@@ -1,9 +1,11 @@
+use std::fmt::Debug;
+
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
-    type Size: Clone + Send + Sync + 'static;
-    type Offset: Clone + Send + Sync + 'static;
-    type Intrinsics<'a>: Send + Sync;
-    type CanvasTransformation: Clone + Send + Sync + 'static;
+    type Size: Debug + Clone + Send + Sync + 'static;
+    type Offset: Debug + Clone + Send + Sync + 'static;
+    type Intrinsics<'a>: Debug + Send + Sync;
+    type CanvasTransformation: Debug + Clone + Send + Sync + 'static;
     type Canvas: Send + Sync;
     // fn point_in_area(
     //     size: Self::Size,
@@ -12,7 +14,7 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     // ) -> bool;
 }
 
-pub trait Constraints<Size>: PartialEq + Clone + Send + Sync + 'static {
+pub trait Constraints<Size>: Debug + PartialEq + Clone + Send + Sync + 'static {
     fn is_tight(&self) -> bool;
     fn constrains(&self, size: Size) -> Size;
 }
