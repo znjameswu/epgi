@@ -1,13 +1,11 @@
 mod build;
-mod commit_barrier;
 mod layout;
+mod mark;
 mod paint;
-mod subtree_results;
 mod tree_scheduler;
 
 pub use build::*;
-pub use commit_barrier::*;
 pub use layout::*;
+pub use mark::*;
 pub use paint::*;
-pub use subtree_results::*;
 pub use tree_scheduler::*;
