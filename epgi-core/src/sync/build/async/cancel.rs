@@ -8,9 +8,12 @@ use epgi_threadpool::ThreadPool;
 /// 3. Cancel: Remove this lane in the **descendants**. For the subtree root, we first purge this lane and then put it into backqueue.
 /// We do not try to requeue anything in the subtree root.
 use crate::{
-    common::{Element, ElementNode, ElementSnapshot, ElementSnapshotInner, Mainline},
+    common::{
+        AsyncDequeueResult, AsyncInflating, AsyncOutput, AsyncQueueCurrentEntry, AsyncStash,
+        Element, ElementNode, ElementSnapshot, ElementSnapshotInner, Mainline, SubscriptionDiff,
+    },
     foundation::{Arc, Parallel},
-    r#async::{AsyncInflating, AsyncOutput, AsyncQueueCurrentEntry, AsyncRebuild, AsyncStash, SubscriptionDiff},
+    r#async::AsyncRebuild,
     scheduler::{get_current_scheduler, LanePos},
     sync::TreeScheduler,
 };
@@ -63,8 +66,8 @@ where
         tree_scheduler: &TreeScheduler,
     ) -> Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>> {
         let Mainline { state, async_queue } = mainline;
-        use crate::r#async::AsyncDequeueResult::*;
-        use crate::r#async::AsyncOutput::*;
+        use AsyncDequeueResult::*;
+        use AsyncOutput::*;
         match async_queue.try_remove(lane_pos) {
             FoundCurrent(AsyncQueueCurrentEntry {
                 stash:
@@ -270,8 +273,8 @@ where
         lane_pos: LanePos,
     ) -> Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>> {
         let Mainline { state, async_queue } = mainline;
-        use crate::r#async::AsyncDequeueResult::*;
-        use crate::r#async::AsyncOutput::*;
+        use AsyncDequeueResult::*;
+        use AsyncOutput::*;
         match async_queue.try_remove(lane_pos) {
             FoundCurrent(AsyncQueueCurrentEntry {
                 stash:

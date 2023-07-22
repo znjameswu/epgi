@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Asc, HktContainer, Parallel, Protocol, SmallSet, InlinableDwsizeVec},
+    foundation::{Arc, Asc, HktContainer, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
     scheduler::{get_current_scheduler, JobId},
     sync::{CommitBarrier, SubtreeCommitResult, TreeScheduler},
 };
@@ -76,7 +76,6 @@ where
         }
     }
 }
-
 
 impl<E> ElementNode<E>
 where

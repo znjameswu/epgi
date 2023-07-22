@@ -39,7 +39,7 @@ pub struct TreeScheduler {
 
 impl TreeScheduler {
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
-        let LanePos::Async(pos ) = lane_pos else {
+        let LanePos::Async(pos) = lane_pos else {
             panic!("Only async lanes have commit barriers");
         };
         let Some(async_lane) = &self.async_lanes[pos as usize] else {

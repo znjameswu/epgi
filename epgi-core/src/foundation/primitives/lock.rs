@@ -1,5 +1,5 @@
 /// A sync Mutex without poisoning.
-/// 
+///
 /// This abstraction paves the way for an optional parking-lot feature.
 #[derive(Debug, Default)]
 pub struct SyncMutex<T>(std::sync::Mutex<T>);
@@ -31,7 +31,7 @@ impl<T> SyncMutex<T> {
 /// A sync Rwlock without poisoning.
 ///
 /// This abstraction paves the way for an optional parking-lot feature.
-/// 
+///
 /// The std RwLock does not have a correct poisoning behavior whatsoever [https://github.com/rust-lang/rust/issues/89832]
 #[derive(Debug, Default)]
 pub struct SyncRwLock<T>(std::sync::RwLock<T>);

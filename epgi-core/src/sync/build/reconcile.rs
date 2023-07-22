@@ -2,20 +2,19 @@ use linear_map::LinearMap;
 
 use crate::{
     common::{
-        ArcChildElementNode, ArcElementContextNode, ArcRenderObject, BuildContext, Element,
-        ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, GetRenderObject,
-        Hooks, Mainline, MainlineState,
+        ArcChildElementNode, ArcElementContextNode, ArcRenderObject, AsyncWorkQueue, BuildContext,
+        Element, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
+        GetRenderObject, Hooks, Mainline, MainlineState,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, InlinableUsizeVec, LinearMapEntryExt,
         Parallel, Provide, SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
-    r#async::AsyncWorkQueue,
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{CancelAsync, SubtreeCommitResult, TreeScheduler},
+    sync::{SubtreeCommitResult, TreeScheduler},
 };
 
-use super::SyncReconciler;
+use super::{CancelAsync, SyncReconciler};
 
 impl<E> ElementNode<E>
 where

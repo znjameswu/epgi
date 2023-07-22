@@ -157,7 +157,11 @@ impl ElementContextNode {
             .map(|ptr_eq| ptr_eq.0.clone())
             .collect();
         use AsyncProviderOccupation::*;
-        let Reading{ new_readers, backqueue_writer } = &mut inner.occupation else {
+        let Reading {
+            new_readers,
+            backqueue_writer,
+        } = &mut inner.occupation
+        else {
             panic!("There should be no async writer when reserving a async writer")
         };
         assert!(
@@ -189,7 +193,12 @@ impl ElementContextNode {
         //     .map(|ptr_eq| ptr_eq.0.clone())
         //     .collect();
         use AsyncProviderOccupation::*;
-        let Writing { writer, value_to_write, backqueue_new_readers }= &mut inner.occupation else {
+        let Writing {
+            writer,
+            value_to_write,
+            backqueue_new_readers,
+        } = &mut inner.occupation
+        else {
             panic!("The async writer to be unreserved must exist")
         };
         assert_eq!(
@@ -239,7 +248,11 @@ impl ProviderObject {
         // TODO: type check
         *self.value.write() = value;
         use AsyncProviderOccupation::*;
-        let Reading{ new_readers, backqueue_writer } = &inner.occupation else {
+        let Reading {
+            new_readers,
+            backqueue_writer,
+        } = &inner.occupation
+        else {
             panic!("There should be no async writer when reserving a async writer")
         };
         return ContendingProviderReaders {

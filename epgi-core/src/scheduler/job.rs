@@ -3,7 +3,8 @@ use std::sync::atomic::{Ordering, Ordering::*};
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{Inlinable64Vec, PtrEq}, common::AweakElementContextNode,
+    common::AweakElementContextNode,
+    foundation::{Inlinable64Vec, PtrEq},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -1,30 +1,35 @@
+mod async_queue;
 mod context;
-mod snapshot;
 mod provider;
+mod snapshot;
 
-pub use snapshot::*;
+pub use async_queue::*;
 pub use context::*;
 pub use provider::*;
-
+pub use snapshot::*;
 
 use std::{any::TypeId, marker::PhantomData};
 
 use futures::{
     future::{BoxFuture, Either},
-    stream::Aborted, never::Never,
+    never::Never,
+    stream::Aborted,
 };
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
     foundation::{
-        Arc, Aweak, InlinableDwsizeVec, InlinableUsizeVec,
-        SyncMutex, TypeKey, Protocol, Provide, Parallel, BuildSuspendedError,
-    }, scheduler::JobId,
+        Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, InlinableUsizeVec, Parallel, Protocol,
+        Provide, SyncMutex, TypeKey,
+    },
+    scheduler::JobId,
 };
 
-use super::{ArcWidget, ArcChildRenderObject, Render, RenderObject, BuildContext, core_nodes::{SuspenseElement, Suspense, RenderSuspense}, ArcChildWidget, ChildElementWidgetPair, Reconciler};
-
-
+use super::{
+    core_nodes::{RenderSuspense, Suspense, SuspenseElement},
+    ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext, ChildElementWidgetPair,
+    Reconciler, Render, RenderObject,
+};
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
 pub type AweakAnyElementNode = Aweak<dyn AnyElementNode>;
@@ -195,9 +200,10 @@ where
         self.snapshot.lock().widget.clone()
     }
 }
- 
-pub trait AnyElementNode: crate::sync::cancel_private::AnyElementNodeAsyncCancelExt 
-    + crate::sync::sync_build_private::AnyElementSyncTreeWalkExt 
+
+pub trait AnyElementNode:
+    crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
+    + crate::sync::sync_build_private::AnyElementSyncTreeWalkExt
     + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
     + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
     + Send
@@ -210,7 +216,7 @@ pub trait AnyElementNode: crate::sync::cancel_private::AnyElementNodeAsyncCancel
 }
 
 pub trait ChildElementNode:
-    crate::sync::sync_build_private::AnyElementSyncTreeWalkExt 
+    crate::sync::sync_build_private::AnyElementSyncTreeWalkExt
 //
 // super::build::tree_walk_private::ElementTreeWalkExt
 + crate::sync::commit_private::ChildElementNodeCommitWalkExt

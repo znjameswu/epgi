@@ -82,7 +82,7 @@ where
 {
     fn borrow(&self) -> &T {
         // SAFETY: repr transparent
-        unsafe {&*(self as *const PtrEq<T> as *const T)}
+        unsafe { &*(self as *const PtrEq<T> as *const T) }
     }
 }
 
@@ -90,8 +90,11 @@ pub trait PtrEqExt: AsHeapPtr + Sized {
     fn as_ref_ptr_eq(&self) -> &PtrEq<Self>;
 }
 
-impl<T> PtrEqExt for T where T:AsHeapPtr {
+impl<T> PtrEqExt for T
+where
+    T: AsHeapPtr,
+{
     fn as_ref_ptr_eq(&self) -> &PtrEq<Self> {
-        unsafe {&*(self as *const _ as *const PtrEq<T>)}
+        unsafe { &*(self as *const _ as *const PtrEq<T>) }
     }
 }

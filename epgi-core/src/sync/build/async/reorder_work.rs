@@ -45,7 +45,7 @@ where
 
         // Return None if the backqueue is empty
         let (current, Some(backqueue)) = async_queue.current_and_backqueue_mut() else {
-            return None
+            return None;
         };
         let Some((index, entry)) = backqueue
             .iter()
@@ -53,7 +53,7 @@ where
             .enumerate()
             .min_by_key(|(_, entry)| entry.work.context.batch.priority)
         else {
-            return None
+            return None;
         };
 
         let backqueue_priority = entry.work.context.batch.priority;
@@ -105,7 +105,7 @@ where
     ) -> Option<AsyncRebuild<E>> {
         let async_queue = &mut mainline.async_queue;
         let Some(backqueue) = async_queue.backqueue_mut() else {
-            return None
+            return None;
         };
 
         let Some((index, _)) = backqueue
@@ -114,7 +114,7 @@ where
             .enumerate()
             .min_by_key(|(_, entry)| entry.work.context.batch.priority)
         else {
-            return None
+            return None;
         };
 
         let backqueue_candidate = backqueue.swap_remove(index);

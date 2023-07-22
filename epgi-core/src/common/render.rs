@@ -156,8 +156,12 @@ where
         constraints: &P::Constraints,
         parent_use_size: bool,
     ) -> Option<&P::Size> {
-        let Some(inner) = &mut self.inner else {return None};
-        let Some(layout) = &mut inner.layout else {return None};
+        let Some(inner) = &mut self.inner else {
+            return None;
+        };
+        let Some(layout) = &mut inner.layout else {
+            return None;
+        };
         if &inner.constraints == constraints {
             inner.parent_use_size = parent_use_size;
             return Some(&layout.size);

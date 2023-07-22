@@ -3,13 +3,14 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    common::{BuildContext, Hook},
+    common::{AsyncInflating, BuildContext, Hook},
     foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec, MpscQueue},
-    r#async::{AsyncInflating, AsyncWorkQueue},
     scheduler::{BatchId, LanePos},
 };
 
-use super::{ArcChildElementNode, AweakAnyElementNode, AweakElementContextNode, Element};
+use super::{
+    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, AweakElementContextNode, Element,
+};
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
@@ -193,13 +194,6 @@ impl BuildSuspendResults {
     pub fn new(build_context: BuildContext) -> Self {
         todo!()
     }
-}
-
-struct BuildSuspendWaker {
-    node: AweakAnyElementNode,
-    // Ensures there won't be more than one polls after a single wake.
-    poll_permit: AtomicBool,
-    suspend_ready_tx: MpscQueue<AweakAnyElementNode>,
 }
 
 #[derive(Clone)]
