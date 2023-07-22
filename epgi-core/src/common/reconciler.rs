@@ -1,12 +1,11 @@
 use crate::{
-    foundation::{Arc, Asc, HktContainer, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
-    scheduler::{get_current_scheduler, JobId},
-    sync::{CommitBarrier, SubtreeCommitResult, TreeScheduler},
+    foundation::{Arc, Asc, HktContainer, InlinableDwsizeVec, Parallel, Protocol},
+    sync::CommitBarrier,
 };
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, BuildContext, Element, ElementNode, Widget, Work, WorkContext, WorkHandle,
+    ArcWidget, BuildContext, Element, ElementNode, Widget, WorkContext, WorkHandle,
 };
 
 pub trait Reconciler<CP: Protocol> {

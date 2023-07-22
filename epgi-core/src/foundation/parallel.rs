@@ -144,7 +144,11 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> {
         f: F,
     );
 
-    fn par_map_collect<F: Fn(<Self as Parallel>::Item) -> R + Send + Sync, R: Send, P: ThreadPoolExt>(
+    fn par_map_collect<
+        F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
+        R: Send,
+        P: ThreadPoolExt,
+    >(
         self,
         pool: &P,
         f: F,

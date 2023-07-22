@@ -1,18 +1,16 @@
-use std::{future::Future, ops::DerefMut};
-
-use futures::stream::{AbortHandle, AbortRegistration, Abortable, Aborted};
+use futures::stream::Aborted;
 use hashbrown::HashMap;
 
 use crate::{
     common::{
         ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildContext, BuildResults,
         BuildSuspendResults, Element, ElementContextNode, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, Hooks, Mainline, ProviderElementMap, Reconciler, SubscriptionDiff,
-        Work, WorkContext, WorkHandle,
+        ElementSnapshotInner, Hooks, Mainline, ProviderElementMap, SubscriptionDiff, Work,
+        WorkContext, WorkHandle,
     },
     foundation::{
         Arc, Asc, InlinableDwsizeVec, InlinableUsizeVec, Parallel, Provide, SyncMutex, TryResult,
-        TypeKey, VecPushLastExt, EMPTY_CONSUMED_TYPES,
+        TypeKey, EMPTY_CONSUMED_TYPES,
     },
     r#async::build::reconciler::AsyncReconciler,
     scheduler::{get_current_scheduler, LanePos},

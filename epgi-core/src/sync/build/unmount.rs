@@ -67,7 +67,9 @@ impl<E: Element> ElementNode<E> {
         // todo!("Prevent stale scheduler calls");
 
         if let Some(children) = children {
-            children.par_for_each(&get_current_scheduler().sync_threadpool, |child| child.unmount())
+            children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+                child.unmount()
+            })
         }
     }
 }

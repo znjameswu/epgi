@@ -4,7 +4,7 @@ use futures::task::ArcWake;
 
 use crate::{
     common::{AsyncInflating, BuildContext, Hook},
-    foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec, MpscQueue},
+    foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
 };
 

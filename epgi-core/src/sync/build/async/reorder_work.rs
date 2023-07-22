@@ -2,7 +2,6 @@ use crate::{
     common::{Element, ElementNode, Mainline},
     foundation::Arc,
     r#async::AsyncRebuild,
-    scheduler::get_current_scheduler,
     sync::TreeScheduler,
 };
 

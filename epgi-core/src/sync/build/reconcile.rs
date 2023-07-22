@@ -7,8 +7,8 @@ use crate::{
         GetRenderObject, Hooks, Mainline, MainlineState,
     },
     foundation::{
-        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, InlinableUsizeVec, LinearMapEntryExt,
-        Parallel, Provide, SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, LinearMapEntryExt, Parallel, Provide,
+        SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeCommitResult, TreeScheduler},
