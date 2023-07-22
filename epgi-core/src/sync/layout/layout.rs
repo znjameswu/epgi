@@ -60,7 +60,7 @@ where
         let constraints = cache.constraints.clone();
         let parent_use_size = cache.parent_use_size;
         get_current_scheduler()
-            .threadpool
+            .sync_threadpool
             .0
             .in_place_scope(|scope| {
                 inner.perform_wet_layout(constraints, parent_use_size, LayoutExecutor { scope });

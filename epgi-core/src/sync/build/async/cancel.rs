@@ -119,7 +119,7 @@ where
         self.perform_purge_async_work_local(reserved_provider_write, subscription_diff, lane_pos);
 
         if let Some(non_mainline_children) = non_mainline_children {
-            non_mainline_children.par_for_each(&get_current_scheduler().threadpool, |child| {
+            non_mainline_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.remove_async_work_in_subtree(lane_pos)
             })
         }
@@ -147,7 +147,7 @@ where
         match purge {
             Ok(purge) => self.perform_cancel_async_work(purge),
             Err(Some(children)) => children
-                .par_for_each(&get_current_scheduler().threadpool, |child| {
+                .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                     child.remove_async_work_in_subtree(lane_pos)
                 }),
             Err(None) => {}
@@ -207,7 +207,7 @@ where
         match purge {
             Ok(remove) => self.perform_purge_async_work(remove),
             Err(Some(children)) => children
-                .par_for_each(&get_current_scheduler().threadpool, |child| {
+                .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                     child.purge_async_work_in_subtree(lane_pos)
                 }),
             Err(None) => {}
@@ -352,7 +352,7 @@ where
         self.perform_purge_async_work_local(reserved_provider_write, subscription_diff, lane_pos);
 
         if let Some(non_mainline_children) = non_mainline_children {
-            non_mainline_children.par_for_each(&get_current_scheduler().threadpool, |child| {
+            non_mainline_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.purge_async_work_in_subtree(lane_pos)
             })
         }
@@ -392,13 +392,13 @@ where
 
                 if let Some(non_mainline_children) = non_mainline_children {
                     non_mainline_children
-                        .par_for_each(&get_current_scheduler().threadpool, |child| {
+                        .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                             child.remove_async_work_and_lane_in_subtree(lane_pos)
                         })
                 }
             }
             Err(Some(children)) => children
-                .par_for_each(&get_current_scheduler().threadpool, |child| {
+                .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                     child.remove_async_work_and_lane_in_subtree(lane_pos)
                 }),
             Err(None) => {}

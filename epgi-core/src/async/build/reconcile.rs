@@ -279,7 +279,7 @@ where
 
     pub(crate) fn execute_rebuild_node_async_detached(self: Arc<Self>, rebuild: AsyncRebuild<E>) {
         get_current_scheduler()
-            .threadpool
+            .async_threadpool
             .execute_detached(move || self.execute_rebuild_node_async(rebuild))
     }
 

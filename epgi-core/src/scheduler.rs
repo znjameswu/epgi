@@ -49,7 +49,8 @@ unsafe fn setup_scheduler() {
 }
 
 pub struct SchedulerHandle {
-    pub threadpool: GlobalThreadPool,
+    pub sync_threadpool: GlobalThreadPool,
+    pub async_threadpool: GlobalThreadPool,
 
     scheduler_inbox: Asc<SchedulerInbox>,
     is_executing_sync: AtomicBool,
@@ -196,7 +197,7 @@ impl Scheduler {
                     let paint_started_event = event_listener::Event::new();
                     let paint_started = paint_started_event.listen();
                     get_current_scheduler()
-                        .threadpool
+                        .sync_threadpool
                         .execute_detached(move || {
                             let scheduler = tree_scheduler.read();
                             paint_started_event.notify(usize::MAX);
@@ -209,7 +210,7 @@ impl Scheduler {
                 ReorderAsyncWork { node } => {
                     let tree_scheduler = self.tree_scheduler.clone();
                     get_current_scheduler()
-                        .threadpool
+                        .sync_threadpool
                         .execute_detached(move || {
                             let tree_scheduler = tree_scheduler.read();
                             tree_scheduler.reorder_async_work(node);
@@ -218,7 +219,7 @@ impl Scheduler {
                 ReorderProviderReservation { context } => {
                     let tree_scheduler = self.tree_scheduler.clone();
                     get_current_scheduler()
-                        .threadpool
+                        .sync_threadpool
                         .execute_detached(move || {
                             let tree_scheduler = tree_scheduler.read();
                             tree_scheduler.reorder_provider_reservation(context);

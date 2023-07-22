@@ -125,7 +125,7 @@ where
                             .write_sync(new_provided_value);
 
                         contending_readers.non_mainline.par_for_each(
-                            &get_current_scheduler().threadpool,
+                            &get_current_scheduler().sync_threadpool,
                             |(lane_pos, node)| {
                                 let node = node.upgrade().expect("ElementNode should be alive");
                                 node.restart_async_work(lane_pos, tree_scheduler)
@@ -214,7 +214,7 @@ where
             }
 
             Err(Some(children)) => children
-                .par_map_collect(&get_current_scheduler().threadpool, |child| {
+                .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
                     child.visit_and_work_sync(job_ids, scope, tree_scheduler)
                 })
                 .into_iter()
@@ -756,7 +756,7 @@ where
             .collect();
         let async_work_needs_restarting: Vec<_> = async_work_needs_restarting.into();
         async_work_needs_restarting.par_for_each(
-            &get_current_scheduler().threadpool,
+            &get_current_scheduler().sync_threadpool,
             |(lane_pos, context)| {
                 let node = context
                     .element_node
