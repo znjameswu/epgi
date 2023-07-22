@@ -48,7 +48,7 @@ impl TreeScheduler {
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
     }
 
-    pub(in super::super) fn apply_batcher_result(&mut self, result: BatchResult) {
+    pub(crate) fn apply_batcher_result(&mut self, result: BatchResult) {
         debug_assert!(
             self.sync_lane.is_none(),
             "Batcher should only be run after the previous sync batch finishes"
@@ -97,10 +97,7 @@ impl TreeScheduler {
         }
     }
 
-    pub(in super::super) fn commit_completed_async_batches(
-        &mut self,
-        job_batcher: &mut JobBatcher,
-    ) {
+    pub(crate) fn commit_completed_async_batches(&mut self, job_batcher: &mut JobBatcher) {
         for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
             let Some(async_lane) = async_lane else {
                 continue;
@@ -112,19 +109,19 @@ impl TreeScheduler {
         }
     }
 
-    pub(in super::super) fn dispatch_sync_batch(&mut self) {
+    pub(crate) fn dispatch_sync_batch(&mut self) {
         todo!()
     }
 
-    pub(in super::super) fn dispatch_async_batches(&self) {
+    pub(crate) fn dispatch_async_batches(&self) {
         todo!()
     }
 
-    pub(in super::super) fn reorder_async_work(&self, node: AweakAnyElementNode) {
+    pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {
         node.upgrade().map(|node| node.reorder_async_work(self));
     }
 
-    pub(in super::super) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
+    pub(crate) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
         todo!()
     }
 }
