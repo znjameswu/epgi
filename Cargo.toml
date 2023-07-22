@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "epgi-core",
+    "epgi-common",
+    "epgi-threadpool",
+    "epgi-futures"
+]
+
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.70"
+keywords = ["graphics"]
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies.epgi-core]
+package = "epgi-core"
+path = "./epgi-core"
+
+[workspace.dependencies.epgi-threadpool]
+package = "epgi-threadpool"
+path = "./epgi-threadpool"

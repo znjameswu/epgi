@@ -1,0 +1,11 @@
+1. Use task-local storage to pass environmental variables such as is_self_sync to enforce certain invariants during debugging.
+2. NOW: Design BuildContext and effects
+3. NOW: Tree walks
+4. ~~NOW: Requeue async tasks~~
+5. ~~NOW: Interrupts~~
+6. NOW: Async suspense
+7: NOW: Provider write
+8. ~~NOW: Cancel skip subtree~~
+9. NOW: WorkContext updating
+10. NOW: Make sure lane marking and dispatching checks unmountednedss
+11. NOW: async overdue blocking

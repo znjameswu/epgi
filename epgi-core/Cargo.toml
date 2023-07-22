@@ -1,0 +1,31 @@
+[package]
+name = "epgi-core"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+epgi-threadpool = {workspace = true}
+
+async-channel = "1.9"
+crossbeam = "0.8"
+either = "1.8"
+event-listener = "2.5"
+futures = "0.3.27"
+hashbrown = "0.14"
+linear-map = "1.2.0"
+portable-atomic = "1.0"
+rayon="1.7"
+smallvec = {version = "1.10", features = ["union", "const_generics", "const_new"]}
+# tokio = { version = "1.18", features = ["sync"] }
+
+[dependencies.vello]
+git = "https://github.com/linebender/vello"
+rev = "006faab69fc519c9c7ed6002be740914efad9ffe"
+
+[dependencies.glazier]
+git = "https://github.com/linebender/glazier"
+rev = "51eb418511790309b90b0d9838e4d91fc11d84d3"
+default-features = false
+features = ["accesskit", "x11"]
