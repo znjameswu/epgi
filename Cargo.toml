@@ -2,7 +2,6 @@
 members = [
     "epgi-core",
     "epgi-common",
-    "epgi-threadpool",
     "epgi-futures"
 ]
 
@@ -16,7 +15,3 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies.epgi-core]
 package = "epgi-core"
 path = "./epgi-core"
-
-[workspace.dependencies.epgi-threadpool]
-package = "epgi-threadpool"
-path = "./epgi-threadpool"

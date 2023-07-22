@@ -101,7 +101,7 @@
 
 use std::marker::PhantomData;
 
-use epgi_threadpool::ThreadPool;
+use crate::foundation::ThreadPoolExt;
 
 /// Workaround for https://github.com/bluss/either/issues/
 ///
@@ -138,13 +138,13 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> {
 
     type HktContainer: HktContainer<Container<<Self as Parallel>::Item> = Self>;
 
-    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPool>(
+    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPoolExt>(
         self,
         pool: &P,
         f: F,
     );
 
-    fn par_map_collect<F: Fn(<Self as Parallel>::Item) -> R + Send + Sync, R: Send, P: ThreadPool>(
+    fn par_map_collect<F: Fn(<Self as Parallel>::Item) -> R + Send + Sync, R: Send, P: ThreadPoolExt>(
         self,
         pool: &P,
         f: F,
@@ -175,7 +175,7 @@ where
 
     type HktContainer = VecContainer;
 
-    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPool>(
+    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPoolExt>(
         self,
         pool: &P,
         f: F,
@@ -186,7 +186,7 @@ where
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
         R: Send,
-        P: ThreadPool,
+        P: ThreadPoolExt,
     >(
         self,
         pool: &P,
@@ -224,7 +224,7 @@ where
 
     type HktContainer = ArrayContainer<N>;
 
-    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPool>(
+    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPoolExt>(
         self,
         pool: &P,
         f: F,
@@ -235,7 +235,7 @@ where
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
         R: Send,
-        P: ThreadPool,
+        P: ThreadPoolExt,
     >(
         self,
         pool: &P,
@@ -310,7 +310,7 @@ where
 
     type HktContainer = EitherContainer<A::HktContainer, B::HktContainer>;
 
-    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPool>(
+    fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPoolExt>(
         self,
         pool: &P,
         f: F,
@@ -321,7 +321,7 @@ where
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
         R: Send,
-        P: ThreadPool,
+        P: ThreadPoolExt,
     >(
         self,
         pool: &P,

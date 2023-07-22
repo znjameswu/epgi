@@ -1,17 +1,16 @@
 mod batch;
 mod handle;
 mod job;
+mod job_batcher;
 mod lane;
 
 pub use batch::*;
 pub use handle::*;
 pub use job::*;
+pub use job_batcher::*;
 pub use lane::*;
 
-mod job_batcher;
-use epgi_threadpool::ThreadPool;
 use hashbrown::HashSet;
-pub use job_batcher::*;
 
 use portable_atomic::AtomicU64;
 
@@ -26,7 +25,7 @@ use crate::{
     common::{
         AweakAnyElementNode, AweakAnyRenderObject, AweakElementContextNode, WorkContext, WorkHandle,
     },
-    foundation::{Asc, GlobalThreadPool, MpscQueue, PtrEq, SyncMutex, SyncRwLock},
+    foundation::{Asc, MpscQueue, PtrEq, SyncMutex, SyncRwLock},
     sync::{CommitBarrier, TreeScheduler},
 };
 
@@ -49,8 +48,8 @@ unsafe fn setup_scheduler() {
 }
 
 pub struct SchedulerHandle {
-    pub sync_threadpool: GlobalThreadPool,
-    pub async_threadpool: GlobalThreadPool,
+    pub sync_threadpool: rayon::ThreadPool,
+    pub async_threadpool: rayon::ThreadPool,
 
     scheduler_inbox: Asc<SchedulerInbox>,
     is_executing_sync: AtomicBool,
@@ -196,34 +195,28 @@ impl Scheduler {
                     let tree_scheduler = self.tree_scheduler.clone();
                     let paint_started_event = event_listener::Event::new();
                     let paint_started = paint_started_event.listen();
-                    get_current_scheduler()
-                        .sync_threadpool
-                        .execute_detached(move || {
-                            let scheduler = tree_scheduler.read();
-                            paint_started_event.notify(usize::MAX);
-                            scheduler.perform_paint();
-                        });
+                    get_current_scheduler().sync_threadpool.spawn(move || {
+                        let scheduler = tree_scheduler.read();
+                        paint_started_event.notify(usize::MAX);
+                        scheduler.perform_paint();
+                    });
                     paint_started.wait();
                     drop(read_guard);
                 }
                 PointerEvent {} => {}
                 ReorderAsyncWork { node } => {
                     let tree_scheduler = self.tree_scheduler.clone();
-                    get_current_scheduler()
-                        .sync_threadpool
-                        .execute_detached(move || {
-                            let tree_scheduler = tree_scheduler.read();
-                            tree_scheduler.reorder_async_work(node);
-                        })
+                    get_current_scheduler().sync_threadpool.spawn(move || {
+                        let tree_scheduler = tree_scheduler.read();
+                        tree_scheduler.reorder_async_work(node);
+                    })
                 }
                 ReorderProviderReservation { context } => {
                     let tree_scheduler = self.tree_scheduler.clone();
-                    get_current_scheduler()
-                        .sync_threadpool
-                        .execute_detached(move || {
-                            let tree_scheduler = tree_scheduler.read();
-                            tree_scheduler.reorder_provider_reservation(context);
-                        })
+                    get_current_scheduler().sync_threadpool.spawn(move || {
+                        let tree_scheduler = tree_scheduler.read();
+                        tree_scheduler.reorder_provider_reservation(context);
+                    })
                 }
                 AsyncYieldSubtree {
                     node,

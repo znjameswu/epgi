@@ -1,5 +1,3 @@
-use epgi_threadpool::ThreadPool;
-
 use std::{future::Future, ops::DerefMut};
 
 use futures::stream::{AbortHandle, AbortRegistration, Abortable, Aborted};
@@ -280,7 +278,7 @@ where
     pub(crate) fn execute_rebuild_node_async_detached(self: Arc<Self>, rebuild: AsyncRebuild<E>) {
         get_current_scheduler()
             .async_threadpool
-            .execute_detached(move || self.execute_rebuild_node_async(rebuild))
+            .spawn(move || self.execute_rebuild_node_async(rebuild))
     }
 
     pub(super) fn inflate_node_async_(

@@ -1,7 +1,7 @@
 mod as_any;
 mod constants;
 mod error;
-mod executor;
+mod threadpool;
 mod key;
 mod parallel;
 mod primitives;
@@ -16,7 +16,7 @@ mod vec_push_last;
 pub use as_any::*;
 pub use constants::*;
 pub use error::*;
-pub use executor::*;
+pub use threadpool::*;
 pub use key::*;
 pub use parallel::*;
 pub use primitives::*;

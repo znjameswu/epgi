@@ -686,7 +686,6 @@ dependencies = [
  "async-channel",
  "crossbeam",
  "either",
- "epgi-threadpool",
  "event-listener",
  "futures",
  "glazier",
@@ -701,13 +700,6 @@ dependencies = [
 [[package]]
 name = "epgi-futures"
 version = "0.1.0"
-
-[[package]]
-name = "epgi-threadpool"
-version = "0.1.0"
-dependencies = [
- "rayon",
-]
 
 [[package]]
 name = "equivalent"
