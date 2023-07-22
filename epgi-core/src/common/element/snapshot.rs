@@ -4,7 +4,7 @@ use futures::task::ArcWake;
 
 use crate::{
     common::{BuildContext, Hook},
-    foundation::{Asc, InlinableUsizeVec, MpscQueue},
+    foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec, MpscQueue},
     r#async::{AsyncInflating, AsyncWorkQueue},
     scheduler::{BatchId, LanePos},
 };
@@ -175,7 +175,7 @@ where
     pub fn from_pieces(
         build_context: BuildContext,
         element: E,
-        nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+        nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     ) -> Self {
         todo!()
     }

@@ -1,27 +1,35 @@
 use crate::{
     common::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
-        ReconcileItem, Reconciler2, WorkContext, WorkHandle,
+        ReconcileItem, Reconciler, WorkContext, WorkHandle,
     },
-    foundation::{Asc, HktContainer, Parallel, Protocol},
+    foundation::{Asc, HktContainer, InlinableDwsizeVec, Parallel, Protocol},
     sync::CommitBarrier,
 };
 
-struct AsyncReconciler<'a> {
-    host_handle: &'a WorkHandle,
-    work_context: Asc<WorkContext>,
-    child_tasks: &'a mut Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
-    barrier: CommitBarrier,
-    host_context: &'a ArcElementContextNode,
-    build_context: &'a mut BuildContext,
+pub(super) struct AsyncReconciler<'a, CP: Protocol> {
+    pub(super) host_handle: &'a WorkHandle,
+    pub(super) work_context: Asc<WorkContext>,
+    pub(super) child_tasks: &'a mut Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
+    pub(super) barrier: CommitBarrier,
+    pub(super) host_context: &'a ArcElementContextNode,
+    pub(super) build_context: &'a mut BuildContext,
+    pub(super) nodes_needing_unmount: &'a mut InlinableDwsizeVec<ArcChildElementNode<CP>>,
 }
 
-impl<'a> Reconciler2 for AsyncReconciler<'a> {
+impl<'a, CP> Reconciler<CP> for AsyncReconciler<'a, CP>
+where
+    CP: Protocol,
+{
     fn build_context_mut(&mut self) -> &mut BuildContext {
         self.build_context
     }
 
-    fn into_reconcile<CP: crate::foundation::Protocol, I: Parallel<Item = ReconcileItem<CP>>>(
+    fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>> {
+        self.nodes_needing_unmount
+    }
+
+    fn into_reconcile<I: Parallel<Item = ReconcileItem<CP>>>(
         self,
         items: I,
     ) -> <I::HktContainer as HktContainer>::Container<ArcChildElementNode<CP>> {

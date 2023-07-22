@@ -1,20 +1,21 @@
-use epgi_threadpool::ThreadPool;
 use linear_map::LinearMap;
 
 use crate::{
     common::{
         ArcChildElementNode, ArcElementContextNode, ArcRenderObject, BuildContext, Element,
         ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, GetRenderObject,
-        Hooks, Mainline, MainlineState, ReconcileItem, Reconciler, Reconciler2,
+        Hooks, Mainline, MainlineState,
     },
     foundation::{
-        Arc, Asc, BuildSuspendedError, HktContainer, InlinableDwsizeVec, InlinableUsizeVec,
-        LinearMapEntryExt, Parallel, Provide, SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, InlinableUsizeVec, LinearMapEntryExt,
+        Parallel, Provide, SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     r#async::AsyncWorkQueue,
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{CancelAsync, SubtreeCommitResult, TreeScheduler},
 };
+
+use super::SyncReconciler;
 
 impl<E> ElementNode<E>
 where
@@ -306,16 +307,17 @@ where
 
         let mut build_context = BuildContext::new_rebuild(hooks);
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
-        let reconciler = Reconciler::new_sync(job_ids, &self.context, scope, &mut subtree_results);
         let mut nodes_needing_unmount = Default::default();
-        let results = element.perform_rebuild_element(
-            &widget,
-            &mut build_context,
-            provider_values,
-            reconciler,
-            &mut nodes_needing_unmount,
-        );
-
+        let reconciler = SyncReconciler {
+            job_ids,
+            scope,
+            tree_scheduler,
+            subtree_results: &mut subtree_results,
+            host_context: &self.context,
+            build_context: &mut build_context,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
+        let results = element.perform_rebuild_element(&widget, provider_values, reconciler);
         let (state, subtree_results) = self.process_rebuild_results(
             results,
             build_context,
@@ -340,15 +342,17 @@ where
     ) -> SubtreeCommitResult {
         let mut build_context = BuildContext::new_inflate();
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
-        let reconciler = Reconciler::new_sync(job_ids, &self.context, scope, &mut subtree_results);
         let mut nodes_needing_unmount = Default::default();
-        let results = E::perform_inflate_element(
-            &widget,
-            &mut build_context,
-            provider_values,
-            reconciler,
-            &mut nodes_needing_unmount,
-        );
+        let reconciler = SyncReconciler {
+            job_ids,
+            scope,
+            tree_scheduler,
+            subtree_results: &mut subtree_results,
+            host_context: &self.context,
+            build_context: &mut build_context,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
+        let results = E::perform_inflate_element(&widget, provider_values, reconciler);
 
         let (state, subtree_results) = self.process_inflate_results(
             results,
@@ -375,15 +379,17 @@ where
     ) -> SubtreeCommitResult {
         let mut build_context = BuildContext::new_poll(hooks);
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
-        let reconciler = Reconciler::new_sync(job_ids, &self.context, scope, &mut subtree_results);
         let mut nodes_needing_unmount = Default::default();
-        let results = last_element.perform_rebuild_element(
-            &widget,
-            &mut build_context,
-            provider_values,
-            reconciler,
-            &mut nodes_needing_unmount,
-        );
+        let reconciler = SyncReconciler {
+            job_ids,
+            scope,
+            tree_scheduler,
+            subtree_results: &mut subtree_results,
+            host_context: &self.context,
+            build_context: &mut build_context,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
+        let results = last_element.perform_rebuild_element(&widget, provider_values, reconciler);
 
         let (state, subtree_results) = self.process_rebuild_results(
             results,
@@ -410,15 +416,17 @@ where
     ) -> SubtreeCommitResult {
         let mut build_context = BuildContext::new_poll(last_hooks);
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
-        let reconciler = Reconciler::new_sync(job_ids, &self.context, scope, &mut subtree_results);
         let mut nodes_needing_unmount = Default::default();
-        let results = E::perform_inflate_element(
-            &widget,
-            &mut build_context,
-            provider_values,
-            reconciler,
-            &mut nodes_needing_unmount,
-        );
+        let reconciler = SyncReconciler {
+            job_ids,
+            scope,
+            tree_scheduler,
+            subtree_results: &mut subtree_results,
+            host_context: &self.context,
+            build_context: &mut build_context,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
+        let results = E::perform_inflate_element(&widget, provider_values, reconciler);
 
         let (state, subtree_results) = self.process_inflate_results(
             results,
@@ -441,7 +449,7 @@ where
         widget: &E::ArcWidget,
         job_ids: &'a SmallSet<JobId>,
         mut render_object: Option<E::ArcRenderObject>,
-        nodes_needing_unmount: &mut InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         subtree_results: SubtreeCommitResult,
         tree_scheduler: &'batch TreeScheduler,
     ) -> (MainlineState<E>, SubtreeCommitResult) {
@@ -650,7 +658,7 @@ where
     fn commit_sync<'a, 'batch>(
         self: &'a Arc<Self>,
         state: MainlineState<E>,
-        nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+        nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         scope: &'a rayon::Scope<'batch>,
     ) {
         let suspended = state.is_suspended();

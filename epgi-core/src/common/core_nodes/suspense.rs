@@ -53,10 +53,8 @@ impl<P: Protocol> Element for SuspenseElement<P> {
     fn perform_rebuild_element(
         self,
         widget: &Self::ArcWidget,
-        ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: Reconciler,
-        nodes_needing_unmount: &mut InlinableUsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, (Self, BuildSuspendedError)> {
         // Suspense needs to reconcile fallback if it is available. To avoid missing propagation rebuilds.
         todo!()
@@ -64,10 +62,8 @@ impl<P: Protocol> Element for SuspenseElement<P> {
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: Reconciler,
-        nodes_needing_unmount: &mut InlinableUsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, BuildSuspendedError> {
         todo!()
     }

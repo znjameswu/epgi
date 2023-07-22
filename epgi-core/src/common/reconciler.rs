@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Asc, HktContainer, Parallel, Protocol, SmallSet},
+    foundation::{Arc, Asc, HktContainer, Parallel, Protocol, SmallSet, InlinableDwsizeVec},
     scheduler::{get_current_scheduler, JobId},
     sync::{CommitBarrier, SubtreeCommitResult, TreeScheduler},
 };
@@ -9,36 +9,15 @@ use super::{
     ArcWidget, BuildContext, Element, ElementNode, Widget, Work, WorkContext, WorkHandle,
 };
 
-pub trait Reconciler2 {
+pub trait Reconciler<CP: Protocol> {
     fn build_context_mut(&mut self) -> &mut BuildContext;
 
-    fn into_reconcile<CP: Protocol, I: Parallel<Item = ReconcileItem<CP>>>(
+    fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>>;
+
+    fn into_reconcile<I: Parallel<Item = ReconcileItem<CP>>>(
         self,
         items: I,
     ) -> <I::HktContainer as HktContainer>::Container<ArcChildElementNode<CP>>;
-}
-
-/// Reconciler has to be a concrete type, not a trait. Due to the virtual function context that it is going to be used upon.
-// #[derive(Clone)]
-pub struct Reconciler<'a, 'batch> {
-    // executor: Asc<E>,
-    kind: ReconcilerKind<'a, 'batch>,
-    host_context: &'a ArcElementContextNode,
-}
-
-pub enum ReconcilerKind<'a, 'batch> {
-    Sync {
-        job_ids: &'a SmallSet<JobId>,
-        scope: &'a rayon::Scope<'batch>,
-        tree_scheduler: &'batch TreeScheduler,
-        subtree_results: &'a mut SubtreeCommitResult,
-    },
-    Async {
-        host_handle: &'a WorkHandle,
-        work_context: Asc<WorkContext>,
-        child_tasks: &'a mut Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
-        barrier: CommitBarrier,
-    },
 }
 
 pub enum ReconcileItem<CP: Protocol> {
@@ -64,7 +43,6 @@ where
             }
         }
     }
-    fn into_reconcile_with(self, reconciler: Reconciler) {}
 }
 
 struct AsyncReconcileItem<CP: Protocol> {
@@ -99,83 +77,6 @@ where
     }
 }
 
-// fn inflate_widget<W:Widget>(widget: &Asc<W>, build_context: BuildContext)
-
-impl<'a, 'batch> Reconciler<'a, 'batch> {
-    pub fn new_sync(
-        job_ids: &'a SmallSet<JobId>,
-        element_context: &'a ArcElementContextNode,
-        scope: &'a rayon::Scope<'batch>,
-        subtree_results: &'a mut SubtreeCommitResult,
-    ) -> Self {
-        todo!()
-    }
-
-    pub fn new_async(
-        element_context: &'a ArcElementContextNode,
-        work_context: Asc<WorkContext>,
-        host_handle: &'a WorkHandle,
-        child_tasks: &'a mut Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
-        barrier: CommitBarrier,
-    ) -> Self {
-        Self {
-            kind: ReconcilerKind::Async {
-                child_tasks,
-                barrier,
-                host_handle,
-                work_context,
-            },
-            host_context: element_context,
-        }
-    }
-
-    pub fn into_reconcile<CP: Protocol, I: Parallel<Item = ReconcileItem<CP>>>(
-        self,
-        items: I,
-    ) -> <I::HktContainer as HktContainer>::Container<ArcChildElementNode<CP>> {
-        // items.par_map_collect(&get_current_scheduler().threadpool, todo!());
-        match self.kind {
-            ReconcilerKind::Sync {
-                job_ids,
-                scope,
-                tree_scheduler,
-                subtree_results,
-            } => items
-                .par_map_collect(&get_current_scheduler().threadpool, |item| match item {
-                    ReconcileItem::Rebuild(pair) => {
-                        pair.rebuild_sync_box(job_ids, scope, tree_scheduler)
-                    }
-                    ReconcileItem::Inflate(widget) => {
-                        widget.inflate_sync(self.host_context, job_ids, scope, tree_scheduler)
-                    }
-                })
-                .map(|(node, subtree_result)| {
-                    *subtree_results = subtree_results.merge(subtree_result);
-                    node
-                }),
-            ReconcilerKind::Async {
-                child_tasks,
-                barrier,
-                host_handle,
-                work_context,
-            } => {
-                let async_items = items.map(|item: ReconcileItem<CP>| {
-                    item.into_async_item(
-                        work_context.clone(),
-                        self.host_context.clone(),
-                        barrier.clone(),
-                    )
-                });
-                let results = async_items.map_ref(|item| item.element().clone());
-                child_tasks.extend(async_items.map(|item: AsyncReconcileItem<CP>| {
-                    Box::new(move || item.perform_reconcile())
-                        as Box<dyn FnOnce() + Send + Sync + 'static>
-                }));
-                results
-            }
-        }
-    }
-}
 
 impl<E> ElementNode<E>
 where

@@ -1,28 +1,33 @@
 use crate::{
     common::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
-        ReconcileItem, Reconciler2,
+        ReconcileItem, Reconciler,
     },
-    foundation::{HktContainer, Parallel, Protocol, SmallSet},
+    foundation::{HktContainer, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
     scheduler::JobId,
     sync::{SubtreeCommitResult, TreeScheduler},
 };
 
-struct SyncReconciler<'a, 'batch> {
-    job_ids: &'a SmallSet<JobId>,
-    scope: &'a rayon::Scope<'batch>,
-    tree_scheduler: &'batch TreeScheduler,
-    subtree_results: &'a mut SubtreeCommitResult,
-    host_context: &'a ArcElementContextNode,
-    build_context: &'a mut BuildContext,
+pub(super) struct SyncReconciler<'a, 'batch, CP: Protocol> {
+    pub(super) job_ids: &'a SmallSet<JobId>,
+    pub(super) scope: &'a rayon::Scope<'batch>,
+    pub(super) tree_scheduler: &'batch TreeScheduler,
+    pub(super) subtree_results: &'a mut SubtreeCommitResult,
+    pub(super) host_context: &'a ArcElementContextNode,
+    pub(super) build_context: &'a mut BuildContext,
+    pub(super) nodes_needing_unmount: &'a mut InlinableDwsizeVec<ArcChildElementNode<CP>>,
 }
 
-impl<'a, 'batch> Reconciler2 for SyncReconciler<'a, 'batch> {
+impl<'a, 'batch, CP: Protocol> Reconciler<CP> for SyncReconciler<'a, 'batch, CP> {
     fn build_context_mut(&mut self) -> &mut BuildContext {
         self.build_context
     }
 
-    fn into_reconcile<CP: crate::foundation::Protocol, I: Parallel<Item = ReconcileItem<CP>>>(
+    fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>> {
+        self.nodes_needing_unmount
+    }
+
+    fn into_reconcile<I: Parallel<Item = ReconcileItem<CP>>>(
         self,
         items: I,
     ) -> <I::HktContainer as HktContainer>::Container<ArcChildElementNode<CP>> {

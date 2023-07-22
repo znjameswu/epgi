@@ -48,22 +48,16 @@ impl Element for RootViewElement {
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         self,
         widget: &Self::ArcWidget,
-        ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<crate::foundation::Arc<dyn Provide>>,
-        reconciler: Reconciler,
-        nodes_needing_unmount: &mut crate::foundation::InlinableUsizeVec<
-            ArcChildElementNode<Self::ChildProtocol>,
-        >,
+        reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, (Self, BuildSuspendedError)> {
         todo!()
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: Reconciler, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-        nodes_needing_unmount: &mut InlinableUsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
     ) -> Result<Self, BuildSuspendedError> {
         todo!()
     }

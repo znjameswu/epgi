@@ -11,8 +11,8 @@ use hashbrown::HashMap;
 use crate::{
     common::{
         ArcElementContextNode, BuildContext, Element, ElementContextNode, ElementNode,
-        ElementSnapshot, ElementSnapshotInner, Hooks, Mainline, ProviderElementMap, WorkContext,
-        WorkHandle, Reconciler,
+        ElementSnapshot, ElementSnapshotInner, Hooks, Mainline, ProviderElementMap, Reconciler,
+        WorkContext, WorkHandle,
     },
     foundation::{
         Arc, Asc, InlinableDwsizeVec, InlinableUsizeVec, Parallel, Provide, SyncMutex, TryResult,
@@ -360,20 +360,20 @@ where
 
         let mut build_context = BuildContext::new_rebuild(hooks);
         let mut child_tasks = Default::default();
-        let reconciler = Reconciler::new_async(
-            &self.context,
-            work_context,
-            handle,
-            &mut child_tasks,
-            barrier,
-        );
         let mut nodes_needing_unmount = Default::default();
+        let reconciler = AsyncReconciler {
+            host_handle: handle,
+            work_context,
+            child_tasks: &mut child_tasks,
+            barrier,
+            host_context: &self.context,
+            build_context: &mut build_context,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
         let results = element.perform_rebuild_element(
             widget,
-            &mut build_context,
             provider_values,
             reconciler,
-            &mut nodes_needing_unmount,
         );
         let new_stash = match results {
             Ok(element) => AsyncOutput::Completed {
@@ -402,20 +402,20 @@ where
 
         let mut build_context = BuildContext::new_inflate();
         let mut child_tasks = Default::default();
-        let reconciler = Reconciler::new_async(
-            &self.context,
-            work_context,
-            handle,
-            &mut child_tasks,
-            barrier,
-        );
         let mut nodes_needing_unmount = Default::default();
+        let reconciler = AsyncReconciler {
+            host_handle: handle,
+            work_context,
+            child_tasks: &mut child_tasks,
+            barrier,
+            host_context: &self.context,
+            build_context: &mut build_context,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
         let results = E::perform_inflate_element(
             widget,
-            &mut build_context,
             provider_values,
             reconciler,
-            &mut nodes_needing_unmount,
         );
         let new_stash = match results {
             Ok(element) => AsyncOutput::Completed {

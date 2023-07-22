@@ -22,7 +22,7 @@ use crate::{
     }, scheduler::JobId,
 };
 
-use super::{ArcWidget, ArcChildRenderObject, Render, RenderObject, BuildContext, Reconciler, core_nodes::{SuspenseElement, Suspense, RenderSuspense}, ArcChildWidget, ChildElementWidgetPair};
+use super::{ArcWidget, ArcChildRenderObject, Render, RenderObject, BuildContext, core_nodes::{SuspenseElement, Suspense, RenderSuspense}, ArcChildWidget, ChildElementWidgetPair, Reconciler};
 
 
 
@@ -58,18 +58,14 @@ pub trait Element: Send + Sync + Clone + 'static {
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         self,
         widget: &Self::ArcWidget,
-        ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: Reconciler,
-        nodes_needing_unmount: &mut InlinableUsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, (Self, BuildSuspendedError)>;
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: Reconciler, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-        nodes_needing_unmount: &mut InlinableUsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
     ) -> Result<Self, BuildSuspendedError>;
 
     // Cannot use GAT due to this rustc bug https://github.com/rust-lang/rust/issues/102211
@@ -234,11 +230,6 @@ pub trait ChildElementNode:
         widget: ArcChildWidget<Self::SelfProtocol>,
     ) -> Option<Box<dyn ChildElementWidgetPair<Self::SelfProtocol>>>;
 
-    fn unmount_with(
-        self: Arc<Self>,
-        reconciler: Reconciler,
-    ) -> BoxFuture<'static, Result<(), Aborted>>;
-
     fn get_current_subtree_render_object(&self)
         -> Option<ArcChildRenderObject<Self::SelfProtocol>>;
 }
@@ -262,26 +253,6 @@ where
         widget: ArcChildWidget<Self::SelfProtocol>,
     ) -> Option<Box<dyn ChildElementWidgetPair<Self::SelfProtocol>>> {
         ElementNode::<E>::can_rebuild_with(self, widget).map(|x| Box::new(x) as Box<_>)
-    }
-
-    // fn try_if_can_rebuild_with(
-    //     self: Arc<Self>,
-    //     widget: ArcChildWidget<Self::SelfProtocol>,
-    //     reconciler: Reconciler,
-    // ) -> Result<(), Reconciler> {
-    //     if let Some(rebuild_task) = ElementNode::<E>::can_rebuild_with(self, widget) {
-    //         // Ok(reconciler.into_rebuild(rebuild_task))
-    //         todo!()
-    //     } else {
-    //         Err(reconciler)
-    //     }
-    // }
-
-    fn unmount_with(
-        self: Arc<Self>,
-        reconciler: Reconciler,
-    ) -> BoxFuture<'static, Result<(), Aborted>> {
-        todo!()
     }
 
     fn get_current_subtree_render_object(
