@@ -4,3 +4,4 @@ mod foundation;
 mod integrations;
 mod scheduler;
 mod sync;
+mod painting;

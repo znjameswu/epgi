@@ -683,6 +683,7 @@ version = "0.1.0"
 name = "epgi-core"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "async-channel",
  "crossbeam",
  "either",
@@ -690,11 +691,13 @@ dependencies = [
  "futures",
  "glazier",
  "hashbrown 0.14.0",
+ "kurbo",
  "linear-map",
  "portable-atomic",
  "rayon",
  "smallvec",
  "vello",
+ "vello_encoding",
 ]
 
 [[package]]

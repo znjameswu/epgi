@@ -4,6 +4,7 @@ members = [
     "epgi-common",
     "epgi-futures"
 ]
+resolver = "2"
 
 
 [workspace.package]

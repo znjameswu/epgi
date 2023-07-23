@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use crate::painting::{Affine2d, CanvasAffine2d};
+
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
     type Size: Debug + Clone + Send + Sync + 'static;
@@ -95,9 +97,3 @@ impl Protocol for BoxProtocol {
 
     type Canvas = CanvasAffine2d;
 }
-
-// TODO
-#[derive(Clone, Copy, Debug)]
-pub struct Affine2d;
-
-pub struct CanvasAffine2d;

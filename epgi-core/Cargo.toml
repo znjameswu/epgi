@@ -13,13 +13,19 @@ either = "1.8"
 event-listener = "2.5"
 futures = "0.3.27"
 hashbrown = "0.14"
+kurbo = "0.9"
 linear-map = "1.2.0"
 portable-atomic = "1.0"
 rayon="1.7"
 smallvec = {version = "1.10", features = ["union", "const_generics", "const_new"]}
+accesskit = "0.9"
 # tokio = { version = "1.18", features = ["sync"] }
 
 [dependencies.vello]
+git = "https://github.com/linebender/vello"
+rev = "006faab69fc519c9c7ed6002be740914efad9ffe"
+
+[dependencies.vello_encoding]
 git = "https://github.com/linebender/vello"
 rev = "006faab69fc519c9c7ed6002be740914efad9ffe"
 
