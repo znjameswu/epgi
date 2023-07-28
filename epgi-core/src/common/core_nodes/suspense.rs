@@ -6,7 +6,7 @@ use crate::{
     foundation::{
         Arc, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key, Never, Protocol,
         Provide,
-    },
+    }, rendering::PaintingContext,
 };
 
 #[derive(Clone)]
@@ -168,7 +168,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
         transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
         memo: &Self::LayoutMemo,
-        canvas: &mut <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+        paint_ctx: &mut impl PaintingContext<<<Self::Element as Element>::SelfProtocol as Protocol>::Canvas>,
     ) {
         todo!()
     }

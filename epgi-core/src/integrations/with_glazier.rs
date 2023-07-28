@@ -13,6 +13,8 @@ use vello::{
     RenderParams, Renderer, RendererOptions, Scene, SceneBuilder,
 };
 
+use crate::scheduler::get_current_scheduler;
+
 const QUIT_MENU_ID: u32 = 0x100;
 
 pub fn run() {
@@ -60,10 +62,14 @@ impl WinHandler for MainState {
     fn prepare_paint(&mut self) {}
 
     fn paint(&mut self, _: &Region) {
-        todo!()
+        let scheduler = get_current_scheduler();
+        let new_frame_ready_listener = scheduler.new_frame_ready.listen();
+        todo!();
         // self.app.paint();
         // self.render();
-        // self.schedule_render();
+        // scheduler.
+        new_frame_ready_listener.wait();
+        self.schedule_render();
     }
 
     // TODO: temporary hack

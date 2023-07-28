@@ -8,7 +8,7 @@ use crate::{
     foundation::{
         Arc, Asc, BoxProtocol, BuildSuspendedError, InlinableDwsizeVec, Key, Never, Protocol,
         Provide,
-    },
+    }, integrations::RenderRootView,
 };
 
 #[derive(Debug)]
@@ -102,38 +102,3 @@ impl RenderElement for RootViewElement {
     const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
 }
 
-pub struct RenderRootView {
-    render_ctx: RenderContext,
-    child: ArcChildRenderObject<BoxProtocol>,
-}
-
-impl Render for RenderRootView {
-    type Element = RootViewElement;
-
-    type ChildIter = [ArcChildRenderObject<BoxProtocol>; 1];
-
-    fn get_children(&self) -> Self::ChildIter {
-        todo!()
-    }
-
-    fn set_children(&mut self, new_children: Self::ChildIter) {
-        todo!()
-    }
-
-    type LayoutMemo = ();
-
-    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::DryLayout {
-        compute_dry_layout: todo!(),
-        perform_layout: todo!(),
-    };
-
-    fn perform_paint(
-        &self,
-        size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
-        memo: &Self::LayoutMemo,
-        canvas: &mut <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
-    ) {
-        todo!()
-    }
-}

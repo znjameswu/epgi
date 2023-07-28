@@ -693,6 +693,7 @@ dependencies = [
  "hashbrown 0.14.0",
  "kurbo",
  "linear-map",
+ "parley",
  "portable-atomic",
  "rayon",
  "smallvec",
@@ -788,6 +789,14 @@ name = "foreign-types-shared"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
+name = "fount"
+version = "0.1.0"
+source = "git+https://github.com/jneem/fount?rev=361c76fecf813ebc64d2634d3df7bfb6089c6414#361c76fecf813ebc64d2634d3df7bfb6089c6414"
+dependencies = [
+ "swash",
+]
 
 [[package]]
 name = "futures"
@@ -1513,6 +1522,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "parley"
+version = "0.1.0"
+source = "git+https://github.com/dfrg/parley?rev=2371bf4b702ec91edee2d58ffb2d432539580e1e#2371bf4b702ec91edee2d58ffb2d432539580e1e"
+dependencies = [
+ "fount",
+ "swash",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1907,6 +1925,15 @@ name = "svg_fmt"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fb1df15f412ee2e9dfc1c504260fa695c1c3f10fe9f4a6ee2d2184d7d6450e2"
+
+[[package]]
+name = "swash"
+version = "0.1.8"
+source = "git+https://github.com/dfrg/swash#56ea551ac49e51580c466f03d6c75252a8c8e700"
+dependencies = [
+ "yazi",
+ "zeno",
+]
 
 [[package]]
 name = "syn"
@@ -2550,6 +2577,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "yazi"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c94451ac9513335b5e23d7a8a2b61a7102398b8cca5160829d313e84c9d98be1"
+
+[[package]]
 name = "zbus"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2612,6 +2645,12 @@ dependencies = [
  "static_assertions",
  "zvariant",
 ]
+
+[[package]]
+name = "zeno"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c110ba09c9b3a43edd4803d570df0da2414fed6e822e22b976a4e3ef50860701"
 
 [[package]]
 name = "zvariant"

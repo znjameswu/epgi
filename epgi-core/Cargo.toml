@@ -21,9 +21,14 @@ smallvec = {version = "1.10", features = ["union", "const_generics", "const_new"
 accesskit = "0.9"
 # tokio = { version = "1.18", features = ["sync"] }
 
+[dependencies.parley]
+git = "https://github.com/dfrg/parley"
+rev = "2371bf4b702ec91edee2d58ffb2d432539580e1e"
+
 [dependencies.vello]
 git = "https://github.com/linebender/vello"
 rev = "006faab69fc519c9c7ed6002be740914efad9ffe"
+features = []
 
 [dependencies.vello_encoding]
 git = "https://github.com/linebender/vello"

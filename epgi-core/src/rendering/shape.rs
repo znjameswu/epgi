@@ -31,10 +31,19 @@ pub struct RRect {
     pub top: f32,
     pub right: f32,
     pub botton: f32,
+    pub radius: RRectRadius
+}
+
+pub struct RRectRadius {
     pub tl_radius: f32,
     pub tr_radius: f32,
     pub bl_radius: f32,
     pub br_radius: f32,
+}
+
+pub struct Circle {
+    pub c: Point2d,
+    pub r: f32,
 }
 
 pub struct Ellipse {
@@ -72,11 +81,11 @@ pub struct AffineRRect {
 }
 
 trait Affine2dShape {
-    type SCALAR_ARRAY: Array<f32>;
-    type VECTOR_ARRAY: Array<Point2d>;
-    type AFFINE_ARRAY: Array<Affine2d>;
+    type ScalarArray: Array<f32>;
+    type VectorArray: Array<Point2d>;
+    type AffineArray: Array<Affine2d>;
 
-    fn breakdown(self) -> (Self::SCALAR_ARRAY, Self::VECTOR_ARRAY, Self::AFFINE_ARRAY);
+    fn breakdown(self) -> (Self::ScalarArray, Self::VectorArray, Self::AffineArray);
 }
 
 trait Array<T> {

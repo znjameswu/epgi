@@ -1,4 +1,4 @@
-use crate::foundation::{Arc, Aweak, Parallel, Protocol, SyncMutex};
+use crate::{foundation::{Arc, Aweak, Parallel, Protocol, SyncMutex}, rendering::PaintingContext};
 
 use super::{ArcElementContextNode, Element, ElementContextNode};
 
@@ -33,7 +33,7 @@ pub trait Render: Sized + Send + Sync + 'static {
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
         transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
         memo: &Self::LayoutMemo,
-        canvas: &mut <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+        paint_ctx: &mut impl PaintingContext<<<Self::Element as Element>::SelfProtocol as Protocol>::Canvas>,
     );
 
     // fn compute_child_transformation(
@@ -70,24 +70,43 @@ pub enum PerformLayout<R: Render> {
     },
 }
 
-#[derive(Clone, Copy)]
-pub struct LayoutExecutor<'a, 'layout> {
-    pub scope: &'a rayon::Scope<'layout>,
-}
-
 trait WetLayout: Render {
+    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::WetLayout {
+        perform_layout: Self::perform_layout,
+    };
+
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &<<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
         executor: LayoutExecutor<'a, 'layout>,
     ) -> (
         <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
         Self::LayoutMemo,
     );
+}
 
-    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::WetLayout {
+pub trait DryLayout: Render {
+    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::DryLayout {
+        compute_dry_layout: Self::compute_dry_layout,
         perform_layout: Self::perform_layout,
     };
+
+    fn compute_dry_layout(
+        &self,
+        constraints: &<<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+    ) -> <<Self::Element as Element>::SelfProtocol as Protocol>::Size;
+
+    fn perform_layout<'a, 'layout>(
+        &'a self,
+        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        size: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        executor: LayoutExecutor<'a, 'layout>,
+    ) -> Self::LayoutMemo;
+}
+
+#[derive(Clone, Copy)]
+pub struct LayoutExecutor<'a, 'layout> {
+    pub scope: &'a rayon::Scope<'layout>,
 }
 
 impl<R> PerformLayout<R>

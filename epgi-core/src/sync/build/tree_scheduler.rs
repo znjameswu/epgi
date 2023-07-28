@@ -1,10 +1,10 @@
 use crate::{
     common::{
-        AweakAnyElementNode, AweakElementContextNode, ElementNode, RenderObject, RenderRootView,
+        AweakAnyElementNode, AweakElementContextNode, ElementNode, RenderObject,
         RootViewElement,
     },
     foundation::{Arc, Asc},
-    scheduler::{BatchConf, BatchResult, JobBatcher, LaneMask, LanePos},
+    scheduler::{BatchConf, BatchResult, JobBatcher, LaneMask, LanePos}, integrations::RenderRootView,
 };
 
 use super::{CommitBarrier, CommitBarrierInner};

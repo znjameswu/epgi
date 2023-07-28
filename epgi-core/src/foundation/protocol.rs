@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
-use crate::painting::{Affine2d, CanvasAffine2d};
+use crate::rendering::{Affine2d, Affine2dPrimitive, CanvasAffine2d, PaintingContext};
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
     type Size: Debug + Clone + Send + Sync + 'static;
     type Offset: Debug + Clone + Send + Sync + 'static;
-    type Intrinsics<'a>: Debug + Send + Sync;
+    type Intrinsics: Intrinsics;
     type CanvasTransformation: Debug + Clone + Send + Sync + 'static;
-    type Canvas: Send + Sync;
+    type Canvas: Canvas;
     // fn point_in_area(
     //     size: Self::Size,
     //     transform: Self::CanvasTransformation,
@@ -21,10 +21,33 @@ pub trait Constraints<Size>: Debug + PartialEq + Clone + Send + Sync + 'static {
     fn constrains(&self, size: Size) -> Size;
 }
 
-pub trait Canvas {
-    type RecoderSize: Clone + Send + Sync + 'static;
-    type RecoderOffset: Clone + Send + Sync + 'static;
+pub trait Canvas: Sized {
+    type Transformation: Debug + Clone + Send + Sync;
+    type PaintCommands: Send + Sync;
+
+    type PaintingContext: PaintingContext<Self>;
+    type PaintingContextScanner: PaintingContext<Self>;
 }
+
+pub struct Affine2dCanvas;
+
+impl Canvas for Affine2dCanvas {
+    type Transformation = Affine2d;
+
+    type PaintCommands = Affine2dPrimitive;
+
+    type PaintingContext = Affine2dPaintingContext;
+
+    type PaintingContextScanner = Affine2dPaintingContextScanner;
+}
+
+pub struct Affine2dPaintingContext;
+
+pub struct Affine2dPaintingContextScanner;
+
+impl PaintingContext<Affine2dCanvas> for Affine2dPaintingContext {}
+
+impl PaintingContext<Affine2dCanvas> for Affine2dPaintingContextScanner {}
 
 //// Sample implementation of BoxProtocol, which is fundamental to the crate as a result of the rect canvas from WebGPU
 
@@ -65,23 +88,69 @@ pub struct BoxOffset {
 }
 
 #[derive(Debug)]
-pub enum BoxIntrinsics<'a> {
-    MinWidth {
-        height: f32,
-        res: &'a mut Option<f32>,
-    },
-    MaxWidth {
-        height: f32,
-        res: &'a mut Option<f32>,
-    },
-    MinHeight {
-        width: f32,
-        res: &'a mut Option<f32>,
-    },
-    MaxHeight {
-        width: f32,
-        res: &'a mut Option<f32>,
-    },
+pub enum BoxIntrinsics {
+    MinWidth { height: f32, res: Option<f32> },
+    MaxWidth { height: f32, res: Option<f32> },
+    MinHeight { width: f32, res: Option<f32> },
+    MaxHeight { width: f32, res: Option<f32> },
+}
+
+pub trait Intrinsics: Debug + Send + Sync {
+    fn eq_tag(&self, other: &Self) -> bool;
+    fn eq_param(&self, other: &Self) -> bool;
+}
+
+impl Intrinsics for BoxIntrinsics {
+    fn eq_tag(&self, other: &Self) -> bool {
+        use BoxIntrinsics::*;
+        match (self, other) {
+            (MinWidth { .. }, MinWidth { .. })
+            | (MaxWidth { .. }, MaxWidth { .. })
+            | (MinHeight { .. }, MinHeight { .. })
+            | (MaxHeight { .. }, MaxHeight { .. }) => true,
+            _ => false,
+        }
+    }
+
+    fn eq_param(&self, other: &Self) -> bool {
+        use BoxIntrinsics::*;
+        match (self, other) {
+            (MinWidth { height: x, .. }, MinWidth { height: y, .. })
+            | (MaxWidth { height: x, .. }, MaxWidth { height: y, .. })
+            | (MinHeight { width: x, .. }, MinHeight { width: y, .. })
+            | (MaxHeight { width: x, .. }, MaxHeight { width: y, .. }) => x == y,
+            _ => false,
+        }
+    }
+}
+
+struct TagEq<T: Intrinsics>(T);
+
+impl<T> PartialEq<Self> for TagEq<T>
+where
+    T: Intrinsics,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq_tag(&other.0)
+    }
+}
+
+impl<T> Eq for TagEq<T>
+where
+    T: Intrinsics,
+{
+    fn assert_receiver_is_total_eq(&self) {}
+}
+
+struct ParamEq<T: Intrinsics>(T);
+
+impl<T> PartialEq<Self> for ParamEq<T>
+where
+    T: Intrinsics,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq_param(&other.0)
+    }
 }
 
 impl Protocol for BoxProtocol {
@@ -91,9 +160,9 @@ impl Protocol for BoxProtocol {
 
     type Offset = BoxOffset;
 
-    type Intrinsics<'a> = BoxIntrinsics<'a>;
+    type Intrinsics = BoxIntrinsics;
 
     type CanvasTransformation = Affine2d;
 
-    type Canvas = CanvasAffine2d;
+    type Canvas = Affine2dCanvas;
 }

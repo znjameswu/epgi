@@ -88,3 +88,24 @@ Bypass and reuse the old layout results if the layout constraints are the same. 
 Flutter does not cache the old painting results. However, the painting results is actually cacheable, if we cache the whole paint results of the entire layer in a shared vector buffer. The painting results of a specific node can be represented by the reference to the old buffer and the start/end indices. If the layout constraints are the same, we can directly copy the slices of old painting buffer and bypass the subtree.
 
 # How to Single Pass Layout
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# State hierarchy, layout hierarchy, layer hierarchy
+1. Overlay (text handles)
+https://androidx.tech/artifacts/compose.foundation/foundation/1.4.3-source/androidx/compose/foundation/text/selection/TextFieldSelectionManager.kt.html
+getSelectionHandleCoordinates
+2. Switching paint orders without switch state hierarchy to avoid reconcile problems
+3. Popups
