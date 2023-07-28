@@ -9,3 +9,8 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+accesskit = { workspace = true }
+epgi-core = { workspace = true }
+epgi-2d = { workspace = true }
+glazier = { workspace = true }
+vello = { workspace = true }

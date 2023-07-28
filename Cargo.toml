@@ -1,5 +1,11 @@
 [workspace]
-members = ["epgi-core", "epgi-common", "epgi-futures", "epgi-2d", "epgi-glazier"]
+members = [
+    "epgi-core",
+    "epgi-common",
+    "epgi-futures",
+    "epgi-2d",
+    "epgi-glazier",
+]
 resolver = "2"
 
 
@@ -26,4 +32,9 @@ path = "./epgi-vello"
 vello = { git = "https://github.com/linebender/vello", rev = "006faab69fc519c9c7ed6002be740914efad9ffe" }
 vello_encoding = { git = "https://github.com/linebender/vello", rev = "006faab69fc519c9c7ed6002be740914efad9ffe" }
 peniko = { git = "https://github.com/linebender/peniko", rev = "cafdac9a211a0fb2fec5656bd663d1ac770bcc81" }
-parley = {git = "https://github.com/dfrg/parley", rev = "2371bf4b702ec91edee2d58ffb2d432539580e1e"}
+parley = { git = "https://github.com/dfrg/parley", rev = "2371bf4b702ec91edee2d58ffb2d432539580e1e" }
+glazier = { git = "https://github.com/linebender/glazier", rev = "51eb418511790309b90b0d9838e4d91fc11d84d3", default-features = false, features = [
+    "accesskit",
+    "x11",
+] }
+accesskit = "0.9"

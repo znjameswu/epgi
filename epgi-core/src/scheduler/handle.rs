@@ -41,7 +41,7 @@ pub struct SchedulerHandle {
     pub async_threadpool: rayon::ThreadPool,
 
     pub(super) task_rx: SchedulerTaskReceiver,
-    pub(crate) new_frame_ready: event_listener::Event,
+    pub new_frame_ready: event_listener::Event,
     is_executing_sync: AtomicBool,
 
     // mode: LatencyMode,
@@ -97,6 +97,8 @@ impl SchedulerHandle {
             .lock()
             .insert(PtrEq(object));
     }
+
+    // pub fn schedule_idle_callback
 }
 
 pub(super) struct SchedulerTaskReceiver {

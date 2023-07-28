@@ -13,7 +13,7 @@ use vello::{
     RenderParams, Renderer, RendererOptions, Scene, SceneBuilder,
 };
 
-use crate::scheduler::get_current_scheduler;
+use epgi_core::scheduler::get_current_scheduler;
 
 const QUIT_MENU_ID: u32 = 0x100;
 

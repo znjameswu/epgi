@@ -2,7 +2,7 @@ use crate::{
     common::{
         ArcAnyElementNode, AweakAnyElementNode, AweakElementContextNode, ElementNode, RenderObject,
     },
-    foundation::{Arc, Asc},
+    foundation::{Arc, Asc, Protocol},
     scheduler::{BatchConf, BatchResult, JobBatcher, LaneMask, LanePos},
 };
 
@@ -37,7 +37,7 @@ pub struct TreeScheduler {
     // root_render_object: Arc<RenderObject<RenderRootView>>,
 }
 
-impl TreeScheduler {
+impl TreeScheduler{
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
         let LanePos::Async(pos) = lane_pos else {
             panic!("Only async lanes have commit barriers");

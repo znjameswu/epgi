@@ -694,22 +694,16 @@ version = "0.1.0"
 name = "epgi-core"
 version = "0.1.0"
 dependencies = [
- "accesskit",
  "async-channel",
  "crossbeam",
  "either",
  "event-listener",
  "futures",
- "glazier",
  "hashbrown 0.14.0",
- "kurbo",
  "linear-map",
- "parley",
  "portable-atomic",
  "rayon",
  "smallvec",
- "vello",
- "vello_encoding",
 ]
 
 [[package]]
@@ -719,6 +713,13 @@ version = "0.1.0"
 [[package]]
 name = "epgi-glazier"
 version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "epgi-2d",
+ "epgi-core",
+ "glazier",
+ "vello",
+]
 
 [[package]]
 name = "equivalent"
