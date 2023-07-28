@@ -1,11 +1,9 @@
 mod r#box;
-mod paint_command;
-mod paint_context;
+mod paint;
 mod vello;
 mod text;
 
-pub use paint_command::*;
-pub use paint_context::*;
+pub use paint::*;
 pub use r#box::*;
 pub use vello::*;
 pub use text::*;
@@ -19,11 +17,11 @@ pub type Point2d = BoxOffset;
 pub struct Affine2dCanvas;
 
 impl Canvas for Affine2dCanvas {
-    type Transformation = Affine2d;
+    type Transform = Affine2d;
 
-    type PaintCommand = Affine2dPrimitive;
+    type PaintCommand = Affine2dPaintCommand;
 
-    type DefaultPaintingContext = VelloPaintingContext;
+    type DefaultPaintContext<'a> = VelloPaintContext<'a>;
 
-    type DefaultPaintingScanner = VelloPaintingScanner;
+    type DefaultPaintScanner<'a> = VelloPaintScanner<'a>;
 }

@@ -124,18 +124,17 @@ where
     const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::None(E::child);
 }
 
-impl<E, R> ArcRenderObject<E> for Arc<RenderObject<R>>
+impl<R> ArcRenderObject<R::Element> for Arc<RenderObject<R>>
 where
-    E: RenderElement<ArcRenderObject = Self, Render = R>,
     R: Render,
 {
-    const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::RenderObject {
-        get_render_object: todo!(),
-        try_create_render_object: E::try_create_render_object,
-        update_render_object_widget: E::update_render_object_widget,
-        try_update_render_object_children: E::try_update_render_object_children,
-        detach_render_object: E::detach_render_object,
-        get_suspense: E::GET_SUSPENSE,
+    const GET_RENDER_OBJECT: GetRenderObject<R::Element> = GetRenderObject::RenderObject {
+        get_render_object: |x| x,
+        try_create_render_object: R::Element::try_create_render_object,
+        update_render_object_widget: R::Element::update_render_object_widget,
+        try_update_render_object_children: R::Element::try_update_render_object_children,
+        detach_render_object: R::Element::detach_render_object,
+        get_suspense: R::Element::GET_SUSPENSE,
     };
 }
 

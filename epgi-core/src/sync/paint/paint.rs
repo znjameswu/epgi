@@ -1,6 +1,6 @@
 use crate::{
     common::{Element, Render, RenderObject},
-    foundation::{PaintingContext, Protocol},
+    foundation::{PaintContext, Protocol},
     sync::TreeScheduler,
 };
 
@@ -16,8 +16,8 @@ where
 {
     fn paint(
         &self,
-        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
-        paint_ctx: &mut impl PaintingContext<
+        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        paint_ctx: impl PaintContext<
             Canvas = <<R::Element as Element>::SelfProtocol as Protocol>::Canvas,
         >,
     ) {
@@ -42,14 +42,14 @@ pub(crate) mod paint_private {
     pub trait ChildRenderObjectPaintExt<SP: Protocol> {
         fn paint(
             &self,
-            transformation: &SP::CanvasTransformation,
-            paint_ctx: &mut <SP::Canvas as Canvas>::DefaultPaintingContext,
+            transformation: &SP::SelfTransform,
+            paint_ctx: <SP::Canvas as Canvas>::DefaultPaintContext<'_>,
         );
 
         fn paint_scan(
             &self,
-            transformation: &SP::CanvasTransformation,
-            paint_ctx: &mut <SP::Canvas as Canvas>::DefaultPaintingScanner,
+            transformation: &SP::SelfTransform,
+            paint_ctx: <SP::Canvas as Canvas>::DefaultPaintScanner<'_>,
         );
     }
 
@@ -59,16 +59,16 @@ pub(crate) mod paint_private {
     {
         fn paint(
             &self,
-            transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
-            paint_ctx: &mut <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::DefaultPaintingContext,
+            transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::DefaultPaintContext<'_>,
         ) {
             self.paint(transformation, paint_ctx)
         }
 
         fn paint_scan(
             &self,
-            transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
-            paint_ctx: &mut <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::DefaultPaintingScanner,
+            transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::DefaultPaintScanner<'_>,
         ) {
             self.paint(transformation, paint_ctx)
         }

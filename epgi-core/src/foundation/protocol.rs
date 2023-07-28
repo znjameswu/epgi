@@ -5,8 +5,12 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Size: Debug + Clone + Send + Sync + 'static;
     type Offset: Debug + Clone + Send + Sync + 'static;
     type Intrinsics: Intrinsics;
-    type CanvasTransformation: Debug + Clone + Send + Sync + 'static;
+    type SelfTransform: Debug + Clone + Send + Sync + 'static;
     type Canvas: Canvas;
+    // fn transform_canvas(
+    //     transform: &Self::SelfTransform,
+    //     canvas_transform: &<Self::Canvas as Canvas>::Transform,
+    // ) -> Self::SelfTransform;
     // fn point_in_area(
     //     size: Self::Size,
     //     transform: Self::CanvasTransformation,
@@ -54,20 +58,20 @@ where
 }
 
 pub trait Canvas: Sized {
-    type Transformation: Debug + Clone + Send + Sync;
+    type Transform: Debug + Clone + Send + Sync;
     type PaintCommand: Send + Sync;
 
-    type DefaultPaintingContext: PaintingContext<Canvas = Self>;
-    type DefaultPaintingScanner: PaintingContext<Canvas = Self>;
+    type DefaultPaintContext<'a>: PaintContext<Canvas = Self>;
+    type DefaultPaintScanner<'a>: PaintContext<Canvas = Self>;
 }
 
-pub trait PaintingContext {
+pub trait PaintContext {
     type Canvas: Canvas;
     fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand);
 
     fn with_transform(
         &mut self,
-        transform: <Self::Canvas as Canvas>::Transformation,
-        op: impl FnOnce(&mut Self),
+        transform: <Self::Canvas as Canvas>::Transform,
+        op: impl FnOnce(&mut Self) ,
     );
 }

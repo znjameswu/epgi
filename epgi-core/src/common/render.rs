@@ -1,13 +1,13 @@
-use crate::foundation::{Arc, Aweak, PaintingContext, Parallel, Protocol, SyncMutex};
+use crate::foundation::{Arc, Aweak, PaintContext, Parallel, Protocol, SyncMutex, Canvas};
 
-use super::{ArcElementContextNode, Element, ElementContextNode};
+use super::{ArcElementContextNode, Element, ElementContextNode, RenderElement};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
 
 pub trait Render: Sized + Send + Sync + 'static {
-    type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
+    type Element: RenderElement<Render = Self>;
 
     type ChildIter: Parallel<Item = ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>>
         + Send
@@ -31,9 +31,9 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
+        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintingContext<
+        paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
         >,
     );
@@ -72,7 +72,7 @@ pub enum PerformLayout<R: Render> {
     },
 }
 
-trait WetLayout: Render {
+pub trait WetLayout: Render {
     const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::WetLayout {
         perform_layout: Self::perform_layout,
     };
@@ -221,7 +221,7 @@ pub(crate) struct LayoutResults<P: Protocol, M> {
 }
 
 pub(crate) struct PaintResults<P: Protocol> {
-    pub(crate) transformation: P::CanvasTransformation,
+    pub(crate) transformation: <P::Canvas as Canvas>::Transform,
     pub(crate) encoding_slice: Option<()>, //TODO
 }
 
@@ -234,6 +234,11 @@ pub trait ChildRenderObject<SP: Protocol>:
     + Sync
     + 'static
 {
+}
+
+
+impl<R> ChildRenderObject<<R::Element as Element>::SelfProtocol> for RenderObject<R> where R: Render {
+
 }
 
 pub trait AnyRenderObject:

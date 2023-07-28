@@ -4,7 +4,7 @@ use epgi_core::{
         LayoutExecutor, PerformLayout, Reconciler, Render, RenderElement, RenderObject, Widget,
     },
     foundation::{
-        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintingContext, Protocol,
+        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
         Provide,
     },
 };
@@ -38,9 +38,9 @@ impl Render for RenderRootView {
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
+        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintingContext<
+        paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
         >,
     ) {

@@ -1,11 +1,11 @@
 use crate::{
     common::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, GetSuspense,
-        PerformLayout, Reconciler, Render, RenderElement, RenderObject, Widget,
+        PerformLayout, Reconciler, Render, RenderElement, RenderObject, WetLayout, Widget,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key, Never,
-        PaintingContext, Protocol, Provide,
+        PaintContext, Protocol, Provide,
     },
 };
 
@@ -158,19 +158,29 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     //     todo!()
     // }
 
-    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::DryLayout {
-        compute_dry_layout: todo!(),
-        perform_layout: todo!(),
-    };
+    const PERFORM_LAYOUT: PerformLayout<Self> = <Self as WetLayout>::PERFORM_LAYOUT;
 
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
+        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintingContext<
+        paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
         >,
+    ) {
+        todo!()
+    }
+}
+
+impl<P: Protocol> WetLayout for RenderSuspense<P> {
+    fn perform_layout<'a, 'layout>(
+        &'a self,
+        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        executor: crate::common::LayoutExecutor<'a, 'layout>,
+    ) -> (
+        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        Self::LayoutMemo,
     ) {
         todo!()
     }
