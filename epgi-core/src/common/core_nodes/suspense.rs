@@ -4,9 +4,9 @@ use crate::{
         PerformLayout, Reconciler, Render, RenderElement, RenderObject, Widget,
     },
     foundation::{
-        Arc, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key, Never, Protocol,
-        Provide,
-    }, rendering::PaintingContext,
+        Arc, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key, Never,
+        PaintingContext, Protocol, Provide,
+    },
 };
 
 #[derive(Clone)]
@@ -168,7 +168,9 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
         transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintingContext<<<Self::Element as Element>::SelfProtocol as Protocol>::Canvas>,
+        paint_ctx: &mut impl PaintingContext<
+            Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+        >,
     ) {
         todo!()
     }

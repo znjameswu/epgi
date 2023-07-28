@@ -1,118 +1,76 @@
-use std::ops::BitAnd;
+// use std::ops::BitAnd;
 
-use crate::foundation::{BoxOffset, BoxSize};
+// use crate::foundation::{BoxOffset, BoxSize};
 
-pub type Point2d = BoxOffset;
 
-pub type Affine2d = vello_encoding::Transform;
 
-pub struct Rect {
-    pub left: f32,
-    pub top: f32,
-    pub right: f32,
-    pub botton: f32,
-}
 
-impl BitAnd<BoxSize> for BoxOffset {
-    type Output = Rect;
 
-    fn bitand(self, rhs: BoxSize) -> Self::Output {
-        Rect {
-            left: self.x,
-            top: self.y,
-            right: self.x + rhs.width,
-            botton: self.y + rhs.height,
-        }
-    }
-}
 
-pub struct RRect {
-    pub left: f32,
-    pub top: f32,
-    pub right: f32,
-    pub botton: f32,
-    pub radius: RRectRadius
-}
 
-pub struct RRectRadius {
-    pub tl_radius: f32,
-    pub tr_radius: f32,
-    pub bl_radius: f32,
-    pub br_radius: f32,
-}
+// /// We could store an Affine2d from a unit square, however that would require matrix-matrix multiplication.
+// /// By storing three points, we simplify to matrix-vector multiplicaiton and vector-vector addition/subtraction.
+// pub struct AffineRect {
+//     pub lt: Point2d,
+//     pub rt: Point2d,
+//     pub rb: Point2d,
+// }
 
-pub struct Circle {
-    pub c: Point2d,
-    pub r: f32,
-}
+// pub struct AffineArc {
+//     pub start_angle: f32,
+//     pub sweep_angle: f32,
+//     pub affine: Affine2d,
+// }
 
-pub struct Ellipse {
-    pub affine: Affine2d,
-}
+// pub struct Line {
+//     pub p0: Point2d,
+//     pub p1: Point2d,
+// }
 
-/// We could store an Affine2d from a unit square, however that would require matrix-matrix multiplication.
-/// By storing three points, we simplify to matrix-vector multiplicaiton and vector-vector addition/subtraction.
-pub struct AffineRect {
-    pub lt: Point2d,
-    pub rt: Point2d,
-    pub rb: Point2d,
-}
+// pub struct AffineRRect {
+//     pub lt: Point2d,
+//     pub rt: Point2d,
+//     pub rb: Point2d,
+//     pub lt_radius_x_ratio: f32,
+//     pub rt_radius_x_ratio: f32,
+//     pub rb_radius_x_ratio: f32,
+//     pub lb_radius_x_ratio: f32,
+//     pub lt_radius_y_ratio: f32,
+// }
 
-pub struct AffineArc {
-    pub start_angle: f32,
-    pub sweep_angle: f32,
-    pub affine: Affine2d,
-}
+// trait Affine2dShape {
+//     type ScalarArray: Array<f32>;
+//     type VectorArray: Array<Point2d>;
+//     type AffineArray: Array<Affine2d>;
 
-pub struct Line {
-    pub p0: Point2d,
-    pub p1: Point2d,
-}
+//     fn breakdown(self) -> (Self::ScalarArray, Self::VectorArray, Self::AffineArray);
+// }
 
-pub struct AffineRRect {
-    pub lt: Point2d,
-    pub rt: Point2d,
-    pub rb: Point2d,
-    pub lt_radius_x_ratio: f32,
-    pub rt_radius_x_ratio: f32,
-    pub rb_radius_x_ratio: f32,
-    pub lb_radius_x_ratio: f32,
-    pub lt_radius_y_ratio: f32,
-}
+// trait Array<T> {
+//     const LENGTH: usize;
+// }
 
-trait Affine2dShape {
-    type ScalarArray: Array<f32>;
-    type VectorArray: Array<Point2d>;
-    type AffineArray: Array<Affine2d>;
+// impl<T, const N: usize> Array<T> for [T; N] {
+//     const LENGTH: usize = N;
+// }
 
-    fn breakdown(self) -> (Self::ScalarArray, Self::VectorArray, Self::AffineArray);
-}
+// macro_rules! impl_shape {
+//     ($ty: ty, $self:ident, $n_scalar: literal, $scalar: expr, $n_vector: literal,$vector: expr, $n_affine: literal,$affine: expr) => {
+//         impl Affine2dShape for $ty {
+//             type SCALAR_ARRAY = [f32; $n_scalar];
+//             type VECTOR_ARRAY = [Point2d; $n_vector];
+//             type AFFINE_ARRAY = [Affine2d; $n_affine];
 
-trait Array<T> {
-    const LENGTH: usize;
-}
+//             fn breakdown($self) -> (Self::SCALAR_ARRAY, Self::VECTOR_ARRAY, Self::AFFINE_ARRAY) {
+//                 (
+//                     $scalar,
+//                     $vector,
+//                     $affine
+//                 )
+//             }
+//         }
+//     };
+// }
 
-impl<T, const N: usize> Array<T> for [T; N] {
-    const LENGTH: usize = N;
-}
-
-macro_rules! impl_shape {
-    ($ty: ty, $self:ident, $n_scalar: literal, $scalar: expr, $n_vector: literal,$vector: expr, $n_affine: literal,$affine: expr) => {
-        impl Affine2dShape for $ty {
-            type SCALAR_ARRAY = [f32; $n_scalar];
-            type VECTOR_ARRAY = [Point2d; $n_vector];
-            type AFFINE_ARRAY = [Affine2d; $n_affine];
-
-            fn breakdown($self) -> (Self::SCALAR_ARRAY, Self::VECTOR_ARRAY, Self::AFFINE_ARRAY) {
-                (
-                    $scalar,
-                    $vector,
-                    $affine
-                )
-            }
-        }
-    };
-}
-
-// impl_shape!(Rect, self, 0, [], 2, self.LTRB, 0, []);
-// impl_shape!(Ellipse, self, 0, [], 0, [], 1, [self.affine]);
+// // impl_shape!(Rect, self, 0, [], 2, self.LTRB, 0, []);
+// // impl_shape!(Ellipse, self, 0, [], 0, [], 1, [self.affine]);

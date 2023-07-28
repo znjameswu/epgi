@@ -1,9 +1,5 @@
 [workspace]
-members = [
-    "epgi-core",
-    "epgi-common",
-    "epgi-futures"
-]
+members = ["epgi-core", "epgi-common", "epgi-futures", "epgi-2d", "epgi-glazier"]
 resolver = "2"
 
 
@@ -16,3 +12,18 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies.epgi-core]
 package = "epgi-core"
 path = "./epgi-core"
+
+[workspace.dependencies.epgi-2d]
+package = "epgi-2d"
+path = "./epgi-2d"
+
+[workspace.dependencies.epgi-vello]
+package = "epgi-vello"
+path = "./epgi-vello"
+
+
+[workspace.dependencies]
+vello = { git = "https://github.com/linebender/vello", rev = "006faab69fc519c9c7ed6002be740914efad9ffe" }
+vello_encoding = { git = "https://github.com/linebender/vello", rev = "006faab69fc519c9c7ed6002be740914efad9ffe" }
+peniko = { git = "https://github.com/linebender/peniko", rev = "cafdac9a211a0fb2fec5656bd663d1ac770bcc81" }
+parley = {git = "https://github.com/dfrg/parley", rev = "2371bf4b702ec91edee2d58ffb2d432539580e1e"}

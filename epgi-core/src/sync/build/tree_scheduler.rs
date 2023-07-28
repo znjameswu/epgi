@@ -1,10 +1,9 @@
 use crate::{
     common::{
-        AweakAnyElementNode, AweakElementContextNode, ElementNode, RenderObject,
-        RootViewElement,
+        ArcAnyElementNode, AweakAnyElementNode, AweakElementContextNode, ElementNode, RenderObject,
     },
     foundation::{Arc, Asc},
-    scheduler::{BatchConf, BatchResult, JobBatcher, LaneMask, LanePos}, integrations::RenderRootView,
+    scheduler::{BatchConf, BatchResult, JobBatcher, LaneMask, LanePos},
 };
 
 use super::{CommitBarrier, CommitBarrierInner};
@@ -33,8 +32,9 @@ pub struct TreeScheduler {
     sync_lane: Option<LaneData>,
     async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
     queued_batches: Vec<Asc<BatchConf>>,
-    root_element: Arc<ElementNode<RootViewElement>>,
-    root_render_object: Arc<RenderObject<RenderRootView>>,
+    root_element: ArcAnyElementNode,
+    // root_element: Arc<ElementNode<RootViewElement>>,
+    // root_render_object: Arc<RenderObject<RenderRootView>>,
 }
 
 impl TreeScheduler {
@@ -65,6 +65,7 @@ impl TreeScheduler {
                 if let Some(async_lane_data) = async_lane {
                     if expired_batches.contains(&async_lane_data.batch.id) {
                         self.root_element
+                            .clone()
                             .remove_async_work_and_lane_in_subtree(async_lane_data.lane_pos);
                         *async_lane = None;
                     }

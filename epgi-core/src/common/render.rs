@@ -1,4 +1,4 @@
-use crate::{foundation::{Arc, Aweak, Parallel, Protocol, SyncMutex}, rendering::PaintingContext};
+use crate::foundation::{Arc, Aweak, PaintingContext, Parallel, Protocol, SyncMutex};
 
 use super::{ArcElementContextNode, Element, ElementContextNode};
 
@@ -33,7 +33,9 @@ pub trait Render: Sized + Send + Sync + 'static {
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
         transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintingContext<<<Self::Element as Element>::SelfProtocol as Protocol>::Canvas>,
+        paint_ctx: &mut impl PaintingContext<
+            Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+        >,
     );
 
     // fn compute_child_transformation(

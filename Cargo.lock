@@ -676,6 +676,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "epgi-2d"
+version = "0.1.0"
+dependencies = [
+ "epgi-core",
+ "parley",
+ "peniko",
+ "vello",
+ "vello_encoding",
+]
+
+[[package]]
 name = "epgi-common"
 version = "0.1.0"
 
@@ -703,6 +714,10 @@ dependencies = [
 
 [[package]]
 name = "epgi-futures"
+version = "0.1.0"
+
+[[package]]
+name = "epgi-glazier"
 version = "0.1.0"
 
 [[package]]

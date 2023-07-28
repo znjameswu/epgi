@@ -1,0 +1,16 @@
+[package]
+name = "epgi-2d"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+epgi-core = { workspace = true }
+peniko = { workspace = true }
+vello_encoding = { workspace = true }
+vello = { workspace = true }
+parley = { workspace = true }

@@ -3,74 +3,7 @@ pub use vello::peniko::{
     Image, Join, Stroke,
 };
 
-use crate::foundation::BoxOffset;
 
-use super::{Affine2d, Circle, Paragraph, Point2d, RRect, RRectRadius, Rect};
-
-pub enum Affine2dPrimitive {
-    ClipPath,
-    ClipRect {
-        rect: Rect,
-    },
-    ClipRRect {
-        rect: Rect,
-        radius: RRectRadius,
-    },
-    Arc {
-        rect: Rect,
-        start_angle: f32,
-        sweep_angle: f32,
-        use_center: bool,
-        painter: Painter,
-    },
-    // Atlas,
-    Circle {
-        center: Point2d,
-        radius: f32,
-        use_center: bool,
-        painter: Painter,
-    },
-    Color {
-        color: Color,
-        blend_mode: BlendMode,
-    },
-    DRRect {
-        outer: RRect,
-        inner: RRect,
-        painter: Painter,
-    },
-    Image,
-    ImageNine,
-    ImageRect,
-    Line {
-        p1: Point2d,
-        p2: Point2d,
-        painter: StrokePainter
-    },
-    Oval {
-        rect: Rect,
-        painter: Painter
-    },
-    Paint {
-        painter: FillPainter,
-    },
-    Paragraph {
-        paragraph: Paragraph,
-        offset: BoxOffset,
-    },
-    Path,
-    // Picture,
-    // Points, //https://stackoverflow.com/a/56896362
-    Rect {
-        rect: Rect,
-    },
-    RRect {
-        rect: Rect,
-        radius: RRectRadius,
-    },
-    Shadow,
-    Vertices,
-}
 
 pub enum Affine2dPrimitiveTag {
     ClipPath,
@@ -97,35 +30,18 @@ pub enum Affine2dPrimitiveTag {
     Vertices,
 }
 
-pub enum Painter {
-    Fill(FillPainter),
-    Stroke(StrokePainter),
-}
 
-pub struct FillPainter {
-    pub fill: PathFillType,
-    pub brush: Brush,
-    pub transform: Option<Affine2d>,
-}
-
-pub struct StrokePainter {
-    pub stroke: Stroke,
-    pub brush: Brush,
-    pub transform: Option<Affine2d>,
-}
-
-pub type PathFillType = vello::peniko::Fill;
 
 // // TODO
 // #[derive(Clone, Copy, Debug)]
 // pub struct Affine2d;
 
-pub struct CanvasAffine2d<'a> {
-    transform: Affine2d,
-    scene: vello::SceneBuilder<'a>,
-}
+// pub struct CanvasAffine2d<'a> {
+//     transform: Affine2d,
+//     scene: vello::SceneBuilder<'a>,
+// }
 
-impl<'a> CanvasAffine2d<'a> {
+// impl<'a> CanvasAffine2d<'a> {
     // /// Pushes a new layer bound by the specifed shape and composed with
     // /// previous layers using the specified blend mode.
     // fn push_layer(
@@ -220,4 +136,4 @@ impl<'a> CanvasAffine2d<'a> {
     // //         &transform.map(|xform| Transform::from_kurbo(&xform)),
     // //     );
     // // }
-}
+// }
