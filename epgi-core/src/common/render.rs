@@ -1,8 +1,13 @@
-use crate::foundation::{Arc, Aweak, PaintContext, Parallel, Protocol, SyncMutex, Canvas};
+use std::any::Any;
+
+use crate::foundation::{
+    Arc, Aweak, BoolExpectExt, Canvas, PaintContext, Parallel, Protocol, SyncMutex,
+};
 
 use super::{ArcElementContextNode, Element, ElementContextNode, RenderElement};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
+pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
 
@@ -147,6 +152,20 @@ pub(crate) struct RenderCacheInner<P: Protocol, M> {
     pub(crate) layout: Option<LayoutResults<P, M>>,
 }
 
+impl<P, M> RenderCache<P, M>
+where
+    P: Protocol,
+{
+    pub(crate) fn set_constraints(&mut self, constraints: P::Constraints) -> bool {
+        let Some(inner) = &mut self.inner else {
+            return false;
+        };
+        inner.constraints = constraints;
+        inner.layout = None;
+        return true;
+    }
+}
+
 pub struct CacheEntry<K, V> {
     key: K,
     value: Option<V>,
@@ -236,15 +255,35 @@ pub trait ChildRenderObject<SP: Protocol>:
 {
 }
 
-
-impl<R> ChildRenderObject<<R::Element as Element>::SelfProtocol> for RenderObject<R> where R: Render {
-
-}
+impl<R> ChildRenderObject<<R::Element as Element>::SelfProtocol> for RenderObject<R> where R: Render {}
 
 pub trait AnyRenderObject:
     crate::sync::layout_private::AnyRenderObjectRelayoutExt + Send + Sync + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
+
+    fn set_constraints(&self, constraints: Box<dyn Any>);
+}
+
+impl<R> AnyRenderObject for RenderObject<R>
+where
+    R: Render,
+{
+    fn element_context(&self) -> &ElementContextNode {
+        &self.element_context
+    }
+
+    fn set_constraints(&self, constraints: Box<dyn Any>) {
+        let constraints = constraints
+            .downcast::<<<R::Element as Element>::SelfProtocol as Protocol>::Constraints>()
+            .ok()
+            .expect("A correct type of constraints should be passed to root");
+        self.inner
+            .lock()
+            .cache
+            .set_constraints(*constraints)
+            .debug_assert("Only previously laid-out render object can be updated with constraints");
+    }
 }
 
 pub trait ParentRenderObject: Send + Sync + 'static {

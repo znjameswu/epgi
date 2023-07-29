@@ -1,12 +1,12 @@
 mod r#box;
 mod paint;
-mod vello;
 mod text;
+mod vello;
 
 pub use paint::*;
 pub use r#box::*;
-pub use vello::*;
 pub use text::*;
+pub use vello::*;
 
 use epgi_core::foundation::Canvas;
 

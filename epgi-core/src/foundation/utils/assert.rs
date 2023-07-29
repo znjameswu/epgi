@@ -1,10 +1,16 @@
 pub trait BoolExpectExt {
     fn assert(self, msg: &str);
+
+    fn debug_assert(self, msg: &str);
 }
 
 impl BoolExpectExt for bool {
     fn assert(self, msg: &str) {
         assert!(self, "{}", msg)
+    }
+
+    fn debug_assert(self, msg: &str) {
+        debug_assert!(self, "{}", msg)
     }
 }
 

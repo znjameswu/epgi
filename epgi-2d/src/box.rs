@@ -82,5 +82,4 @@ impl Protocol for BoxProtocol {
     type SelfTransform = Affine2d;
 
     type Canvas = Affine2dCanvas;
-
 }

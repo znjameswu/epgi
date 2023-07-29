@@ -72,6 +72,6 @@ pub trait PaintContext {
     fn with_transform(
         &mut self,
         transform: <Self::Canvas as Canvas>::Transform,
-        op: impl FnOnce(&mut Self) ,
+        op: impl FnOnce(&mut Self),
     );
 }

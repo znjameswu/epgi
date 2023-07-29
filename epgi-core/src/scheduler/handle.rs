@@ -57,9 +57,7 @@ impl SchedulerHandle {
         todo!()
     }
 
-    pub(crate) fn schedule_new_frame(&self) {
-        
-    }
+    pub(crate) fn schedule_new_frame(&self) {}
 
     pub(crate) fn schedule_reorder_async_work(&self, node: AweakAnyElementNode) {
         self.task_rx

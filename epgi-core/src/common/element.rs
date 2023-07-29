@@ -19,9 +19,8 @@ use crate::{
 };
 
 use super::{
-    core_nodes::{RenderSuspense, Suspense, SuspenseElement},
     ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Reconciler, Render,
-    RenderObject,
+    RenderObject, RenderSuspense, Suspense, SuspenseElement,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
