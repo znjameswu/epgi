@@ -1,6 +1,7 @@
 /// Modified based on xilem:src/app_main.rs
 use std::any::Any;
 
+use epgi_2d::Affine2dCanvas;
 use glazier::{
     kurbo::{Affine, Size},
     text::Event,
@@ -13,7 +14,7 @@ use vello::{
     RenderParams, Renderer, RendererOptions, Scene, SceneBuilder,
 };
 
-use epgi_core::scheduler::get_current_scheduler;
+use epgi_core::{common::LayerScope, scheduler::get_current_scheduler};
 
 const QUIT_MENU_ID: u32 = 0x100;
 
@@ -48,6 +49,7 @@ struct MainState {
     render_cx: RenderContext,
     surface: Option<RenderSurface>,
     renderer: Option<Renderer>,
+    // root_layer: Option<Layer<Affine2dCanvas>>,
     scene: Scene,
     counter: u64,
 }
@@ -69,6 +71,7 @@ impl WinHandler for MainState {
         // self.render();
         // scheduler.
         new_frame_ready_listener.wait();
+        // self.root_layer
         self.schedule_render();
     }
 

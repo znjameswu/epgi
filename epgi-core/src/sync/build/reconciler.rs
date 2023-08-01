@@ -58,7 +58,7 @@ pub(crate) mod reconciler_private {
         ) -> (ArcChildElementNode<P>, SubtreeCommitResult);
     }
 
-    impl<E> ChildElementWidgetPairSyncBuildExt<E::SelfProtocol> for ElementWidgetPair<E>
+    impl<E> ChildElementWidgetPairSyncBuildExt<E::ParentProtocol> for ElementWidgetPair<E>
     where
         E: Element,
     {
@@ -67,7 +67,7 @@ pub(crate) mod reconciler_private {
             job_ids: &'a SmallSet<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
-        ) -> (ArcChildElementNode<E::SelfProtocol>, SubtreeCommitResult) {
+        ) -> (ArcChildElementNode<E::ParentProtocol>, SubtreeCommitResult) {
             let subtree_results =
                 self.element
                     .rebuild_node_sync(Some(self.widget), job_ids, scope, tree_scheduler);
@@ -79,22 +79,22 @@ pub(crate) mod reconciler_private {
             job_ids: &'a SmallSet<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
-        ) -> (ArcChildElementNode<E::SelfProtocol>, SubtreeCommitResult) {
+        ) -> (ArcChildElementNode<E::ParentProtocol>, SubtreeCommitResult) {
             self.rebuild_sync(job_ids, scope, tree_scheduler)
         }
     }
 
-    pub trait ChildWidgetSyncInflateExt<SP: Protocol> {
+    pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
         fn inflate_sync<'a, 'batch>(
             self: Arc<Self>,
             parent_context: &ArcElementContextNode,
             job_ids: &'a SmallSet<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
-        ) -> (ArcChildElementNode<SP>, SubtreeCommitResult);
+        ) -> (ArcChildElementNode<PP>, SubtreeCommitResult);
     }
 
-    impl<T> ChildWidgetSyncInflateExt<<<T as Widget>::Element as Element>::SelfProtocol> for T
+    impl<T> ChildWidgetSyncInflateExt<<<T as Widget>::Element as Element>::ParentProtocol> for T
     where
         T: Widget,
     {
@@ -105,7 +105,7 @@ pub(crate) mod reconciler_private {
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (
-            ArcChildElementNode<<<T as Widget>::Element as Element>::SelfProtocol>,
+            ArcChildElementNode<<<T as Widget>::Element as Element>::ParentProtocol>,
             SubtreeCommitResult,
         ) {
             let (node, results) = ElementNode::<<T as Widget>::Element>::inflate_node_sync(

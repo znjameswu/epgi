@@ -26,4 +26,13 @@ impl Canvas for Affine2dCanvas {
     type PaintScanner<'a> = VelloPaintScanner<'a>;
 
     type Encoding = VelloEncoding;
+
+    fn composite(
+        dst: &mut Self::Encoding,
+        src: &Self::Encoding,
+        transform: Option<&Self::Transform>,
+    ) {
+        // TODO: Vello API design issue.
+        dst.append(src, &transform.cloned())
+    }
 }

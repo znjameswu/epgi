@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::common::Layer;
+use crate::common::LayerScope;
 
 use super::Asc;
 
@@ -61,7 +61,7 @@ where
     }
 }
 
-pub trait Canvas: Sized {
+pub trait Canvas: Sized + 'static {
     type Transform: Debug + Clone + Send + Sync;
     type PaintCommand: Send + Sync;
 
@@ -69,7 +69,13 @@ pub trait Canvas: Sized {
     type PaintScanner<'a>: PaintContext<Canvas = Self>;
 
     /// The Picture class in Flutter
-    type Encoding: Send + Sync;
+    type Encoding: Send + Sync + 'static;
+
+    fn composite(
+        dst: &mut Self::Encoding,
+        src: &Self::Encoding,
+        transform: Option<&Self::Transform>,
+    );
 }
 
 pub trait PaintContext {

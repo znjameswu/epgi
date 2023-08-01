@@ -24,9 +24,9 @@ pub trait Widget: std::fmt::Debug + 'static + Send + Sync {
     fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget;
 }
 
-pub trait ChildWidget<SP: Protocol>:
-    crate::sync::reconciler_private::ChildWidgetSyncInflateExt<SP>
-    + crate::r#async::reconciler_private::ChildWidgetAsyncInflateExt<SP>
+pub trait ChildWidget<PP: Protocol>:
+    crate::sync::reconciler_private::ChildWidgetSyncInflateExt<PP>
+    + crate::r#async::reconciler_private::ChildWidgetAsyncInflateExt<PP>
     + AnyWidget
     + 'static
     + Debug
@@ -53,7 +53,7 @@ pub trait ChildWidget<SP: Protocol>:
     fn widget_type_id(&self) -> TypeId;
 }
 
-impl<T> ChildWidget<<T::Element as Element>::SelfProtocol> for T
+impl<T> ChildWidget<<T::Element as Element>::ParentProtocol> for T
 where
     T: Widget,
 {
@@ -155,7 +155,7 @@ where
     }
 
     fn as_any_child(&self) -> Box<dyn Any> {
-        let res: &dyn ChildWidget<<<Self as Widget>::Element as Element>::SelfProtocol> = self;
+        let res: &dyn ChildWidget<<<Self as Widget>::Element as Element>::ParentProtocol> = self;
         Box::new(res as *const _)
     }
 
@@ -167,7 +167,7 @@ where
     }
 
     fn as_any_child_arc(self: Arc<Self>) -> Box<dyn Any> {
-        let res: ArcChildWidget<<<Self as Widget>::Element as Element>::SelfProtocol> = self;
+        let res: ArcChildWidget<<<Self as Widget>::Element as Element>::ParentProtocol> = self;
         Box::new(res)
     }
 
@@ -225,7 +225,7 @@ pub trait ArcWidget: ArcRaw + AsHeapPtr + Clone + Send + Sync + 'static {
 
     fn into_any_widget(self) -> ArcAnyWidget;
 
-    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as Element>::SelfProtocol>;
+    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol>;
 
     fn widget_type_id(&self) -> TypeId;
 
@@ -234,8 +234,8 @@ pub trait ArcWidget: ArcRaw + AsHeapPtr + Clone + Send + Sync + 'static {
 
 pub fn try_convert_if_same_type<T: ArcWidget>(
     this: &T,
-    other: ArcChildWidget<<T::Element as Element>::SelfProtocol>,
-) -> Result<T, ArcChildWidget<<T::Element as Element>::SelfProtocol>> {
+    other: ArcChildWidget<<T::Element as Element>::ParentProtocol>,
+) -> Result<T, ArcChildWidget<<T::Element as Element>::ParentProtocol>> {
     if this.widget_type_id() == other.widget_type_id() {
         let raw = unsafe {
             let mut this_ptr_repr = PtrRepr::new_null();
@@ -330,7 +330,7 @@ where
         self
     }
 
-    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as Element>::SelfProtocol> {
+    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol> {
         self
     }
 

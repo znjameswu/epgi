@@ -64,7 +64,7 @@ pub(crate) mod reconciler_private {
         );
     }
 
-    impl<E> ChildElementWidgetPairAsyncBuildExt<E::SelfProtocol> for ElementWidgetPair<E>
+    impl<E> ChildElementWidgetPairAsyncBuildExt<E::ParentProtocol> for ElementWidgetPair<E>
     where
         E: Element,
     {
@@ -94,17 +94,17 @@ pub(crate) mod reconciler_private {
         }
     }
 
-    pub trait ChildWidgetAsyncInflateExt<SP: Protocol> {
+    pub trait ChildWidgetAsyncInflateExt<PP: Protocol> {
         fn inflate_async(
             self: Arc<Self>,
             work_context: Asc<WorkContext>,
             parent_context: &ArcElementContextNode,
             barrier: CommitBarrier,
             handle: WorkHandle,
-        ) -> Box<dyn ChildElementWidgetPair<SP>>;
+        ) -> Box<dyn ChildElementWidgetPair<PP>>;
     }
 
-    impl<T> ChildWidgetAsyncInflateExt<<<T as Widget>::Element as Element>::SelfProtocol> for T
+    impl<T> ChildWidgetAsyncInflateExt<<<T as Widget>::Element as Element>::ParentProtocol> for T
     where
         T: Widget,
     {
@@ -114,7 +114,7 @@ pub(crate) mod reconciler_private {
             parent_context: &ArcElementContextNode,
             barrier: CommitBarrier,
             handle: WorkHandle,
-        ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as Element>::SelfProtocol>>
+        ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as Element>::ParentProtocol>>
         {
             let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
                 self.clone().into_arc_widget(),

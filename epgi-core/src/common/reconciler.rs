@@ -82,7 +82,7 @@ where
 {
     pub(crate) fn can_rebuild_with(
         self: Arc<Self>,
-        widget: ArcChildWidget<E::SelfProtocol>,
+        widget: ArcChildWidget<E::ParentProtocol>,
     ) -> Option<ElementWidgetPair<E>> {
         let old_widget = self.widget();
         if let Ok(widget) = try_convert_if_same_type(&old_widget, widget) {
@@ -124,11 +124,11 @@ pub trait ChildElementWidgetPair<P: Protocol>:
     fn element(&self) -> ArcChildElementNode<P>;
 }
 
-impl<E> ChildElementWidgetPair<E::SelfProtocol> for ElementWidgetPair<E>
+impl<E> ChildElementWidgetPair<E::ParentProtocol> for ElementWidgetPair<E>
 where
     E: Element,
 {
-    fn element(&self) -> ArcChildElementNode<E::SelfProtocol> {
+    fn element(&self) -> ArcChildElementNode<E::ParentProtocol> {
         self.element.clone() as _
     }
 }

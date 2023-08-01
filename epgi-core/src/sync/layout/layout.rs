@@ -67,7 +67,7 @@ where
 
     fn layout_detached<'a, 'layout>(
         self: Arc<Self>,
-        constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         executor: LayoutExecutor<'a, 'layout>,
     ) {
         executor.scope.spawn(move |scope| {
@@ -81,7 +81,7 @@ where
 
     fn layout<'a, 'layout>(
         &'a self,
-        constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         executor: LayoutExecutor<'a, 'layout>,
     ) {
         let mut inner = self.inner.lock();
@@ -93,9 +93,9 @@ where
 
     fn layout_use_size<'a, 'layout>(
         &'a self,
-        constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         executor: LayoutExecutor<'a, 'layout>,
-    ) -> <<R::Element as Element>::SelfProtocol as Protocol>::Size {
+    ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
         let mut inner = self.inner.lock();
 
         if let Some(size) = inner.cache.get_layout_for(&constraints, true) {
@@ -113,10 +113,10 @@ where
     #[inline(always)]
     fn perform_wet_layout<'a, 'layout>(
         &'a mut self,
-        constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         parent_use_size: bool,
         executor: LayoutExecutor<'a, 'layout>,
-    ) -> &<<R::Element as Element>::SelfProtocol as Protocol>::Size {
+    ) -> &<<R::Element as Element>::ParentProtocol as Protocol>::Size {
         let (size, memo) = if let Some(PerformDryLayout {
             compute_dry_layout,
             perform_layout,
@@ -140,41 +140,41 @@ pub(crate) mod layout_private {
 
     use super::*;
 
-    pub trait ChildRenderObjectLayoutExt<SP: Protocol> {
+    pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
         fn layout_use_size<'a, 'layout>(
             &'a self,
-            constraints: SP::Constraints,
+            constraints: PP::Constraints,
             executor: LayoutExecutor<'a, 'layout>,
-        ) -> SP::Size;
+        ) -> PP::Size;
 
         fn layout<'a, 'layout>(
             &'a self,
-            constraints: SP::Constraints,
+            constraints: PP::Constraints,
             executor: LayoutExecutor<'a, 'layout>,
         );
 
         fn layout_detached<'a, 'layout>(
             self: Arc<Self>,
-            constraints: SP::Constraints,
+            constraints: PP::Constraints,
             executor: LayoutExecutor<'a, 'layout>,
         );
     }
 
-    impl<R> ChildRenderObjectLayoutExt<<R::Element as Element>::SelfProtocol> for RenderObject<R>
+    impl<R> ChildRenderObjectLayoutExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
     where
         R: Render,
     {
         fn layout_use_size<'a, 'layout>(
             &'a self,
-            constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+            constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
             executor: LayoutExecutor<'a, 'layout>,
-        ) -> <<R::Element as Element>::SelfProtocol as Protocol>::Size {
+        ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
             self.layout_use_size(constraints, executor)
         }
 
         fn layout<'a, 'layout>(
             &'a self,
-            constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+            constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
             executor: LayoutExecutor<'a, 'layout>,
         ) {
             self.layout(constraints, executor)
@@ -182,7 +182,7 @@ pub(crate) mod layout_private {
 
         fn layout_detached<'a, 'layout>(
             self: Arc<Self>,
-            constraints: <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+            constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
             executor: LayoutExecutor<'a, 'layout>,
         ) {
             self.layout_detached(constraints, executor)

@@ -25,11 +25,11 @@ use super::{
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
 pub type AweakAnyElementNode = Aweak<dyn AnyElementNode>;
-pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<SelfProtocol = P>>;
+pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<ParentProtocol = P>>;
 
 pub trait Element: Send + Sync + Clone + 'static {
     type ArcWidget: ArcWidget<Element = Self>; //<Element = Self>;
-    type SelfProtocol: Protocol;
+    type ParentProtocol: Protocol;
     type ChildProtocol: Protocol;
 
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
@@ -83,7 +83,7 @@ pub trait Element: Send + Sync + Clone + 'static {
 }
 
 pub trait ComposeElement: Element<ArcRenderObject = Never> {
-    fn child(&self) -> &ArcChildElementNode<Self::SelfProtocol>;
+    fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol>;
 
     const GET_RENDER_OBJECT: GetRenderObject<Self> = GetRenderObject::None(Self::child);
 }
@@ -139,23 +139,23 @@ where
 
 pub enum GetRenderObject<E: Element> {
     RenderObject {
-        get_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::SelfProtocol>,
+        get_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
         try_create_render_object: fn(&E, &E::ArcWidget) -> Option<E::ArcRenderObject>,
         update_render_object_widget: fn(&E::ArcWidget, &E::ArcRenderObject),
         try_update_render_object_children: fn(&E, &E::ArcRenderObject) -> Result<(), ()>,
         detach_render_object: fn(&E::ArcRenderObject),
         get_suspense: Option<GetSuspense<E>>,
     },
-    None(fn(&E) -> &ArcChildElementNode<E::SelfProtocol>),
+    None(fn(&E) -> &ArcChildElementNode<E::ParentProtocol>),
 }
 
 pub struct GetSuspense<E: Element> {
     pub(crate) get_suspense_element_mut: fn(&mut E) -> &mut SuspenseElement<E::ChildProtocol>,
-    pub(crate) get_suspense_widget_ref: fn(&E::ArcWidget) -> &Suspense<E::SelfProtocol>,
+    pub(crate) get_suspense_widget_ref: fn(&E::ArcWidget) -> &Suspense<E::ParentProtocol>,
     pub(crate) get_suspense_render_object:
-        fn(E::ArcRenderObject) -> Arc<RenderObject<RenderSuspense<E::SelfProtocol>>>,
+        fn(E::ArcRenderObject) -> Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>,
     pub(crate) into_arc_render_object:
-        fn(Arc<RenderObject<RenderSuspense<E::SelfProtocol>>>) -> E::ArcRenderObject,
+        fn(Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>) -> E::ArcRenderObject,
 }
 
 pub struct ElementNode<E: Element> {
@@ -214,7 +214,7 @@ pub trait ChildElementNode:
 + crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
 + Send + Sync + 'static
 {
-    type SelfProtocol: Protocol;
+    type ParentProtocol: Protocol;
 
     fn context(&self) -> &ElementContextNode;
 
@@ -224,18 +224,18 @@ pub trait ChildElementNode:
     // Which may not be a bad thing after all, considering how a fat &Arc would look like in memory layout.
     fn can_rebuild_with(
         self: Arc<Self>,
-        widget: ArcChildWidget<Self::SelfProtocol>,
-    ) -> Option<Box<dyn ChildElementWidgetPair<Self::SelfProtocol>>>;
+        widget: ArcChildWidget<Self::ParentProtocol>,
+    ) -> Option<Box<dyn ChildElementWidgetPair<Self::ParentProtocol>>>;
 
     fn get_current_subtree_render_object(&self)
-        -> Option<ArcChildRenderObject<Self::SelfProtocol>>;
+        -> Option<ArcChildRenderObject<Self::ParentProtocol>>;
 }
 
 impl<E> ChildElementNode for ElementNode<E>
 where
     E: Element,
 {
-    type SelfProtocol = E::SelfProtocol;
+    type ParentProtocol = E::ParentProtocol;
 
     fn context(&self) -> &ElementContextNode {
         self.context.as_ref()
@@ -247,14 +247,14 @@ where
 
     fn can_rebuild_with(
         self: Arc<Self>,
-        widget: ArcChildWidget<Self::SelfProtocol>,
-    ) -> Option<Box<dyn ChildElementWidgetPair<Self::SelfProtocol>>> {
+        widget: ArcChildWidget<Self::ParentProtocol>,
+    ) -> Option<Box<dyn ChildElementWidgetPair<Self::ParentProtocol>>> {
         ElementNode::<E>::can_rebuild_with(self, widget).map(|x| Box::new(x) as Box<_>)
     }
 
     fn get_current_subtree_render_object(
         &self,
-    ) -> Option<ArcChildRenderObject<Self::SelfProtocol>> {
+    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
         todo!()
         // let snapshot = self.snapshot.lock();
 

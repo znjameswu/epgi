@@ -35,10 +35,10 @@ impl Render for RenderRootView {
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-        executor: LayoutExecutor<'a, 'layout>,
+        _constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        _executor: LayoutExecutor<'a, 'layout>,
     ) -> (
-        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
     ) {
         unreachable!()
@@ -49,11 +49,11 @@ impl Render for RenderRootView {
 
     fn perform_paint(
         &self,
-        size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-        memo: &Self::LayoutMemo,
-        paint_ctx: impl PaintContext<
-            Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+        _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+        _transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        _memo: &Self::LayoutMemo,
+        _paint_ctx: impl PaintContext<
+            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
         unreachable!()
@@ -63,15 +63,15 @@ impl Render for RenderRootView {
 impl DryLayout for RenderRootView {
     fn compute_dry_layout(
         &self,
-        constraints: &<<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-    ) -> <<Self::Element as Element>::SelfProtocol as Protocol>::Size {
+        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+    ) -> <<Self::Element as Element>::ParentProtocol as Protocol>::Size {
         todo!()
     }
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-        size: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        size: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         executor: LayoutExecutor<'a, 'layout>,
     ) -> Self::LayoutMemo {
         // self.render_ctx.resize_surface(&mut self.surface, size.width, size.height)
@@ -109,7 +109,7 @@ pub struct RootViewElement {}
 impl Element for RootViewElement {
     type ArcWidget = Asc<RootView>;
 
-    type SelfProtocol = BoxProtocol;
+    type ParentProtocol = BoxProtocol;
 
     type ChildProtocol = BoxProtocol;
 

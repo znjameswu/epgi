@@ -16,9 +16,9 @@ where
 {
     fn paint(
         &self,
-        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
         paint_ctx: impl PaintContext<
-            Canvas = <<R::Element as Element>::SelfProtocol as Protocol>::Canvas,
+            Canvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
         let mut inner = self.inner.lock();
@@ -39,36 +39,36 @@ pub(crate) mod paint_private {
     use crate::foundation::Canvas;
 
     use super::*;
-    pub trait ChildRenderObjectPaintExt<SP: Protocol> {
+    pub trait ChildRenderObjectPaintExt<PP: Protocol> {
         fn paint(
             &self,
-            transformation: &SP::SelfTransform,
-            paint_ctx: <SP::Canvas as Canvas>::PaintContext<'_>,
+            transformation: &PP::SelfTransform,
+            paint_ctx: <PP::Canvas as Canvas>::PaintContext<'_>,
         );
 
         fn paint_scan(
             &self,
-            transformation: &SP::SelfTransform,
-            paint_ctx: <SP::Canvas as Canvas>::PaintScanner<'_>,
+            transformation: &PP::SelfTransform,
+            paint_ctx: <PP::Canvas as Canvas>::PaintScanner<'_>,
         );
     }
 
-    impl<R> ChildRenderObjectPaintExt<<R::Element as Element>::SelfProtocol> for RenderObject<R>
+    impl<R> ChildRenderObjectPaintExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
     where
         R: Render,
     {
         fn paint(
             &self,
-            transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
+            transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+            paint_ctx: <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
             self.paint(transformation, paint_ctx)
         }
 
         fn paint_scan(
             &self,
-            transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
+            transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+            paint_ctx: <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
             self.paint(transformation, paint_ctx)
         }

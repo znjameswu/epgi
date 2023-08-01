@@ -42,7 +42,7 @@ impl<P: Protocol> Widget for Suspense<P> {
 impl<P: Protocol> Element for SuspenseElement<P> {
     type ArcWidget = Asc<Suspense<P>>;
 
-    type SelfProtocol = P;
+    type ParentProtocol = P;
 
     type ChildProtocol = P;
 
@@ -156,10 +156,10 @@ impl<P: Protocol> Render for RenderSuspense<P> {
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
         executor: super::LayoutExecutor<'a, 'layout>,
     ) -> (
-        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
     ) {
         unreachable!()
@@ -167,11 +167,11 @@ impl<P: Protocol> Render for RenderSuspense<P> {
 
     fn perform_paint(
         &self,
-        size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
         memo: &Self::LayoutMemo,
         paint_ctx: impl PaintContext<
-            Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
         todo!()

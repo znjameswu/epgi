@@ -5,7 +5,8 @@ use crate::foundation::{
 };
 
 use super::{
-    ArcElementContextNode, Element, ElementContextNode, Layer, LayerFragment, RenderElement,
+    ArcElementContextNode, ArcLayerOf, Element, ElementContextNode, Layer, LayerFragment,
+    LayerScope, RenderElement,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -27,10 +28,10 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
         executor: LayoutExecutor<'a, 'layout>,
     ) -> (
-        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
     );
 
@@ -41,11 +42,11 @@ pub trait Render: Sized + Send + Sync + 'static {
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
     fn perform_paint(
         &self,
-        size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
         memo: &Self::LayoutMemo,
         paint_ctx: impl PaintContext<
-            Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
+            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     );
 
@@ -68,13 +69,13 @@ pub trait DryLayout: Render {
 
     fn compute_dry_layout(
         &self,
-        constraints: &<<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-    ) -> <<Self::Element as Element>::SelfProtocol as Protocol>::Size;
+        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+    ) -> <<Self::Element as Element>::ParentProtocol as Protocol>::Size;
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-        size: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        size: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         executor: LayoutExecutor<'a, 'layout>,
     ) -> Self::LayoutMemo;
 }
@@ -82,13 +83,13 @@ pub trait DryLayout: Render {
 pub struct PerformDryLayout<R: Render> {
     pub compute_dry_layout: fn(
         &R,
-        &<<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
-    ) -> <<R::Element as Element>::SelfProtocol as Protocol>::Size,
+        &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+    ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size,
 
     pub perform_layout: for<'a, 'layout> fn(
         &'a R,
-        &'a <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
-        &'a <<R::Element as Element>::SelfProtocol as Protocol>::Size,
+        &'a <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        &'a <<R::Element as Element>::ParentProtocol as Protocol>::Size,
         LayoutExecutor<'a, 'layout>,
     ) -> R::LayoutMemo,
 }
@@ -101,33 +102,33 @@ trait LayerPaint: Render {
     });
     fn create_layer(
         &mut self,
-        size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
         memo: &Self::LayoutMemo,
-        parent_layer: &Arc<Layer<<<Self::Element as Element>::SelfProtocol as Protocol>::Canvas>>,
-    ) -> &Arc<Layer<<<Self::Element as Element>::ChildProtocol as Protocol>::Canvas>>;
+        parent_layer: &Arc<
+            LayerScope<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas>,
+        >,
+    ) -> &ArcLayerOf<Self>;
     fn update_layer(
         &mut self,
-        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-    ) -> &Arc<Layer<<<Self::Element as Element>::ChildProtocol as Protocol>::Canvas>>;
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+    ) -> &ArcLayerOf<Self>;
     fn child(&self) -> &ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>;
 }
 pub struct PerformLayerPaint<R: Render> {
     pub create_layer: for<'a> fn(
         render: &'a mut R,
-        size: &<<R::Element as Element>::SelfProtocol as Protocol>::Size,
-        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        size: &<<R::Element as Element>::ParentProtocol as Protocol>::Size,
+        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
         memo: &R::LayoutMemo,
-        parent_layer: &Arc<Layer<<<R::Element as Element>::SelfProtocol as Protocol>::Canvas>>,
-    ) -> &'a Arc<
-        Layer<<<R::Element as Element>::ChildProtocol as Protocol>::Canvas>,
-    >,
+        parent_layer: &Arc<
+            LayerScope<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas>,
+        >,
+    ) -> &'a ArcLayerOf<R>,
     pub update_layer: for<'a> fn(
         render: &'a mut R,
-        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-    ) -> &'a Arc<
-        Layer<<<R::Element as Element>::ChildProtocol as Protocol>::Canvas>,
-    >,
+        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+    ) -> &'a ArcLayerOf<R>,
     pub child: fn(render: &R) -> &ArcChildRenderObject<<R::Element as Element>::ChildProtocol>,
 }
 
@@ -144,7 +145,7 @@ pub struct RenderObject<R: Render> {
 pub(crate) struct RenderObjectInner<R: Render> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     boundaries: Option<RenderObjectBoundaries>,
-    pub(crate) cache: RenderCache<<R::Element as Element>::SelfProtocol, R::LayoutMemo>,
+    pub(crate) cache: RenderCache<<R::Element as Element>::ParentProtocol, R::LayoutMemo>,
     pub(crate) render: R,
 }
 
@@ -268,16 +269,19 @@ where
 
 impl<R> RenderObject<R> where R: Render {}
 
-pub trait ChildRenderObject<SP: Protocol>:
-    crate::sync::layout_private::ChildRenderObjectLayoutExt<SP>
-    + crate::sync::paint_private::ChildRenderObjectPaintExt<SP>
+pub trait ChildRenderObject<PP: Protocol>:
+    crate::sync::layout_private::ChildRenderObjectLayoutExt<PP>
+    + crate::sync::paint_private::ChildRenderObjectPaintExt<PP>
     + Send
     + Sync
     + 'static
 {
 }
 
-impl<R> ChildRenderObject<<R::Element as Element>::SelfProtocol> for RenderObject<R> where R: Render {}
+impl<R> ChildRenderObject<<R::Element as Element>::ParentProtocol> for RenderObject<R> where
+    R: Render
+{
+}
 
 pub trait AnyRenderObject:
     crate::sync::layout_private::AnyRenderObjectRelayoutExt + Send + Sync + 'static
@@ -304,7 +308,7 @@ where
             "set_root_constraints should only be called on tree root"
         );
         let constraints = constraints
-            .downcast_ref::<<<R::Element as Element>::SelfProtocol as Protocol>::Constraints>()
+            .downcast_ref::<<<R::Element as Element>::ParentProtocol as Protocol>::Constraints>()
             .expect("A correct type of constraints should be passed to root");
         self.inner.lock().cache.set_root_constraints(constraints)
     }

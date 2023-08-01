@@ -55,7 +55,7 @@ This creates problem for 3D renderer.
 ```
       Node A
      ┌──────────────────────┐
-     │ SelfProtocol         │
+     │ ParentProtocol       │
      ├──────────────────────┤
      │ Received Constraints │
      │ Previous Span        │
@@ -72,7 +72,7 @@ This creates problem for 3D renderer.
 │ │                            │
 │ │   Node B                   │
 │ │  ┌──────────────────────┐  │
-│ │  │ SelfProtocol         │  │
+│ │  │ ParentProtocol       │  │
 │ │  ├──────────────────────┤  │
 │ ├─►│ Received Constraints │  │
 │ │  │ Previous Span        ├──┘
