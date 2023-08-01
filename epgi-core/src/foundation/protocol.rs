@@ -1,5 +1,9 @@
 use std::fmt::Debug;
 
+use crate::common::Layer;
+
+use super::Asc;
+
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
     type Size: Debug + Clone + Send + Sync + 'static;
@@ -61,8 +65,11 @@ pub trait Canvas: Sized {
     type Transform: Debug + Clone + Send + Sync;
     type PaintCommand: Send + Sync;
 
-    type DefaultPaintContext<'a>: PaintContext<Canvas = Self>;
-    type DefaultPaintScanner<'a>: PaintContext<Canvas = Self>;
+    type PaintContext<'a>: PaintContext<Canvas = Self>;
+    type PaintScanner<'a>: PaintContext<Canvas = Self>;
+
+    /// The Picture class in Flutter
+    type Encoding: Send + Sync;
 }
 
 pub trait PaintContext {
@@ -74,4 +81,6 @@ pub trait PaintContext {
         transform: <Self::Canvas as Canvas>::Transform,
         op: impl FnOnce(&mut Self),
     );
+
+    // fn layer(&self) -> &Asc<Layer<Self::Canvas>>;
 }

@@ -44,6 +44,8 @@ pub struct SchedulerHandle {
     pub new_frame_ready: event_listener::Event,
     is_executing_sync: AtomicBool,
 
+    pub(super) root_constraints: SyncMutex<Asc<dyn core::any::Any + Send + Sync>>,
+
     // mode: LatencyMode,
     nodes_needing_paint: MpscQueue<AweakAnyRenderObject>,
     nodes_needing_layout: MpscQueue<AweakAnyRenderObject>,

@@ -43,13 +43,13 @@ pub(crate) mod paint_private {
         fn paint(
             &self,
             transformation: &SP::SelfTransform,
-            paint_ctx: <SP::Canvas as Canvas>::DefaultPaintContext<'_>,
+            paint_ctx: <SP::Canvas as Canvas>::PaintContext<'_>,
         );
 
         fn paint_scan(
             &self,
             transformation: &SP::SelfTransform,
-            paint_ctx: <SP::Canvas as Canvas>::DefaultPaintScanner<'_>,
+            paint_ctx: <SP::Canvas as Canvas>::PaintScanner<'_>,
         );
     }
 
@@ -60,7 +60,7 @@ pub(crate) mod paint_private {
         fn paint(
             &self,
             transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::DefaultPaintContext<'_>,
+            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
             self.paint(transformation, paint_ctx)
         }
@@ -68,7 +68,7 @@ pub(crate) mod paint_private {
         fn paint_scan(
             &self,
             transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
-            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::DefaultPaintScanner<'_>,
+            paint_ctx: <<<R::Element as Element>::SelfProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
             self.paint(transformation, paint_ctx)
         }

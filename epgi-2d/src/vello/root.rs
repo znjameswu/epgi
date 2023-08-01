@@ -1,7 +1,7 @@
 use epgi_core::{
     common::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, GetSuspense,
-        LayoutExecutor, PerformLayout, Reconciler, Render, RenderElement, RenderObject, Widget,
+        LayoutExecutor, Reconciler, Render, RenderElement, RenderObject, Widget,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
@@ -33,7 +33,19 @@ impl Render for RenderRootView {
 
     type LayoutMemo = ();
 
-    const PERFORM_LAYOUT: PerformLayout<Self> = <Self as DryLayout>::PERFORM_LAYOUT;
+    fn perform_layout<'a, 'layout>(
+        &'a self,
+        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        executor: LayoutExecutor<'a, 'layout>,
+    ) -> (
+        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        Self::LayoutMemo,
+    ) {
+        unreachable!()
+    }
+
+    const PERFORM_DRY_LAYOUT: Option<epgi_core::common::PerformDryLayout<Self>> =
+        Some(<Self as DryLayout>::PERFORM_DRY_LAYOUT);
 
     fn perform_paint(
         &self,
@@ -44,8 +56,7 @@ impl Render for RenderRootView {
             Canvas = <<Self::Element as Element>::SelfProtocol as Protocol>::Canvas,
         >,
     ) {
-        // self.child.paint(transformation, paint_ctx)
-        //todo!()
+        unreachable!()
     }
 }
 

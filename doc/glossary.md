@@ -210,3 +210,27 @@ Questions
 We use two types of scheduling to maximize parallizable batches in execution.
 1. Planed execution
 2. Oppurtunistic execution
+
+
+# Main Phases
+## Build
+## Layout
+## Paint
+Painting translates a subtree of [RenderObject]s into [PaintCommand]s recorded on [Layer]s or [LayerFragment]s.
+
+Painting is initiated on all [RenderObject]s that host a layer (repaint boundary) and have been marked as needing repaint (dirty). 
+The marking is performed during both build and layout phases when a [RenderObject] has been updated in a way that will affect its rendering. 
+A single marking marks the [RenderObject] and its ancestor all the way to the nearest repaint boundary.
+
+Repaint boundaries, if clean, will skip painting and only update its layers transform.
+Other [RenderObject] will call its `perform_paint` method. 
+
+## Composition
+Composition combines a subtree of [Layer]s and [LayerFragment]s under a retained [Layer] into a scene that is ready to be rendered.
+
+Composition is initiated on all retained [Layer]s that is marked as needing recomposition (dirty). 
+The marking is performed in the painting phase when any [Layer]s or [LayerFragment]s under the retained [Layer] is repainted or its transform is changed.
+A single marking marks all ancestor retained [Layer]s all the way to the application root.
+
+Retained layers, if dirty, will first recomposite itself before add the recomposited results to the scene. If clean, the recomposited results are directly added to the scene.
+Other layers will directly add itself to the scene.

@@ -1,10 +1,12 @@
 use std::any::Any;
 
 use crate::foundation::{
-    Arc, Aweak, BoolExpectExt, Canvas, PaintContext, Parallel, Protocol, SyncMutex,
+    Arc, Asc, Aweak, BoolExpectExt, Canvas, PaintContext, Parallel, Protocol, SyncMutex,
 };
 
-use super::{ArcElementContextNode, Element, ElementContextNode, RenderElement};
+use super::{
+    ArcElementContextNode, Element, ElementContextNode, Layer, LayerFragment, RenderElement,
+};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
@@ -23,16 +25,20 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     type LayoutMemo: Send + Sync + 'static;
 
-    // fn perform_layout(
-    //     &self,
-    //     constraints: &<<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-    // ) -> (
-    //     <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-    //     Self::LayoutMemo,
-    // );
+    fn perform_layout<'a, 'layout>(
+        &'a self,
+        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        executor: LayoutExecutor<'a, 'layout>,
+    ) -> (
+        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        Self::LayoutMemo,
+    );
 
-    const PERFORM_LAYOUT: PerformLayout<Self>;
+    /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
+    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = None;
 
+    // We don't make perform paint into an associated constant because it has an generic paramter
+    // Then we have to go to associated generic type, which makes the boilerplate explodes.
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
@@ -43,59 +49,21 @@ pub trait Render: Sized + Send + Sync + 'static {
         >,
     );
 
+    /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
+    const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<Self>> = None;
+
+    // fn mark_needs_recompositing(&self) {}
+
     // fn compute_child_transformation(
     //     transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
     //     child_offset: &<<Self::Element as Element>::ChildProtocol as Protocol>::Offset,
     // ) -> <<Self::Element as Element>::ChildProtocol as Protocol>::CanvasTransformation;
 }
 
-pub enum PerformLayout<R: Render> {
-    WetLayout {
-        perform_layout: for<'a, 'layout> fn(
-            &'a R,
-            &'a <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
-            LayoutExecutor<'a, 'layout>,
-        ) -> (
-            <<R::Element as Element>::SelfProtocol as Protocol>::Size,
-            R::LayoutMemo,
-        ),
-    },
-    /// sized_by_parent == true
-    DryLayout {
-        compute_dry_layout: fn(
-            &R,
-            &<<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
-        )
-            -> <<R::Element as Element>::SelfProtocol as Protocol>::Size,
-
-        perform_layout: for<'a, 'layout> fn(
-            &'a R,
-            &'a <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
-            &'a <<R::Element as Element>::SelfProtocol as Protocol>::Size,
-            LayoutExecutor<'a, 'layout>,
-        ) -> R::LayoutMemo,
-    },
-}
-
-pub trait WetLayout: Render {
-    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::WetLayout {
-        perform_layout: Self::perform_layout,
-    };
-
-    fn perform_layout<'a, 'layout>(
-        &'a self,
-        constraints: &'a <<Self::Element as Element>::SelfProtocol as Protocol>::Constraints,
-        executor: LayoutExecutor<'a, 'layout>,
-    ) -> (
-        <<Self::Element as Element>::SelfProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    );
-}
-
 pub trait DryLayout: Render {
-    const PERFORM_LAYOUT: PerformLayout<Self> = PerformLayout::DryLayout {
+    const PERFORM_DRY_LAYOUT: PerformDryLayout<Self> = PerformDryLayout {
         compute_dry_layout: Self::compute_dry_layout,
-        perform_layout: Self::perform_layout,
+        perform_layout: <Self as DryLayout>::perform_layout,
     };
 
     fn compute_dry_layout(
@@ -111,18 +79,61 @@ pub trait DryLayout: Render {
     ) -> Self::LayoutMemo;
 }
 
+pub struct PerformDryLayout<R: Render> {
+    pub compute_dry_layout: fn(
+        &R,
+        &<<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+    ) -> <<R::Element as Element>::SelfProtocol as Protocol>::Size,
+
+    pub perform_layout: for<'a, 'layout> fn(
+        &'a R,
+        &'a <<R::Element as Element>::SelfProtocol as Protocol>::Constraints,
+        &'a <<R::Element as Element>::SelfProtocol as Protocol>::Size,
+        LayoutExecutor<'a, 'layout>,
+    ) -> R::LayoutMemo,
+}
+
+trait LayerPaint: Render {
+    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
+        create_layer: Self::create_layer,
+        update_layer: Self::update_layer,
+        child: Self::child,
+    });
+    fn create_layer(
+        &mut self,
+        size: &<<Self::Element as Element>::SelfProtocol as Protocol>::Size,
+        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        memo: &Self::LayoutMemo,
+        parent_layer: &Arc<Layer<<<Self::Element as Element>::SelfProtocol as Protocol>::Canvas>>,
+    ) -> &Arc<Layer<<<Self::Element as Element>::ChildProtocol as Protocol>::Canvas>>;
+    fn update_layer(
+        &mut self,
+        transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+    ) -> &Arc<Layer<<<Self::Element as Element>::ChildProtocol as Protocol>::Canvas>>;
+    fn child(&self) -> &ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>;
+}
+pub struct PerformLayerPaint<R: Render> {
+    pub create_layer: for<'a> fn(
+        render: &'a mut R,
+        size: &<<R::Element as Element>::SelfProtocol as Protocol>::Size,
+        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+        memo: &R::LayoutMemo,
+        parent_layer: &Arc<Layer<<<R::Element as Element>::SelfProtocol as Protocol>::Canvas>>,
+    ) -> &'a Arc<
+        Layer<<<R::Element as Element>::ChildProtocol as Protocol>::Canvas>,
+    >,
+    pub update_layer: for<'a> fn(
+        render: &'a mut R,
+        transformation: &<<R::Element as Element>::SelfProtocol as Protocol>::SelfTransform,
+    ) -> &'a Arc<
+        Layer<<<R::Element as Element>::ChildProtocol as Protocol>::Canvas>,
+    >,
+    pub child: fn(render: &R) -> &ArcChildRenderObject<<R::Element as Element>::ChildProtocol>,
+}
+
 #[derive(Clone, Copy)]
 pub struct LayoutExecutor<'a, 'layout> {
     pub scope: &'a rayon::Scope<'layout>,
-}
-
-impl<R> PerformLayout<R>
-where
-    R: Render,
-{
-    pub const fn sized_by_parent(&self) -> bool {
-        matches!(self, PerformLayout::DryLayout { .. })
-    }
 }
 
 pub struct RenderObject<R: Render> {
@@ -156,19 +167,41 @@ impl<P, M> RenderCache<P, M>
 where
     P: Protocol,
 {
-    pub(crate) fn set_constraints(&mut self, constraints: P::Constraints) -> bool {
-        let Some(inner) = &mut self.inner else {
-            return false;
-        };
-        inner.constraints = constraints;
-        inner.layout = None;
-        return true;
+    /// Return: whether a layout is needed.
+    pub(crate) fn set_root_constraints(&mut self, constraints: &P::Constraints) -> bool {
+        match &mut self.inner {
+            Some(inner) => {
+                debug_assert!(
+                    inner.parent_use_size == false,
+                    "Root render object should not have parent_use_size"
+                );
+                if inner.constraints.eq(constraints) {
+                    return false;
+                }
+                inner.constraints = constraints.clone();
+                inner.layout = None;
+                return true;
+            }
+            None => {
+                self.inner = Some(RenderCacheInner {
+                    constraints: constraints.clone(),
+                    parent_use_size: false,
+                    layout: None,
+                });
+                return true;
+            }
+        }
     }
 }
 
-pub struct CacheEntry<K, V> {
-    key: K,
-    value: Option<V>,
+pub(crate) struct LayoutResults<P: Protocol, M> {
+    pub(crate) size: P::Size,
+    pub(crate) memo: M,
+    pub(crate) paint: Option<PaintResults<P>>,
+}
+
+pub(crate) struct PaintResults<P: Protocol> {
+    pub(crate) transform_abs: P::SelfTransform,
 }
 
 impl<P, M> RenderCache<P, M>
@@ -233,17 +266,6 @@ where
     }
 }
 
-pub(crate) struct LayoutResults<P: Protocol, M> {
-    pub(crate) size: P::Size,
-    pub(crate) memo: M,
-    pub(crate) paint: Option<PaintResults<P>>,
-}
-
-pub(crate) struct PaintResults<P: Protocol> {
-    pub(crate) transformation: <P::Canvas as Canvas>::Transform,
-    pub(crate) encoding_slice: Option<()>, //TODO
-}
-
 impl<R> RenderObject<R> where R: Render {}
 
 pub trait ChildRenderObject<SP: Protocol>:
@@ -262,7 +284,10 @@ pub trait AnyRenderObject:
 {
     fn element_context(&self) -> &ElementContextNode;
 
-    fn set_constraints(&self, constraints: Box<dyn Any>);
+    /// Returns whether the root needs layout after updating constraints.
+    ///
+    /// Will panic if supplied with wrong type of constraints.
+    fn set_root_constraints(&self, constraints: &dyn Any) -> bool;
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -273,16 +298,15 @@ where
         &self.element_context
     }
 
-    fn set_constraints(&self, constraints: Box<dyn Any>) {
+    fn set_root_constraints(&self, constraints: &dyn Any) -> bool {
+        debug_assert!(
+            self.element_context.parent.is_none(),
+            "set_root_constraints should only be called on tree root"
+        );
         let constraints = constraints
-            .downcast::<<<R::Element as Element>::SelfProtocol as Protocol>::Constraints>()
-            .ok()
+            .downcast_ref::<<<R::Element as Element>::SelfProtocol as Protocol>::Constraints>()
             .expect("A correct type of constraints should be passed to root");
-        self.inner
-            .lock()
-            .cache
-            .set_constraints(*constraints)
-            .debug_assert("Only previously laid-out render object can be updated with constraints");
+        self.inner.lock().cache.set_root_constraints(constraints)
     }
 }
 

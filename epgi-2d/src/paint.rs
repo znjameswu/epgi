@@ -9,6 +9,7 @@ pub use peniko::{
 use crate::{Affine2d, BoxOffset, BoxSize, Paragraph, Point2d};
 
 pub enum Affine2dPaintCommand {
+    // TODO: New clip should stack on top of existing clip
     ClipPath {
         path: Path,
     },

@@ -21,7 +21,9 @@ impl Canvas for Affine2dCanvas {
 
     type PaintCommand = Affine2dPaintCommand;
 
-    type DefaultPaintContext<'a> = VelloPaintContext<'a>;
+    type PaintContext<'a> = VelloPaintContext<'a>;
 
-    type DefaultPaintScanner<'a> = VelloPaintScanner<'a>;
+    type PaintScanner<'a> = VelloPaintScanner<'a>;
+
+    type Encoding = VelloEncoding;
 }

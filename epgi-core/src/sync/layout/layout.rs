@@ -2,7 +2,7 @@ use hashbrown::HashSet;
 
 use crate::{
     common::{
-        AweakAnyRenderObject, Element, LayoutExecutor, PerformLayout, Render, RenderObject,
+        AweakAnyRenderObject, Element, LayoutExecutor, PerformDryLayout, Render, RenderObject,
         RenderObjectInner,
     },
     foundation::{Arc, Protocol, PtrEq},
@@ -36,7 +36,7 @@ where
     R: Render,
 {
     fn is_relayout_boundary(&self) -> bool {
-        R::PERFORM_LAYOUT.sized_by_parent() || self.cache.parent_use_size() == Some(true)
+        R::PERFORM_DRY_LAYOUT.is_some() || self.cache.parent_use_size() == Some(true)
     }
 }
 
@@ -45,8 +45,7 @@ where
     R: Render,
 {
     fn is_relayout_boundary(&self) -> bool {
-        R::PERFORM_LAYOUT.sized_by_parent()
-            || self.inner.lock().cache.parent_use_size() == Some(false)
+        R::PERFORM_DRY_LAYOUT.is_some() || self.inner.lock().cache.parent_use_size() == Some(false)
     }
     fn layout_without_resize(&self) {
         let mut inner = self.inner.lock();
@@ -118,17 +117,16 @@ where
         parent_use_size: bool,
         executor: LayoutExecutor<'a, 'layout>,
     ) -> &<<R::Element as Element>::SelfProtocol as Protocol>::Size {
-        use PerformLayout::*;
-        let (size, memo) = match R::PERFORM_LAYOUT {
-            WetLayout { perform_layout } => perform_layout(&self.render, &constraints, executor),
-            DryLayout {
-                compute_dry_layout,
-                perform_layout,
-            } => {
-                let size = compute_dry_layout(&self.render, &constraints);
-                let memo = perform_layout(&self.render, &constraints, &size, executor);
-                (size, memo)
-            }
+        let (size, memo) = if let Some(PerformDryLayout {
+            compute_dry_layout,
+            perform_layout,
+        }) = R::PERFORM_DRY_LAYOUT
+        {
+            let size = compute_dry_layout(&self.render, &constraints);
+            let memo = perform_layout(&self.render, &constraints, &size, executor);
+            (size, memo)
+        } else {
+            self.render.perform_layout(&constraints, executor)
         };
 
         return &self
