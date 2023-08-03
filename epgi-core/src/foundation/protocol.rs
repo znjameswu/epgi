@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::common::LayerScope;
+use crate::common::{ArcParentLayer, LayerScope};
 
 use super::Asc;
 
@@ -9,7 +9,7 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Size: Debug + Clone + Send + Sync + 'static;
     type Offset: Debug + Clone + Send + Sync + 'static;
     type Intrinsics: Intrinsics;
-    type SelfTransform: Debug + Clone + Send + Sync + 'static;
+    type Transform: Identity + Debug + Clone + Send + Sync + 'static;
     type Canvas: Canvas;
     // fn transform_canvas(
     //     transform: &Self::SelfTransform,
@@ -62,7 +62,7 @@ where
 }
 
 pub trait Canvas: Sized + 'static {
-    type Transform: Debug + Clone + Send + Sync;
+    type Transform: Identity + Debug + Clone + Send + Sync + 'static;
     type PaintCommand: Send + Sync;
 
     type PaintContext<'a>: PaintContext<Canvas = Self>;
@@ -76,10 +76,17 @@ pub trait Canvas: Sized + 'static {
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
     );
+
+    fn with_context(
+        layer: ArcParentLayer<Self>,
+        scan: impl FnOnce(Self::PaintScanner<'_>),
+        paint: impl FnOnce(Self::PaintContext<'_>),
+    );
 }
 
 pub trait PaintContext {
     type Canvas: Canvas;
+
     fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand);
 
     fn with_transform(
@@ -88,5 +95,18 @@ pub trait PaintContext {
         op: impl FnOnce(&mut Self),
     );
 
-    // fn layer(&self) -> &Asc<Layer<Self::Canvas>>;
+    /// Get access to the parent layer to create a new [Layer].
+    ///
+    /// Do not call this method if you do not intend to push a new layer,
+    /// even if this method seems to allow arbitrary operation.
+    // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
+    fn with_layer(&mut self, op: impl FnOnce(&ArcParentLayer<Self::Canvas>));
+}
+
+pub trait Identity {
+    const IDENTITY: Self;
+}
+
+impl Identity for vello_encoding::Transform {
+    const IDENTITY: Self = Self::IDENTITY;
 }

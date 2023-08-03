@@ -79,7 +79,7 @@ impl Protocol for BoxProtocol {
 
     type Intrinsics = BoxIntrinsics;
 
-    type SelfTransform = Affine2d;
+    type Transform = Affine2d;
 
     type Canvas = Affine2dCanvas;
 }

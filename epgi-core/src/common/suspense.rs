@@ -168,7 +168,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
         paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,

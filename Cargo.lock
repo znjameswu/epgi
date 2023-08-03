@@ -704,6 +704,7 @@ dependencies = [
  "portable-atomic",
  "rayon",
  "smallvec",
+ "vello_encoding",
 ]
 
 [[package]]

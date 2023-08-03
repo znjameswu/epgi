@@ -5,8 +5,8 @@ use crate::foundation::{
 };
 
 use super::{
-    ArcElementContextNode, ArcLayerOf, Element, ElementContextNode, Layer, LayerFragment,
-    LayerScope, RenderElement,
+    ArcElementContextNode, ArcLayerOf, ArcParentLayer, Element, ElementContextNode, Layer,
+    LayerFragment, LayerScope, RenderElement,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -43,7 +43,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
         paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
@@ -96,38 +96,36 @@ pub struct PerformDryLayout<R: Render> {
 
 trait LayerPaint: Render {
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
-        create_layer: Self::create_layer,
+        get_layer: Self::get_layer,
         update_layer: Self::update_layer,
         child: Self::child,
     });
-    fn create_layer(
+    fn get_layer(
         &mut self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        parent_layer: &Arc<
-            LayerScope<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas>,
+        parent_layer: &ArcParentLayer<
+            <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) -> &ArcLayerOf<Self>;
     fn update_layer(
         &mut self,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
     ) -> &ArcLayerOf<Self>;
     fn child(&self) -> &ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>;
 }
 pub struct PerformLayerPaint<R: Render> {
-    pub create_layer: for<'a> fn(
+    pub get_layer: for<'a> fn(
         render: &'a mut R,
         size: &<<R::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &R::LayoutMemo,
-        parent_layer: &Arc<
-            LayerScope<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas>,
-        >,
+        parent_layer: &ArcParentLayer<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas>,
     ) -> &'a ArcLayerOf<R>,
     pub update_layer: for<'a> fn(
         render: &'a mut R,
-        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
     ) -> &'a ArcLayerOf<R>,
     pub child: fn(render: &R) -> &ArcChildRenderObject<<R::Element as Element>::ChildProtocol>,
 }
@@ -202,7 +200,7 @@ pub(crate) struct LayoutResults<P: Protocol, M> {
 }
 
 pub(crate) struct PaintResults<P: Protocol> {
-    pub(crate) transform_abs: P::SelfTransform,
+    pub(crate) transform_abs: P::Transform,
 }
 
 impl<P, M> RenderCache<P, M>

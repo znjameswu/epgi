@@ -50,7 +50,7 @@ impl Render for RenderRootView {
     fn perform_paint(
         &self,
         _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        _transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::SelfTransform,
+        _transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
         _paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,

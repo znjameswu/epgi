@@ -64,6 +64,10 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         op(self);
         self.curr_transform = old_transform;
     }
+
+    fn with_layer(&mut self, op: impl FnOnce(&epgi_core::common::ArcParentLayer<Self::Canvas>)) {
+        todo!()
+    }
 }
 
 impl<'a> PaintContext for VelloPaintScanner<'a> {
@@ -79,6 +83,10 @@ impl<'a> PaintContext for VelloPaintScanner<'a> {
         transform: <Self::Canvas as Canvas>::Transform,
         op: impl FnOnce(&mut Self),
     ) {
+        todo!()
+    }
+
+    fn with_layer(&mut self, op: impl FnOnce(&epgi_core::common::ArcParentLayer<Self::Canvas>)) {
         todo!()
     }
 }

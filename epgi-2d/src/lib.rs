@@ -8,7 +8,7 @@ pub use r#box::*;
 pub use text::*;
 pub use vello::*;
 
-use epgi_core::foundation::Canvas;
+use epgi_core::{common::ArcParentLayer, foundation::Canvas};
 
 pub type Affine2d = vello_encoding::Transform;
 
@@ -34,5 +34,13 @@ impl Canvas for Affine2dCanvas {
     ) {
         // TODO: Vello API design issue.
         dst.append(src, &transform.cloned())
+    }
+
+    fn with_context(
+        layer: ArcParentLayer<Self>,
+        scan: impl FnOnce(Self::PaintScanner<'_>),
+        paint: impl FnOnce(Self::PaintContext<'_>),
+    ) {
+        todo!()
     }
 }
