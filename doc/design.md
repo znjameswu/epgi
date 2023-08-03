@@ -447,3 +447,7 @@ We have following candidate solutions:
 4. Solution 2-2 and 3 actually have the same execution flow.
 
 Decision: Prototype with Solution 1 and later try Solution 2-2 or 3. Solution 1 is easy to upgrade to Solution 2-2.
+
+# Detached layout optimization (for !parent_use_size) is incorrect
+
+Therefore we can get rid of that ugly LayoutExecutor, since now every layout operation is structured.

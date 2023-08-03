@@ -157,7 +157,6 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn perform_layout<'a, 'layout>(
         &'a self,
         constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        executor: super::LayoutExecutor<'a, 'layout>,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,

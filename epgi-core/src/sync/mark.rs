@@ -26,7 +26,7 @@ pub(crate) struct ElementMark {
 
     pub(super) descendants_contain_repaint: AtomicBool,
 
-    pub(super) is_repaint_boundary: AtomicBool,
+    pub(super) is_repaint_boundary: bool,
 }
 
 impl ElementContextNode {
@@ -40,6 +40,10 @@ impl ElementContextNode {
 
     pub(crate) fn needs_poll(&self) -> bool {
         self.mark.is_poll_ready.load(Relaxed)
+    }
+
+    pub(crate) fn needs_relayout(&self) -> bool {
+        self.mark.needs_relayout.load(Relaxed)
     }
 
     pub(crate) fn mark_secondary_root(&self, lane_pos: LanePos) {
@@ -62,9 +66,11 @@ impl ElementContextNode {
 
     pub(super) fn mark_needs_relayout(&self) {
         let mut cur = self;
+        // Mark up to the nearest relayout boundary
         loop {
             let old_needs_relayout = cur.mark.needs_relayout.swap(true, Relaxed);
             cur.mark.descendants_contain_relayout.store(true, Relaxed);
+            cur.mark_needs_repaint();
             if cur.mark.is_relayout_boundary.load(Relaxed) {
                 break;
             }
@@ -76,7 +82,7 @@ impl ElementContextNode {
             };
             cur = parent.as_ref();
         }
-
+        // Then, mark all the way up to the root
         loop {
             let Some(parent) = &cur.parent else {
                 break;
@@ -88,17 +94,17 @@ impl ElementContextNode {
                 break;
             }
         }
-        self.mark_needs_repaint();
     }
 
     pub(super) fn mark_needs_repaint(&self) {
         let mut cur = self;
+        // Mark up to the nearest repaint boundary
         loop {
             let old_needs_repaint = cur.mark.needs_repaint.swap(true, Relaxed);
             cur.mark.descendants_contain_repaint.store(true, Relaxed);
-            // if cur.mark.is_repaint_boundary.load(Relaxed) {
-            //     break;
-            // }
+            if cur.mark.is_repaint_boundary {
+                break;
+            }
             if old_needs_repaint {
                 break;
             }
@@ -107,7 +113,7 @@ impl ElementContextNode {
             };
             cur = parent.as_ref();
         }
-
+        // Then, mark all the way up to the root
         loop {
             let Some(parent) = &cur.parent else {
                 break;

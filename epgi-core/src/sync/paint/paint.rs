@@ -23,7 +23,11 @@ where
     ) {
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let Some(layout_results) = inner_reborrow.cache.layout_results_mut() else {
+        let Some(layout_results) = inner_reborrow
+            .cache
+            .as_ref()
+            .and_then(|x| x.layout_results(&self.element_context))
+        else {
             panic!("Paint should only be called after layout has finished")
         };
 

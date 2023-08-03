@@ -29,7 +29,6 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_layout<'a, 'layout>(
         &'a self,
         constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        executor: LayoutExecutor<'a, 'layout>,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
@@ -76,7 +75,6 @@ pub trait DryLayout: Render {
         &'a self,
         constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
         size: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        executor: LayoutExecutor<'a, 'layout>,
     ) -> Self::LayoutMemo;
 }
 
@@ -90,7 +88,6 @@ pub struct PerformDryLayout<R: Render> {
         &'a R,
         &'a <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         &'a <<R::Element as Element>::ParentProtocol as Protocol>::Size,
-        LayoutExecutor<'a, 'layout>,
     ) -> R::LayoutMemo,
 }
 
@@ -130,20 +127,15 @@ pub struct PerformLayerPaint<R: Render> {
     pub child: fn(render: &R) -> &ArcChildRenderObject<<R::Element as Element>::ChildProtocol>,
 }
 
-#[derive(Clone, Copy)]
-pub struct LayoutExecutor<'a, 'layout> {
-    pub scope: &'a rayon::Scope<'layout>,
-}
-
 pub struct RenderObject<R: Render> {
-    element_context: ArcElementContextNode,
+    pub(crate) element_context: ArcElementContextNode,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
 pub(crate) struct RenderObjectInner<R: Render> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     boundaries: Option<RenderObjectBoundaries>,
-    pub(crate) cache: RenderCache<<R::Element as Element>::ParentProtocol, R::LayoutMemo>,
+    pub(crate) cache: Option<RenderCache<<R::Element as Element>::ParentProtocol, R::LayoutMemo>>,
     pub(crate) render: R,
 }
 
@@ -153,43 +145,23 @@ struct RenderObjectBoundaries {
 }
 
 pub(crate) struct RenderCache<P: Protocol, M> {
-    pub(crate) inner: Option<RenderCacheInner<P, M>>,
-}
-
-pub(crate) struct RenderCacheInner<P: Protocol, M> {
     pub(crate) constraints: P::Constraints,
     pub(crate) parent_use_size: bool,
-    pub(crate) layout: Option<LayoutResults<P, M>>,
+    layout_results: Option<LayoutResults<P, M>>,
 }
 
 impl<P, M> RenderCache<P, M>
 where
     P: Protocol,
 {
-    /// Return: whether a layout is needed.
-    pub(crate) fn set_root_constraints(&mut self, constraints: &P::Constraints) -> bool {
-        match &mut self.inner {
-            Some(inner) => {
-                debug_assert!(
-                    inner.parent_use_size == false,
-                    "Root render object should not have parent_use_size"
-                );
-                if inner.constraints.eq(constraints) {
-                    return false;
-                }
-                inner.constraints = constraints.clone();
-                inner.layout = None;
-                return true;
-            }
-            None => {
-                self.inner = Some(RenderCacheInner {
-                    constraints: constraints.clone(),
-                    parent_use_size: false,
-                    layout: None,
-                });
-                return true;
-            }
+    pub(crate) fn layout_results(
+        &self,
+        context: &ElementContextNode,
+    ) -> Option<&LayoutResults<P, M>> {
+        if context.needs_relayout() {
+            return None;
         }
+        self.layout_results.as_ref()
     }
 }
 
@@ -208,60 +180,65 @@ where
     P: Protocol,
 {
     #[inline]
-    pub(crate) fn parent_use_size(&self) -> Option<bool> {
-        self.inner.as_ref().map(|inner| inner.parent_use_size)
-    }
-
-    #[inline]
-    pub(crate) fn layout_results_ref(&self) -> Option<&LayoutResults<P, M>> {
-        self.inner.as_ref().and_then(|inner| inner.layout.as_ref())
-    }
-
-    #[inline]
-    pub(crate) fn layout_results_mut(&mut self) -> Option<&mut LayoutResults<P, M>> {
-        self.inner.as_mut().and_then(|inner| inner.layout.as_mut())
-    }
-
-    #[inline]
-    pub fn get_layout_for(
-        &mut self,
-        constraints: &P::Constraints,
-        parent_use_size: bool,
-    ) -> Option<&P::Size> {
-        let Some(inner) = &mut self.inner else {
+    pub fn get_layout_for(&mut self, constraints: &P::Constraints) -> Option<&P::Size> {
+        let Some(layout_results) = &mut self.layout_results else {
             return None;
         };
-        let Some(layout) = &mut inner.layout else {
-            return None;
-        };
-        if &inner.constraints == constraints {
-            inner.parent_use_size = parent_use_size;
-            return Some(&layout.size);
+        if &self.constraints == constraints {
+            return Some(&layout_results.size);
         }
         return None;
     }
 
-    pub fn insert_layout_results(
-        &mut self,
+    /// An almost-zero-overhead way to write into cache while holding reference to [Size]
+    pub fn insert_into(
+        dst: &mut Option<Self>,
         constraints: P::Constraints,
         parent_use_size: bool,
         size: P::Size,
         memo: M,
     ) -> &P::Size {
-        &self
-            .inner
-            .insert(RenderCacheInner {
-                constraints,
-                parent_use_size,
-                layout: None,
-            })
-            .layout
-            .insert(LayoutResults {
-                size,
-                memo,
-                paint: None,
-            })
-            .size
+        &dst.insert(RenderCache {
+            constraints,
+            parent_use_size,
+            layout_results: None,
+        })
+        .layout_results
+        .insert(LayoutResults {
+            size,
+            memo,
+            paint: None,
+        })
+        .size
+    }
+
+    /// Return: whether a layout is needed.
+    pub(crate) fn set_root_constraints(
+        dst: &mut Option<Self>,
+        constraints: &P::Constraints,
+    ) -> bool {
+        match dst {
+            Some(inner) => {
+                debug_assert!(
+                    inner.parent_use_size == false,
+                    "Root render object should not have parent_use_size"
+                );
+                if inner.constraints.eq(constraints) {
+                    return false;
+                }
+                inner.constraints = constraints.clone();
+                inner.layout_results = None;
+                return true;
+            }
+            None => {
+                *dst = Some(RenderCache {
+                    constraints: constraints.clone(),
+                    parent_use_size: false,
+                    layout_results: None,
+                });
+                return true;
+            }
+        }
     }
 }
 
@@ -308,7 +285,8 @@ where
         let constraints = constraints
             .downcast_ref::<<<R::Element as Element>::ParentProtocol as Protocol>::Constraints>()
             .expect("A correct type of constraints should be passed to root");
-        self.inner.lock().cache.set_root_constraints(constraints)
+
+        return RenderCache::set_root_constraints(&mut self.inner.lock().cache, constraints);
     }
 }
 

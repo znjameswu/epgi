@@ -1,7 +1,7 @@
 use epgi_core::{
     common::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, GetSuspense,
-        LayoutExecutor, Reconciler, Render, RenderElement, RenderObject, Widget,
+        Reconciler, Render, RenderElement, RenderObject, Widget,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
@@ -36,7 +36,6 @@ impl Render for RenderRootView {
     fn perform_layout<'a, 'layout>(
         &'a self,
         _constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        _executor: LayoutExecutor<'a, 'layout>,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
@@ -72,7 +71,6 @@ impl DryLayout for RenderRootView {
         &'a self,
         constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
         size: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        executor: LayoutExecutor<'a, 'layout>,
     ) -> Self::LayoutMemo {
         // self.render_ctx.resize_surface(&mut self.surface, size.width, size.height)
     }

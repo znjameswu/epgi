@@ -2,7 +2,7 @@ use hashbrown::HashSet;
 
 use crate::{
     common::{
-        AweakAnyRenderObject, Element, LayoutExecutor, PerformDryLayout, Render, RenderObject,
+        AweakAnyRenderObject, Element, PerformDryLayout, Render, RenderCache, RenderObject,
         RenderObjectInner,
     },
     foundation::{Arc, Protocol, PtrEq},
@@ -36,7 +36,7 @@ where
     R: Render,
 {
     fn is_relayout_boundary(&self) -> bool {
-        R::PERFORM_DRY_LAYOUT.is_some() || self.cache.parent_use_size() == Some(true)
+        R::PERFORM_DRY_LAYOUT.is_some() || self.cache.as_ref().is_some_and(|x| x.parent_use_size)
     }
 }
 
@@ -45,65 +45,56 @@ where
     R: Render,
 {
     fn is_relayout_boundary(&self) -> bool {
-        R::PERFORM_DRY_LAYOUT.is_some() || self.inner.lock().cache.parent_use_size() == Some(false)
+        R::PERFORM_DRY_LAYOUT.is_some()
+            || self
+                .inner
+                .lock()
+                .cache
+                .as_ref()
+                .is_some_and(|x| x.parent_use_size)
     }
     fn layout_without_resize(&self) {
         let mut inner = self.inner.lock();
         debug_assert!(inner.is_relayout_boundary());
-        let Some(cache) = inner.cache.inner.as_mut() else {
+        let Some(cache) = inner.cache.as_mut() else {
             panic!("Relayout should only be called on relayout boundaries which must retain their layout caches")
         };
-        if cache.layout.is_some() {
+        if cache.layout_results(&self.element_context).is_some() {
             return;
         }
         let constraints = cache.constraints.clone();
         let parent_use_size = cache.parent_use_size;
-        get_current_scheduler()
-            .sync_threadpool
-            .in_place_scope(|scope| {
-                inner.perform_wet_layout(constraints, parent_use_size, LayoutExecutor { scope });
-            })
-    }
-
-    fn layout_detached<'a, 'layout>(
-        self: Arc<Self>,
-        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        executor: LayoutExecutor<'a, 'layout>,
-    ) {
-        executor.scope.spawn(move |scope| {
-            let mut inner = self.inner.lock();
-            if inner.cache.get_layout_for(&constraints, false).is_some() {
-                return;
-            }
-            inner.perform_wet_layout(constraints, false, LayoutExecutor { scope });
-        });
+        inner.perform_wet_layout(constraints, parent_use_size);
     }
 
     fn layout<'a, 'layout>(
         &'a self,
         constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        executor: LayoutExecutor<'a, 'layout>,
     ) {
         let mut inner = self.inner.lock();
-        if inner.cache.get_layout_for(&constraints, false).is_some() {
-            return;
+        if let Some(cache) = &mut inner.cache {
+            if cache.get_layout_for(&constraints).is_some() {
+                cache.parent_use_size = false;
+                return;
+            }
         }
-        inner.perform_wet_layout(constraints, false, executor);
+        inner.perform_wet_layout(constraints, false);
     }
 
     fn layout_use_size<'a, 'layout>(
         &'a self,
         constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        executor: LayoutExecutor<'a, 'layout>,
     ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
         let mut inner = self.inner.lock();
 
-        if let Some(size) = inner.cache.get_layout_for(&constraints, true) {
-            return size.clone();
+        if let Some(cache) = &mut inner.cache {
+            if let Some(size) = cache.get_layout_for(&constraints) {
+                let size = size.clone();
+                cache.parent_use_size = false;
+                return size;
+            }
         }
-        inner
-            .perform_wet_layout(constraints, true, executor)
-            .clone()
+        inner.perform_wet_layout(constraints, true).clone()
     }
 }
 impl<R> RenderObjectInner<R>
@@ -115,7 +106,6 @@ where
         &'a mut self,
         constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         parent_use_size: bool,
-        executor: LayoutExecutor<'a, 'layout>,
     ) -> &<<R::Element as Element>::ParentProtocol as Protocol>::Size {
         let (size, memo) = if let Some(PerformDryLayout {
             compute_dry_layout,
@@ -123,15 +113,13 @@ where
         }) = R::PERFORM_DRY_LAYOUT
         {
             let size = compute_dry_layout(&self.render, &constraints);
-            let memo = perform_layout(&self.render, &constraints, &size, executor);
+            let memo = perform_layout(&self.render, &constraints, &size);
             (size, memo)
         } else {
-            self.render.perform_layout(&constraints, executor)
+            self.render.perform_layout(&constraints)
         };
 
-        return &self
-            .cache
-            .insert_layout_results(constraints, parent_use_size, size, memo);
+        return RenderCache::insert_into(&mut self.cache, constraints, parent_use_size, size, memo);
     }
 }
 
@@ -141,23 +129,9 @@ pub(crate) mod layout_private {
     use super::*;
 
     pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
-        fn layout_use_size<'a, 'layout>(
-            &'a self,
-            constraints: PP::Constraints,
-            executor: LayoutExecutor<'a, 'layout>,
-        ) -> PP::Size;
+        fn layout_use_size<'a, 'layout>(&'a self, constraints: PP::Constraints) -> PP::Size;
 
-        fn layout<'a, 'layout>(
-            &'a self,
-            constraints: PP::Constraints,
-            executor: LayoutExecutor<'a, 'layout>,
-        );
-
-        fn layout_detached<'a, 'layout>(
-            self: Arc<Self>,
-            constraints: PP::Constraints,
-            executor: LayoutExecutor<'a, 'layout>,
-        );
+        fn layout<'a, 'layout>(&'a self, constraints: PP::Constraints);
     }
 
     impl<R> ChildRenderObjectLayoutExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
@@ -167,25 +141,15 @@ pub(crate) mod layout_private {
         fn layout_use_size<'a, 'layout>(
             &'a self,
             constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-            executor: LayoutExecutor<'a, 'layout>,
         ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
-            self.layout_use_size(constraints, executor)
+            self.layout_use_size(constraints)
         }
 
         fn layout<'a, 'layout>(
             &'a self,
             constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-            executor: LayoutExecutor<'a, 'layout>,
         ) {
-            self.layout(constraints, executor)
-        }
-
-        fn layout_detached<'a, 'layout>(
-            self: Arc<Self>,
-            constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-            executor: LayoutExecutor<'a, 'layout>,
-        ) {
-            self.layout_detached(constraints, executor)
+            self.layout(constraints)
         }
     }
 
