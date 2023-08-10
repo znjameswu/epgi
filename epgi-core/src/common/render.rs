@@ -5,8 +5,8 @@ use crate::foundation::{
 };
 
 use super::{
-    ArcElementContextNode, ArcLayerOf, ArcParentLayer, Element, ElementContextNode, Layer,
-    LayerFragment, LayerScope, RenderElement,
+    ArcElementContextNode, ArcLayerOf, ArcParentLayer, Element, ElementContextNode, GetSuspense,
+    Layer, LayerFragment, LayerScope,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -39,13 +39,13 @@ pub trait Render: Sized + Send + Sync + 'static {
         widget: &<Self::Element as Element>::ArcWidget,
     ) -> RenderObjectUpdateResult;
 
-    /// Whether [Render::update_render_object] is a no-op
+    /// Whether [Render::update_render_object] is a no-op and always returns None
     ///
     /// When set to true, [Render::update_render_object]'s implementation will be ignored,
     /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
     /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
     ///
-    /// Setting to false will always guarantee the correct behavior. 
+    /// Setting to false will always guarantee the correct behavior.
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
     fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()>;
@@ -56,7 +56,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
     /// However, if [Render::try_update_render_object_children] is actually not no-op, doing this will cause unexpected behaviors.
     ///
-    /// Setting to false will always guarantee the correct behavior. 
+    /// Setting to false will always guarantee the correct behavior.
     /// Leaf render objects may consider setting this to true.
     const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = false;
 
@@ -74,16 +74,16 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     type LayoutMemo: Send + Sync + 'static;
 
-    fn perform_layout<'a, 'layout>(
-        &'a self,
-        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+    fn perform_layout(
+        &self,
+        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
     );
 
-    /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
-    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = None;
+    /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
+    const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<Self>> = None;
 
     // We don't make perform paint into an associated constant because it has an generic paramter
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
@@ -92,13 +92,15 @@ pub trait Render: Sized + Send + Sync + 'static {
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        paint_ctx: impl PaintContext<
+        paint_ctx: &mut impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     );
 
-    /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
-    const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<Self>> = None;
+    /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
+    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = None;
+
+    const GET_SUSPENSE: Option<GetSuspense<Self::Element>> = None;
 
     // fn compute_child_transformation(
     //     transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
@@ -215,6 +217,17 @@ impl<P, M> RenderCache<P, M>
 where
     P: Protocol,
 {
+    pub(crate) fn new(
+        constraints: P::Constraints,
+        parent_use_size: bool,
+        layout_results: Option<LayoutResults<P, M>>,
+    ) -> Self {
+        Self {
+            constraints,
+            parent_use_size,
+            layout_results,
+        }
+    }
     pub(crate) fn layout_results(
         &self,
         context: &ElementContextNode,

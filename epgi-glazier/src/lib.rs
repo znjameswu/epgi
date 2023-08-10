@@ -12,7 +12,11 @@ pub fn run_app(app: ArcChildWidget<BoxProtocol>) {
     // let root: ArcChildWidget<BoxProtocol> = Arc::new(RootView { child: app });
     let widget_placeholder = Arc::new(RootView { child: None });
     let element = RootViewElement { child: None };
-    let element_node = create_root_element(widget_placeholder, element, BoxConstraints::default());
+    let element_node = create_root_element::<RenderRootView>(
+        widget_placeholder,
+        element,
+        BoxConstraints::default(),
+    );
 
     let tree_scheduler = TreeScheduler::new(element_node.clone());
     let sync_threadpool = rayon::ThreadPoolBuilder::new().build().unwrap();

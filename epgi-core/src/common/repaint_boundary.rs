@@ -5,8 +5,7 @@ use crate::foundation::{
 
 use super::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode, ArcLayerOf,
-    ArcParentLayer, Element, LayerPaint, LayerScope, Reconciler, Render, RenderElement,
-    RenderObject, Widget,
+    ArcParentLayer, Element, LayerPaint, LayerScope, Reconciler, Render, RenderObject, Widget,
 };
 
 #[derive(Debug)]
@@ -19,10 +18,6 @@ where
     P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
 {
     type Element = RepaintBoundaryElement<P>;
-
-    fn create_element(self: Asc<Self>) -> Self::Element {
-        todo!()
-    }
 
     fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
         self
@@ -72,38 +67,6 @@ where
     type ArcRenderObject = Arc<RenderObject<RenderRepaintBoundary<P>>>;
 }
 
-impl<P> RenderElement for RepaintBoundaryElement<P>
-where
-    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
-{
-    type Render = RenderRepaintBoundary<P>;
-
-    fn try_create_render_object(
-        &self,
-        widget: &Self::ArcWidget,
-    ) -> Option<Arc<RenderObject<Self::Render>>> {
-        todo!()
-    }
-
-    fn update_render_object_widget(
-        widget: &Self::ArcWidget,
-        render_object: &Arc<RenderObject<Self::Render>>,
-    ) {
-        todo!()
-    }
-
-    fn try_update_render_object_children(
-        &self,
-        render_object: &Arc<RenderObject<Self::Render>>,
-    ) -> Result<(), ()> {
-        todo!()
-    }
-
-    fn detach_render_object(render_object: &Arc<RenderObject<Self::Render>>) {
-        todo!()
-    }
-}
-
 pub struct RenderRepaintBoundary<P: Protocol> {
     layer: Option<Arc<LayerScope<P::Canvas>>>,
     child: [ArcChildRenderObject<P>; 1],
@@ -120,6 +83,26 @@ where
     fn children(&self) -> Self::ChildIter {
         todo!()
     }
+
+    fn try_create_render_object_from_element(
+        element: &Self::Element,
+        widget: &<Self::Element as Element>::ArcWidget,
+    ) -> Option<Self> {
+        todo!()
+    }
+
+    fn update_render_object(
+        &mut self,
+        widget: &<Self::Element as Element>::ArcWidget,
+    ) -> super::RenderObjectUpdateResult {
+        todo!()
+    }
+
+    fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
+        todo!()
+    }
+
+    const NOOP_DETACH: bool = true;
 
     type LayoutMemo = ();
 
@@ -138,7 +121,7 @@ where
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        paint_ctx: impl PaintContext<
+        paint_ctx: &mut impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {

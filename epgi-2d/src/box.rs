@@ -26,6 +26,18 @@ impl Constraints<BoxSize> for BoxConstraints {
     }
 }
 
+impl BoxConstraints {
+    #[inline(always)]
+    pub fn enforce(&self, other: &Self) -> Self {
+        Self {
+            min_width: self.min_width.clamp(other.min_width, other.max_width),
+            max_width: self.max_width.clamp(other.min_width, other.max_width),
+            min_height: self.min_height.clamp(other.min_height, other.max_height),
+            max_height: self.max_height.clamp(other.min_height, other.max_height),
+        }
+    }
+}
+
 impl Default for BoxConstraints {
     fn default() -> Self {
         Self {

@@ -1,65 +1,59 @@
-use epgi_2d::BoxProtocol;
-use epgi_core::{common::{ArcChildElementNode, ArcChildWidget, Element, Widget}, foundation::Never};
+use std::sync::Arc;
 
-// #[derive(Debug)]
-// pub struct ConstrainedBox {
-//     child: ArcChildWidget<BoxProtocol>,
-// }
+use epgi_2d::{BoxConstraints, BoxProtocol, BoxSize};
+use epgi_core::common::{
+    ArcChildRenderObject, ArcChildWidget, Element, ProxyWidget, RenderObjectUpdateResult,
+    SingleChildRenderObjectElement, Widget,
+};
 
-// impl Widget for ConstrainedBox {
-//     type Element = ConstrainedBoxElement;
+#[derive(Debug)]
+pub struct ConstrainedBox {
+    constraints: BoxConstraints,
+    child: ArcChildWidget<BoxProtocol>,
+}
 
-//     fn create_element(self: epgi_core::foundation::Asc<Self>) -> Self::Element {
-//         todo!()
-//     }
+impl Widget for ConstrainedBox {
+    type Element = SingleChildRenderObjectElement<Self>;
 
-//     fn into_arc_widget(
-//         self: std::sync::Arc<Self>,
-//     ) -> <Self::Element as epgi_core::common::Element>::ArcWidget {
-//         todo!()
-//     }
-// }
+    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+        self
+    }
+}
 
-// #[derive(Clone)]
-// pub struct ConstrainedBoxElement {
-//     child: ArcChildElementNode<BoxProtocol>,
-// }
+impl ProxyWidget for ConstrainedBox {
+    type Protocol = BoxProtocol;
 
-// impl Element for ConstrainedBoxElement {
-//     type ArcWidget;
+    type RenderState = BoxConstraints;
 
-//     type ParentProtocol = BoxProtocol;
+    fn child(&self) -> &ArcChildWidget<BoxProtocol> {
+        &self.child
+    }
 
-//     type ChildProtocol = BoxProtocol;
+    fn create_render_state(&self) -> BoxConstraints {
+        self.constraints.clone()
+    }
 
-//     type Provided = Never;
+    fn update_render_state(&self, render_state: &mut BoxConstraints) -> RenderObjectUpdateResult {
+        if render_state != &self.constraints {
+            *render_state = self.constraints.clone();
+            return RenderObjectUpdateResult::MarkNeedsLayout;
+        }
+        return RenderObjectUpdateResult::None;
+    }
 
-//     fn perform_rebuild_element(
-//         self,
-//         widget: &Self::ArcWidget,
-//         provider_values: epgi_core::foundation::InlinableDwsizeVec<
-//             epgi_core::foundation::Arc<dyn epgi_core::foundation::Provide>,
-//         >,
-//         reconciler: impl epgi_core::common::Reconciler<Self::ChildProtocol>,
-//     ) -> Result<Self, (Self, epgi_core::foundation::BuildSuspendedError)> {
-//         todo!()
-//     }
+    fn detach_render_state(_render_state: &mut Self::RenderState) {}
 
-//     fn perform_inflate_element(
-//         widget: &Self::ArcWidget,
-//         provider_values: epgi_core::foundation::InlinableDwsizeVec<
-//             epgi_core::foundation::Arc<dyn epgi_core::foundation::Provide>,
-//         >,
-//         reconciler: impl epgi_core::common::Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-//     ) -> Result<Self, epgi_core::foundation::BuildSuspendedError> {
-//         todo!()
-//     }
+    const NOOP_DETACH: bool = true;
 
-//     type ChildIter;
+    type LayoutMemo = ();
 
-//     fn children(&self) -> Self::ChildIter {
-//         todo!()
-//     }
-
-//     type ArcRenderObject;
-// }
+    fn perform_layout(
+        state: &BoxConstraints,
+        child: &ArcChildRenderObject<BoxProtocol>,
+        constraints: &BoxConstraints,
+    ) -> (BoxSize, ()) {
+        let child_constraints = state.enforce(constraints);
+        let size = child.layout_use_size(&child_constraints);
+        (size, ())
+    }
+}

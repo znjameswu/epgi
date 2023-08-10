@@ -21,8 +21,6 @@ pub trait Widget: std::fmt::Debug + 'static + Send + Sync {
         None
     }
 
-    fn create_element(self: Asc<Self>) -> Self::Element;
-
     fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget;
 }
 
@@ -38,19 +36,6 @@ pub trait ChildWidget<PP: Protocol>:
     fn as_arc_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 
     fn as_arc_any_widget(self: Arc<Self>) -> ArcAnyWidget;
-
-    // // These methods cannot be hidden behind a private supertrait. Since the supertrait needs associated types to be object safe and the associated types will be duplicated everywhere
-    // fn spawn_inflate_with(
-    //     self: Arc<Self>,
-    //     reconciler: &Reconciler,
-    // ) -> ArcChildElementNode<Self::SelfProtocol>;
-    // fn inflate_sync<'a, 'batch>(
-    //     self: Arc<Self>,
-    //     parent_context: &ArcElementContextNode,
-    //     job_ids: &'a SmallSet<JobId>,
-    //     scope: &'a rayon::Scope<'batch>,
-    //     tree_scheduler: &'batch TreeScheduler,
-    // ) -> (ArcChildElementNode<SP>, SubtreeCommitResult);
 
     fn widget_type_id(&self) -> TypeId;
 }

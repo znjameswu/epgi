@@ -67,9 +67,9 @@ where
         inner.perform_wet_layout(constraints, parent_use_size);
     }
 
-    fn layout<'a, 'layout>(
-        &'a self,
-        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+    fn layout(
+        &self,
+        constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
     ) {
         let mut inner = self.inner.lock();
         if let Some(cache) = &mut inner.cache {
@@ -78,12 +78,12 @@ where
                 return;
             }
         }
-        inner.perform_wet_layout(constraints, false);
+        inner.perform_wet_layout(constraints.clone(), false);
     }
 
-    fn layout_use_size<'a, 'layout>(
-        &'a self,
-        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+    fn layout_use_size(
+        &self,
+        constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
     ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
         let mut inner = self.inner.lock();
 
@@ -94,7 +94,7 @@ where
                 return size;
             }
         }
-        inner.perform_wet_layout(constraints, true).clone()
+        inner.perform_wet_layout(constraints.clone(), true).clone()
     }
 }
 impl<R> RenderObjectInner<R>
@@ -102,8 +102,8 @@ where
     R: Render,
 {
     #[inline(always)]
-    fn perform_wet_layout<'a, 'layout>(
-        &'a mut self,
+    fn perform_wet_layout(
+        &mut self,
         constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         parent_use_size: bool,
     ) -> &<<R::Element as Element>::ParentProtocol as Protocol>::Size {
@@ -129,25 +129,25 @@ pub(crate) mod layout_private {
     use super::*;
 
     pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
-        fn layout_use_size<'a, 'layout>(&'a self, constraints: PP::Constraints) -> PP::Size;
+        fn layout_use_size(&self, constraints: &PP::Constraints) -> PP::Size;
 
-        fn layout<'a, 'layout>(&'a self, constraints: PP::Constraints);
+        fn layout(&self, constraints: &PP::Constraints);
     }
 
     impl<R> ChildRenderObjectLayoutExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
     where
         R: Render,
     {
-        fn layout_use_size<'a, 'layout>(
-            &'a self,
-            constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        fn layout_use_size(
+            &self,
+            constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
             self.layout_use_size(constraints)
         }
 
-        fn layout<'a, 'layout>(
-            &'a self,
-            constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        fn layout(
+            &self,
+            constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         ) {
             self.layout(constraints)
         }

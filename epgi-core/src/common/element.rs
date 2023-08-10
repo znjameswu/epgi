@@ -21,7 +21,7 @@ use crate::{
 
 use super::{
     ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Reconciler, Render,
-    RenderCache, RenderObject, RenderSuspense, Suspense, SuspenseElement,
+    RenderCache, RenderObject, RenderObjectInner, RenderSuspense, Suspense, SuspenseElement,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -79,8 +79,6 @@ pub trait Element: Send + Sync + Clone + 'static {
     // Rust const is inlined, so we can safely expect that no actual function pointers will occur in binary causing indirection.
     // const GET_RENDER_OBJECT: GetRenderObject<Self>;
     type ArcRenderObject: ArcRenderObject<Self>;
-
-    // fn get_subtree_render_object
 }
 
 pub trait ComposeElement: Element<ArcRenderObject = Never> {
@@ -89,89 +87,114 @@ pub trait ComposeElement: Element<ArcRenderObject = Never> {
     const GET_RENDER_OBJECT: GetRenderObject<Self> = GetRenderObject::None(Self::child);
 }
 
-pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render>>> {
-    type Render: Render<Element = Self>;
+// pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render>>> {
+//     type Render: Render<Element = Self>;
 
-    fn try_create_render_object(
-        &self,
-        widget: &Self::ArcWidget,
-    ) -> Option<Arc<RenderObject<Self::Render>>>;
-    /// Update necessary properties of render object given by the widget
-    ///
-    /// Called during the commit phase, when the widget is updated.
-    /// Always called after [RenderElement::try_update_render_object_children].
-    /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render_object_widget(
-        widget: &Self::ArcWidget,
-        render_object: &Arc<RenderObject<Self::Render>>,
-    );
-    /// Try to re-assemble the children of the givin render object.
-    ///
-    /// Called during the commit phase, when subtree structure has changed.
-    fn try_update_render_object_children(
-        &self,
-        render_object: &Arc<RenderObject<Self::Render>>,
-    ) -> Result<(), ()>;
+//     fn try_create_render_object(
+//         &self,
+//         widget: &Self::ArcWidget,
+//     ) -> Option<Arc<RenderObject<Self::Render>>>;
+//     /// Update necessary properties of render object given by the widget
+//     ///
+//     /// Called during the commit phase, when the widget is updated.
+//     /// Always called after [RenderElement::try_update_render_object_children].
+//     /// If that call failed to update children (indicating suspense), then this call will be skipped.
+//     fn update_render_object_widget(
+//         widget: &Self::ArcWidget,
+//         render_object: &Arc<RenderObject<Self::Render>>,
+//     );
+//     /// Try to re-assemble the children of the givin render object.
+//     ///
+//     /// Called during the commit phase, when subtree structure has changed.
+//     fn try_update_render_object_children(
+//         &self,
+//         render_object: &Arc<RenderObject<Self::Render>>,
+//     ) -> Result<(), ()>;
 
-    fn detach_render_object(render_object: &Arc<RenderObject<Self::Render>>);
+//     fn detach_render_object(render_object: &Arc<RenderObject<Self::Render>>);
 
-    const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
-}
+//     const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
+// }
 
 pub trait ArcRenderObject<E>: Send + Sync + 'static
 where
     E: Element<ArcRenderObject = Self>,
 {
-    // type Render: Render<Element = E>;
+    type Render;
     const GET_RENDER_OBJECT: GetRenderObject<E>;
+    fn with_inner(&self, op: impl FnOnce(&mut Self::Render, &ArcElementContextNode));
 }
 
 impl<E> ArcRenderObject<E> for Never
 where
     E: ComposeElement<ArcRenderObject = Self>,
 {
+    type Render = Never;
     const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::None(E::child);
+
+    fn with_inner(&self, op: impl FnOnce(&mut Self::Render, &ArcElementContextNode)) {
+        debug_assert!(
+            false,
+            "Never should never be dereferenced as ArcRenderObject"
+        )
+    }
 }
 
 impl<R> ArcRenderObject<R::Element> for Arc<RenderObject<R>>
 where
     R: Render,
 {
+    type Render = R;
     const GET_RENDER_OBJECT: GetRenderObject<R::Element> = GetRenderObject::RenderObject {
         get_render_object: |x| x,
-        try_create_render_object: |element, element_context, widget| {
+        try_create_render_object: |element, widget, element_context| {
             let render = R::try_create_render_object_from_element(element, widget)?;
-            Some(Arc::new(RenderObject::new(render, element_context.clone())))
+            Some(Arc::new(RenderObject {
+                element_context: element_context.clone(),
+                inner: SyncMutex::new(RenderObjectInner {
+                    cache: None,
+                    render,
+                }),
+            }))
         },
-        update_render_object: |render_object, widget| {
-            render_object
-                .inner
-                .lock()
-                .render
-                .update_render_object(widget)
+        update_render_object: if R::NOOP_UPDATE_RENDER_OBJECT {
+            None
+        } else {
+            Some(R::update_render_object)
         },
-        try_update_render_object_children: |render_object, element| {
-            render_object
-                .inner
-                .lock()
-                .render
-                .try_update_render_object_children(element)
+        try_update_render_object_children: if R::NOOP_UPDATE_RENDER_OBJECT_CHILDREN {
+            None
+        } else {
+            Some(R::try_update_render_object_children)
         },
-        detach_render_object: |render_object| {
-            render_object.
+        detach_render_object: if R::NOOP_DETACH {
+            None
+        } else {
+            Some(R::detach)
         },
-        get_suspense: R::Element::GET_SUSPENSE,
+        get_suspense: R::GET_SUSPENSE,
     };
+
+    fn with_inner(&self, op: impl FnOnce(&mut Self::Render, &ArcElementContextNode)) {
+        op(&mut self.inner.lock().render, &self.element_context)
+    }
 }
 
 pub enum GetRenderObject<E: Element> {
     RenderObject {
         get_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
         try_create_render_object:
-            fn(&E, &ArcElementContextNode, &E::ArcWidget) -> Option<E::ArcRenderObject>,
-        update_render_object: fn(&E::ArcRenderObject, &E::ArcWidget) -> RenderObjectUpdateResult,
-        try_update_render_object_children: fn(&E::ArcRenderObject, &E) -> Result<(), ()>,
-        detach_render_object: fn(&E::ArcRenderObject),
+            fn(&E, &E::ArcWidget, &ArcElementContextNode) -> Option<E::ArcRenderObject>,
+        update_render_object: Option<
+            fn(
+                &mut <E::ArcRenderObject as ArcRenderObject<E>>::Render,
+                &E::ArcWidget,
+            ) -> RenderObjectUpdateResult,
+        >,
+        try_update_render_object_children: Option<
+            fn(&mut <E::ArcRenderObject as ArcRenderObject<E>>::Render, &E) -> Result<(), ()>,
+        >,
+        detach_render_object: Option<fn(&mut <E::ArcRenderObject as ArcRenderObject<E>>::Render)>,
         get_suspense: Option<GetSuspense<E>>,
     },
     None(fn(&E) -> &ArcChildElementNode<E::ParentProtocol>),
@@ -323,26 +346,23 @@ where
     // }
 }
 
-pub fn create_root_element<E: RenderElement>(
-    widget: E::ArcWidget,
-    element: E,
-    constraints: <E::ParentProtocol as Protocol>::Constraints,
-) -> Arc<ElementNode<E>> {
+pub fn create_root_element<R: Render>(
+    widget: <R::Element as Element>::ArcWidget,
+    element: R::Element,
+    constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+) -> Arc<ElementNode<R::Element>> {
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_no_provide(node.clone() as _, None));
-        let GetRenderObject::RenderObject {
-            try_create_render_object,
-            ..
-        } = E::ArcRenderObject::GET_RENDER_OBJECT
-        else {
-            panic!("Root element must be a RenderElement")
-        };
-        let render_object = try_create_render_object(&element, &widget)
+        let render = R::try_create_render_object_from_element(&element, &widget)
             .expect("Root render object creation should always be successfully");
-        {
-            RenderCache::set_root_constraints(&mut render_object.inner.lock().cache, constraints);
-        }
-        ElementNode::<E> {
+        let render_object = Arc::new(RenderObject {
+            element_context: element_context.clone(),
+            inner: SyncMutex::new(RenderObjectInner {
+                cache: Some(RenderCache::new(constraints, false, None)),
+                render,
+            }),
+        });
+        ElementNode {
             context: element_context,
             snapshot: SyncMutex::new(ElementSnapshot {
                 widget,

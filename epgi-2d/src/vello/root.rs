@@ -1,8 +1,7 @@
 use epgi_core::{
     common::{
         create_root_element, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout,
-        Element, ElementNode, GetSuspense, LayerScope, Reconciler, Render, RenderElement,
-        RenderObject, Widget,
+        Element, ElementNode, GetSuspense, LayerScope, Reconciler, Render, RenderObject, Widget,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
@@ -26,6 +25,24 @@ impl Render for RenderRootView {
         todo!()
     }
 
+    fn try_create_render_object_from_element(
+        element: &Self::Element,
+        widget: &<Self::Element as Element>::ArcWidget,
+    ) -> Option<Self> {
+        todo!()
+    }
+
+    fn update_render_object(
+        &mut self,
+        widget: &<Self::Element as Element>::ArcWidget,
+    ) -> epgi_core::common::RenderObjectUpdateResult {
+        todo!()
+    }
+
+    fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
+        todo!()
+    }
+
     type LayoutMemo = ();
 
     fn perform_layout<'a, 'layout>(
@@ -46,7 +63,7 @@ impl Render for RenderRootView {
         _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         _transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
-        _paint_ctx: impl PaintContext<
+        _paint_ctx: &mut impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
@@ -82,10 +99,6 @@ pub struct RootView {
 
 impl Widget for RootView {
     type Element = RootViewElement;
-
-    fn create_element(self: Asc<Self>) -> Self::Element {
-        todo!()
-    }
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
         todo!()
@@ -132,36 +145,3 @@ impl Element for RootViewElement {
 
     type ArcRenderObject = Arc<RenderObject<RenderRootView>>;
 }
-
-impl RenderElement for RootViewElement {
-    type Render = RenderRootView;
-
-    fn try_create_render_object(
-        &self,
-        widget: &Self::ArcWidget,
-    ) -> Option<Arc<RenderObject<Self::Render>>> {
-        todo!()
-    }
-
-    fn update_render_object_widget(
-        widget: &Self::ArcWidget,
-        render_object: &Arc<RenderObject<Self::Render>>,
-    ) {
-        todo!()
-    }
-
-    fn try_update_render_object_children(
-        &self,
-        render_object: &Arc<RenderObject<Self::Render>>,
-    ) -> Result<(), ()> {
-        todo!()
-    }
-
-    fn detach_render_object(render_object: &Arc<RenderObject<Self::Render>>) {
-        todo!()
-    }
-
-    const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
-}
-
-

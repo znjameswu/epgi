@@ -222,7 +222,7 @@ where
                     .reduce(SubtreeCommitResult::merge)
                     .unwrap_or_default();
                 // TODO: Absorb new renderobject from subtree by updating the children of this renderobject
-                return todo!()
+                return todo!();
             }
 
             Err(None) => SubtreeCommitResult::NoUpdate,
@@ -475,30 +475,50 @@ where
                 GetRenderObject::RenderObject {
                     get_suspense: None,
                     try_create_render_object,
-                    update_render_object: update_render_object_widget,
+                    update_render_object,
                     try_update_render_object_children,
                     detach_render_object,
                     ..
                 } => {
                     let mut suspended = subtree_results == SubtreeCommitResult::Suspended;
                     if let Some(render_object) = render_object.as_ref() {
-                        if !suspended && subtree_results == SubtreeCommitResult::NewRenderObject {
-                            let res = try_update_render_object_children(&element, render_object);
-                            suspended |= res.is_err();
-                        }
-
-                        if !suspended {
-                            // TODO: Do we need to check if it is new widget? The benefit might be negligible since not many RenderObjectElement would have hooks or subscription updates.
-                            update_render_object_widget(widget, render_object);
+                        let should_update_render_object =
+                            !suspended && subtree_results == SubtreeCommitResult::NewRenderObject;
+                        let should_lock = (should_update_render_object
+                            && try_update_render_object_children.is_some())
+                            || (!suspended && update_render_object.is_some());
+                        if should_lock {
+                            render_object.with_inner(|render, element_context| {
+                                if should_update_render_object {
+                                    if let Some(try_update_render_object_children) =
+                                        try_update_render_object_children
+                                    {
+                                        let res =
+                                            try_update_render_object_children(render, &element);
+                                        suspended |= res.is_err();
+                                    }
+                                }
+                                if !suspended {
+                                    if let Some(update_render_object) = update_render_object {
+                                        let result = update_render_object(render, widget);
+                                        todo!("Mark needs layout")
+                                    }
+                                }
+                            })
                         }
                     } else if !suspended {
-                        render_object = try_create_render_object(&element, widget);
+                        render_object = try_create_render_object(&element, widget, &self.context);
                         suspended = render_object.is_none();
                     }
                     if suspended {
                         (&mut render_object)
                             .take() // rust-analyzer#14933
-                            .map(|render_object| detach_render_object(&render_object));
+                            .map(|render_object| {
+                                if let Some(detach_render_object) = detach_render_object {
+                                    render_object
+                                        .with_inner(|render, _| detach_render_object(render))
+                                }
+                            });
                     }
                     if !suspended {
                         debug_assert!(render_object.is_some(), "RenderObjectElement that are not suspended should attach a render object")
@@ -549,23 +569,24 @@ where
                         }
                         _ => {}
                     }
-                    if subtree_results != SubtreeCommitResult::NoUpdate {
-                        try_update_render_object_children(
-                            &element,
-                            render_object
-                                .as_ref()
-                                .expect("Suspense itself could never suspend or get detached"),
-                        )
-                        .expect("Impossible to fail");
-                    }
-                    (
-                        MainlineState::Ready {
-                            hooks: build_context.hooks,
-                            render_object,
-                            element,
-                        },
-                        SubtreeCommitResult::NoUpdate,
-                    )
+                    todo!()
+                    // if subtree_results != SubtreeCommitResult::NoUpdate {
+                    //     try_update_render_object_children(
+                    //         &element,
+                    //         render_object
+                    //             .as_ref()
+                    //             .expect("Suspense itself could never suspend or get detached"),
+                    //     )
+                    //     .expect("Impossible to fail");
+                    // }
+                    // (
+                    //     MainlineState::Ready {
+                    //         hooks: build_context.hooks,
+                    //         render_object,
+                    //         element,
+                    //     },
+                    //     SubtreeCommitResult::NoUpdate,
+                    // )
                 }
             },
 
@@ -606,7 +627,7 @@ where
                     ..
                 } => {
                     let render_object = (subtree_results != SubtreeCommitResult::Suspended).then(|| {
-                        try_create_render_object(&element, widget).expect("Unsuspended inflating subtree should succeed in creating render object")
+                        try_create_render_object(&element, widget, &self.context).expect("Unsuspended inflating subtree should succeed in creating render object")
                     });
                     (
                         MainlineState::Ready {
@@ -636,7 +657,7 @@ where
                                 "Fallback widget must not suspend and its subtree must always provide an attached renderobject");
                         suspense.fallback = Some(node);
                     }
-                    let render_object = try_create_render_object(&element, widget);
+                    let render_object = try_create_render_object(&element, widget, &self.context);
                     debug_assert!(render_object.is_some(), "Impossible to fail");
                     (
                         MainlineState::Ready {

@@ -1,4 +1,7 @@
-use epgi_core::foundation::{Canvas, PaintContext};
+use epgi_core::{
+    common::ArcChildRenderObject,
+    foundation::{Canvas, PaintContext, Protocol},
+};
 use peniko::{kurbo::Shape, BrushRef};
 
 use crate::{Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image, Stroke};
@@ -68,6 +71,14 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
     fn with_layer(&mut self, op: impl FnOnce(&Affine2d)) {
         todo!()
     }
+
+    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
+        &mut self,
+        child: ArcChildRenderObject<P>,
+        transform: &P::Transform,
+    ) {
+        child.paint(transform, self)
+    }
 }
 
 impl<'a> PaintContext for VelloPaintScanner<'a> {
@@ -87,6 +98,14 @@ impl<'a> PaintContext for VelloPaintScanner<'a> {
     }
 
     fn with_layer(&mut self, op: impl FnOnce(&Affine2d)) {
+        todo!()
+    }
+
+    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
+        &mut self,
+        child: ArcChildRenderObject<P>,
+        transform: &P::Transform,
+    ) {
         todo!()
     }
 }

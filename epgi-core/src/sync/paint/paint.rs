@@ -17,7 +17,7 @@ where
     fn paint(
         &self,
         transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-        mut paint_ctx: impl PaintContext<
+        paint_ctx: &mut impl PaintContext<
             Canvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
@@ -53,11 +53,11 @@ where
                     let child = child(&inner_reborrow.render);
                     <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
                         layer.as_parent_layer_arc(),
-                        |paint_scan| {
-                            child.paint_scan(&Identity::IDENTITY, paint_scan);
+                        |mut paint_scan| {
+                            child.paint_scan(&Identity::IDENTITY, &mut paint_scan);
                         },
-                        |paint_ctx| {
-                            child.paint(&Identity::IDENTITY, paint_ctx);
+                        |mut paint_ctx| {
+                            child.paint(&Identity::IDENTITY, &mut paint_ctx);
                         },
                     );
                 }
@@ -81,13 +81,13 @@ pub(crate) mod paint_private {
         fn paint(
             &self,
             transform: &PP::Transform,
-            paint_ctx: <PP::Canvas as Canvas>::PaintContext<'_>,
+            paint_ctx: &mut <PP::Canvas as Canvas>::PaintContext<'_>,
         );
 
         fn paint_scan(
             &self,
             transform: &PP::Transform,
-            paint_ctx: <PP::Canvas as Canvas>::PaintScanner<'_>,
+            paint_ctx: &mut <PP::Canvas as Canvas>::PaintScanner<'_>,
         );
     }
 
@@ -98,7 +98,7 @@ pub(crate) mod paint_private {
         fn paint(
             &self,
             transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-            paint_ctx: <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
+            paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
             self.paint(transform, paint_ctx)
         }
@@ -106,7 +106,7 @@ pub(crate) mod paint_private {
         fn paint_scan(
             &self,
             transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-            paint_ctx: <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
+            paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
             self.paint(transform, paint_ctx)
         }
