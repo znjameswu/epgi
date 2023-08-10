@@ -1,11 +1,17 @@
-use std::{any::Any, sync::atomic::AtomicBool};
+use std::{
+    any::Any,
+    sync::atomic::{AtomicBool, Ordering::*},
+};
 
-use crate::foundation::{Arc, Asc, Aweak, Canvas, InlinableDwsizeVec, Protocol, SyncMutex};
+use crate::foundation::{
+    Arc, Asc, Aweak, Canvas, Encoding, InlinableDwsizeVec, Protocol, SyncMutex,
+};
 
-use super::{Element, Render};
+use super::{ArcElementContextNode, Element, Render};
 
 pub type ArcChildLayer<C> = Arc<dyn ChildLayer<ParentCanvas = C>>;
 pub type ArcParentLayer<C> = Arc<dyn ParentLayer<ChildCanvas = C>>;
+pub type AweakParentLayer<C> = Aweak<dyn ParentLayer<ChildCanvas = C>>;
 pub type ArcAnyLayer = Arc<dyn AnyLayer>;
 #[allow(type_alias_bounds)]
 pub type ArcLayerOf<R: Render> = Arc<
@@ -15,18 +21,17 @@ pub type ArcLayerOf<R: Render> = Arc<
     >,
 >;
 
+/// A transparent, unretained internal layer.
 pub struct LayerScope<C: Canvas> {
-    detached_parent: Option<Aweak<dyn ParentLayer<ChildCanvas = C>>>,
-    self_needs_recompositing: Option<Asc<AtomicBool>>,
-    parent_needs_recompositing: Asc<AtomicBool>,
-    // needs_recompositing: AtomicBool,
+    detached_parent: Option<AweakParentLayer<C>>,
+    element_context: ArcElementContextNode,
     inner: SyncMutex<LayerScopeInner<C>>,
 }
 
 struct LayerScopeInner<C: Canvas> {
     transform_abs: C::Transform,
-    structured_children: InlinableDwsizeVec<Arc<dyn ChildLayer<ParentCanvas = C>>>,
-    detached_children: InlinableDwsizeVec<Arc<dyn ChildLayer<ParentCanvas = C>>>,
+    structured_children: InlinableDwsizeVec<ArcChildLayer<C>>,
+    detached_children: InlinableDwsizeVec<ArcChildLayer<C>>,
 }
 
 /// Fragments are ephemeral. Scopes are persistent.
@@ -39,11 +44,18 @@ struct LayerFragmentInner<C: Canvas> {
     encoding: C::Encoding,
 }
 
-pub trait Layer {
+pub trait Layer: Send + Sync {
     type ParentCanvas: Canvas;
     type ChildCanvas: Canvas;
 
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding);
+    /// Clear all contents to prepare for repaint.
+    ///
+    /// For [LayerFragment]s, they will clear their recorded encodings.
+    /// For [LayerScope]s, they will clear their structured children (?).
+    fn clear(&self);
+
+    // fn transform_abs(&self) -> C::Transform;
 
     fn as_child_layer_arc(
         self: Arc<Self>,
@@ -54,18 +66,24 @@ pub trait Layer {
     fn as_any_layer_arc(self: Arc<Self>) -> Arc<dyn AnyLayer>;
 }
 
-pub trait ChildLayer {
+pub trait ChildLayer: Send + Sync {
     type ParentCanvas: Canvas;
 
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding);
+    /// Clear all contents to prepare for repaint.
+    ///
+    /// For [LayerFragment]s, they will clear their recorded encodings.
+    /// For [LayerScope]s, they will clear their structured children (?).
+    fn clear(&self);
 }
 
-pub trait ParentLayer {
+pub trait ParentLayer: Send + Sync {
     type ChildCanvas: Canvas;
 }
 
 pub trait AnyLayer {
     fn composite_to(&self, encoding: &mut dyn Any);
+    fn composite_self(&self) -> Arc<dyn Any + Send + Sync>;
 }
 
 impl<T> ChildLayer for T
@@ -76,6 +94,10 @@ where
 
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
         Layer::composite_to(self, encoding)
+    }
+
+    fn clear(&self) {
+        T::clear(self)
     }
 }
 
@@ -98,6 +120,10 @@ where
             );
         Layer::composite_to(self, encoding)
     }
+
+    fn composite_self(&self) -> Arc<dyn Any + Send + Sync> {
+        todo!()
+    }
 }
 
 impl<C> ChildLayer for LayerFragment<C>
@@ -109,6 +135,10 @@ where
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
         let inner = &mut *self.inner.lock();
         C::composite(encoding, &inner.encoding, Some(&inner.transform_abs));
+    }
+
+    fn clear(&self) {
+        C::clear(&mut self.inner.lock().encoding)
     }
 }
 
@@ -137,6 +167,12 @@ where
         }
     }
 
+    fn clear(&self) {
+        let mut inner = self.inner.lock();
+        inner.structured_children.clear();
+        // inner.detached_children.clear();
+    }
+
     fn as_child_layer_arc(
         self: Arc<Self>,
     ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>> {
@@ -152,4 +188,39 @@ where
     fn as_any_layer_arc(self: Arc<Self>) -> Arc<dyn AnyLayer> {
         self
     }
+}
+
+impl<C> LayerScope<C>
+where
+    C: Canvas,
+{
+    pub fn new_structured(
+        element_context: ArcElementContextNode,
+        transform_abs: C::Transform,
+    ) -> Self {
+        Self {
+            detached_parent: None,
+            element_context,
+            inner: SyncMutex::new(LayerScopeInner {
+                transform_abs,
+                structured_children: Default::default(),
+                detached_children: Default::default(),
+            }),
+        }
+    }
+
+    // pub fn new_detached(
+    //     parent_layer: ArcParentLayer<C>,
+    //     element_context: ArcElementContextNode,
+    // ) -> Self {
+    //     Self {
+    //         detached_parent: None,
+    //         element_context,
+    //         inner: SyncMutex::new(LayerScopeInner {
+    //             transform_abs: todo!(),
+    //             structured_children: Default::default(),
+    //             detached_children: Default::default(),
+    //         }),
+    //     }
+    // }
 }

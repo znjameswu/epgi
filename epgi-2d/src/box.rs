@@ -26,6 +26,17 @@ impl Constraints<BoxSize> for BoxConstraints {
     }
 }
 
+impl Default for BoxConstraints {
+    fn default() -> Self {
+        Self {
+            min_width: 0.0,
+            max_width: f32::INFINITY,
+            min_height: 0.0,
+            max_height: f32::INFINITY,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct BoxSize {
     pub width: f32,
@@ -82,4 +93,12 @@ impl Protocol for BoxProtocol {
     type Transform = Affine2d;
 
     type Canvas = Affine2dCanvas;
+
+    #[inline]
+    fn transform_canvas(
+        transform: &Self::Transform,
+        transform_canvas: &<Self::Canvas as epgi_core::foundation::Canvas>::Transform,
+    ) -> Self::Transform {
+        *transform_canvas * *transform
+    }
 }

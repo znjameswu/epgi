@@ -213,13 +213,17 @@ where
                 }
             }
 
-            Err(Some(children)) => children
-                .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
-                    child.visit_and_work_sync(job_ids, scope, tree_scheduler)
-                })
-                .into_iter()
-                .reduce(SubtreeCommitResult::merge)
-                .unwrap_or_default(),
+            Err(Some(children)) => {
+                let subtree_commit_results = children
+                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
+                        child.visit_and_work_sync(job_ids, scope, tree_scheduler)
+                    })
+                    .into_iter()
+                    .reduce(SubtreeCommitResult::merge)
+                    .unwrap_or_default();
+                // TODO: Absorb new renderobject from subtree by updating the children of this renderobject
+                return todo!()
+            }
 
             Err(None) => SubtreeCommitResult::NoUpdate,
         }
@@ -241,7 +245,7 @@ where
                     get_provided_value(&widget),
                 )
             } else {
-                ElementContextNode::new_no_provide(weak.clone() as _, parent_context)
+                ElementContextNode::new_no_provide(weak.clone() as _, Some(parent_context))
             };
             ElementNode {
                 context: Arc::new(context),
@@ -471,7 +475,7 @@ where
                 GetRenderObject::RenderObject {
                     get_suspense: None,
                     try_create_render_object,
-                    update_render_object_widget,
+                    update_render_object: update_render_object_widget,
                     try_update_render_object_children,
                     detach_render_object,
                     ..

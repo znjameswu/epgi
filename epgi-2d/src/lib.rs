@@ -36,11 +36,15 @@ impl Canvas for Affine2dCanvas {
         dst.append(src, &transform.cloned())
     }
 
-    fn with_context(
+    fn paint_layer(
         layer: ArcParentLayer<Self>,
         scan: impl FnOnce(Self::PaintScanner<'_>),
         paint: impl FnOnce(Self::PaintContext<'_>),
     ) {
         todo!()
+    }
+
+    fn clear(this: &mut Self::Encoding) {
+        this.reset(true)
     }
 }

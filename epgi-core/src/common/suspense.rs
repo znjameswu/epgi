@@ -26,7 +26,7 @@ pub struct Suspense<P: Protocol> {
 impl<P: Protocol> Widget for Suspense<P> {
     type Element = SuspenseElement<P>;
 
-    fn key(&self) -> &dyn Key {
+    fn key(&self) -> Option<&dyn Key> {
         todo!()
     }
 
@@ -144,11 +144,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
 
     type ChildIter = [ArcChildRenderObject<P>; 1];
 
-    fn get_children(&self) -> Self::ChildIter {
-        todo!()
-    }
-
-    fn set_children(&mut self, new_children: Self::ChildIter) {
+    fn children(&self) -> Self::ChildIter {
         todo!()
     }
 
@@ -167,7 +163,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
         paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,

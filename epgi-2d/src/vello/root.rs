@@ -1,7 +1,8 @@
 use epgi_core::{
     common::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, GetSuspense,
-        Reconciler, Render, RenderElement, RenderObject, Widget,
+        create_root_element, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout,
+        Element, ElementNode, GetSuspense, LayerScope, Reconciler, Render, RenderElement,
+        RenderObject, Widget,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
@@ -10,24 +11,18 @@ use epgi_core::{
 };
 use vello::util::{RenderContext, RenderSurface};
 
-use crate::BoxProtocol;
+use crate::{Affine2d, Affine2dCanvas, BoxProtocol};
 
 pub struct RenderRootView {
-    render_ctx: RenderContext,
-    surface: RenderSurface,
-    child: ArcChildRenderObject<BoxProtocol>,
+    child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
 impl Render for RenderRootView {
     type Element = RootViewElement;
 
-    type ChildIter = [ArcChildRenderObject<BoxProtocol>; 1];
+    type ChildIter = Option<ArcChildRenderObject<BoxProtocol>>;
 
-    fn get_children(&self) -> Self::ChildIter {
-        todo!()
-    }
-
-    fn set_children(&mut self, new_children: Self::ChildIter) {
+    fn children(&self) -> Self::ChildIter {
         todo!()
     }
 
@@ -49,7 +44,7 @@ impl Render for RenderRootView {
     fn perform_paint(
         &self,
         _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        _transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        _transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
         _paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
@@ -82,15 +77,11 @@ impl RenderRootView {
 
 #[derive(Debug)]
 pub struct RootView {
-    child: ArcChildWidget<BoxProtocol>,
+    pub child: Option<ArcChildWidget<BoxProtocol>>,
 }
 
 impl Widget for RootView {
     type Element = RootViewElement;
-
-    fn key(&self) -> &dyn Key {
-        todo!()
-    }
 
     fn create_element(self: Asc<Self>) -> Self::Element {
         todo!()
@@ -102,7 +93,9 @@ impl Widget for RootView {
 }
 
 #[derive(Clone)]
-pub struct RootViewElement {}
+pub struct RootViewElement {
+    pub child: Option<ArcChildElementNode<BoxProtocol>>,
+}
 
 impl Element for RootViewElement {
     type ArcWidget = Asc<RootView>;
@@ -131,7 +124,7 @@ impl Element for RootViewElement {
         todo!()
     }
 
-    type ChildIter = [ArcChildElementNode<BoxProtocol>; 1];
+    type ChildIter = Option<ArcChildElementNode<BoxProtocol>>;
 
     fn children(&self) -> Self::ChildIter {
         todo!()
@@ -170,3 +163,5 @@ impl RenderElement for RootViewElement {
 
     const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
 }
+
+

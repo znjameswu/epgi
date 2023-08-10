@@ -451,3 +451,36 @@ Decision: Prototype with Solution 1 and later try Solution 2-2 or 3. Solution 1 
 # Detached layout optimization (for !parent_use_size) is incorrect
 
 Therefore we can get rid of that ugly LayoutExecutor, since now every layout operation is structured.
+
+
+# Composite phase design notes
+
+1. Layers with cached encodings are a necessary construct to impl repaint boundary (or incremental painting)
+2. LayerScopes act as bindings between layer tree and the render object tree. Important note: LayerScope tree is not isomorphic with render object tree.
+    > ## Problem: LayerScope generic over canvas or over protocol?
+    > Advantage of generic over canvas:
+    > 1. Reuse vello's Fragment append mechanism.
+    >
+    > Decision: generic over canvas. However, RepaintBoundary can be generic over a subset of protocol whose transform corresponds with canvas.
+3. LayerFragments are ephemeral and acts as filler for leftover render objects that are not covered by the LayerScope tree.
+4. LayerFragments has to cache encodings to composite with its sibling LayerScopes.
+5. Therefore, if LayerScope cache its encodings, the encodings will duplicate with the combined encodings from all its children (LayerScopes and LayerFragments)
+    > ## Problem: Should we hold duplicate encodings in LayerScopes
+    > Advantage:
+    > 1. skips recompositing
+    > 
+    > Disadvantage:
+    > 1. Potential waste of space of up to depth of the layer tree
+    > 
+    > Decision: No duplicate encodings in LayerScopes. LayerScopes are transparent and do not hold encodings.
+6. This makes composition happens at RetainedLayerScope level. Since compositing an unretained LayerScope has no left-over effect.
+7. RetainedLayerScopes with cached bitmaps (or other universal render results) are a necessary construct to impl recomposite boundary (or incremental composition)
+    > ## Problem: Do we really want incremental composition?
+    > Yes we want. Flutter says retained rendering by retaining bitmaps improves performance on certain render effects.
+    > 
+    > Moreover, I can't think of a way to render 3D scenes or videos in vello other than passing bitmaps. We already need infrastructure to pass around bitmaps anyway.
+8. This introduces a RetainedLayerScopes tree structure which has to be bidirectional to propagate recomposition event.
+    > AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH, another bidirectioanl stuff
+    > ## Problem: Can we express this bi-directionality in the ElementContextNode?
+    > Actually, yes. As long as we strictly binds LayerScope tree to the element tree (i.e. not allowing external references and modifications) and keep it uni-directional.
+    

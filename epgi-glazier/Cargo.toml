@@ -14,3 +14,6 @@ epgi-core = { workspace = true }
 epgi-2d = { workspace = true }
 glazier = { workspace = true }
 vello = { workspace = true }
+wgpu = { workspace = true }
+futures = "0.3.27"
+rayon ={ workspace = true }

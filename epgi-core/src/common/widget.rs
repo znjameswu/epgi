@@ -17,7 +17,9 @@ pub type ArcAnyWidget = Asc<dyn AnyWidget>;
 pub trait Widget: std::fmt::Debug + 'static + Send + Sync {
     type Element: Element;
 
-    fn key(&self) -> &dyn Key;
+    fn key(&self) -> Option<&dyn Key> {
+        None
+    }
 
     fn create_element(self: Asc<Self>) -> Self::Element;
 
@@ -124,7 +126,7 @@ where
 }
 
 pub trait AnyWidget: std::fmt::Debug + 'static + Send + Sync {
-    fn key(&self) -> &dyn Key;
+    fn key(&self) -> Option<&dyn Key>;
 
     fn as_any(&self) -> &dyn Any;
     fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
@@ -142,8 +144,8 @@ impl<T> AnyWidget for T
 where
     T: Widget,
 {
-    fn key(&self) -> &dyn Key {
-        <Self as Widget>::key(self)
+    fn key(&self) -> Option<&dyn Key> {
+        Widget::key(self)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -229,7 +231,7 @@ pub trait ArcWidget: ArcRaw + AsHeapPtr + Clone + Send + Sync + 'static {
 
     fn widget_type_id(&self) -> TypeId;
 
-    fn key(&self) -> &dyn Key;
+    fn key(&self) -> Option<&dyn Key>;
 }
 
 pub fn try_convert_if_same_type<T: ArcWidget>(
@@ -338,7 +340,7 @@ where
         TypeId::of::<W>()
     }
 
-    fn key(&self) -> &dyn Key {
+    fn key(&self) -> Option<&dyn Key> {
         Widget::key(self.as_ref())
     }
 }

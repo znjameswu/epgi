@@ -28,6 +28,22 @@ impl<CP> ReconcileItem<CP>
 where
     CP: Protocol,
 {
+    pub fn new_rebuild<E: Element<ParentProtocol = CP>>(
+        element: Arc<ElementNode<E>>,
+        widget: E::ArcWidget,
+    ) -> Self {
+        Self::Rebuild(Box::new(ElementWidgetPair { element, widget }))
+    }
+
+    pub fn new_inflate(widget: ArcChildWidget<CP>) -> Self {
+        Self::Inflate(widget)
+    }
+}
+
+impl<CP> ReconcileItem<CP>
+where
+    CP: Protocol,
+{
     fn into_async_item(
         self,
         work_context: Asc<WorkContext>,
@@ -97,9 +113,9 @@ where
     }
 }
 
-pub(crate) struct ElementWidgetPair<E: Element> {
-    pub(crate) widget: E::ArcWidget,
-    pub(crate) element: Arc<ElementNode<E>>,
+pub struct ElementWidgetPair<E: Element> {
+    pub element: Arc<ElementNode<E>>,
+    pub widget: E::ArcWidget,
 }
 
 impl<E> Clone for ElementWidgetPair<E>
@@ -108,8 +124,8 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            widget: self.widget.clone(),
             element: self.element.clone(),
+            widget: self.widget.clone(),
         }
     }
 }

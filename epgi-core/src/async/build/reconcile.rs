@@ -63,7 +63,7 @@ where
         Arc::new_cyclic(move |node| Self {
             context: Arc::new(ElementContextNode::new_no_provide(
                 node.clone() as _,
-                parent_context,
+                Some(parent_context),
             )),
             snapshot: SyncMutex::new(ElementSnapshot {
                 widget,

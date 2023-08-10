@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     cell::UnsafeCell,
     mem::MaybeUninit,
     num::NonZeroU64,
@@ -12,7 +13,10 @@ use crate::{
     common::{
         AweakAnyElementNode, AweakAnyRenderObject, AweakElementContextNode, WorkContext, WorkHandle,
     },
-    foundation::{Asc, MpscQueue, PtrEq, SyncMutex, SyncRwLock},
+    foundation::{
+        bounded_channel, Arc, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
+        SyncRwLock,
+    },
     sync::{CommitBarrier, TreeScheduler},
 };
 
@@ -31,9 +35,9 @@ pub fn get_current_scheduler() -> &'static SchedulerHandle {
     unsafe { &*(*_GLOBAL_SCHEDULER_HANDLE.0.get()).as_ptr() }
 }
 
-unsafe fn setup_scheduler() {
+unsafe fn setup_scheduler(scheduler_handle: SchedulerHandle) {
     let scheduler_ref = unsafe { &mut *_GLOBAL_SCHEDULER_HANDLE.0.get() };
-    *scheduler_ref = MaybeUninit::new(todo!());
+    *scheduler_ref = MaybeUninit::new(scheduler_handle);
 }
 
 pub struct SchedulerHandle {
@@ -41,9 +45,7 @@ pub struct SchedulerHandle {
     pub async_threadpool: rayon::ThreadPool,
 
     pub(super) task_rx: SchedulerTaskReceiver,
-    pub new_frame_ready: event_listener::Event,
-    is_executing_sync: AtomicBool,
-
+    // is_executing_sync: AtomicBool,
     pub(super) root_constraints: SyncMutex<Asc<dyn core::any::Any + Send + Sync>>,
 
     // mode: LatencyMode,
@@ -55,8 +57,34 @@ pub struct SchedulerHandle {
 }
 
 impl SchedulerHandle {
-    fn new() -> Self {
-        todo!()
+    pub fn new(
+        sync_threadpool: rayon::ThreadPool,
+        async_threadpool: rayon::ThreadPool,
+        root_constraints: Asc<dyn core::any::Any + Send + Sync>,
+    ) -> Self {
+        Self {
+            sync_threadpool,
+            async_threadpool,
+            task_rx: SchedulerTaskReceiver::new(),
+            // is_executing_sync: (),
+            root_constraints: SyncMutex::new(root_constraints),
+            nodes_needing_paint: Default::default(),
+            nodes_needing_layout: Default::default(),
+            accumulated_jobs: Default::default(),
+            boundaries_needing_relayout: Default::default(),
+        }
+    }
+
+    pub fn set_root_constraints(&self, constraints: Asc<dyn Any + Send + Sync>) {
+        *self.root_constraints.lock() = constraints;
+    }
+
+    pub fn request_new_frame(&self) -> AsyncMpscReceiver<FrameResults> {
+        let (tx, rx) = bounded_channel(1);
+        {
+            self.task_rx.request_frame.lock().requesters.push(tx);
+        }
+        return rx;
     }
 
     pub(crate) fn schedule_new_frame(&self) {}
@@ -106,18 +134,47 @@ pub(super) struct SchedulerTaskReceiver {
     // occupy_node_requests: MpscQueue<()>,
     // event: event_listener::Event,
     request_shutdown: AtomicBool,
-    request_frame_id: AtomicU64,
+    request_frame: SyncMutex<RequestFrame>,
     other_scheduler_tasks: MpscQueue<SchedulerTask>,
     new_scheduler_task: event_listener::Event,
 }
 
+struct RequestFrame {
+    next_frame_id: u64,
+    requesters: Vec<AsyncMpscSender<FrameResults>>,
+}
+
+pub struct FrameResults {
+    pub encodings: Asc<dyn Any + Send + Sync>,
+    pub id: u64,
+}
+
 impl SchedulerTaskReceiver {
+    fn new() -> Self {
+        Self {
+            request_shutdown: AtomicBool::new(false),
+            request_frame: SyncMutex::new(RequestFrame {
+                next_frame_id: 0,
+                requesters: Vec::new(),
+            }),
+            other_scheduler_tasks: Default::default(),
+            new_scheduler_task: event_listener::Event::new(),
+        }
+    }
     pub(super) fn try_recv(&self) -> Option<SchedulerTask> {
         if self.request_shutdown.load(Acquire) {
             return Some(SchedulerTask::Shutdown);
         }
-        if let Some(frame_id) = NonZeroU64::new(self.request_frame_id.load(Acquire)) {
-            return Some(SchedulerTask::NewFrame { frame_id });
+        {
+            let mut request_frame = self.request_frame.lock();
+            if !request_frame.requesters.is_empty() {
+                let frame_id = request_frame.next_frame_id;
+                request_frame.next_frame_id += 1;
+                return Some(SchedulerTask::NewFrame {
+                    frame_id,
+                    requesters: std::mem::take(&mut request_frame.requesters),
+                });
+            }
         }
         if let Some(e) = self.other_scheduler_tasks.pop() {
             return Some(e);

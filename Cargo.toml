@@ -38,3 +38,5 @@ glazier = { git = "https://github.com/linebender/glazier", rev = "51eb4185117903
     "x11",
 ] }
 accesskit = "0.9"
+wgpu = "0.16"
+rayon = "1.7"

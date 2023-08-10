@@ -11,10 +11,10 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Intrinsics: Intrinsics;
     type Transform: Identity + Debug + Clone + Send + Sync + 'static;
     type Canvas: Canvas;
-    // fn transform_canvas(
-    //     transform: &Self::SelfTransform,
-    //     canvas_transform: &<Self::Canvas as Canvas>::Transform,
-    // ) -> Self::SelfTransform;
+    fn transform_canvas(
+        transform: &Self::Transform,
+        transform_canvas: &<Self::Canvas as Canvas>::Transform,
+    ) -> Self::Transform;
     // fn point_in_area(
     //     size: Self::Size,
     //     transform: Self::CanvasTransformation,
@@ -30,6 +30,16 @@ pub trait Constraints<Size>: Debug + PartialEq + Clone + Send + Sync + 'static {
 pub trait Intrinsics: Debug + Send + Sync {
     fn eq_tag(&self, other: &Self) -> bool;
     fn eq_param(&self, other: &Self) -> bool;
+}
+
+impl Intrinsics for () {
+    fn eq_tag(&self, other: &Self) -> bool {
+        true
+    }
+
+    fn eq_param(&self, other: &Self) -> bool {
+        true
+    }
 }
 
 struct TagEq<T: Intrinsics>(T);
@@ -71,17 +81,21 @@ pub trait Canvas: Sized + 'static {
     /// The Picture class in Flutter
     type Encoding: Send + Sync + 'static;
 
+    fn paint_layer(
+        layer: ArcParentLayer<Self>,
+        scan: impl FnOnce(Self::PaintScanner<'_>),
+        paint: impl FnOnce(Self::PaintContext<'_>),
+    );
+
+    // The following methods are here to avoid creating and impl-ing (outside this crate) new traits for vello encodings.
+    // Although we can wrap vello encoding in a new type, I think it is too inconvenient.
     fn composite(
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
     );
 
-    fn with_context(
-        layer: ArcParentLayer<Self>,
-        scan: impl FnOnce(Self::PaintScanner<'_>),
-        paint: impl FnOnce(Self::PaintContext<'_>),
-    );
+    fn clear(this: &mut Self::Encoding);
 }
 
 pub trait PaintContext {
@@ -100,7 +114,7 @@ pub trait PaintContext {
     /// Do not call this method if you do not intend to push a new layer,
     /// even if this method seems to allow arbitrary operation.
     // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
-    fn with_layer(&mut self, op: impl FnOnce(&ArcParentLayer<Self::Canvas>));
+    fn with_layer(&mut self, op: impl FnOnce(&<Self::Canvas as Canvas>::Transform));
 }
 
 pub trait Identity {
@@ -109,4 +123,10 @@ pub trait Identity {
 
 impl Identity for vello_encoding::Transform {
     const IDENTITY: Self = Self::IDENTITY;
+}
+
+pub trait Encoding<T>: Send + Sync + 'static {
+    fn composite(&mut self, src: &Self, transform: Option<&T>);
+
+    fn clear(&mut self);
 }

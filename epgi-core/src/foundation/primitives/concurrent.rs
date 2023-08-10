@@ -22,6 +22,10 @@ pub fn unbounded_channel_async<T>() -> (AsyncMpscSender<T>, AsyncMpscReceiver<T>
     async_channel::unbounded()
 }
 
+pub fn bounded_channel<T>(cap: usize) -> (AsyncMpscSender<T>, AsyncMpscReceiver<T>) {
+    async_channel::bounded(cap)
+}
+
 pub type SyncMpscSender<T> = crossbeam::channel::Sender<T>; // Try flume?
 pub type SyncMpscReceiver<T> = crossbeam::channel::Receiver<T>;
 pub fn unbounded_channel_sync<T>() -> (SyncMpscSender<T>, SyncMpscReceiver<T>) {

@@ -19,7 +19,7 @@ futures = "0.3.27"
 hashbrown = "0.14"
 linear-map = "1.2.0"
 portable-atomic = "1.0"
-rayon = "1.7"
+rayon = { workspace = true }
 smallvec = { version = "1.10", features = [
     "union",
     "const_generics",
@@ -27,4 +27,4 @@ smallvec = { version = "1.10", features = [
 ] }
 
 
-vello_encoding = {workspace = true}
+vello_encoding = { workspace = true }

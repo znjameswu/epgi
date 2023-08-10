@@ -25,14 +25,17 @@ use crate::{
     common::{
         AweakAnyElementNode, AweakAnyRenderObject, AweakElementContextNode, WorkContext, WorkHandle,
     },
-    foundation::{Asc, MpscQueue, PtrEq, SyncMutex, SyncRwLock},
-    sync::{CommitBarrier, TreeScheduler},
+    foundation::{Asc, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex, SyncRwLock},
+    sync::CommitBarrier,
 };
+
+pub use crate::sync::TreeScheduler;
 
 // TODO: BuildAndLayout vs other event can be modeled as RwLock.
 enum SchedulerTask {
     NewFrame {
-        frame_id: NonZeroU64,
+        frame_id: u64,
+        requesters: Vec<AsyncMpscSender<FrameResults>>,
     },
     ReorderAsyncWork {
         node: AweakAnyElementNode,
@@ -50,20 +53,29 @@ enum SchedulerTask {
     Shutdown,
 }
 
-struct Scheduler {
+pub struct Scheduler {
     tree_scheduler: Asc<SyncRwLock<TreeScheduler>>,
     job_batcher: JobBatcher,
 }
 
 impl Scheduler {
-    fn start_event_loop(mut self, handle: &SchedulerHandle) {
+    pub fn new(tree_scheduler: TreeScheduler) -> Self {
+        Self {
+            tree_scheduler: Asc::new(SyncRwLock::new(tree_scheduler)),
+            job_batcher: JobBatcher::new(todo!()),
+        }
+    }
+    pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
         let tasks = &handle.task_rx;
         let jobs = Asc::new(SyncMutex::new(Vec::default()));
         loop {
             let task = tasks.recv();
             use SchedulerTask::*;
             match task {
-                NewFrame { frame_id } => {
+                NewFrame {
+                    frame_id,
+                    requesters,
+                } => {
                     let mut tree_scheduler = self.tree_scheduler.write();
                     tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     let new_jobs = std::mem::take(&mut *jobs.lock());
@@ -89,9 +101,13 @@ impl Scheduler {
                         let scheduler = tree_scheduler.read();
                         paint_started_event.notify(usize::MAX);
                         scheduler.perform_paint();
+                        for requester in requesters {
+                            // let layer = todo!();
+                            // layer.composite_to();
+                        }
                     });
                     paint_started.wait();
-                    handle.new_frame_ready.notify(usize::MAX);
+                    // handle.new_frame_ready.notify(usize::MAX);
                     drop(read_guard);
                 }
                 PointerEvent {} => {}

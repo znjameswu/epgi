@@ -65,7 +65,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         self.curr_transform = old_transform;
     }
 
-    fn with_layer(&mut self, op: impl FnOnce(&epgi_core::common::ArcParentLayer<Self::Canvas>)) {
+    fn with_layer(&mut self, op: impl FnOnce(&Affine2d)) {
         todo!()
     }
 }
@@ -86,7 +86,7 @@ impl<'a> PaintContext for VelloPaintScanner<'a> {
         todo!()
     }
 
-    fn with_layer(&mut self, op: impl FnOnce(&epgi_core::common::ArcParentLayer<Self::Canvas>)) {
+    fn with_layer(&mut self, op: impl FnOnce(&Affine2d)) {
         todo!()
     }
 }

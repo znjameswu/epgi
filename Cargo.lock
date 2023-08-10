@@ -689,6 +689,10 @@ dependencies = [
 [[package]]
 name = "epgi-common"
 version = "0.1.0"
+dependencies = [
+ "epgi-2d",
+ "epgi-core",
+]
 
 [[package]]
 name = "epgi-core"
@@ -718,8 +722,11 @@ dependencies = [
  "accesskit",
  "epgi-2d",
  "epgi-core",
+ "futures",
  "glazier",
+ "rayon",
  "vello",
+ "wgpu",
 ]
 
 [[package]]

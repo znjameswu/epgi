@@ -34,10 +34,18 @@ pub struct TreeScheduler {
     async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
     queued_batches: Vec<Asc<BatchConf>>,
     root_element: ArcAnyElementNode,
-    root_render_object: ArcAnyRenderObject,
 }
 
 impl TreeScheduler {
+    pub fn new(root_element: ArcAnyElementNode) -> Self {
+        Self {
+            sync_lane: None,
+            async_lanes: [(); LaneMask::ASYNC_LANE_COUNT].map(|_| None),
+            queued_batches: Default::default(),
+            root_element,
+        }
+    }
+
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
         let LanePos::Async(pos) = lane_pos else {
             panic!("Only async lanes have commit barriers");

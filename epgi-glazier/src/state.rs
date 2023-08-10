@@ -1,7 +1,7 @@
 /// Modified based on xilem:src/app_main.rs
 use std::any::Any;
 
-use epgi_2d::Affine2dCanvas;
+use epgi_2d::{Affine2dCanvas, BoxConstraints};
 use glazier::{
     kurbo::{Affine, Size},
     text::Event,
@@ -11,10 +11,10 @@ use glazier::{
 use vello::{
     peniko::Color,
     util::{RenderContext, RenderSurface},
-    RenderParams, Renderer, RendererOptions, Scene, SceneBuilder,
+    RenderParams, Renderer, RendererOptions, Scene, SceneBuilder, SceneFragment,
 };
 
-use epgi_core::{common::LayerScope, scheduler::get_current_scheduler};
+use epgi_core::{common::LayerScope, foundation::{Arc, Asc}, scheduler::get_current_scheduler};
 
 const QUIT_MENU_ID: u32 = 0x100;
 
@@ -65,13 +65,7 @@ impl WinHandler for MainState {
 
     fn paint(&mut self, _: &Region) {
         let scheduler = get_current_scheduler();
-        let new_frame_ready_listener = scheduler.new_frame_ready.listen();
         todo!();
-        // self.app.paint();
-        // self.render();
-        // scheduler.
-        new_frame_ready_listener.wait();
-        // self.root_layer
         self.schedule_render();
     }
 
@@ -138,8 +132,8 @@ impl WinHandler for MainState {
     }
 
     fn size(&mut self, size: Size) {
+        // self.size = size;
         todo!()
-        // self.app.size(size);
     }
 
     fn request_close(&mut self) {
@@ -158,6 +152,7 @@ impl WinHandler for MainState {
 impl MainState {
     fn new() -> Self {
         let render_cx = RenderContext::new().unwrap();
+
         Self {
             handle: Default::default(),
             render_cx,
@@ -182,56 +177,68 @@ impl MainState {
     }
 
     fn render(&mut self) {
-        todo!();
         // let fragment = self.app.fragment();
-        // let handle = &self.handle;
-        // let scale = handle.get_scale().unwrap_or_default();
-        // let insets = handle.content_insets().to_px(scale);
-        // let mut size = handle.get_size().to_px(scale);
-        // size.width -= insets.x_value();
-        // size.height -= insets.y_value();
-        // let width = size.width as u32;
-        // let height = size.height as u32;
-        // if self.surface.is_none() {
-        //     //println!("render size: {:?}", size);
-        //     self.surface = Some(futures::executor::block_on(
-        //         self.render_cx.create_surface(handle, width, height),
-        //     ));
-        // }
-        // if let Some(surface) = self.surface.as_mut() {
-        //     if surface.config.width != width || surface.config.height != height {
-        //         self.render_cx.resize_surface(surface, width, height);
-        //     }
-        //     let (scale_x, scale_y) = (scale.x(), scale.y());
-        //     let transform = if scale_x != 1.0 || scale_y != 1.0 {
-        //         Some(Affine::scale_non_uniform(scale_x, scale_y))
-        //     } else {
-        //         None
-        //     };
-        //     let mut builder = SceneBuilder::for_scene(&mut self.scene);
-        //     builder.append(&fragment, transform);
-        //     self.counter += 1;
-        //     let surface_texture = surface
-        //         .surface
-        //         .get_current_texture()
-        //         .expect("failed to acquire next swapchain texture");
-        //     let dev_id = surface.dev_id;
-        //     let device = &self.render_cx.devices[dev_id].device;
-        //     let queue = &self.render_cx.devices[dev_id].queue;
-        //     let renderer_options = RendererOptions {
-        //         surface_format: Some(surface.format),
-        //     };
-        //     let render_params = RenderParams {
-        //         base_color: Color::BLACK,
-        //         width,
-        //         height,
-        //     };
-        //     self.renderer
-        //         .get_or_insert_with(|| Renderer::new(device, &renderer_options).unwrap())
-        //         .render_to_surface(device, queue, &self.scene, &surface_texture, &render_params)
-        //         .expect("failed to render to surface");
-        //     surface_texture.present();
-        //     device.poll(wgpu::Maintain::Wait);
-        // }
+        let handle = &self.handle;
+        let size_dp = handle.get_size();
+        let insets_dp = handle.content_insets();
+        let constraints = BoxConstraints {
+            min_width: size_dp.width as f32,
+            max_width: size_dp.width as f32,
+            min_height: size_dp.height as f32,
+            max_height: size_dp.height as f32,
+        };
+        let scheduler = get_current_scheduler();
+        scheduler.set_root_constraints(Asc::new(constraints) as _);
+        let frame_results = scheduler.request_new_frame().recv_blocking().unwrap();
+        let encoding = Arc::downcast::<SceneFragment>(frame_results.encodings).unwrap();
+
+        let scale = handle.get_scale().unwrap_or_default();
+        let insets = insets_dp.to_px(scale);
+        let mut size = size_dp.to_px(scale);
+        size.width -= insets.x_value();
+        size.height -= insets.y_value();
+        let width = size.width as u32;
+        let height = size.height as u32;
+        if self.surface.is_none() {
+            //println!("render size: {:?}", size);
+            self.surface = Some(futures::executor::block_on(
+                self.render_cx.create_surface(handle, width, height),
+            ));
+        }
+        if let Some(surface) = self.surface.as_mut() {
+            if surface.config.width != width || surface.config.height != height {
+                self.render_cx.resize_surface(surface, width, height);
+            }
+            let (scale_x, scale_y) = (scale.x(), scale.y());
+            let transform = if scale_x != 1.0 || scale_y != 1.0 {
+                Some(Affine::scale_non_uniform(scale_x, scale_y))
+            } else {
+                None
+            };
+            let mut builder = SceneBuilder::for_scene(&mut self.scene);
+            builder.append(&encoding, transform);
+            self.counter += 1;
+            let surface_texture = surface
+                .surface
+                .get_current_texture()
+                .expect("failed to acquire next swapchain texture");
+            let dev_id = surface.dev_id;
+            let device = &self.render_cx.devices[dev_id].device;
+            let queue = &self.render_cx.devices[dev_id].queue;
+            let renderer_options = RendererOptions {
+                surface_format: Some(surface.format),
+            };
+            let render_params = RenderParams {
+                base_color: Color::BLACK,
+                width,
+                height,
+            };
+            self.renderer
+                .get_or_insert_with(|| Renderer::new(device, &renderer_options).unwrap())
+                .render_to_surface(device, queue, &self.scene, &surface_texture, &render_params)
+                .expect("failed to render to surface");
+            surface_texture.present();
+            device.poll(wgpu::Maintain::Wait);
+        }
     }
 }

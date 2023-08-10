@@ -71,7 +71,7 @@ pub(crate) enum MainlineState<E: Element> {
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct Hooks {
     array_hooks: Vec<Box<dyn Hook>>,
 }

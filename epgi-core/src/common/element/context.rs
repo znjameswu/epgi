@@ -43,7 +43,7 @@ impl ElementContextNode {
 
     pub(crate) fn new_no_provide(
         node: AweakAnyElementNode,
-        parent_context: &ArcElementContextNode,
+        parent_context: Option<&ArcElementContextNode>,
     ) -> Self {
         todo!()
     }

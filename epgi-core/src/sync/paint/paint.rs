@@ -16,7 +16,7 @@ where
 {
     fn paint(
         &self,
-        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
         mut paint_ctx: impl PaintContext<
             Canvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
@@ -37,31 +37,35 @@ where
             child,
         }) = R::PERFORM_LAYER_PAINT
         {
-            paint_ctx.with_layer(|parent_layer| {
-                let layer = get_layer(
-                    &mut inner_reborrow.render,
-                    &layout_results.size,
-                    transformation,
-                    &layout_results.memo,
-                    parent_layer,
-                )
-                .clone();
-                let child = child(&inner_reborrow.render);
+            paint_ctx.with_layer(|transform_parent| {
+                if self.element_context.needs_repaint() {
+                    let layer = get_layer(
+                        &mut inner_reborrow.render,
+                        &layout_results.size,
+                        transform,
+                        &layout_results.memo,
+                        &self.element_context,
+                        transform_parent,
+                    )
+                    .clone();
 
-                <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::with_context(
-                    layer.as_parent_layer_arc(),
-                    |paint_scan| {
-                        child.paint_scan(&Identity::IDENTITY, paint_scan);
-                    },
-                    |paint_ctx| {
-                        child.paint(&Identity::IDENTITY, paint_ctx);
-                    },
-                );
+                    layer.clear();
+                    let child = child(&inner_reborrow.render);
+                    <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
+                        layer.as_parent_layer_arc(),
+                        |paint_scan| {
+                            child.paint_scan(&Identity::IDENTITY, paint_scan);
+                        },
+                        |paint_ctx| {
+                            child.paint(&Identity::IDENTITY, paint_ctx);
+                        },
+                    );
+                }
             })
         } else {
             inner_reborrow.render.perform_paint(
                 &layout_results.size,
-                transformation,
+                transform,
                 &layout_results.memo,
                 paint_ctx,
             );
@@ -76,13 +80,13 @@ pub(crate) mod paint_private {
     pub trait ChildRenderObjectPaintExt<PP: Protocol> {
         fn paint(
             &self,
-            transformation: &PP::Transform,
+            transform: &PP::Transform,
             paint_ctx: <PP::Canvas as Canvas>::PaintContext<'_>,
         );
 
         fn paint_scan(
             &self,
-            transformation: &PP::Transform,
+            transform: &PP::Transform,
             paint_ctx: <PP::Canvas as Canvas>::PaintScanner<'_>,
         );
     }
@@ -93,18 +97,18 @@ pub(crate) mod paint_private {
     {
         fn paint(
             &self,
-            transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+            transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
             paint_ctx: <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
-            self.paint(transformation, paint_ctx)
+            self.paint(transform, paint_ctx)
         }
 
         fn paint_scan(
             &self,
-            transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+            transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
             paint_ctx: <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
-            self.paint(transformation, paint_ctx)
+            self.paint(transform, paint_ctx)
         }
     }
 }

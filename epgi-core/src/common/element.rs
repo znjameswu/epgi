@@ -11,6 +11,7 @@ pub use snapshot::*;
 use futures::never::Never;
 
 use crate::{
+    common::RenderObjectUpdateResult,
     foundation::{
         Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Parallel, Protocol, Provide,
         SyncMutex, TypeKey,
@@ -20,7 +21,7 @@ use crate::{
 
 use super::{
     ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Reconciler, Render,
-    RenderObject, RenderSuspense, Suspense, SuspenseElement,
+    RenderCache, RenderObject, RenderSuspense, Suspense, SuspenseElement,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -51,8 +52,8 @@ pub trait Element: Send + Sync + Clone + 'static {
     ///
     ///
     // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
+    // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
     fn perform_rebuild_element(
-        // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         self,
         widget: &Self::ArcWidget,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
@@ -95,10 +96,18 @@ pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render
         &self,
         widget: &Self::ArcWidget,
     ) -> Option<Arc<RenderObject<Self::Render>>>;
+    /// Update necessary properties of render object given by the widget
+    ///
+    /// Called during the commit phase, when the widget is updated.
+    /// Always called after [RenderElement::try_update_render_object_children].
+    /// If that call failed to update children (indicating suspense), then this call will be skipped.
     fn update_render_object_widget(
         widget: &Self::ArcWidget,
         render_object: &Arc<RenderObject<Self::Render>>,
     );
+    /// Try to re-assemble the children of the givin render object.
+    ///
+    /// Called during the commit phase, when subtree structure has changed.
     fn try_update_render_object_children(
         &self,
         render_object: &Arc<RenderObject<Self::Render>>,
@@ -106,13 +115,14 @@ pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render
 
     fn detach_render_object(render_object: &Arc<RenderObject<Self::Render>>);
 
-    const GET_SUSPENSE: Option<GetSuspense<Self>>;
+    const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
 }
 
 pub trait ArcRenderObject<E>: Send + Sync + 'static
 where
     E: Element<ArcRenderObject = Self>,
 {
+    // type Render: Render<Element = E>;
     const GET_RENDER_OBJECT: GetRenderObject<E>;
 }
 
@@ -129,10 +139,27 @@ where
 {
     const GET_RENDER_OBJECT: GetRenderObject<R::Element> = GetRenderObject::RenderObject {
         get_render_object: |x| x,
-        try_create_render_object: R::Element::try_create_render_object,
-        update_render_object_widget: R::Element::update_render_object_widget,
-        try_update_render_object_children: R::Element::try_update_render_object_children,
-        detach_render_object: R::Element::detach_render_object,
+        try_create_render_object: |element, element_context, widget| {
+            let render = R::try_create_render_object_from_element(element, widget)?;
+            Some(Arc::new(RenderObject::new(render, element_context.clone())))
+        },
+        update_render_object: |render_object, widget| {
+            render_object
+                .inner
+                .lock()
+                .render
+                .update_render_object(widget)
+        },
+        try_update_render_object_children: |render_object, element| {
+            render_object
+                .inner
+                .lock()
+                .render
+                .try_update_render_object_children(element)
+        },
+        detach_render_object: |render_object| {
+            render_object.
+        },
         get_suspense: R::Element::GET_SUSPENSE,
     };
 }
@@ -140,9 +167,10 @@ where
 pub enum GetRenderObject<E: Element> {
     RenderObject {
         get_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
-        try_create_render_object: fn(&E, &E::ArcWidget) -> Option<E::ArcRenderObject>,
-        update_render_object_widget: fn(&E::ArcWidget, &E::ArcRenderObject),
-        try_update_render_object_children: fn(&E, &E::ArcRenderObject) -> Result<(), ()>,
+        try_create_render_object:
+            fn(&E, &ArcElementContextNode, &E::ArcWidget) -> Option<E::ArcRenderObject>,
+        update_render_object: fn(&E::ArcRenderObject, &E::ArcWidget) -> RenderObjectUpdateResult,
+        try_update_render_object_children: fn(&E::ArcRenderObject, &E) -> Result<(), ()>,
         detach_render_object: fn(&E::ArcRenderObject),
         get_suspense: Option<GetSuspense<E>>,
     },
@@ -293,4 +321,41 @@ where
     // fn context(&self) -> &ArcElementContextNode {
     //     &self.context
     // }
+}
+
+pub fn create_root_element<E: RenderElement>(
+    widget: E::ArcWidget,
+    element: E,
+    constraints: <E::ParentProtocol as Protocol>::Constraints,
+) -> Arc<ElementNode<E>> {
+    let element_node = Arc::new_cyclic(move |node| {
+        let element_context = Arc::new(ElementContextNode::new_no_provide(node.clone() as _, None));
+        let GetRenderObject::RenderObject {
+            try_create_render_object,
+            ..
+        } = E::ArcRenderObject::GET_RENDER_OBJECT
+        else {
+            panic!("Root element must be a RenderElement")
+        };
+        let render_object = try_create_render_object(&element, &widget)
+            .expect("Root render object creation should always be successfully");
+        {
+            RenderCache::set_root_constraints(&mut render_object.inner.lock().cache, constraints);
+        }
+        ElementNode::<E> {
+            context: element_context,
+            snapshot: SyncMutex::new(ElementSnapshot {
+                widget,
+                inner: ElementSnapshotInner::Mainline(Mainline {
+                    state: Some(MainlineState::Ready {
+                        hooks: Hooks::default(),
+                        element,
+                        render_object: Some(render_object),
+                    }),
+                    async_queue: AsyncWorkQueue::new_empty(),
+                }),
+            }),
+        }
+    });
+    element_node
 }

@@ -46,6 +46,10 @@ impl ElementContextNode {
         self.mark.needs_relayout.load(Relaxed)
     }
 
+    pub(crate) fn needs_repaint(&self) -> bool {
+        self.mark.needs_repaint.load(Relaxed)
+    }
+
     pub(crate) fn mark_secondary_root(&self, lane_pos: LanePos) {
         self.mark.self_lanes.fetch_insert_single(lane_pos, Relaxed);
         let mut cur = self;
@@ -64,13 +68,13 @@ impl ElementContextNode {
         }
     }
 
-    pub(super) fn mark_needs_relayout(&self) {
+    pub(super) fn mark_needs_layout(&self) {
         let mut cur = self;
         // Mark up to the nearest relayout boundary
         loop {
             let old_needs_relayout = cur.mark.needs_relayout.swap(true, Relaxed);
             cur.mark.descendants_contain_relayout.store(true, Relaxed);
-            cur.mark_needs_repaint();
+            cur.mark_needs_paint();
             if cur.mark.is_relayout_boundary.load(Relaxed) {
                 break;
             }
@@ -96,7 +100,7 @@ impl ElementContextNode {
         }
     }
 
-    pub(super) fn mark_needs_repaint(&self) {
+    pub(super) fn mark_needs_paint(&self) {
         let mut cur = self;
         // Mark up to the nearest repaint boundary
         loop {

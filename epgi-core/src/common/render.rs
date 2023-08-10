@@ -14,15 +14,63 @@ pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
 
+pub enum RenderObjectUpdateResult {
+    None,
+    MarkNeedsPaint,
+    MarkNeedsLayout,
+}
+
 pub trait Render: Sized + Send + Sync + 'static {
-    type Element: RenderElement<Render = Self>;
+    type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
 
     type ChildIter: Parallel<Item = ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>>
         + Send
         + Sync
         + 'static;
-    fn get_children(&self) -> Self::ChildIter;
-    fn set_children(&mut self, new_children: Self::ChildIter);
+    fn children(&self) -> Self::ChildIter;
+
+    fn try_create_render_object_from_element(
+        element: &Self::Element,
+        widget: &<Self::Element as Element>::ArcWidget,
+    ) -> Option<Self>;
+
+    fn update_render_object(
+        &mut self,
+        widget: &<Self::Element as Element>::ArcWidget,
+    ) -> RenderObjectUpdateResult;
+
+    /// Whether [Render::update_render_object] is a no-op
+    ///
+    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior. 
+    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
+
+    fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()>;
+
+    /// Whether [Render::try_update_render_object_children] is a no-op and always succeed
+    ///
+    /// When set to true, [Render::try_update_render_object_children]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::try_update_render_object_children] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior. 
+    /// Leaf render objects may consider setting this to true.
+    const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = false;
+
+    fn detach(&mut self) {}
+
+    /// Whether [Render::detach] is a no-op
+    ///
+    /// When set to true, [Render::detach]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::detach] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior. And this is why it's left as false.
+    /// Render objects that do not manage any external resources may consider setting this to true.
+    const NOOP_DETACH: bool = false;
 
     type LayoutMemo: Send + Sync + 'static;
 
@@ -42,7 +90,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_paint(
         &self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
         paint_ctx: impl PaintContext<
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
@@ -51,8 +99,6 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
     const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<Self>> = None;
-
-    // fn mark_needs_recompositing(&self) {}
 
     // fn compute_child_transformation(
     //     transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
@@ -91,7 +137,7 @@ pub struct PerformDryLayout<R: Render> {
     ) -> R::LayoutMemo,
 }
 
-trait LayerPaint: Render {
+pub trait LayerPaint: Render {
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
         get_layer: Self::get_layer,
         update_layer: Self::update_layer,
@@ -100,15 +146,14 @@ trait LayerPaint: Render {
     fn get_layer(
         &mut self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        parent_layer: &ArcParentLayer<
-            <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        element_context: &ArcElementContextNode,
+        transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> &ArcLayerOf<Self>;
     fn update_layer(
         &mut self,
-        transformation: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
     ) -> &ArcLayerOf<Self>;
     fn child(&self) -> &ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>;
 }
@@ -116,13 +161,14 @@ pub struct PerformLayerPaint<R: Render> {
     pub get_layer: for<'a> fn(
         render: &'a mut R,
         size: &<<R::Element as Element>::ParentProtocol as Protocol>::Size,
-        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &R::LayoutMemo,
-        parent_layer: &ArcParentLayer<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas>,
+        element_context: &ArcElementContextNode,
+        transform_parent: &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> &'a ArcLayerOf<R>,
     pub update_layer: for<'a> fn(
         render: &'a mut R,
-        transformation: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
     ) -> &'a ArcLayerOf<R>,
     pub child: fn(render: &R) -> &ArcChildRenderObject<<R::Element as Element>::ChildProtocol>,
 }
@@ -132,9 +178,24 @@ pub struct RenderObject<R: Render> {
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
+impl<R> RenderObject<R>
+where
+    R: Render,
+{
+    pub fn new(render: R, element_context: ArcElementContextNode) -> Self {
+        Self {
+            element_context,
+            inner: SyncMutex::new(RenderObjectInner {
+                cache: None,
+                render,
+            }),
+        }
+    }
+}
+
 pub(crate) struct RenderObjectInner<R: Render> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
-    boundaries: Option<RenderObjectBoundaries>,
+    // boundaries: Option<RenderObjectBoundaries>,
     pub(crate) cache: Option<RenderCache<<R::Element as Element>::ParentProtocol, R::LayoutMemo>>,
     pub(crate) render: R,
 }
@@ -215,7 +276,7 @@ where
     /// Return: whether a layout is needed.
     pub(crate) fn set_root_constraints(
         dst: &mut Option<Self>,
-        constraints: &P::Constraints,
+        constraints: P::Constraints,
     ) -> bool {
         match dst {
             Some(inner) => {
@@ -223,16 +284,16 @@ where
                     inner.parent_use_size == false,
                     "Root render object should not have parent_use_size"
                 );
-                if inner.constraints.eq(constraints) {
+                if inner.constraints.eq(&constraints) {
                     return false;
                 }
-                inner.constraints = constraints.clone();
+                inner.constraints = constraints;
                 inner.layout_results = None;
                 return true;
             }
             None => {
                 *dst = Some(RenderCache {
-                    constraints: constraints.clone(),
+                    constraints: constraints,
                     parent_use_size: false,
                     layout_results: None,
                 });
@@ -262,11 +323,6 @@ pub trait AnyRenderObject:
     crate::sync::layout_private::AnyRenderObjectRelayoutExt + Send + Sync + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
-
-    /// Returns whether the root needs layout after updating constraints.
-    ///
-    /// Will panic if supplied with wrong type of constraints.
-    fn set_root_constraints(&self, constraints: &dyn Any) -> bool;
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -275,18 +331,6 @@ where
 {
     fn element_context(&self) -> &ElementContextNode {
         &self.element_context
-    }
-
-    fn set_root_constraints(&self, constraints: &dyn Any) -> bool {
-        debug_assert!(
-            self.element_context.parent.is_none(),
-            "set_root_constraints should only be called on tree root"
-        );
-        let constraints = constraints
-            .downcast_ref::<<<R::Element as Element>::ParentProtocol as Protocol>::Constraints>()
-            .expect("A correct type of constraints should be passed to root");
-
-        return RenderCache::set_root_constraints(&mut self.inner.lock().cache, constraints);
     }
 }
 
