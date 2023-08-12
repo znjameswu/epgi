@@ -1,9 +1,9 @@
 use std::sync::atomic::{Ordering, Ordering::*};
 
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    common::AweakElementContextNode,
+    common::{AweakElementContextNode, Update},
     foundation::{Inlinable64Vec, PtrEq},
 };
 
@@ -81,6 +81,33 @@ impl JobConf {
 pub struct JobBuilder {
     pub(super) conf: JobConf,
     pub(super) existing_sequenced_jobs: Inlinable64Vec<JobId>,
+}
+
+impl JobBuilder {
+    pub fn id(&self) -> JobId {
+        self.conf.id()
+    }
+
+    pub fn extend_sequenced_jobs(&mut self, iter: impl IntoIterator<Item = JobId>) {
+        self.existing_sequenced_jobs.extend(iter);
+    }
+
+    pub fn extend_sequenced_jobs_in(
+        &mut self,
+        mailbox: &HashMap<JobId, Vec<Update>>,
+        index: usize,
+    ) {
+        let id = self.id();
+        self.extend_sequenced_jobs(mailbox.iter().filter_map(|(job_id, updates)| {
+            if *job_id == id {
+                return None;
+            }
+            updates
+                .iter()
+                .any(|update| update.hook_index == index)
+                .then_some(*job_id)
+        }))
+    }
 }
 
 pub(super) struct AtomicJobIdCounter(portable_atomic::AtomicU64);

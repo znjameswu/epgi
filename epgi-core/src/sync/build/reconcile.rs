@@ -4,7 +4,7 @@ use crate::{
     common::{
         ArcChildElementNode, ArcElementContextNode, ArcRenderObject, AsyncWorkQueue, BuildContext,
         Element, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
-        GetRenderObject, Hooks, Mainline, MainlineState,
+        GetRenderObject, Hooks, HookContext, Mainline, MainlineState, WorkMode,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, LinearMapEntryExt, Parallel, Provide,
@@ -308,7 +308,7 @@ where
             todo!()
         }
 
-        let mut build_context = BuildContext::new_rebuild(hooks);
+        let mut hooks_iter = HookContext::new_rebuild(hooks);
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
@@ -317,13 +317,13 @@ where
             tree_scheduler,
             subtree_results: &mut subtree_results,
             host_context: &self.context,
-            build_context: &mut build_context,
+            hooks: &mut hooks_iter,
             nodes_needing_unmount: &mut nodes_needing_unmount,
         };
         let results = element.perform_rebuild_element(&widget, provider_values, reconciler);
         let (state, subtree_results) = self.process_rebuild_results(
             results,
-            build_context,
+            hooks_iter,
             &widget,
             job_ids,
             old_attached_object,
@@ -343,7 +343,7 @@ where
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
     ) -> SubtreeCommitResult {
-        let mut build_context = BuildContext::new_inflate();
+        let mut hooks_iter = HookContext::new_inflate();
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
@@ -352,14 +352,14 @@ where
             tree_scheduler,
             subtree_results: &mut subtree_results,
             host_context: &self.context,
-            build_context: &mut build_context,
+            hooks: &mut hooks_iter,
             nodes_needing_unmount: &mut nodes_needing_unmount,
         };
         let results = E::perform_inflate_element(&widget, provider_values, reconciler);
 
         let (state, subtree_results) = self.process_inflate_results(
             results,
-            build_context,
+            hooks_iter,
             &widget,
             job_ids,
             subtree_results,
@@ -380,7 +380,7 @@ where
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
     ) -> SubtreeCommitResult {
-        let mut build_context = BuildContext::new_poll(hooks);
+        let mut hooks_iter = HookContext::new_rebuild(hooks);
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
@@ -389,14 +389,14 @@ where
             tree_scheduler,
             subtree_results: &mut subtree_results,
             host_context: &self.context,
-            build_context: &mut build_context,
+            hooks: &mut hooks_iter,
             nodes_needing_unmount: &mut nodes_needing_unmount,
         };
         let results = last_element.perform_rebuild_element(&widget, provider_values, reconciler);
 
         let (state, subtree_results) = self.process_rebuild_results(
             results,
-            build_context,
+            hooks_iter,
             &widget,
             job_ids,
             None,
@@ -417,7 +417,7 @@ where
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
     ) -> SubtreeCommitResult {
-        let mut build_context = BuildContext::new_poll(last_hooks);
+        let mut hooks_iter = HookContext::new_poll_inflate(last_hooks);
         let mut subtree_results = SubtreeCommitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
@@ -426,14 +426,14 @@ where
             tree_scheduler,
             subtree_results: &mut subtree_results,
             host_context: &self.context,
-            build_context: &mut build_context,
+            hooks: &mut hooks_iter,
             nodes_needing_unmount: &mut nodes_needing_unmount,
         };
         let results = E::perform_inflate_element(&widget, provider_values, reconciler);
 
         let (state, subtree_results) = self.process_inflate_results(
             results,
-            build_context,
+            hooks_iter,
             &widget,
             job_ids,
             subtree_results,
@@ -448,7 +448,7 @@ where
     fn process_rebuild_results<'a, 'batch>(
         self: &'a Arc<Self>,
         results: Result<E, (E, BuildSuspendedError)>,
-        build_context: BuildContext,
+        hooks_iter: HookContext,
         widget: &E::ArcWidget,
         job_ids: &'a SmallSet<JobId>,
         mut render_object: Option<E::ArcRenderObject>,
@@ -465,7 +465,7 @@ where
                     );
                     (
                         MainlineState::Ready {
-                            hooks: build_context.hooks,
+                            hooks: hooks_iter.hooks,
                             render_object,
                             element,
                         },
@@ -525,7 +525,7 @@ where
                     }
                     (
                         MainlineState::Ready {
-                            hooks: build_context.hooks,
+                            hooks: hooks_iter.hooks,
                             render_object,
                             element,
                         },
@@ -592,7 +592,7 @@ where
 
             Err((element, err)) => (
                 MainlineState::RebuildSuspended {
-                    hooks: build_context.hooks,
+                    hooks: hooks_iter.hooks,
                     last_element: element,
                     waker: err.waker,
                 },
@@ -605,7 +605,7 @@ where
     fn process_inflate_results<'a, 'batch>(
         self: &'a Arc<Self>,
         results: Result<E, BuildSuspendedError>,
-        build_context: BuildContext,
+        hooks_iter: HookContext,
         widget: &E::ArcWidget,
         job_ids: &'a SmallSet<JobId>,
         subtree_results: SubtreeCommitResult,
@@ -615,7 +615,7 @@ where
             Ok(mut element) => match E::ArcRenderObject::GET_RENDER_OBJECT {
                 GetRenderObject::None(_) => (
                     MainlineState::Ready {
-                        hooks: build_context.hooks,
+                        hooks: hooks_iter.hooks,
                         render_object: None,
                         element,
                     },
@@ -631,7 +631,7 @@ where
                     });
                     (
                         MainlineState::Ready {
-                            hooks: build_context.hooks,
+                            hooks: hooks_iter.hooks,
                             render_object,
                             element,
                         },
@@ -661,7 +661,7 @@ where
                     debug_assert!(render_object.is_some(), "Impossible to fail");
                     (
                         MainlineState::Ready {
-                            hooks: build_context.hooks,
+                            hooks: hooks_iter.hooks,
                             render_object,
                             element,
                         },
@@ -671,7 +671,7 @@ where
             },
             Err(err) => (
                 MainlineState::InflateSuspended {
-                    last_hooks: build_context.hooks,
+                    last_hooks: hooks_iter.hooks,
                     waker: err.waker,
                 },
                 SubtreeCommitResult::Suspended,

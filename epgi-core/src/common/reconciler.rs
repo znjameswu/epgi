@@ -9,7 +9,7 @@ use super::{
 };
 
 pub trait Reconciler<CP: Protocol> {
-    fn build_context_mut(&mut self) -> &mut BuildContext;
+    fn build_context_mut(&mut self) -> BuildContext<'_>;
 
     fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>>;
 

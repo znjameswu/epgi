@@ -1,7 +1,7 @@
 use crate::{
     common::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
-        ReconcileItem, Reconciler,
+        Hooks, HookContext, ReconcileItem, Reconciler, WorkMode,
     },
     foundation::{HktContainer, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
     scheduler::JobId,
@@ -13,14 +13,17 @@ pub(super) struct SyncReconciler<'a, 'batch, CP: Protocol> {
     pub(super) scope: &'a rayon::Scope<'batch>,
     pub(super) tree_scheduler: &'batch TreeScheduler,
     pub(super) subtree_results: &'a mut SubtreeCommitResult,
-    pub(super) host_context: &'a ArcElementContextNode,
-    pub(super) build_context: &'a mut BuildContext,
+    pub(super) host_context: &'a ArcElementContextNode, // Remove duplicate field with build_context
+    pub(super) hooks: &'a mut HookContext,
     pub(super) nodes_needing_unmount: &'a mut InlinableDwsizeVec<ArcChildElementNode<CP>>,
 }
 
 impl<'a, 'batch, CP: Protocol> Reconciler<CP> for SyncReconciler<'a, 'batch, CP> {
-    fn build_context_mut(&mut self) -> &mut BuildContext {
-        self.build_context
+    fn build_context_mut(&mut self) -> BuildContext<'_> {
+        BuildContext {
+            hooks: self.hooks,
+            element_context: self.host_context,
+        }
     }
 
     fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>> {

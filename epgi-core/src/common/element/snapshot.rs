@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    common::{AsyncInflating, BuildContext, Hook},
+    common::{AsyncInflating, BuildContext, Hook, HookContext},
     foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
 };
@@ -73,7 +73,7 @@ pub(crate) enum MainlineState<E: Element> {
 
 #[derive(Clone, Default)]
 pub(crate) struct Hooks {
-    array_hooks: Vec<Box<dyn Hook>>,
+    pub(crate) array_hooks: Vec<Box<dyn Hook>>,
 }
 
 impl<E: Element> MainlineState<E> {
@@ -163,7 +163,6 @@ impl<E: Element> MainlineState<E> {
 pub struct BuildResults<E: Element> {
     hooks: Hooks,
     element: E,
-    new_subscriptions: InlinableUsizeVec<AweakElementContextNode>,
     nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     effects: Vec<u32>,
     performed_inflate: bool,
@@ -174,7 +173,7 @@ where
     E: Element,
 {
     pub fn from_pieces(
-        build_context: BuildContext,
+        hooks_iter: HookContext,
         element: E,
         nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     ) -> Self {
@@ -191,7 +190,7 @@ pub(crate) struct BuildSuspendResults {
 }
 
 impl BuildSuspendResults {
-    pub fn new(build_context: BuildContext) -> Self {
+    pub fn new(hooks_iter: HookContext) -> Self {
         todo!()
     }
 }

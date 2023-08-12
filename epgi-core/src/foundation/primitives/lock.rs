@@ -2,14 +2,9 @@
 ///
 /// This abstraction paves the way for an optional parking-lot feature.
 #[derive(Debug, Default)]
-pub struct SyncMutex<T>(std::sync::Mutex<T>);
+pub struct SyncMutex<T: ?Sized>(std::sync::Mutex<T>);
 
-impl<T> SyncMutex<T> {
-    #[inline]
-    pub fn new(t: T) -> Self {
-        Self(std::sync::Mutex::new(t))
-    }
-
+impl<T: ?Sized> SyncMutex<T> {
     #[inline]
     pub fn lock(&self) -> std::sync::MutexGuard<'_, T> {
         match self.0.lock() {
@@ -25,6 +20,13 @@ impl<T> SyncMutex<T> {
             Err(std::sync::TryLockError::Poisoned(p_err)) => Some(p_err.into_inner()),
             Err(std::sync::TryLockError::WouldBlock) => None,
         }
+    }
+}
+
+impl<T> SyncMutex<T> {
+    #[inline]
+    pub fn new(t: T) -> Self {
+        Self(std::sync::Mutex::new(t))
     }
 }
 

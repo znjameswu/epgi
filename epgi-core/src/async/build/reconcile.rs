@@ -5,8 +5,8 @@ use crate::{
     common::{
         ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildContext, BuildResults,
         BuildSuspendResults, Element, ElementContextNode, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, Hooks, Mainline, ProviderElementMap, SubscriptionDiff, Work,
-        WorkContext, WorkHandle,
+        ElementSnapshotInner, Hooks, HookContext, Mainline, ProviderElementMap, SubscriptionDiff,
+        Work, WorkContext, WorkHandle,
     },
     foundation::{
         Arc, Asc, InlinableDwsizeVec, InlinableUsizeVec, Parallel, Provide, SyncMutex, TryResult,
@@ -351,7 +351,7 @@ where
             todo!()
         }
 
-        let mut build_context = BuildContext::new_rebuild(hooks);
+        let mut hooks_iter = HookContext::new_rebuild(hooks);
         let mut child_tasks = Default::default();
         let mut nodes_needing_unmount = Default::default();
         let reconciler = AsyncReconciler {
@@ -360,17 +360,17 @@ where
             child_tasks: &mut child_tasks,
             barrier,
             host_context: &self.context,
-            build_context: &mut build_context,
+            hooks: &mut hooks_iter,
             nodes_needing_unmount: &mut nodes_needing_unmount,
         };
         let results = element.perform_rebuild_element(widget, provider_values, reconciler);
         let new_stash = match results {
             Ok(element) => AsyncOutput::Completed {
                 children: element.children(),
-                results: BuildResults::from_pieces(build_context, element, nodes_needing_unmount),
+                results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
             },
             Err(err) => AsyncOutput::Suspended {
-                suspend: Some(BuildSuspendResults::new(build_context)),
+                suspend: Some(BuildSuspendResults::new(hooks_iter)),
                 barrier: None,
             },
         };
@@ -389,7 +389,7 @@ where
     ) {
         let lane_pos = work_context.lane_pos;
 
-        let mut build_context = BuildContext::new_inflate();
+        let mut hooks_iter = HookContext::new_inflate();
         let mut child_tasks = Default::default();
         let mut nodes_needing_unmount = Default::default();
         let reconciler = AsyncReconciler {
@@ -398,17 +398,17 @@ where
             child_tasks: &mut child_tasks,
             barrier,
             host_context: &self.context,
-            build_context: &mut build_context,
+            hooks: &mut hooks_iter,
             nodes_needing_unmount: &mut nodes_needing_unmount,
         };
         let results = E::perform_inflate_element(widget, provider_values, reconciler);
         let new_stash = match results {
             Ok(element) => AsyncOutput::Completed {
                 children: element.children(),
-                results: BuildResults::from_pieces(build_context, element, nodes_needing_unmount),
+                results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
             },
             Err(err) => AsyncOutput::Suspended {
-                suspend: Some(BuildSuspendResults::new(build_context)),
+                suspend: Some(BuildSuspendResults::new(hooks_iter)),
                 barrier: None,
             },
         };

@@ -1,7 +1,7 @@
 use crate::{
     common::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
-        ReconcileItem, Reconciler, WorkContext, WorkHandle,
+        Hooks, HookContext, ReconcileItem, Reconciler, WorkContext, WorkHandle, WorkMode,
     },
     foundation::{Asc, HktContainer, InlinableDwsizeVec, Parallel, Protocol},
     sync::CommitBarrier,
@@ -12,8 +12,8 @@ pub(super) struct AsyncReconciler<'a, CP: Protocol> {
     pub(super) work_context: Asc<WorkContext>,
     pub(super) child_tasks: &'a mut Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
     pub(super) barrier: CommitBarrier,
-    pub(super) host_context: &'a ArcElementContextNode,
-    pub(super) build_context: &'a mut BuildContext,
+    pub(super) host_context: &'a ArcElementContextNode, // TODO: Remove duplicate field
+    pub(super) hooks: &'a mut HookContext,
     pub(super) nodes_needing_unmount: &'a mut InlinableDwsizeVec<ArcChildElementNode<CP>>,
 }
 
@@ -21,8 +21,11 @@ impl<'a, CP> Reconciler<CP> for AsyncReconciler<'a, CP>
 where
     CP: Protocol,
 {
-    fn build_context_mut(&mut self) -> &mut BuildContext {
-        self.build_context
+    fn build_context_mut(&mut self) -> BuildContext<'_> {
+        BuildContext {
+            hooks: self.hooks,
+            element_context: self.host_context,
+        }
     }
 
     fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>> {
