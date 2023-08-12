@@ -23,9 +23,13 @@ path = "./epgi-core"
 package = "epgi-2d"
 path = "./epgi-2d"
 
-[workspace.dependencies.epgi-vello]
-package = "epgi-vello"
-path = "./epgi-vello"
+[workspace.dependencies.epgi-common]
+package = "epgi-common"
+path = "./epgi-common"
+
+[workspace.dependencies.epgi-glazier]
+package = "epgi-glazier"
+path = "./epgi-glazier"
 
 
 [workspace.dependencies]

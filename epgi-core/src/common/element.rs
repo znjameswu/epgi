@@ -8,20 +8,19 @@ pub use context::*;
 pub use provider::*;
 pub use snapshot::*;
 
-use futures::never::Never;
-
 use crate::{
     common::RenderObjectUpdateResult,
     foundation::{
-        Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Parallel, Protocol, Provide,
+        Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol, Provide,
         SyncMutex, TypeKey,
     },
     scheduler::JobId,
 };
 
 use super::{
-    ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Reconciler, Render,
-    RenderCache, RenderObject, RenderObjectInner, RenderSuspense, Suspense, SuspenseElement,
+    ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Hook, ReconcileItem,
+    Reconciler, Render, RenderCache, RenderObject, RenderObjectInner, RenderSuspense, Suspense,
+    SuspenseElement,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -81,10 +80,8 @@ pub trait Element: Send + Sync + Clone + 'static {
     type ArcRenderObject: ArcRenderObject<Self>;
 }
 
-pub trait ComposeElement: Element<ArcRenderObject = Never> {
+pub trait SingleChildElement: Element<ArcRenderObject = Never> {
     fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol>;
-
-    const GET_RENDER_OBJECT: GetRenderObject<Self> = GetRenderObject::None(Self::child);
 }
 
 // pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render>>> {
@@ -127,7 +124,7 @@ where
 
 impl<E> ArcRenderObject<E> for Never
 where
-    E: ComposeElement<ArcRenderObject = Self>,
+    E: SingleChildElement<ArcRenderObject = Self>,
 {
     type Render = Never;
     const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::None(E::child);
@@ -210,7 +207,7 @@ pub struct GetSuspense<E: Element> {
 }
 
 pub struct ElementNode<E: Element> {
-    pub(crate) context: ArcElementContextNode,
+    pub context: ArcElementContextNode,
     pub(crate) snapshot: SyncMutex<ElementSnapshot<E>>,
 }
 
@@ -276,7 +273,7 @@ pub trait ChildElementNode:
     fn can_rebuild_with(
         self: Arc<Self>,
         widget: ArcChildWidget<Self::ParentProtocol>,
-    ) -> Option<Box<dyn ChildElementWidgetPair<Self::ParentProtocol>>>;
+    ) -> Result<ReconcileItem<Self::ParentProtocol>, (ArcChildElementNode<Self::ParentProtocol>, ArcChildWidget<Self::ParentProtocol>)>;
 
     fn get_current_subtree_render_object(&self)
         -> Option<ArcChildRenderObject<Self::ParentProtocol>>;
@@ -299,8 +296,15 @@ where
     fn can_rebuild_with(
         self: Arc<Self>,
         widget: ArcChildWidget<Self::ParentProtocol>,
-    ) -> Option<Box<dyn ChildElementWidgetPair<Self::ParentProtocol>>> {
-        ElementNode::<E>::can_rebuild_with(self, widget).map(|x| Box::new(x) as Box<_>)
+    ) -> Result<
+        ReconcileItem<Self::ParentProtocol>,
+        (
+            ArcChildElementNode<Self::ParentProtocol>,
+            ArcChildWidget<Self::ParentProtocol>,
+        ),
+    > {
+        ElementNode::<E>::can_rebuild_with(self, widget)
+            .map_err(|(element, widget)| (element as _, widget))
     }
 
     fn get_current_subtree_render_object(
@@ -349,6 +353,7 @@ where
 pub fn create_root_element<R: Render>(
     widget: <R::Element as Element>::ArcWidget,
     element: R::Element,
+    hooks: Hooks,
     constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<R::Element>> {
     let element_node = Arc::new_cyclic(move |node| {
@@ -368,7 +373,7 @@ pub fn create_root_element<R: Render>(
                 widget,
                 inner: ElementSnapshotInner::Mainline(Mainline {
                     state: Some(MainlineState::Ready {
-                        hooks: Hooks::default(),
+                        hooks,
                         element,
                         render_object: Some(render_object),
                     }),

@@ -12,6 +12,7 @@ license.workspace = true
 accesskit = { workspace = true }
 epgi-core = { workspace = true }
 epgi-2d = { workspace = true }
+epgi-common = {workspace = true}
 glazier = { workspace = true }
 vello = { workspace = true }
 wgpu = { workspace = true }

@@ -93,16 +93,16 @@ where
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         mut reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, (Self, BuildSuspendedError)> {
-        if let Some(rebuild) = self.child.clone().can_rebuild_with(widget.child().clone()) {
-            let [child] = reconciler.into_reconcile([ReconcileItem::Rebuild(rebuild)]);
-            Ok(Self { child })
-        } else {
-            reconciler
-                .nodes_needing_unmount_mut()
-                .push(self.child.clone());
-            let [child] =
-                reconciler.into_reconcile([ReconcileItem::new_inflate(widget.child().clone())]);
-            Ok(Self { child })
+        match self.child.can_rebuild_with(widget.child().clone()) {
+            Ok(item) => {
+                let [child] = reconciler.into_reconcile([item]);
+                Ok(Self { child })
+            }
+            Err((child, child_widget)) => {
+                reconciler.nodes_needing_unmount_mut().push(child);
+                let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+                Ok(Self { child })
+            }
         }
     }
 

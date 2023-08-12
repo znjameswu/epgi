@@ -8,8 +8,8 @@ use epgi_core::common::{
 
 #[derive(Debug)]
 pub struct ConstrainedBox {
-    constraints: BoxConstraints,
-    child: ArcChildWidget<BoxProtocol>,
+    pub constraints: BoxConstraints,
+    pub child: ArcChildWidget<BoxProtocol>,
 }
 
 impl Widget for ConstrainedBox {

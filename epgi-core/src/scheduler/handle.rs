@@ -35,7 +35,7 @@ pub fn get_current_scheduler() -> &'static SchedulerHandle {
     unsafe { &*(*_GLOBAL_SCHEDULER_HANDLE.0.get()).as_ptr() }
 }
 
-unsafe fn setup_scheduler(scheduler_handle: SchedulerHandle) {
+pub unsafe fn setup_scheduler(scheduler_handle: SchedulerHandle) {
     let scheduler_ref = unsafe { &mut *_GLOBAL_SCHEDULER_HANDLE.0.get() };
     *scheduler_ref = MaybeUninit::new(scheduler_handle);
 }
@@ -45,8 +45,6 @@ pub struct SchedulerHandle {
     pub async_threadpool: rayon::ThreadPool,
 
     pub(super) task_rx: SchedulerTaskReceiver,
-    // is_executing_sync: AtomicBool,
-    pub(super) root_constraints: SyncMutex<Asc<dyn core::any::Any + Send + Sync>>,
 
     // mode: LatencyMode,
     nodes_needing_paint: MpscQueue<AweakAnyRenderObject>,
@@ -57,17 +55,12 @@ pub struct SchedulerHandle {
 }
 
 impl SchedulerHandle {
-    pub fn new(
-        sync_threadpool: rayon::ThreadPool,
-        async_threadpool: rayon::ThreadPool,
-        root_constraints: Asc<dyn core::any::Any + Send + Sync>,
-    ) -> Self {
+    pub fn new(sync_threadpool: rayon::ThreadPool, async_threadpool: rayon::ThreadPool) -> Self {
         Self {
             sync_threadpool,
             async_threadpool,
             task_rx: SchedulerTaskReceiver::new(),
             // is_executing_sync: (),
-            root_constraints: SyncMutex::new(root_constraints),
             nodes_needing_paint: Default::default(),
             nodes_needing_layout: Default::default(),
             accumulated_jobs: Default::default(),
@@ -75,8 +68,8 @@ impl SchedulerHandle {
         }
     }
 
-    pub fn set_root_constraints(&self, constraints: Asc<dyn Any + Send + Sync>) {
-        *self.root_constraints.lock() = constraints;
+    pub fn request_sync_job(&self, op: impl FnOnce(&mut JobBuilder)) {
+        todo!()
     }
 
     pub fn request_new_frame(&self) -> AsyncMpscReceiver<FrameResults> {

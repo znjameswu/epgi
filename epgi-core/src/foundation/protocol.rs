@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::common::{ArcParentLayer, LayerScope, ArcChildRenderObject};
+use crate::common::{ArcChildRenderObject, ArcParentLayer, LayerScope};
 
 use super::Asc;
 
@@ -116,7 +116,11 @@ pub trait PaintContext {
     // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
     fn with_layer(&mut self, op: impl FnOnce(&<Self::Canvas as Canvas>::Transform));
 
-    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(&mut self, child: ArcChildRenderObject<P>, transform: &P::Transform);
+    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
+        &mut self,
+        child: ArcChildRenderObject<P>,
+        transform: &P::Transform,
+    );
 }
 
 pub trait Identity {

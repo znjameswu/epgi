@@ -14,7 +14,11 @@ use vello::{
     RenderParams, Renderer, RendererOptions, Scene, SceneBuilder, SceneFragment,
 };
 
-use epgi_core::{common::LayerScope, foundation::{Arc, Asc}, scheduler::get_current_scheduler};
+use epgi_core::{
+    common::LayerScope,
+    foundation::{Arc, Asc},
+    scheduler::get_current_scheduler,
+};
 
 const QUIT_MENU_ID: u32 = 0x100;
 
@@ -188,7 +192,6 @@ impl MainState {
             max_height: size_dp.height as f32,
         };
         let scheduler = get_current_scheduler();
-        scheduler.set_root_constraints(Asc::new(constraints) as _);
         let frame_results = scheduler.request_new_frame().recv_blocking().unwrap();
         let encoding = Arc::downcast::<SceneFragment>(frame_results.encodings).unwrap();
 

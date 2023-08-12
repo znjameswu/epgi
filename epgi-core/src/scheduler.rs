@@ -87,7 +87,6 @@ impl Scheduler {
                     tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     let boundaries_needing_relayout =
                         { std::mem::take(&mut *handle.boundaries_needing_relayout.lock()) };
-                    let root_constraints = { handle.root_constraints.lock().clone() };
                     // TODO: Skip layout if empty
                     tree_scheduler.perform_layout(boundaries_needing_relayout);
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.

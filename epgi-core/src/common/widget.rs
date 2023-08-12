@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::foundation::{AsHeapPtr, Asc, Key, Protocol};
+use crate::foundation::{AsAny, AsHeapPtr, Asc, Key, Protocol};
 
 use super::{ArcAnyElementNode, Element};
 
@@ -14,7 +14,7 @@ pub type ArcChildWidget<P> = Asc<dyn ChildWidget<P>>;
 pub type ArcParentWidget<P> = Asc<dyn ParentWidget<ChildProtocol = P>>;
 pub type ArcAnyWidget = Asc<dyn AnyWidget>;
 
-pub trait Widget: std::fmt::Debug + 'static + Send + Sync {
+pub trait Widget: AsAny + std::fmt::Debug + 'static + Send + Sync {
     type Element: Element;
 
     fn key(&self) -> Option<&dyn Key> {
@@ -22,6 +22,45 @@ pub trait Widget: std::fmt::Debug + 'static + Send + Sync {
     }
 
     fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget;
+}
+
+pub trait WidgetExt: Widget {
+    fn as_arc_any_widget(self: Arc<Self>) -> ArcAnyWidget;
+
+    fn as_arc_child_widget(
+        self: Arc<Self>,
+    ) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol>;
+
+    fn as_arc_parent_widget(
+        self: Arc<Self>,
+    ) -> ArcParentWidget<<Self::Element as Element>::ChildProtocol>;
+
+    fn widget_type_id(&self) -> TypeId;
+}
+
+impl<T> WidgetExt for T
+where
+    T: Widget,
+{
+    fn as_arc_any_widget(self: Arc<Self>) -> ArcAnyWidget {
+        self
+    }
+
+    fn as_arc_child_widget(
+        self: Arc<Self>,
+    ) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol> {
+        self
+    }
+
+    fn as_arc_parent_widget(
+        self: Arc<Self>,
+    ) -> ArcParentWidget<<Self::Element as Element>::ChildProtocol> {
+        self
+    }
+
+    fn widget_type_id(&self) -> TypeId {
+        TypeId::of::<Self>()
+    }
 }
 
 pub trait ChildWidget<PP: Protocol>:

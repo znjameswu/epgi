@@ -99,17 +99,16 @@ where
     pub(crate) fn can_rebuild_with(
         self: Arc<Self>,
         widget: ArcChildWidget<E::ParentProtocol>,
-    ) -> Option<ElementWidgetPair<E>> {
+    ) -> Result<ReconcileItem<E::ParentProtocol>, (Arc<Self>, ArcChildWidget<E::ParentProtocol>)>
+    {
         let old_widget = self.widget();
-        if let Ok(widget) = try_convert_if_same_type(&old_widget, widget) {
-            if widget.key() == old_widget.key() {
-                return Some(ElementWidgetPair {
-                    widget,
-                    element: self,
-                });
-            }
+        if widget.key() != old_widget.key() {
+            return Err((self, widget));
         }
-        return None;
+        match try_convert_if_same_type(&old_widget, widget) {
+            Ok(widget) => Ok(ReconcileItem::new_rebuild(self, widget)),
+            Err(widget) => Err((self, widget)),
+        }
     }
 }
 

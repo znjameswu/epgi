@@ -721,6 +721,7 @@ version = "0.1.0"
 dependencies = [
  "accesskit",
  "epgi-2d",
+ "epgi-common",
  "epgi-core",
  "futures",
  "glazier",

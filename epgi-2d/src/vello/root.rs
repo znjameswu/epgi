@@ -1,7 +1,8 @@
 use epgi_core::{
     common::{
-        create_root_element, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout,
-        Element, ElementNode, GetSuspense, LayerScope, Reconciler, Render, RenderObject, Widget,
+        create_root_element, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
+        BuildContext, DryLayout, Element, ElementNode, GetSuspense, LayerScope, ReconcileItem,
+        Reconciler, Render, RenderObject, Widget,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
@@ -92,9 +93,17 @@ impl RenderRootView {
     pub fn render(&self) {}
 }
 
-#[derive(Debug)]
 pub struct RootView {
-    pub child: Option<ArcChildWidget<BoxProtocol>>,
+    pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
+    // pub child: Option<ArcChildWidget<BoxProtocol>>,
+}
+
+impl std::fmt::Debug for RootView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RootView")
+            // .field("child", &self.child)
+            .finish()
+    }
 }
 
 impl Widget for RootView {
@@ -123,18 +132,47 @@ impl Element for RootViewElement {
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         self,
         widget: &Self::ArcWidget,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        mut reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, (Self, BuildSuspendedError)> {
-        todo!()
+        let child_widget = (widget.build)(reconciler.build_context_mut());
+        match (child_widget, self.child) {
+            (None, None) => Ok(Self { child: None }),
+            (None, Some(child)) => {
+                reconciler.nodes_needing_unmount_mut().push(child.clone());
+                Ok(Self { child: None })
+            }
+            (Some(child_widget), None) => {
+                let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+                Ok(Self { child: Some(child) })
+            }
+            (Some(child_widget), Some(child)) => match child.can_rebuild_with(child_widget) {
+                Ok(item) => {
+                    let [child] = reconciler.into_reconcile([item]);
+                    Ok(Self { child: Some(child) })
+                }
+                Err((child, child_widget)) => {
+                    reconciler.nodes_needing_unmount_mut().push(child);
+                    let [child] =
+                        reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+                    Ok(Self { child: Some(child) })
+                }
+            },
+        }
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
+        mut reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
     ) -> Result<Self, BuildSuspendedError> {
-        todo!()
+        let child_widget = (widget.build)(reconciler.build_context_mut());
+        if let Some(child_widget) = child_widget {
+            let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+            Ok(Self { child: Some(child) })
+        } else {
+            Ok(Self { child: None })
+        }
     }
 
     type ChildIter = Option<ArcChildElementNode<BoxProtocol>>;
