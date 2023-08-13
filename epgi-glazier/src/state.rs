@@ -1,12 +1,11 @@
 /// Modified based on xilem:src/app_main.rs
 use std::any::Any;
 
-use epgi_2d::{Affine2dCanvas, BoxConstraints};
+use epgi_2d::BoxConstraints;
 use glazier::{
     kurbo::{Affine, Size},
-    text::Event,
-    Application, Cursor, HotKey, IdleToken, Menu, MouseEvent, Region, Scalable, SysMods,
-    WinHandler, WindowBuilder, WindowHandle,
+    Application, HotKey, IdleToken, Menu, MouseEvent, Region, Scalable, SysMods, WinHandler,
+    WindowBuilder, WindowHandle,
 };
 use vello::{
     peniko::Color,
@@ -14,11 +13,7 @@ use vello::{
     RenderParams, Renderer, RendererOptions, Scene, SceneBuilder, SceneFragment,
 };
 
-use epgi_core::{
-    tree::LayerScope,
-    foundation::{Arc, Asc},
-    scheduler::get_current_scheduler,
-};
+use epgi_core::{foundation::Arc, scheduler::get_current_scheduler};
 
 const QUIT_MENU_ID: u32 = 0x100;
 

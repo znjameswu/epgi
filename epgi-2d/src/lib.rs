@@ -8,7 +8,7 @@ pub use r#box::*;
 pub use text::*;
 pub use vello::*;
 
-use epgi_core::{tree::ArcParentLayer, foundation::Canvas, nodes::Provider};
+use epgi_core::{foundation::Canvas, nodes::Provider, tree::ArcParentLayer};
 
 pub type Affine2d = vello_encoding::Transform;
 
@@ -48,6 +48,5 @@ impl Canvas for Affine2dCanvas {
         this.reset(true)
     }
 }
-
 
 pub type BoxProvider<T> = Provider<T, BoxProtocol>;

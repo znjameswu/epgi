@@ -10,23 +10,10 @@ pub use job::*;
 pub use job_batcher::*;
 pub use lane::*;
 
-use hashbrown::HashSet;
-
-use portable_atomic::AtomicU64;
-
-use std::{
-    cell::UnsafeCell,
-    mem::MaybeUninit,
-    num::NonZeroU64,
-    sync::atomic::{AtomicBool, Ordering::*},
-};
-
 use crate::{
-    tree::{
-        AweakAnyElementNode, AweakAnyRenderObject, AweakElementContextNode, WorkContext, WorkHandle,
-    },
-    foundation::{Asc, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex, SyncRwLock},
+    foundation::{Asc, AsyncMpscSender, SyncMutex, SyncRwLock},
     sync::CommitBarrier,
+    tree::{AweakAnyElementNode, AweakElementContextNode, WorkContext, WorkHandle},
 };
 
 pub use crate::sync::TreeScheduler;
@@ -99,14 +86,16 @@ impl Scheduler {
                     handle.sync_threadpool.spawn(move || {
                         let scheduler = tree_scheduler.read();
                         paint_started_event.notify(usize::MAX);
-                        scheduler.perform_paint();
+                        let layer = scheduler.perform_paint();
+                        let encodings = layer.composite_self();
                         for requester in requesters {
-                            // let layer = todo!();
-                            // layer.composite_to();
+                            let _ = requester.try_send(FrameResults {
+                                encodings: encodings.clone(),
+                                id: frame_id,
+                            }); // TODO: log failure
                         }
                     });
                     paint_started.wait();
-                    // handle.new_frame_ready.notify(usize::MAX);
                     drop(read_guard);
                 }
                 PointerEvent {} => {}

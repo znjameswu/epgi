@@ -1,4 +1,4 @@
-use super::{ArcElementContextNode, HookContext, Hooks};
+use super::{ArcElementContextNode, HookContext};
 
 // The entire BuildContext has to be refactored because
 // we need the reference to element_context to avoid needless copies.

@@ -1,7 +1,7 @@
 use crate::{
-    tree::{Element, ElementNode, SuspendWaker},
     foundation::{Arc, Parallel},
     scheduler::get_current_scheduler,
+    tree::{Element, ElementNode, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 

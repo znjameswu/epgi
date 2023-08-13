@@ -2,19 +2,19 @@ use futures::stream::Aborted;
 use hashbrown::HashMap;
 
 use crate::{
-    tree::{
-        ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildContext, BuildResults,
-        BuildSuspendResults, Element, ElementContextNode, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, HookContext, Hooks, Mainline, ProviderElementMap, SubscriptionDiff,
-        Work, WorkContext, WorkHandle,
-    },
     foundation::{
-        Arc, Asc, InlinableDwsizeVec, InlinableUsizeVec, Parallel, Provide, SyncMutex, TryResult,
-        TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, InlinableDwsizeVec, InlinableUsizeVec, Provide, SyncMutex, TryResult, TypeKey,
+        EMPTY_CONSUMED_TYPES,
     },
     r#async::build::reconciler::AsyncReconciler,
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
+    tree::{
+        ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildResults,
+        BuildSuspendResults, Element, ElementContextNode, ElementNode, ElementSnapshot,
+        ElementSnapshotInner, HookContext, Hooks, Mainline, ProviderElementMap, SubscriptionDiff,
+        Work, WorkContext, WorkHandle,
+    },
 };
 
 pub(crate) struct AsyncRebuild<E: Element> {

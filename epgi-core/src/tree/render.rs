@@ -1,13 +1,6 @@
-use std::any::Any;
+use crate::foundation::{Arc, Aweak, Canvas, PaintContext, Parallel, Protocol, SyncMutex};
 
-use crate::foundation::{
-    Arc, Asc, Aweak, BoolExpectExt, Canvas, PaintContext, Parallel, Protocol, SyncMutex,
-};
-
-use super::{
-    ArcElementContextNode, ArcLayerOf, ArcParentLayer, Element, ElementContextNode, GetSuspense,
-    Layer, LayerFragment, LayerScope,
-};
+use super::{ArcElementContextNode, ArcLayerOf, Element, ElementContextNode, GetSuspense};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
@@ -141,11 +134,10 @@ pub struct PerformDryLayout<R: Render> {
 
 pub trait LayerPaint: Render {
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
+        get_layer_or_insert: Self::get_layer_or_insert,
         get_layer: Self::get_layer,
-        update_layer: Self::update_layer,
-        child: Self::child,
     });
-    fn get_layer(
+    fn get_layer_or_insert(
         &mut self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
@@ -153,14 +145,10 @@ pub trait LayerPaint: Render {
         element_context: &ArcElementContextNode,
         transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> &ArcLayerOf<Self>;
-    fn update_layer(
-        &mut self,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-    ) -> &ArcLayerOf<Self>;
-    fn child(&self) -> &ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>;
+    fn get_layer(&mut self) -> &ArcLayerOf<Self>;
 }
 pub struct PerformLayerPaint<R: Render> {
-    pub get_layer: for<'a> fn(
+    pub get_layer_or_insert: for<'a> fn(
         render: &'a mut R,
         size: &<<R::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
@@ -168,11 +156,9 @@ pub struct PerformLayerPaint<R: Render> {
         element_context: &ArcElementContextNode,
         transform_parent: &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> &'a ArcLayerOf<R>,
-    pub update_layer: for<'a> fn(
+    pub get_layer: for<'a> fn(
         render: &'a mut R,
-        transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
     ) -> &'a ArcLayerOf<R>,
-    pub child: fn(render: &R) -> &ArcChildRenderObject<<R::Element as Element>::ChildProtocol>,
 }
 
 pub struct RenderObject<R: Render> {
@@ -325,15 +311,24 @@ pub trait ChildRenderObject<PP: Protocol>:
     + Sync
     + 'static
 {
+    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
 }
 
-impl<R> ChildRenderObject<<R::Element as Element>::ParentProtocol> for RenderObject<R> where
-    R: Render
+impl<R> ChildRenderObject<<R::Element as Element>::ParentProtocol> for RenderObject<R>
+where
+    R: Render,
 {
+    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
+        self
+    }
 }
 
 pub trait AnyRenderObject:
-    crate::sync::layout_private::AnyRenderObjectRelayoutExt + Send + Sync + 'static
+    crate::sync::layout_private::AnyRenderObjectRelayoutExt
+    + crate::sync::paint_private::AnyRenderObjectRepaintExt
+    + Send
+    + Sync
+    + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
 }

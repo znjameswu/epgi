@@ -1,6 +1,6 @@
 use crate::{
-    tree::{BuildContext, Hook},
     foundation::{Asc, SyncMutex},
+    tree::{BuildContext, Hook},
 };
 
 pub trait TearDown: Send + Sync + 'static {

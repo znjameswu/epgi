@@ -63,15 +63,16 @@ where
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         mut reconciler: impl Reconciler<Self::ChildProtocol>,
     ) -> Result<Self, (Self, BuildSuspendedError)> {
-        let child_widget = widget.build_with(reconciler.build_context_mut());
+        let child_widget = widget.build_with(reconciler.build_context());
         match self.child.can_rebuild_with(child_widget) {
             Ok(item) => {
-                let [child] = reconciler.into_reconcile([item]);
+                let child = reconciler.into_reconcile_single(item);
                 Ok(Self { child })
             }
             Err((child, child_widget)) => {
                 reconciler.nodes_needing_unmount_mut().push(child);
-                let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+                let child =
+                    reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
                 Ok(Self { child })
             }
         }
@@ -83,8 +84,8 @@ where
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         mut reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
     ) -> Result<Self, BuildSuspendedError> {
-        let child_widget = widget.build_with(reconciler.build_context_mut());
-        let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+        let child_widget = widget.build_with(reconciler.build_context());
+        let child = reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
         Ok(Self { child })
     }
 

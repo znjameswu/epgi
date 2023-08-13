@@ -1,11 +1,6 @@
-use std::{
-    any::Any,
-    sync::atomic::{AtomicBool, Ordering::*},
-};
+use std::any::Any;
 
-use crate::foundation::{
-    Arc, Asc, Aweak, Canvas, Encoding, InlinableDwsizeVec, Protocol, SyncMutex,
-};
+use crate::foundation::{Arc, Aweak, Canvas, InlinableDwsizeVec, Protocol, SyncMutex};
 
 use super::{ArcElementContextNode, Element, Render};
 

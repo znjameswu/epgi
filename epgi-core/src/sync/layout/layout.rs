@@ -1,13 +1,12 @@
 use hashbrown::HashSet;
 
 use crate::{
+    foundation::{Protocol, PtrEq},
+    sync::TreeScheduler,
     tree::{
         AweakAnyRenderObject, Element, PerformDryLayout, Render, RenderCache, RenderObject,
         RenderObjectInner,
     },
-    foundation::{Arc, Protocol, PtrEq},
-    scheduler::get_current_scheduler,
-    sync::TreeScheduler,
 };
 
 impl TreeScheduler {

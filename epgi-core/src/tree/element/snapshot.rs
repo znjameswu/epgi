@@ -3,14 +3,12 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    tree::{AsyncInflating, BuildContext, Hook, HookContext},
     foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
+    tree::{AsyncInflating, Hook, HookContext},
 };
 
-use super::{
-    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, AweakElementContextNode, Element,
-};
+use super::{ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, Element};
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with

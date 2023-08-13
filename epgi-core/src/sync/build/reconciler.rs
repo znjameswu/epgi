@@ -1,11 +1,11 @@
 use crate::{
-    tree::{
-        ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
-        HookContext, Hooks, ReconcileItem, Reconciler, WorkMode,
-    },
     foundation::{HktContainer, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
     scheduler::JobId,
     sync::{SubtreeCommitResult, TreeScheduler},
+    tree::{
+        ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
+        HookContext, ReconcileItem, Reconciler,
+    },
 };
 
 pub(super) struct SyncReconciler<'a, 'batch, CP: Protocol> {
@@ -19,7 +19,7 @@ pub(super) struct SyncReconciler<'a, 'batch, CP: Protocol> {
 }
 
 impl<'a, 'batch, CP: Protocol> Reconciler<CP> for SyncReconciler<'a, 'batch, CP> {
-    fn build_context_mut(&mut self) -> BuildContext<'_> {
+    fn build_context(&mut self) -> BuildContext<'_> {
         BuildContext {
             hooks: self.hooks,
             element_context: self.host_context,
@@ -40,8 +40,8 @@ impl<'a, 'batch, CP: Protocol> Reconciler<CP> for SyncReconciler<'a, 'batch, CP>
 
 pub(crate) mod reconciler_private {
     use crate::{
-        tree::{ArcElementContextNode, ElementNode, Widget},
         foundation::Arc,
+        tree::{ArcElementContextNode, ElementNode, Widget},
     };
 
     use super::*;

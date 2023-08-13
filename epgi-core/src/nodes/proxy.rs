@@ -1,7 +1,7 @@
 use crate::foundation::{PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildRenderObject, ArcChildWidget, Element, PerformDryLayout, PerformLayerPaint, Render,
+    ArcChildWidget, ChildRenderObject, Element, PerformDryLayout, PerformLayerPaint,
     RenderObjectUpdateResult, Widget,
 };
 
@@ -31,7 +31,7 @@ pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + 
     #[inline(always)]
     fn perform_layout(
         _state: &Self::RenderState,
-        child: &ArcChildRenderObject<Self::Protocol>,
+        child: &dyn ChildRenderObject<Self::Protocol>,
         constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
@@ -49,7 +49,7 @@ pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + 
     #[inline(always)]
     fn perform_paint(
         _state: &Self::RenderState,
-        child: &ArcChildRenderObject<Self::Protocol>,
+        child: &dyn ChildRenderObject<Self::Protocol>,
         _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
@@ -57,7 +57,7 @@ pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + 
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
-        paint_ctx.paint_child(child.clone(), transform)
+        paint_ctx.paint_child(child, transform)
     }
 
     /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
@@ -104,7 +104,7 @@ where
     #[inline(always)]
     fn perform_layout(
         state: &Self::RenderState,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
+        child: &dyn ChildRenderObject<Self::ChildProtocol>,
         constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
@@ -119,7 +119,7 @@ where
     #[inline(always)]
     fn perform_paint(
         state: &Self::RenderState,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
+        child: &dyn ChildRenderObject<Self::ChildProtocol>,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,

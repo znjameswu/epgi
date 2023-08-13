@@ -19,8 +19,8 @@ use crate::{
 };
 
 use super::{
-    ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Hook, ReconcileItem,
-    Reconciler, Render, RenderCache, RenderObject, RenderObjectInner,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ReconcileItem, Reconciler,
+    Render, RenderCache, RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -113,7 +113,7 @@ pub trait SingleChildElement: Element<ArcRenderObject = Never> {
 //     const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
 // }
 
-pub trait ArcRenderObject<E>: Send + Sync + 'static
+pub trait ArcRenderObject<E>: Clone + Send + Sync + 'static
 where
     E: Element<ArcRenderObject = Self>,
 {
@@ -251,6 +251,7 @@ pub trait AnyElementNode:
 {
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode;
     fn push_job(&self, job_id: JobId);
+    fn render_object(&self) -> Result<ArcAnyRenderObject, &str>;
     // fn context(&self) -> &ArcElementContextNode;
 }
 
@@ -345,9 +346,27 @@ where
         todo!()
     }
 
-    // fn context(&self) -> &ArcElementContextNode {
-    //     &self.context
-    // }
+    fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
+        let GetRenderObject::RenderObject {
+            get_render_object, ..
+        } = E::ArcRenderObject::GET_RENDER_OBJECT
+        else {
+            return Err("Render object call should not be called on an Element type that does not associate with a render object");
+        };
+        let snapshot = self.snapshot.lock();
+        let Some(Mainline {
+            state:
+                Some(MainlineState::Ready {
+                    render_object: Some(render_object),
+                    ..
+                }),
+            ..
+        }) = snapshot.inner.mainline()
+        else {
+            return Err("Render object call should only be called on element nodes that are ready and attached");
+        };
+        Ok(get_render_object(render_object.clone()).as_arc_any_render_object())
+    }
 }
 
 pub fn create_root_element<R: Render>(

@@ -3,10 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use hashbrown::HashMap;
 
 use crate::{
-    tree::Update,
     foundation::{Arc, Asc, Aweak, InlinableUsizeVec, Provide, SyncMutex, TypeKey},
     scheduler::JobId,
     sync::ElementMark,
+    tree::Update,
 };
 
 use super::{AweakAnyElementNode, ProviderObject};

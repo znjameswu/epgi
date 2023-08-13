@@ -1,9 +1,9 @@
 use core::sync::atomic::{AtomicBool, Ordering::*};
 
 use crate::{
-    tree::{ArcElementContextNode, Element, ElementContextNode, ElementNode},
     foundation::PtrEq,
     scheduler::{AtomicLaneMask, LaneMask, LanePos},
+    tree::{ArcElementContextNode, Element, ElementContextNode, ElementNode},
 };
 
 pub(crate) struct ElementMark {

@@ -102,7 +102,7 @@ where
     ) -> Result<Self, (Self, BuildSuspendedError)> {
         match self.child.can_rebuild_with(widget.child.clone()) {
             Ok(item) => {
-                let [child] = reconciler.into_reconcile([item]);
+                let child = reconciler.into_reconcile_single(item);
                 Ok(Self {
                     child,
                     phantom: PhantomData,
@@ -110,7 +110,8 @@ where
             }
             Err((child, child_widget)) => {
                 reconciler.nodes_needing_unmount_mut().push(child);
-                let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+                let child =
+                    reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
                 Ok(Self {
                     child,
                     phantom: PhantomData,
@@ -125,7 +126,7 @@ where
         reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
     ) -> Result<Self, BuildSuspendedError> {
         let child_widget = widget.child.clone();
-        let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+        let child = reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
         Ok(Self {
             child,
             phantom: PhantomData,

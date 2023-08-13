@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use crate::tree::{ArcChildRenderObject, ArcParentLayer, LayerScope};
+use crate::tree::{ArcChildRenderObject, ArcParentLayer, ChildRenderObject};
 
-use super::Asc;
+use super::Parallel;
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
@@ -118,7 +118,13 @@ pub trait PaintContext {
 
     fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: ArcChildRenderObject<P>,
+        child: &dyn ChildRenderObject<P>,
+        transform: &P::Transform,
+    );
+
+    fn paint_children<P: Protocol<Canvas = Self::Canvas>>(
+        &mut self,
+        child: impl Parallel<Item = ArcChildRenderObject<P>>,
         transform: &P::Transform,
     );
 }

@@ -1,6 +1,6 @@
 use crate::{
-    tree::{Element, Render, RenderObject},
     foundation::{Canvas, Protocol},
+    tree::{Element, Render, RenderObject},
 };
 
 impl<R> RenderObject<R>

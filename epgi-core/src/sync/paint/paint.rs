@@ -1,12 +1,12 @@
 use crate::{
-    tree::{Element, PerformLayerPaint, Render, RenderObject},
     foundation::{Canvas, Identity, PaintContext, Protocol},
     sync::TreeScheduler,
+    tree::{ArcAnyLayer, Element, PerformLayerPaint, Render, RenderObject},
 };
 
 impl TreeScheduler {
-    pub(crate) fn perform_paint(&self) {
-        todo!()
+    pub(crate) fn perform_paint(&self) -> ArcAnyLayer {
+        self.root_render_object.repaint()
     }
 }
 
@@ -32,14 +32,13 @@ where
         };
 
         if let Some(PerformLayerPaint {
-            get_layer,
-            update_layer,
-            child,
+            get_layer_or_insert,
+            get_layer: _,
         }) = R::PERFORM_LAYER_PAINT
         {
             paint_ctx.with_layer(|transform_parent| {
                 if self.element_context.needs_repaint() {
-                    let layer = get_layer(
+                    let layer = get_layer_or_insert(
                         &mut inner_reborrow.render,
                         &layout_results.size,
                         transform,
@@ -50,14 +49,14 @@ where
                     .clone();
 
                     layer.clear();
-                    let child = child(&inner_reborrow.render);
+                    // let child = child(&inner_reborrow.render);
                     <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
                         layer.as_parent_layer_arc(),
                         |mut paint_scan| {
-                            child.paint_scan(&Identity::IDENTITY, &mut paint_scan);
+                            paint_scan.paint_children(inner_reborrow.render.children(),&Identity::IDENTITY);
                         },
                         |mut paint_ctx| {
-                            child.paint(&Identity::IDENTITY, &mut paint_ctx);
+                            paint_ctx.paint_children(inner_reborrow.render.children(),&Identity::IDENTITY);
                         },
                     );
                 }
@@ -71,10 +70,44 @@ where
             );
         }
     }
+
+    fn repaint(&self) -> ArcAnyLayer {
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        let Some(layout_results) = inner_reborrow
+            .cache
+            .as_ref()
+            .and_then(|x| x.layout_results(&self.element_context))
+        else {
+            panic!("Paint should only be called after layout has finished")
+        };
+        if let Some(PerformLayerPaint {
+            get_layer_or_insert: _,
+            get_layer,
+        }) = R::PERFORM_LAYER_PAINT
+        {
+            let layer = get_layer(&mut inner_reborrow.render).clone();
+
+            layer.clear();
+            <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
+                layer.clone().as_parent_layer_arc(),
+                |mut paint_scan| {
+                    paint_scan
+                        .paint_children(inner_reborrow.render.children(), &Identity::IDENTITY);
+                },
+                |mut paint_ctx| {
+                    paint_ctx.paint_children(inner_reborrow.render.children(), &Identity::IDENTITY);
+                },
+            );
+            layer.as_any_layer_arc()
+        } else {
+            panic!("Non-RepaintBoundary nodes should not be repainted")
+        }
+    }
 }
 
 pub(crate) mod paint_private {
-    use crate::foundation::Canvas;
+    use crate::{foundation::Canvas, tree::ArcAnyLayer};
 
     use super::*;
     pub trait ChildRenderObjectPaintExt<PP: Protocol> {
@@ -109,6 +142,19 @@ pub(crate) mod paint_private {
             paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
             self.paint(transform, paint_ctx)
+        }
+    }
+
+    pub trait AnyRenderObjectRepaintExt {
+        fn repaint(&self) -> ArcAnyLayer;
+    }
+
+    impl<R> AnyRenderObjectRepaintExt for RenderObject<R>
+    where
+        R: Render,
+    {
+        fn repaint(&self) -> ArcAnyLayer {
+            self.repaint()
         }
     }
 }

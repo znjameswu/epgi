@@ -5,11 +5,11 @@ use crate::{
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, BuildContext, Element, ElementNode, Widget, WorkContext, WorkHandle,
+    ArcWidget, BuildContext, Element, ElementNode, WorkContext, WorkHandle,
 };
 
-pub trait Reconciler<CP: Protocol> {
-    fn build_context_mut(&mut self) -> BuildContext<'_>;
+pub trait Reconciler<CP: Protocol>: Sized {
+    fn build_context(&mut self) -> BuildContext<'_>;
 
     fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>>;
 
@@ -17,6 +17,11 @@ pub trait Reconciler<CP: Protocol> {
         self,
         items: I,
     ) -> <I::HktContainer as HktContainer>::Container<ArcChildElementNode<CP>>;
+
+    fn into_reconcile_single(self, item: ReconcileItem<CP>) -> ArcChildElementNode<CP> {
+        let [child] = self.into_reconcile([item]);
+        child
+    }
 }
 
 pub enum ReconcileItem<CP: Protocol> {

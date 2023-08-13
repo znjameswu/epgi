@@ -3,9 +3,9 @@ use crate::foundation::{
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, PerformDryLayout,
-    PerformLayerPaint, ReconcileItem, Reconciler, Render, RenderObject, RenderObjectUpdateResult,
-    Widget,
+    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ChildRenderObject, Element,
+    PerformDryLayout, PerformLayerPaint, ReconcileItem, Reconciler, Render, RenderObject,
+    RenderObjectUpdateResult, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -32,7 +32,7 @@ pub trait SingleChildRenderObjectWidget:
 
     fn perform_layout(
         state: &Self::RenderState,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
+        child: &dyn ChildRenderObject<Self::ChildProtocol>,
         constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
     ) -> (
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
@@ -46,7 +46,7 @@ pub trait SingleChildRenderObjectWidget:
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
     fn perform_paint(
         state: &Self::RenderState,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
+        child: &dyn ChildRenderObject<Self::ChildProtocol>,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
@@ -95,12 +95,13 @@ where
     ) -> Result<Self, (Self, BuildSuspendedError)> {
         match self.child.can_rebuild_with(widget.child().clone()) {
             Ok(item) => {
-                let [child] = reconciler.into_reconcile([item]);
+                let child = reconciler.into_reconcile_single(item);
                 Ok(Self { child })
             }
             Err((child, child_widget)) => {
                 reconciler.nodes_needing_unmount_mut().push(child);
-                let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
+                let child =
+                    reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
                 Ok(Self { child })
             }
         }
@@ -112,8 +113,8 @@ where
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
     ) -> Result<Self, BuildSuspendedError> {
-        let [child] =
-            reconciler.into_reconcile([ReconcileItem::new_inflate(widget.child().clone())]);
+        let child =
+            reconciler.into_reconcile_single(ReconcileItem::new_inflate(widget.child().clone()));
         Ok(Self { child })
     }
 
@@ -187,7 +188,7 @@ where
         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         Self::LayoutMemo,
     ) {
-        W::perform_layout(&self.state, &self.child, constraints)
+        W::perform_layout(&self.state, self.child.as_ref(), constraints)
     }
 
     #[inline(always)]
@@ -200,6 +201,13 @@ where
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
-        W::perform_paint(&self.state, &self.child, size, transform, memo, paint_ctx)
+        W::perform_paint(
+            &self.state,
+            self.child.as_ref(),
+            size,
+            transform,
+            memo,
+            paint_ctx,
+        )
     }
 }

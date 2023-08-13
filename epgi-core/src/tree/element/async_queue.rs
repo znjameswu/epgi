@@ -1,11 +1,11 @@
 use crate::{
+    foundation::{Asc, InlinableUsizeVec, TryResult, TryResult::*, VecPushLastExt},
+    scheduler::LanePos,
+    sync::CommitBarrier,
     tree::{
         ArcElementContextNode, BuildResults, BuildSuspendResults, Element, Work, WorkContext,
         WorkHandle,
     },
-    foundation::{Asc, InlinableUsizeVec, TryResult, TryResult::*, VecPushLastExt},
-    scheduler::LanePos,
-    sync::CommitBarrier,
 };
 
 pub(crate) struct AsyncWorkQueue<E: Element> {

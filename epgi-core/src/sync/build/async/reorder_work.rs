@@ -1,8 +1,8 @@
 use crate::{
-    tree::{Element, ElementNode, Mainline},
     foundation::Arc,
     r#async::AsyncRebuild,
     sync::TreeScheduler,
+    tree::{Element, ElementNode, Mainline},
 };
 
 use super::cancel::CancelAsync;

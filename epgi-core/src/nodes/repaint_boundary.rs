@@ -1,17 +1,16 @@
 use crate::foundation::{
-    Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Key, Never, PaintContext, Protocol,
-    Provide, SyncMutex,
+    Arc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext, Protocol, Provide,
 };
 
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode, ArcLayerOf,
-    ArcParentLayer, Element, LayerPaint, LayerScope, Reconciler, Render, RenderObject,
-    RenderObjectUpdateResult, Widget,
+    Element, LayerPaint, LayerScope, Reconciler, Render, RenderObject, RenderObjectUpdateResult,
+    Widget,
 };
 
 #[derive(Debug)]
 pub struct RepaintBoundary<P: Protocol> {
-    child: [ArcChildWidget<P>; 1],
+    child: ArcChildWidget<P>,
 }
 
 impl<P> Widget for RepaintBoundary<P>
@@ -27,7 +26,7 @@ where
 
 #[derive(Clone)]
 pub struct RepaintBoundaryElement<P: Protocol> {
-    child: [ArcChildElementNode<P>; 1],
+    child: ArcChildElementNode<P>,
 }
 
 impl<P> Element for RepaintBoundaryElement<P>
@@ -62,7 +61,7 @@ where
     type ChildIter = [ArcChildElementNode<P>; 1];
 
     fn children(&self) -> Self::ChildIter {
-        self.child.clone()
+        [self.child.clone()]
     }
 
     type ArcRenderObject = Arc<RenderObject<RenderRepaintBoundary<P>>>;
@@ -70,7 +69,7 @@ where
 
 pub struct RenderRepaintBoundary<P: Protocol> {
     layer: Option<Arc<LayerScope<P::Canvas>>>,
-    child: [ArcChildRenderObject<P>; 1],
+    child: ArcChildRenderObject<P>,
 }
 
 impl<P> Render for RenderRepaintBoundary<P>
@@ -134,7 +133,7 @@ impl<P: Protocol> LayerPaint for RenderRepaintBoundary<P>
 where
     P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
 {
-    fn get_layer(
+    fn get_layer_or_insert(
         &mut self,
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
@@ -158,14 +157,7 @@ where
         }
     }
 
-    fn update_layer(
-        &mut self,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-    ) -> &ArcLayerOf<Self> {
+    fn get_layer(&mut self) -> &ArcLayerOf<Self> {
         todo!()
-    }
-
-    fn child(&self) -> &ArcChildRenderObject<<Self::Element as Element>::ChildProtocol> {
-        &self.child[0]
     }
 }

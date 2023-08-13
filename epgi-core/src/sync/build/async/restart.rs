@@ -1,8 +1,8 @@
 use crate::{
-    tree::{Element, ElementNode},
     foundation::Arc,
     scheduler::LanePos,
     sync::TreeScheduler,
+    tree::{Element, ElementNode},
 };
 
 use super::reorder_work::ReorderAsync;

@@ -1,6 +1,6 @@
 use epgi_core::{
-    tree::ArcChildRenderObject,
-    foundation::{Canvas, PaintContext, Protocol},
+    foundation::{Canvas, PaintContext, Parallel, Protocol},
+    tree::{ArcChildRenderObject, ChildRenderObject},
 };
 use peniko::{kurbo::Shape, BrushRef};
 
@@ -74,10 +74,18 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
 
     fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: ArcChildRenderObject<P>,
+        child: &dyn ChildRenderObject<P>,
         transform: &P::Transform,
     ) {
         child.paint(transform, self)
+    }
+
+    fn paint_children<P: Protocol<Canvas = Self::Canvas>>(
+        &mut self,
+        child: impl Parallel<Item = ArcChildRenderObject<P>>,
+        transform: &P::Transform,
+    ) {
+        todo!()
     }
 }
 
@@ -103,7 +111,15 @@ impl<'a> PaintContext for VelloPaintScanner<'a> {
 
     fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: ArcChildRenderObject<P>,
+        child: &dyn ChildRenderObject<P>,
+        transform: &P::Transform,
+    ) {
+        todo!()
+    }
+
+    fn paint_children<P: Protocol<Canvas = Self::Canvas>>(
+        &mut self,
+        child: impl Parallel<Item = ArcChildRenderObject<P>>,
         transform: &P::Transform,
     ) {
         todo!()

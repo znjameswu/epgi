@@ -4,8 +4,8 @@ use hashbrown::{HashMap, HashSet};
 use smallvec::smallvec;
 
 use crate::{
-    tree::AweakElementContextNode,
     foundation::{Asc, Inlinable64Vec, InlinableUsizeVec, MpscQueue, SyncMutex},
+    tree::AweakElementContextNode,
 };
 
 use super::{BatchConf, BatchId, JobBuilder, JobConf, JobId, JobPriority};

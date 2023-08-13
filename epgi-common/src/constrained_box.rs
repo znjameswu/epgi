@@ -3,7 +3,7 @@ use std::sync::Arc;
 use epgi_2d::{BoxConstraints, BoxProtocol, BoxSize};
 use epgi_core::{
     nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{ArcChildRenderObject, ArcChildWidget, Element, RenderObjectUpdateResult, Widget},
+    tree::{ArcChildWidget, ChildRenderObject, Element, RenderObjectUpdateResult, Widget},
 };
 
 #[derive(Debug)]
@@ -49,7 +49,7 @@ impl ProxyWidget for ConstrainedBox {
 
     fn perform_layout(
         state: &BoxConstraints,
-        child: &ArcChildRenderObject<BoxProtocol>,
+        child: &dyn ChildRenderObject<BoxProtocol>,
         constraints: &BoxConstraints,
     ) -> (BoxSize, ()) {
         let child_constraints = state.enforce(constraints);

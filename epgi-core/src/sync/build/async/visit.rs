@@ -1,6 +1,6 @@
 use crate::{
-    tree::{Element, ElementNode},
     foundation::Arc,
+    tree::{Element, ElementNode},
 };
 
 impl<E> ElementNode<E>

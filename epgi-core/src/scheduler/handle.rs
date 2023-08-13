@@ -2,22 +2,19 @@ use std::{
     any::Any,
     cell::UnsafeCell,
     mem::MaybeUninit,
-    num::NonZeroU64,
     sync::atomic::{AtomicBool, Ordering::*},
 };
 
 use hashbrown::HashSet;
-use portable_atomic::AtomicU64;
 
 use crate::{
+    foundation::{
+        bounded_channel, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
+    },
+    sync::CommitBarrier,
     tree::{
         AweakAnyElementNode, AweakAnyRenderObject, AweakElementContextNode, WorkContext, WorkHandle,
     },
-    foundation::{
-        bounded_channel, Arc, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
-        SyncRwLock,
-    },
-    sync::{CommitBarrier, TreeScheduler},
 };
 
 use super::{JobBuilder, SchedulerTask};

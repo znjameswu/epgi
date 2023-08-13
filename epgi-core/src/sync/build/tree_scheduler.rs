@@ -1,10 +1,7 @@
 use crate::{
-    tree::{
-        ArcAnyElementNode, ArcAnyRenderObject, AweakAnyElementNode, AweakElementContextNode,
-        ElementNode, RenderObject,
-    },
-    foundation::{Arc, Asc, Protocol},
-    scheduler::{BatchConf, BatchResult, JobBatcher, LaneMask, LanePos},
+    foundation::Asc,
+    scheduler::{BatchConf, BatchResult, LaneMask, LanePos},
+    tree::ArcAnyElementNode,
 };
 
 use super::{CommitBarrier, CommitBarrierInner};
@@ -29,24 +26,22 @@ impl LaneData {
     }
 }
 
-pub struct TreeScheduler {
+pub(in crate::sync) struct LaneScheduler {
     sync_lane: Option<LaneData>,
     async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
     queued_batches: Vec<Asc<BatchConf>>,
-    root_element: ArcAnyElementNode,
 }
 
-impl TreeScheduler {
-    pub fn new(root_element: ArcAnyElementNode) -> Self {
+impl LaneScheduler {
+    pub(crate) fn new() -> Self {
         Self {
             sync_lane: None,
             async_lanes: [(); LaneMask::ASYNC_LANE_COUNT].map(|_| None),
             queued_batches: Default::default(),
-            root_element,
         }
     }
 
-    pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
+    pub(crate) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
         let LanePos::Async(pos) = lane_pos else {
             panic!("Only async lanes have commit barriers");
         };
@@ -56,7 +51,11 @@ impl TreeScheduler {
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
     }
 
-    pub(crate) fn apply_batcher_result(&mut self, result: BatchResult) {
+    pub(crate) fn apply_batcher_result(
+        &mut self,
+        result: BatchResult,
+        root_element: &ArcAnyElementNode,
+    ) {
         debug_assert!(
             self.sync_lane.is_none(),
             "Batcher should only be run after the previous sync batch finishes"
@@ -72,7 +71,7 @@ impl TreeScheduler {
             for async_lane in self.async_lanes.iter_mut() {
                 if let Some(async_lane_data) = async_lane {
                     if expired_batches.contains(&async_lane_data.batch.id) {
-                        self.root_element
+                        root_element
                             .clone()
                             .remove_async_work_and_lane_in_subtree(async_lane_data.lane_pos);
                         *async_lane = None;
@@ -104,33 +103,5 @@ impl TreeScheduler {
                 todo!()
             }
         }
-    }
-
-    pub(crate) fn commit_completed_async_batches(&mut self, job_batcher: &mut JobBatcher) {
-        for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
-            let Some(async_lane) = async_lane else {
-                continue;
-            };
-            if async_lane.barrier_inner.is_empty() {
-                todo!("Commit async lane");
-                job_batcher.remove_commited_batch(&async_lane.batch.id);
-            }
-        }
-    }
-
-    pub(crate) fn dispatch_sync_batch(&mut self) {
-        todo!()
-    }
-
-    pub(crate) fn dispatch_async_batches(&self) {
-        todo!()
-    }
-
-    pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {
-        node.upgrade().map(|node| node.reorder_async_work(self));
-    }
-
-    pub(crate) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
-        todo!()
     }
 }

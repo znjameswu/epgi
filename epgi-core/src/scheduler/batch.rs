@@ -1,8 +1,8 @@
 use hashbrown::HashSet;
 
 use crate::{
-    tree::AweakElementContextNode,
     foundation::{Inlinable64Vec, PtrEq},
+    tree::AweakElementContextNode,
 };
 
 use super::{JobId, JobPriority};
