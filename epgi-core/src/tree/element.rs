@@ -372,18 +372,19 @@ where
 pub fn create_root_element<R: Render>(
     widget: <R::Element as Element>::ArcWidget,
     element: R::Element,
+    create_render: impl FnOnce(&ArcElementContextNode) -> R,
     hooks: Hooks,
     constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<R::Element>> {
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_no_provide(node.clone() as _, None));
-        let render = R::try_create_render_object_from_element(&element, &widget)
-            .expect("Root render object creation should always be successfully");
+        // let render = R::try_create_render_object_from_element(&element, &widget)
+        //     .expect("Root render object creation should always be successfully");
         let render_object = Arc::new(RenderObject {
             element_context: element_context.clone(),
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
-                render,
+                render: create_render(&element_context),
             }),
         });
         ElementNode {

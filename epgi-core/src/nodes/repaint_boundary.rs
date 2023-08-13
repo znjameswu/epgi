@@ -140,7 +140,7 @@ where
         memo: &Self::LayoutMemo,
         element_context: &ArcElementContextNode,
         transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> &ArcLayerOf<Self> {
+    ) -> ArcLayerOf<Self> {
         match &self.layer {
             Some(layer) => todo!(),
             None => {
@@ -151,13 +151,14 @@ where
                         transform_parent,
                     ),
                 );
-                self.layer = Some(Arc::new(layer));
-                todo!()
+                let layer = Arc::new(layer);
+                self.layer = Some(layer.clone());
+                layer
             }
         }
     }
 
-    fn get_layer(&mut self) -> &ArcLayerOf<Self> {
-        todo!()
+    fn get_layer(&mut self) -> Option<ArcLayerOf<Self>> {
+        self.layer.clone().map(|x| x as _)
     }
 }

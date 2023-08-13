@@ -144,8 +144,8 @@ pub trait LayerPaint: Render {
         memo: &Self::LayoutMemo,
         element_context: &ArcElementContextNode,
         transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> &ArcLayerOf<Self>;
-    fn get_layer(&mut self) -> &ArcLayerOf<Self>;
+    ) -> ArcLayerOf<Self>;
+    fn get_layer(&mut self) -> Option<ArcLayerOf<Self>>;
 }
 pub struct PerformLayerPaint<R: Render> {
     pub get_layer_or_insert: for<'a> fn(
@@ -155,10 +155,10 @@ pub struct PerformLayerPaint<R: Render> {
         memo: &R::LayoutMemo,
         element_context: &ArcElementContextNode,
         transform_parent: &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> &'a ArcLayerOf<R>,
+    ) -> ArcLayerOf<R>,
     pub get_layer: for<'a> fn(
         render: &'a mut R,
-    ) -> &'a ArcLayerOf<R>,
+    ) -> Option<ArcLayerOf<R>>,
 }
 
 pub struct RenderObject<R: Render> {

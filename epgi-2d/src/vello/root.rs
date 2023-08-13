@@ -5,16 +5,15 @@ use epgi_core::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
-        ArcLayerOf, BuildContext, DryLayout, Element, LayerPaint, ReconcileItem, Reconciler,
-        Render, RenderObject, Widget,
+        ArcLayerOf, BuildContext, DryLayout, Element, LayerPaint, LayerScope, ReconcileItem,
+        Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
     },
 };
 
-use crate::BoxProtocol;
+use crate::{Affine2dCanvas, BoxProtocol};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
-    // pub child: Option<ArcChildWidget<BoxProtocol>>,
 }
 
 impl std::fmt::Debug for RootView {
@@ -29,7 +28,7 @@ impl Widget for RootView {
     type Element = RootViewElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
-        todo!()
+        self
     }
 }
 
@@ -97,14 +96,15 @@ impl Element for RootViewElement {
     type ChildIter = Option<ArcChildElementNode<BoxProtocol>>;
 
     fn children(&self) -> Self::ChildIter {
-        todo!()
+        self.child.clone()
     }
 
     type ArcRenderObject = Arc<RenderObject<RenderRootView>>;
 }
 
 pub struct RenderRootView {
-    child: Option<ArcChildRenderObject<BoxProtocol>>,
+    pub layer: Asc<LayerScope<Affine2dCanvas>>,
+    pub child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
 impl Render for RenderRootView {
@@ -113,7 +113,7 @@ impl Render for RenderRootView {
     type ChildIter = Option<ArcChildRenderObject<BoxProtocol>>;
 
     fn children(&self) -> Self::ChildIter {
-        todo!()
+        self.child.clone()
     }
 
     fn try_create_render_object_from_element(
@@ -121,17 +121,34 @@ impl Render for RenderRootView {
         widget: &<Self::Element as Element>::ArcWidget,
     ) -> Option<Self> {
         todo!()
+        // Some(Self {
+        //     layer: Asc::new(LayerScope::new_structured(
+        //         element_context,
+        //         Affine2d::IDENTITY,
+        //     )),
+        //     child: element.child.map(|child| {
+        //         child
+        //             .get_current_subtree_render_object()
+        //             .expect("Root ElementNode should never receive suspense event")
+        //     }),
+        // })
     }
 
     fn update_render_object(
         &mut self,
-        widget: &<Self::Element as Element>::ArcWidget,
-    ) -> epgi_core::tree::RenderObjectUpdateResult {
-        todo!()
+        _widget: &<Self::Element as Element>::ArcWidget,
+    ) -> RenderObjectUpdateResult {
+        RenderObjectUpdateResult::None
     }
+    const NOOP_UPDATE_RENDER_OBJECT: bool = true;
 
     fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
-        todo!()
+        self.child = element.child.as_ref().map(|child| {
+            child
+                .get_current_subtree_render_object()
+                .expect("Root ElementNode should never receive suspense event")
+        });
+        Ok(())
     }
 
     type LayoutMemo = ();
@@ -187,11 +204,11 @@ impl LayerPaint for RenderRootView {
         memo: &Self::LayoutMemo,
         element_context: &ArcElementContextNode,
         transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> &ArcLayerOf<Self> {
+    ) -> ArcLayerOf<Self> {
         unimplemented!("Root layer design has not been finalized")
     }
 
-    fn get_layer(&mut self) -> &ArcLayerOf<Self> {
-        todo!()
+    fn get_layer(&mut self) -> Option<ArcLayerOf<Self>> {
+        Some(self.layer.clone() as _)
     }
 }

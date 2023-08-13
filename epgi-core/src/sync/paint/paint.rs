@@ -74,19 +74,21 @@ where
     fn repaint(&self) -> ArcAnyLayer {
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let Some(layout_results) = inner_reborrow
-            .cache
-            .as_ref()
-            .and_then(|x| x.layout_results(&self.element_context))
-        else {
-            panic!("Paint should only be called after layout has finished")
-        };
+        // let Some(layout_results) = inner_reborrow
+        //     .cache
+        //     .as_ref()
+        //     .and_then(|x| x.layout_results(&self.element_context))
+        // else {
+        //     panic!("Repaint should only be called after layout has finished")
+        // };
         if let Some(PerformLayerPaint {
             get_layer_or_insert: _,
             get_layer,
         }) = R::PERFORM_LAYER_PAINT
         {
-            let layer = get_layer(&mut inner_reborrow.render).clone();
+            let layer = get_layer(&mut inner_reborrow.render)
+                .expect("Repaint can only be called on nodes with an attached layer")
+                .clone();
 
             layer.clear();
             <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
