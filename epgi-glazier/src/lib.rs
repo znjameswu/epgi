@@ -4,15 +4,18 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-use epgi_2d::{BoxConstraints, BoxProtocol, RenderRootView, RootView, RootViewElement};
+use epgi_2d::{
+    BoxConstraints, BoxProtocol, BoxProvider, RenderRootView, RootView, RootViewElement,
+};
 use epgi_common::ConstrainedBox;
 use epgi_core::{
-    tree::{create_root_element, ArcChildWidget, Element, Function, Hooks, ReconcileItem},
     foundation::SyncMutex,
     hooks::{SetState, StateHook},
+    nodes::Function,
     scheduler::{
         get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, TreeScheduler,
     },
+    tree::{create_root_element, ArcChildWidget, Element, Hooks, ReconcileItem},
 };
 pub use state::*;
 
@@ -83,7 +86,13 @@ pub fn run_app(app: ArcChildWidget<BoxProtocol>) {
         let child = child.clone();
         let (frame, set_frame) = ctx.use_state_with(FrameInfo::now);
         ctx.use_effect(move || *frame_binding.lock() = Some(set_frame));
-        child
+        BoxProvider::value_inner(
+            frame.frame_count,
+            BoxProvider::value_inner(
+                frame.system_time,
+                BoxProvider::value_inner(frame.instant, child),
+            ),
+        )
     }));
 
     // Bind the window size.
