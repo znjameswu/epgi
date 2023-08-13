@@ -1,6 +1,6 @@
 use event_listener::EventListener;
 
-use crate::common::SuspendWaker;
+use crate::tree::SuspendWaker;
 
 pub enum Error {
     Suspended,

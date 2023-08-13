@@ -15,7 +15,7 @@ use vello::{
 };
 
 use epgi_core::{
-    common::LayerScope,
+    tree::LayerScope,
     foundation::{Arc, Asc},
     scheduler::get_current_scheduler,
 };

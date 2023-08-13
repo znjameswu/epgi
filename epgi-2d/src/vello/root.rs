@@ -1,5 +1,5 @@
 use epgi_core::{
-    common::{
+    tree::{
         create_root_element, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
         BuildContext, DryLayout, Element, ElementNode, GetSuspense, LayerScope, ReconcileItem,
         Reconciler, Render, RenderObject, Widget,
@@ -36,7 +36,7 @@ impl Render for RenderRootView {
     fn update_render_object(
         &mut self,
         widget: &<Self::Element as Element>::ArcWidget,
-    ) -> epgi_core::common::RenderObjectUpdateResult {
+    ) -> epgi_core::tree::RenderObjectUpdateResult {
         todo!()
     }
 
@@ -56,7 +56,7 @@ impl Render for RenderRootView {
         unreachable!()
     }
 
-    const PERFORM_DRY_LAYOUT: Option<epgi_core::common::PerformDryLayout<Self>> =
+    const PERFORM_DRY_LAYOUT: Option<epgi_core::tree::PerformDryLayout<Self>> =
         Some(<Self as DryLayout>::PERFORM_DRY_LAYOUT);
 
     fn perform_paint(

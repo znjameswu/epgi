@@ -9,18 +9,18 @@ pub use provider::*;
 pub use snapshot::*;
 
 use crate::{
-    common::RenderObjectUpdateResult,
     foundation::{
         Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol, Provide,
         SyncMutex, TypeKey,
     },
+    nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
+    tree::RenderObjectUpdateResult,
 };
 
 use super::{
     ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair, Hook, ReconcileItem,
-    Reconciler, Render, RenderCache, RenderObject, RenderObjectInner, RenderSuspense, Suspense,
-    SuspenseElement,
+    Reconciler, Render, RenderCache, RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;

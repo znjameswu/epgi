@@ -1,9 +1,12 @@
 use crate::foundation::{PaintContext, Protocol};
 
-use super::{
+use crate::tree::{
     ArcChildRenderObject, ArcChildWidget, Element, PerformDryLayout, PerformLayerPaint, Render,
-    RenderObjectUpdateResult, SingleChildRenderObject, SingleChildRenderObjectElement,
-    SingleChildRenderObjectWidget, Widget,
+    RenderObjectUpdateResult, Widget,
+};
+
+use super::{
+    SingleChildRenderObject, SingleChildRenderObjectElement, SingleChildRenderObjectWidget,
 };
 
 pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + Sized {

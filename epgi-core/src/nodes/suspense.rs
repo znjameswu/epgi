@@ -1,7 +1,7 @@
 use crate::{
-    common::{
+    tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, GetSuspense,
-        Reconciler, Render, RenderObject, Widget,
+        Reconciler, Render, RenderObject, Widget, RenderObjectUpdateResult,
     },
     foundation::{
         Arc, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key, Never,
@@ -98,7 +98,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn update_render_object(
         &mut self,
         widget: &<Self::Element as Element>::ArcWidget,
-    ) -> super::RenderObjectUpdateResult {
+    ) -> RenderObjectUpdateResult {
         todo!()
     }
 

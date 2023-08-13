@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use hashbrown::HashMap;
 
 use crate::{
-    common::Update,
+    tree::Update,
     foundation::{Arc, Asc, Aweak, InlinableUsizeVec, Provide, SyncMutex, TypeKey},
     scheduler::JobId,
     sync::ElementMark,

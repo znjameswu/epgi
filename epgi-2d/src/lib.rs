@@ -8,7 +8,7 @@ pub use r#box::*;
 pub use text::*;
 pub use vello::*;
 
-use epgi_core::{common::ArcParentLayer, foundation::Canvas};
+use epgi_core::{tree::ArcParentLayer, foundation::Canvas};
 
 pub type Affine2d = vello_encoding::Transform;
 

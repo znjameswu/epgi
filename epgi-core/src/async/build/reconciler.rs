@@ -1,5 +1,5 @@
 use crate::{
-    common::{
+    tree::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
         HookContext, Hooks, ReconcileItem, Reconciler, WorkContext, WorkHandle, WorkMode,
     },
@@ -42,7 +42,7 @@ where
 
 pub(crate) mod reconciler_private {
     use crate::{
-        common::{
+        tree::{
             ArcElementContextNode, ChildElementWidgetPair, ElementNode, Widget, Work, WorkContext,
             WorkHandle,
         },

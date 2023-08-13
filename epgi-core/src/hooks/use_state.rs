@@ -1,7 +1,7 @@
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
-    common::{AweakElementContextNode, BuildContext, Hook, Update},
+    tree::{AweakElementContextNode, BuildContext, Hook, Update},
     foundation::Arc,
     scheduler::{JobBuilder, JobId},
 };

@@ -6,7 +6,7 @@
 /// 3. Cancel: Remove this lane in the **descendants**. For the subtree root, we first purge this lane and then put it into backqueue.
 /// We do not try to requeue anything in the subtree root.
 use crate::{
-    common::{
+    tree::{
         AsyncDequeueResult, AsyncInflating, AsyncOutput, AsyncQueueCurrentEntry, AsyncStash,
         Element, ElementNode, ElementSnapshot, ElementSnapshotInner, Mainline, SubscriptionDiff,
     },

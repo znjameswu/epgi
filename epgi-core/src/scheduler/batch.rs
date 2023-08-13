@@ -1,7 +1,7 @@
 use hashbrown::HashSet;
 
 use crate::{
-    common::AweakElementContextNode,
+    tree::AweakElementContextNode,
     foundation::{Inlinable64Vec, PtrEq},
 };
 

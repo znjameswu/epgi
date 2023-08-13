@@ -4,7 +4,7 @@ use hashbrown::{HashMap, HashSet};
 use smallvec::smallvec;
 
 use crate::{
-    common::AweakElementContextNode,
+    tree::AweakElementContextNode,
     foundation::{Asc, Inlinable64Vec, InlinableUsizeVec, MpscQueue, SyncMutex},
 };
 

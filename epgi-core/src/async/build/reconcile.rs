@@ -2,7 +2,7 @@ use futures::stream::Aborted;
 use hashbrown::HashMap;
 
 use crate::{
-    common::{
+    tree::{
         ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildContext, BuildResults,
         BuildSuspendResults, Element, ElementContextNode, ElementNode, ElementSnapshot,
         ElementSnapshotInner, HookContext, Hooks, Mainline, ProviderElementMap, SubscriptionDiff,
@@ -202,7 +202,7 @@ where
                                 .mark_secondary_root(work.context.lane_pos)
                         }
                     }
-                    use crate::common::MainlineState::*;
+                    use crate::tree::MainlineState::*;
                     let rebuild = match state {
                         InflateSuspended { last_hooks, waker } => AsyncRebuild {
                             handle,

@@ -1,15 +1,13 @@
 use std::any::TypeId;
 
 use crate::{
-    common::ReconcileItem,
     foundation::{
         Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, Protocol, Provide,
     },
-};
-
-use super::{
-    ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, Element,
-    Reconciler, SingleChildElement, Widget, WidgetExt,
+    tree::{
+        ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, Element,
+        ReconcileItem, Reconciler, SingleChildElement, Widget, WidgetExt,
+    },
 };
 
 // ComponentWidget and Consumer are separated due to the virtual call overhead in get_consumed_types

@@ -3,9 +3,10 @@ use crate::foundation::{
     Provide, SyncMutex,
 };
 
-use super::{
+use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode, ArcLayerOf,
-    ArcParentLayer, Element, LayerPaint, LayerScope, Reconciler, Render, RenderObject, Widget,
+    ArcParentLayer, Element, LayerPaint, LayerScope, Reconciler, Render, RenderObject,
+    RenderObjectUpdateResult, Widget,
 };
 
 #[derive(Debug)]
@@ -94,7 +95,7 @@ where
     fn update_render_object(
         &mut self,
         widget: &<Self::Element as Element>::ArcWidget,
-    ) -> super::RenderObjectUpdateResult {
+    ) -> RenderObjectUpdateResult {
         todo!()
     }
 

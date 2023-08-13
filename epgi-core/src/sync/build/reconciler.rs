@@ -1,5 +1,5 @@
 use crate::{
-    common::{
+    tree::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
         HookContext, Hooks, ReconcileItem, Reconciler, WorkMode,
     },
@@ -40,7 +40,7 @@ impl<'a, 'batch, CP: Protocol> Reconciler<CP> for SyncReconciler<'a, 'batch, CP>
 
 pub(crate) mod reconciler_private {
     use crate::{
-        common::{ArcElementContextNode, ElementNode, Widget},
+        tree::{ArcElementContextNode, ElementNode, Widget},
         foundation::Arc,
     };
 

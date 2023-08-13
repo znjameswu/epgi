@@ -1,5 +1,5 @@
 use crate::{
-    common::{BuildContext, Hook},
+    tree::{BuildContext, Hook},
     foundation::{Asc, SyncMutex},
 };
 

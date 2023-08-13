@@ -1,7 +1,7 @@
 use hashbrown::HashSet;
 
 use crate::{
-    common::{
+    tree::{
         AweakAnyRenderObject, Element, PerformDryLayout, Render, RenderCache, RenderObject,
         RenderObjectInner,
     },
@@ -124,7 +124,7 @@ where
 }
 
 pub(crate) mod layout_private {
-    use crate::common::RenderObject;
+    use crate::tree::RenderObject;
 
     use super::*;
 

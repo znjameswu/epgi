@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use epgi_2d::{BoxConstraints, BoxProtocol, BoxSize};
-use epgi_core::common::{
-    ArcChildRenderObject, ArcChildWidget, Element, ProxyWidget, RenderObjectUpdateResult,
-    SingleChildRenderObjectElement, Widget,
+use epgi_core::{
+    nodes::{ProxyWidget, SingleChildRenderObjectElement},
+    tree::{ArcChildRenderObject, ArcChildWidget, Element, RenderObjectUpdateResult, Widget},
 };
 
 #[derive(Debug)]

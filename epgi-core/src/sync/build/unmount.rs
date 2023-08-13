@@ -1,5 +1,5 @@
 use crate::{
-    common::{Element, ElementNode, SuspendWaker},
+    tree::{Element, ElementNode, SuspendWaker},
     foundation::{Arc, Parallel},
     scheduler::get_current_scheduler,
 };

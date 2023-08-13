@@ -3,7 +3,7 @@ use std::sync::atomic::{Ordering, Ordering::*};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    common::{AweakElementContextNode, Update},
+    tree::{AweakElementContextNode, Update},
     foundation::{Inlinable64Vec, PtrEq},
 };
 

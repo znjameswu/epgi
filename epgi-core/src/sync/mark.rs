@@ -1,7 +1,7 @@
 use core::sync::atomic::{AtomicBool, Ordering::*};
 
 use crate::{
-    common::{ArcElementContextNode, Element, ElementContextNode, ElementNode},
+    tree::{ArcElementContextNode, Element, ElementContextNode, ElementNode},
     foundation::PtrEq,
     scheduler::{AtomicLaneMask, LaneMask, LanePos},
 };
