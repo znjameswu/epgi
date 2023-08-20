@@ -433,6 +433,10 @@ Relaxed lane marking with no unmarking
 Layout is different from build, so the impl strategy from build tree walk does not work here:
 1. Layout visit process (child layout) is offloaded to user specified logic. The users may request a specific sequential layout order instead of parallel independent layout. The users may also retrieve child layout result (sizes) midway.
 2. A single render object could perform many layout attempts during a single layout phase. Such layout attempts will be multiplicative when going deeper into the tree and is unpredictable in nature. From a non-root render object, it has no way of knowing if a speicific layout visit will be the last.
+    
+Edit: 
+1. With lane marking, we CAN go deeper to visit all marked nodes, but we cannot tell if we SHOULD go deeper in the current layout pass (which may only be a probing pass).
+2. ~~With lane marking, if we choose to not go deeper beyond necessary, we cannot tell if a node has been relayout-ed in the last layout scope.~~
 
 However, layout still prefers level-ordering.
 

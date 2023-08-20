@@ -10,10 +10,10 @@ use crate::{
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildResults,
-        BuildSuspendResults, Element, ElementContextNode, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, HookContext, Hooks, Mainline, ProviderElementMap, SubscriptionDiff,
-        Work, WorkContext, WorkHandle,
+        ArcElementContextNode, ArcRenderObject, AsyncInflating, AsyncOutput, AsyncStash,
+        BuildResults, BuildSuspendResults, Element, ElementContextNode, ElementNode,
+        ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, ProviderElementMap,
+        SubscriptionDiff, Work, WorkContext, WorkHandle,
     },
 };
 
@@ -48,7 +48,7 @@ where
     pub(super) fn new_async_uninflated(
         widget: E::ArcWidget,
         work_context: Asc<WorkContext>,
-        parent_context: &ArcElementContextNode,
+        parent_context: ArcElementContextNode,
         handle: WorkHandle,
         barrier: CommitBarrier,
     ) -> Arc<Self> {
@@ -63,7 +63,8 @@ where
         Arc::new_cyclic(move |node| Self {
             context: Arc::new(ElementContextNode::new_no_provide(
                 node.clone() as _,
-                Some(parent_context),
+                parent_context,
+                E::ArcRenderObject::GET_RENDER_OBJECT.is_some(),
             )),
             snapshot: SyncMutex::new(ElementSnapshot {
                 widget,

@@ -101,7 +101,7 @@ pub(crate) mod reconciler_private {
         fn inflate_async(
             self: Arc<Self>,
             work_context: Asc<WorkContext>,
-            parent_context: &ArcElementContextNode,
+            parent_context: ArcElementContextNode,
             barrier: CommitBarrier,
             handle: WorkHandle,
         ) -> Box<dyn ChildElementWidgetPair<PP>>;
@@ -114,7 +114,7 @@ pub(crate) mod reconciler_private {
         fn inflate_async(
             self: Arc<Self>,
             work_context: Asc<WorkContext>,
-            parent_context: &ArcElementContextNode,
+            parent_context: ArcElementContextNode,
             barrier: CommitBarrier,
             handle: WorkHandle,
         ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as Element>::ParentProtocol>>

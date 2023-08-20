@@ -10,7 +10,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcElementContextNode, ArcRenderObject, AsyncWorkQueue, Element,
         ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, GetRenderObject,
-        HookContext, Hooks, Mainline, MainlineState,
+        HookContext, Hooks, Mainline, MainlineState, RenderObjectUpdateResult,
     },
 };
 
@@ -232,7 +232,7 @@ where
     // Reconciler needs this
     pub(in super::super) fn inflate_node_sync<'a, 'batch>(
         widget: &E::ArcWidget,
-        parent_context: &ArcElementContextNode,
+        parent_context: ArcElementContextNode,
         job_ids: &'a SmallSet<JobId>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
@@ -243,9 +243,14 @@ where
                     weak.clone() as _,
                     parent_context,
                     get_provided_value(&widget),
+                    E::ArcRenderObject::GET_RENDER_OBJECT.is_some(),
                 )
             } else {
-                ElementContextNode::new_no_provide(weak.clone() as _, Some(parent_context))
+                ElementContextNode::new_no_provide(
+                    weak.clone() as _,
+                    parent_context,
+                    E::ArcRenderObject::GET_RENDER_OBJECT.is_some(),
+                )
             };
             ElementNode {
                 context: Arc::new(context),
@@ -463,14 +468,14 @@ where
                         render_object.is_none(),
                         "ComponentElement should not have a render object"
                     );
-                    (
+                    return (
                         MainlineState::Ready {
                             hooks: hooks_iter.hooks,
                             render_object,
                             element,
                         },
                         subtree_results,
-                    )
+                    );
                 }
                 GetRenderObject::RenderObject {
                     get_suspense: None,
@@ -481,34 +486,44 @@ where
                     ..
                 } => {
                     let mut suspended = subtree_results == SubtreeCommitResult::Suspended;
-                    if let Some(render_object) = render_object.as_ref() {
-                        let should_update_render_object =
-                            !suspended && subtree_results == SubtreeCommitResult::NewRenderObject;
-                        let should_lock = (should_update_render_object
-                            && try_update_render_object_children.is_some())
-                            || (!suspended && update_render_object.is_some());
-                        if should_lock {
-                            render_object.with_inner(|render, element_context| {
-                                if should_update_render_object {
-                                    if let Some(try_update_render_object_children) =
-                                        try_update_render_object_children
-                                    {
+                    if !suspended {
+                        if let Some(render_object) = render_object.as_ref() {
+                            let should_update_render_object_children = subtree_results
+                                == SubtreeCommitResult::NewRenderObject
+                                && try_update_render_object_children.is_some();
+                            let can_update_render_object = update_render_object.is_some();
+                            if should_update_render_object_children || can_update_render_object {
+                                render_object.lock_with(|render, context| {
+                                    if should_update_render_object_children {
+                                        let try_update_render_object_children =
+                                            try_update_render_object_children
+                                                .expect("Impossible to fail");
                                         let res =
                                             try_update_render_object_children(render, &element);
-                                        suspended |= res.is_err();
+                                        if res.is_ok() {
+                                            context.mark_needs_layout();
+                                        } else {
+                                            suspended = true;
+                                        }
                                     }
-                                }
-                                if !suspended {
-                                    if let Some(update_render_object) = update_render_object {
+                                    if !suspended && can_update_render_object {
+                                        let update_render_object =
+                                            update_render_object.expect("Impossible to fail");
                                         let result = update_render_object(render, widget);
-                                        todo!("Mark needs layout")
+                                        use RenderObjectUpdateResult::*;
+                                        match result {
+                                            MarkNeedsLayout => context.mark_needs_layout(),
+                                            MarkNeedsPaint => context.mark_needs_paint(),
+                                            None => {}
+                                        }
                                     }
-                                }
-                            })
+                                })
+                            }
+                        } else {
+                            render_object =
+                                try_create_render_object(&element, widget, &self.context);
+                            suspended = render_object.is_none();
                         }
-                    } else if !suspended {
-                        render_object = try_create_render_object(&element, widget, &self.context);
-                        suspended = render_object.is_none();
                     }
                     if suspended {
                         (&mut render_object)
@@ -516,25 +531,25 @@ where
                             .map(|render_object| {
                                 if let Some(detach_render_object) = detach_render_object {
                                     render_object
-                                        .with_inner(|render, _| detach_render_object(render))
+                                        .lock_with(|render, _| detach_render_object(render))
                                 }
                             });
                     }
                     if !suspended {
                         debug_assert!(render_object.is_some(), "RenderObjectElement that are not suspended should attach a render object")
                     }
-                    (
+                    return (
                         MainlineState::Ready {
                             hooks: hooks_iter.hooks,
                             render_object,
                             element,
                         },
-                        if suspended {
+                        if !suspended {
                             SubtreeCommitResult::NoUpdate
                         } else {
                             SubtreeCommitResult::Suspended
                         },
-                    )
+                    );
                 }
                 GetRenderObject::RenderObject {
                     get_suspense: Some(get_suspense),
@@ -557,7 +572,7 @@ where
                         (None, SubtreeCommitResult::Suspended) => {
                             let (node, subtree_results) = rayon::scope(|scope| {
                                 suspense.fallback_widget.clone().inflate_sync(
-                                    &self.context,
+                                    self.context.clone(),
                                     job_ids,
                                     scope,
                                     tree_scheduler,
@@ -647,7 +662,7 @@ where
                     if subtree_results == SubtreeCommitResult::Suspended {
                         let (node, subtree_results) = rayon::scope(|scope| {
                             suspense.fallback_widget.clone().inflate_sync(
-                                &self.context,
+                                self.context.clone(),
                                 job_ids,
                                 scope,
                                 tree_scheduler,

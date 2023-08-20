@@ -16,17 +16,23 @@ pub(crate) struct ElementMark {
     /// Indicate whether this node requested for a sync poll
     pub(super) is_poll_ready: AtomicBool,
 
-    pub(super) needs_relayout: AtomicBool,
+    pub(super) needs_layout: AtomicBool,
 
-    pub(super) descendants_contain_relayout: AtomicBool,
+    pub(super) subtree_has_layout: AtomicBool,
 
     pub(super) is_relayout_boundary: AtomicBool,
 
-    pub(super) needs_repaint: AtomicBool,
+    pub(super) needs_paint: AtomicBool,
 
-    pub(super) descendants_contain_repaint: AtomicBool,
+    pub(super) subtree_has_paint: AtomicBool,
 
     pub(super) is_repaint_boundary: bool,
+}
+
+impl ElementMark {
+    pub(crate) fn new() -> Self {
+        todo!()
+    }
 }
 
 impl ElementContextNode {
@@ -42,12 +48,12 @@ impl ElementContextNode {
         self.mark.is_poll_ready.load(Relaxed)
     }
 
-    pub(crate) fn needs_relayout(&self) -> bool {
-        self.mark.needs_relayout.load(Relaxed)
+    pub(crate) fn needs_layout(&self) -> bool {
+        self.mark.needs_layout.load(Relaxed)
     }
 
-    pub(crate) fn needs_repaint(&self) -> bool {
-        self.mark.needs_repaint.load(Relaxed)
+    pub(crate) fn needs_paint(&self) -> bool {
+        self.mark.needs_paint.load(Relaxed)
     }
 
     pub(crate) fn mark_secondary_root(&self, lane_pos: LanePos) {
@@ -72,8 +78,8 @@ impl ElementContextNode {
         let mut cur = self;
         // Mark up to the nearest relayout boundary
         loop {
-            let old_needs_relayout = cur.mark.needs_relayout.swap(true, Relaxed);
-            cur.mark.descendants_contain_relayout.store(true, Relaxed);
+            let old_needs_relayout = cur.mark.needs_layout.swap(true, Relaxed);
+            cur.mark.subtree_has_layout.store(true, Relaxed);
             cur.mark_needs_paint();
             if cur.mark.is_relayout_boundary.load(Relaxed) {
                 break;
@@ -92,8 +98,7 @@ impl ElementContextNode {
                 break;
             };
             cur = parent.as_ref();
-            let old_subtree_contains_relayout =
-                cur.mark.descendants_contain_relayout.swap(true, Relaxed);
+            let old_subtree_contains_relayout = cur.mark.subtree_has_layout.swap(true, Relaxed);
             if old_subtree_contains_relayout {
                 break;
             }
@@ -104,8 +109,8 @@ impl ElementContextNode {
         let mut cur = self;
         // Mark up to the nearest repaint boundary
         loop {
-            let old_needs_repaint = cur.mark.needs_repaint.swap(true, Relaxed);
-            cur.mark.descendants_contain_repaint.store(true, Relaxed);
+            let old_needs_repaint = cur.mark.needs_paint.swap(true, Relaxed);
+            cur.mark.subtree_has_paint.store(true, Relaxed);
             if cur.mark.is_repaint_boundary {
                 break;
             }
@@ -123,8 +128,7 @@ impl ElementContextNode {
                 break;
             };
             cur = parent.as_ref();
-            let old_subtree_contains_repaint =
-                cur.mark.descendants_contain_repaint.swap(true, Relaxed);
+            let old_subtree_contains_repaint = cur.mark.subtree_has_paint.swap(true, Relaxed);
             if old_subtree_contains_repaint {
                 break;
             }

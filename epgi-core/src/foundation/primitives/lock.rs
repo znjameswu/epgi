@@ -4,9 +4,11 @@
 #[derive(Debug, Default)]
 pub struct SyncMutex<T: ?Sized>(std::sync::Mutex<T>);
 
+pub type SyncMutexGuard<'a, T> = std::sync::MutexGuard<'a, T>;
+
 impl<T: ?Sized> SyncMutex<T> {
     #[inline]
-    pub fn lock(&self) -> std::sync::MutexGuard<'_, T> {
+    pub fn lock(&self) -> SyncMutexGuard<'_, T> {
         match self.0.lock() {
             Ok(guard) => guard,
             Err(p_err) => p_err.into_inner(),
@@ -14,7 +16,7 @@ impl<T: ?Sized> SyncMutex<T> {
     }
 
     #[inline]
-    pub fn try_lock(&self) -> Option<std::sync::MutexGuard<'_, T>> {
+    pub fn try_lock(&self) -> Option<SyncMutexGuard<'_, T>> {
         match self.0.try_lock() {
             Ok(guard) => Some(guard),
             Err(std::sync::TryLockError::Poisoned(p_err)) => Some(p_err.into_inner()),

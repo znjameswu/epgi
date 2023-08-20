@@ -1,3 +1,7 @@
+mod context;
+
+pub use context::*;
+
 use crate::foundation::{Arc, Aweak, Canvas, PaintContext, Parallel, Protocol, SyncMutex};
 
 use super::{ArcElementContextNode, ArcLayerOf, Element, ElementContextNode, GetSuspense};
@@ -163,6 +167,7 @@ pub struct PerformLayerPaint<R: Render> {
 
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
+    pub(crate) context: AscRenderContextNode,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
@@ -171,7 +176,12 @@ where
     R: Render,
 {
     pub fn new(render: R, element_context: ArcElementContextNode) -> Self {
+        debug_assert!(
+            element_context.has_render,
+            "A render object node must construct a render context node in its element context ndoe"
+        );
         Self {
+            context: element_context.nearest_render_context.clone(),
             element_context,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,
@@ -216,9 +226,9 @@ where
     }
     pub(crate) fn layout_results(
         &self,
-        context: &ElementContextNode,
+        context: &RenderContextNode,
     ) -> Option<&LayoutResults<P, M>> {
-        if context.needs_relayout() {
+        if context.needs_layout() {
             return None;
         }
         self.layout_results.as_ref()

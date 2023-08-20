@@ -26,7 +26,7 @@ where
         let Some(layout_results) = inner_reborrow
             .cache
             .as_ref()
-            .and_then(|x| x.layout_results(&self.element_context))
+            .and_then(|x| x.layout_results(&self.context))
         else {
             panic!("Paint should only be called after layout has finished")
         };
@@ -37,7 +37,7 @@ where
         }) = R::PERFORM_LAYER_PAINT
         {
             paint_ctx.with_layer(|transform_parent| {
-                if self.element_context.needs_repaint() {
+                if self.element_context.needs_paint() {
                     let layer = get_layer_or_insert(
                         &mut inner_reborrow.render,
                         &layout_results.size,

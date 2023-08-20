@@ -49,12 +49,11 @@ impl Scheduler {
     pub fn new(tree_scheduler: TreeScheduler) -> Self {
         Self {
             tree_scheduler: Asc::new(SyncRwLock::new(tree_scheduler)),
-            job_batcher: JobBatcher::new(todo!()),
+            job_batcher: JobBatcher::new(),
         }
     }
     pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
         let tasks = &handle.task_rx;
-        let jobs = Asc::new(SyncMutex::new(Vec::default()));
         loop {
             let task = tasks.recv();
             use SchedulerTask::*;
@@ -65,7 +64,7 @@ impl Scheduler {
                 } => {
                     let mut tree_scheduler = self.tree_scheduler.write();
                     tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
-                    let new_jobs = std::mem::take(&mut *jobs.lock());
+                    let new_jobs = std::mem::take(&mut *handle.accumulated_jobs.lock());
                     self.job_batcher.update_with_new_jobs(new_jobs);
                     let updates = self.job_batcher.get_batch_updates();
                     tree_scheduler.apply_batcher_result(updates);

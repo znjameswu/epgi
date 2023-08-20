@@ -1,4 +1,7 @@
-use std::sync::atomic::{Ordering, Ordering::*};
+use std::{
+    sync::atomic::{Ordering, Ordering::*},
+    time::Instant,
+};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -84,6 +87,20 @@ pub struct JobBuilder {
 }
 
 impl JobBuilder {
+    pub fn new(job_id: JobId, deadline: Instant) -> Self {
+        Self {
+            conf: JobConf {
+                priority: JobPriority { deadline, job_id },
+                roots: Default::default(),
+            },
+            existing_sequenced_jobs: Default::default(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.conf.roots.is_empty() && self.existing_sequenced_jobs.is_empty()
+    }
+
     pub fn id(&self) -> JobId {
         self.conf.id()
     }
@@ -119,11 +136,11 @@ impl AtomicJobIdCounter {
         Self(portable_atomic::AtomicU64::new(0))
     }
 
-    fn load_frame(&self, order: Ordering) -> u64 {
+    pub(super) fn load_frame(&self, order: Ordering) -> u64 {
         return self.0.load(order) >> (Self::BITS_JOB_COUNTER + 1);
     }
 
-    fn increment_frame(&self) {
+    pub(super) fn increment_frame(&self) {
         loop {
             let prev = self.0.load(Relaxed);
             let new = (prev >> (Self::BITS_JOB_COUNTER + 1) + 1) << (Self::BITS_JOB_COUNTER + 1);
@@ -133,7 +150,7 @@ impl AtomicJobIdCounter {
         }
     }
 
-    fn generate_sync_job_id(&self) -> JobId {
+    pub(super) fn generate_sync_job_id(&self) -> JobId {
         let state = self.0.fetch_add(1, Relaxed);
         if (state + 1) & (1 << Self::BITS_JOB_COUNTER) != 0 {
             panic!("Too many jobs generated during one frame!")
@@ -141,7 +158,7 @@ impl AtomicJobIdCounter {
         return JobId(state & !(1 << Self::BITS_JOB_COUNTER));
     }
 
-    fn generate_async_job_id(&self) -> JobId {
+    pub(super) fn generate_async_job_id(&self) -> JobId {
         let state = self.0.fetch_add(1, Relaxed);
         if (state + 1) & (1 << Self::BITS_JOB_COUNTER) != 0 {
             panic!("Too many jobs generated during one frame!")

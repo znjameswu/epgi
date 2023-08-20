@@ -6,7 +6,7 @@ use crate::{
     foundation::{Arc, Asc, Aweak, InlinableUsizeVec, Provide, SyncMutex, TypeKey},
     scheduler::JobId,
     sync::ElementMark,
-    tree::Update,
+    tree::{AscRenderContextNode, RenderContextNode, Update},
 };
 
 use super::{AweakAnyElementNode, ProviderObject};
@@ -30,23 +30,67 @@ pub struct ElementContextNode {
     /// Pre-calculated provider map for children nodes
     pub provider_map_for_child: Asc<ProviderElementMap>,
     pub(crate) provider: Option<Box<ProviderObject>>,
+
+    pub(crate) nearest_render_context: AscRenderContextNode,
+    pub(crate) has_render: bool,
 }
 
 impl ElementContextNode {
+    #[inline(always)]
     pub(crate) fn new_with_provide<T: Provide>(
         node: AweakAnyElementNode,
-        parent_context: &ArcElementContextNode,
+        parent_context: ArcElementContextNode,
         provider_value: Arc<T>,
+        has_render: bool,
     ) -> Self {
         todo!()
     }
 
+    #[inline(always)]
     pub(crate) fn new_no_provide(
         node: AweakAnyElementNode,
-        parent_context: Option<&ArcElementContextNode>,
+        parent_context: ArcElementContextNode,
+        has_render: bool,
     ) -> Self {
-        todo!()
+        let nearest_render_context = if has_render {
+            Asc::new(RenderContextNode::new(
+                parent_context.nearest_render_context.clone(),
+            ))
+        } else {
+            parent_context.nearest_render_context.clone()
+        };
+        Self {
+            element_node: node,
+            unmounted: false.into(),
+            depth: parent_context.depth + 1,
+            mark: ElementMark::new(),
+            mailbox: Default::default(),
+            provider_map: parent_context.provider_map_for_child.clone(),
+            provider_map_for_child: parent_context.provider_map_for_child.clone(),
+            provider: None,
+            nearest_render_context,
+            has_render,
+            parent: Some(parent_context),
+        }
     }
+
+    pub(crate) fn new_root(node: AweakAnyElementNode) -> Self {
+        let nearest_render_context = Asc::new(RenderContextNode::new_root());
+        Self {
+            element_node: node,
+            unmounted: false.into(),
+            depth: 0,
+            mark: ElementMark::new(),
+            mailbox: Default::default(),
+            provider_map: Default::default(),
+            provider_map_for_child: Default::default(),
+            provider: None,
+            nearest_render_context,
+            has_render: true,
+            parent: None,
+        }
+    }
+
     pub(crate) fn push_update(this: &Arc<Self>, job_id: JobId, update: Update) {
         let jobs = {
             let mut mailbox = this.mailbox.lock();

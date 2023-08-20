@@ -90,7 +90,7 @@ pub(crate) mod reconciler_private {
     pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
         fn inflate_sync<'a, 'batch>(
             self: Arc<Self>,
-            parent_context: &ArcElementContextNode,
+            parent_context: ArcElementContextNode,
             job_ids: &'a SmallSet<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
@@ -103,7 +103,7 @@ pub(crate) mod reconciler_private {
     {
         fn inflate_sync<'a, 'batch>(
             self: Arc<Self>,
-            parent_context: &ArcElementContextNode,
+            parent_context: ArcElementContextNode,
             job_ids: &'a SmallSet<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,

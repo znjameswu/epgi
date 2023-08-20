@@ -11,7 +11,7 @@ pub use snapshot::*;
 use crate::{
     foundation::{
         Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol, Provide,
-        SyncMutex, TypeKey,
+        SyncMutex, TypeKey, SyncMutexGuard,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -19,8 +19,9 @@ use crate::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ReconcileItem, Reconciler,
-    Render, RenderCache, RenderObject, RenderObjectInner,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, AscRenderContextNode,
+    ReconcileItem, Reconciler, Render, RenderCache, RenderContextNode, RenderObject,
+    RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -119,7 +120,7 @@ where
 {
     type Render;
     const GET_RENDER_OBJECT: GetRenderObject<E>;
-    fn with_inner(&self, op: impl FnOnce(&mut Self::Render, &ArcElementContextNode));
+    fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode));
 }
 
 impl<E> ArcRenderObject<E> for Never
@@ -129,7 +130,7 @@ where
     type Render = Never;
     const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::None(E::child);
 
-    fn with_inner(&self, op: impl FnOnce(&mut Self::Render, &ArcElementContextNode)) {
+    fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode)) {
         debug_assert!(
             false,
             "Never should never be dereferenced as ArcRenderObject"
@@ -146,13 +147,7 @@ where
         get_render_object: |x| x,
         try_create_render_object: |element, widget, element_context| {
             let render = R::try_create_render_object_from_element(element, widget)?;
-            Some(Arc::new(RenderObject {
-                element_context: element_context.clone(),
-                inner: SyncMutex::new(RenderObjectInner {
-                    cache: None,
-                    render,
-                }),
-            }))
+            Some(Arc::new(RenderObject::new(render, element_context.clone())))
         },
         update_render_object: if R::NOOP_UPDATE_RENDER_OBJECT {
             None
@@ -172,8 +167,8 @@ where
         get_suspense: R::GET_SUSPENSE,
     };
 
-    fn with_inner(&self, op: impl FnOnce(&mut Self::Render, &ArcElementContextNode)) {
-        op(&mut self.inner.lock().render, &self.element_context)
+    fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode)) {
+        op(&mut self.inner.lock().render, &self.context)
     }
 }
 
@@ -195,6 +190,22 @@ pub enum GetRenderObject<E: Element> {
         get_suspense: Option<GetSuspense<E>>,
     },
     None(fn(&E) -> &ArcChildElementNode<E::ParentProtocol>),
+}
+
+impl<E> GetRenderObject<E>
+where
+    E: Element,
+{
+    pub const fn is_none(&self) -> bool {
+        match self {
+            GetRenderObject::RenderObject { .. } => false,
+            GetRenderObject::None(_) => true,
+        }
+    }
+
+    pub const fn is_some(&self) -> bool {
+        !self.is_none()
+    }
 }
 
 pub struct GetSuspense<E: Element> {
@@ -377,11 +388,12 @@ pub fn create_root_element<R: Render>(
     constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<R::Element>> {
     let element_node = Arc::new_cyclic(move |node| {
-        let element_context = Arc::new(ElementContextNode::new_no_provide(node.clone() as _, None));
+        let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
         // let render = R::try_create_render_object_from_element(&element, &widget)
         //     .expect("Root render object creation should always be successfully");
         let render_object = Arc::new(RenderObject {
             element_context: element_context.clone(),
+            context: element_context.nearest_render_context.clone(),
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
                 render: create_render(&element_context),

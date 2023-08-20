@@ -43,10 +43,6 @@ enum JobInterference {
     Racing(JobId, JobId),
 }
 
-pub(crate) struct JobSchedulerSink {
-    pub(crate) new_jobs: SyncMutex<Vec<JobConf>>,
-}
-
 pub(crate) struct JobSchedulerSinkInner {
     pub(crate) new_jobs: SyncMutex<Vec<JobConf>>,
 }
@@ -58,7 +54,6 @@ pub(crate) struct RootMarkResult {
 
 pub(crate) struct JobBatcher {
     job_datas: HashMap<JobId, JobData>,
-    sink: Asc<JobSchedulerSink>,
 
     completed_async_batches: Asc<MpscQueue<BatchId>>,
     batches: HashMap<BatchId, Asc<BatchConf>>,
@@ -73,11 +68,10 @@ pub(crate) struct BatchResult {
 
 /// Responsibility: Batch up jobs, report outdated batches, report batch conflict (recommend executable batches?)
 impl JobBatcher {
-    pub(super) fn new(sink: JobSchedulerSink) -> Self {
+    pub(super) fn new() -> Self {
         Self {
             job_datas: Default::default(),
-            sink: todo!(),
-            completed_async_batches: todo!(),
+            completed_async_batches: Default::default(),
             batches: Default::default(),
             batch_id_counter: 1,
         }
@@ -113,10 +107,6 @@ impl JobBatcher {
                     debug_assert!(
                         sequenced_job_id.spawning_frame() <= job_id.spawning_frame(),
                         "A job cannot be sequenced with an job from a future frame"
-                    );
-                    debug_assert!(
-                        sequenced_job_id.spawning_frame() < job_id.spawning_frame(),
-                        "Job from the same frame should be inserted at the same time"
                     );
                 }
             }
@@ -404,16 +394,17 @@ impl JobBatcher {
             }
         }
     }
-    pub(super) fn debug_validate_sync_jobs_from_same_frame(&self) {
-        let sync_job_spawning_frame: HashSet<_> = self
-            .job_datas
-            .values()
-            .filter(|&data| data.is_sync())
-            .map(|data| data.spawning_frame())
-            .collect();
-        assert!(sync_job_spawning_frame.len() == 0 || sync_job_spawning_frame.len() == 1,
-        "All sync jobs being processed at any point of time should be spawned in the same frame. That is, there should be no left-over sync jobs from the earlier frames, nor any future sync jobs from a future frame.")
-    }
+    // // This check has been abandoned to allow older sync jobs from occuring
+    // pub(super) fn debug_validate_sync_jobs_from_same_frame(&self) {
+    //     let sync_job_spawning_frame: HashSet<_> = self
+    //         .job_datas
+    //         .values()
+    //         .filter(|&data| data.is_sync())
+    //         .map(|data| data.spawning_frame())
+    //         .collect();
+    //     assert!(sync_job_spawning_frame.len() == 0 || sync_job_spawning_frame.len() == 1,
+    //     "All sync jobs being processed at any point of time should be spawned in the same frame. That is, there should be no left-over sync jobs from the earlier frames, nor any future sync jobs from a future frame.")
+    // }
 
     // fn debug_validate_async_batch_closedness(&self) {
     //     for (batch_id, batch_data) in self.batches.iter() {

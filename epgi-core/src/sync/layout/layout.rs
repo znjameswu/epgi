@@ -1,11 +1,12 @@
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{Protocol, PtrEq},
+    foundation::{Parallel, Protocol, PtrEq},
+    scheduler::get_current_scheduler,
     sync::TreeScheduler,
     tree::{
-        AweakAnyRenderObject, Element, PerformDryLayout, Render, RenderCache, RenderObject,
-        RenderObjectInner,
+        AweakAnyRenderObject, Element, PerformDryLayout, Render, RenderCache, RenderContextNode,
+        RenderObject, RenderObjectInner,
     },
 };
 
@@ -54,16 +55,7 @@ where
     }
     fn layout_without_resize(&self) {
         let mut inner = self.inner.lock();
-        debug_assert!(inner.is_relayout_boundary());
-        let Some(cache) = inner.cache.as_mut() else {
-            panic!("Relayout should only be called on relayout boundaries which must retain their layout caches")
-        };
-        if cache.layout_results(&self.element_context).is_some() {
-            return;
-        }
-        let constraints = cache.constraints.clone();
-        let parent_use_size = cache.parent_use_size;
-        inner.perform_wet_layout(constraints, parent_use_size);
+        inner.perform_layout_without_resize(&self.context)
     }
 
     fn layout(
@@ -95,6 +87,30 @@ where
         }
         inner.perform_wet_layout(constraints.clone(), true).clone()
     }
+
+    fn visit_and_layout(&self) {
+        let is_relayout_boundary = self.context.is_relayout_boundary();
+        let needs_layout = self.context.needs_layout();
+        debug_assert!(
+            is_relayout_boundary || !needs_layout,
+            "A layout walk should not encounter a dirty non-boundary node.
+            Such node should be already laied-out by an ancester layout sometime earlier in this walk."
+        );
+        if self.context.subtree_has_layout() {
+            let children = {
+                let mut inner = self.inner.lock();
+                if is_relayout_boundary && needs_layout {
+                    inner.perform_layout_without_resize(&self.context);
+                    self.context.clear_self_needs_layout();
+                }
+                inner.render.children()
+            };
+            children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+                child.visit_and_layout()
+            });
+            self.context.clear_subtree_has_layout();
+        }
+    }
 }
 impl<R> RenderObjectInner<R>
 where
@@ -120,6 +136,20 @@ where
 
         return RenderCache::insert_into(&mut self.cache, constraints, parent_use_size, size, memo);
     }
+
+    #[inline(always)]
+    fn perform_layout_without_resize(&mut self, context: &RenderContextNode) {
+        debug_assert!(self.is_relayout_boundary());
+        let Some(cache) = self.cache.as_mut() else {
+            panic!("Relayout should only be called on relayout boundaries which must retain their layout caches")
+        };
+        if cache.layout_results(context).is_some() {
+            return;
+        }
+        let constraints = cache.constraints.clone();
+        let parent_use_size = cache.parent_use_size;
+        self.perform_wet_layout(constraints, parent_use_size);
+    }
 }
 
 pub(crate) mod layout_private {
@@ -131,6 +161,8 @@ pub(crate) mod layout_private {
         fn layout_use_size(&self, constraints: &PP::Constraints) -> PP::Size;
 
         fn layout(&self, constraints: &PP::Constraints);
+
+        fn visit_and_layout(&self);
     }
 
     impl<R> ChildRenderObjectLayoutExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
@@ -149,6 +181,10 @@ pub(crate) mod layout_private {
             constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
         ) {
             self.layout(constraints)
+        }
+
+        fn visit_and_layout(&self) {
+            self.visit_and_layout()
         }
     }
 

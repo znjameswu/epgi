@@ -3,6 +3,7 @@ use std::{
     cell::UnsafeCell,
     mem::MaybeUninit,
     sync::atomic::{AtomicBool, Ordering::*},
+    time::Instant,
 };
 
 use hashbrown::HashSet;
@@ -17,7 +18,7 @@ use crate::{
     },
 };
 
-use super::{JobBuilder, SchedulerTask};
+use super::{AtomicJobIdCounter, JobBuilder, SchedulerTask};
 
 // The following unsafe code is following https://users.rust-lang.org/t/uninitialised-static-mut/62215/3
 struct SchedulerHandleCell(UnsafeCell<MaybeUninit<SchedulerHandle>>);
@@ -43,6 +44,8 @@ pub struct SchedulerHandle {
 
     pub(super) task_rx: SchedulerTaskReceiver,
 
+    job_id: AtomicJobIdCounter,
+
     // mode: LatencyMode,
     nodes_needing_paint: MpscQueue<AweakAnyRenderObject>,
     nodes_needing_layout: MpscQueue<AweakAnyRenderObject>,
@@ -57,6 +60,7 @@ impl SchedulerHandle {
             sync_threadpool,
             async_threadpool,
             task_rx: SchedulerTaskReceiver::new(),
+            job_id: AtomicJobIdCounter::new(),
             // is_executing_sync: (),
             nodes_needing_paint: Default::default(),
             nodes_needing_layout: Default::default(),
@@ -66,7 +70,16 @@ impl SchedulerHandle {
     }
 
     pub fn request_sync_job(&self, op: impl FnOnce(&mut JobBuilder)) {
-        todo!()
+        // Note: if the op takes a long time, then we can see this very outdated sync job in a later frame.
+        let job_id = self.job_id.generate_sync_job_id();
+        let mut job_builder = JobBuilder::new(job_id, Instant::now());
+        op(&mut job_builder);
+        if !job_builder.is_empty() {
+            get_current_scheduler()
+                .accumulated_jobs
+                .lock()
+                .push(job_builder);
+        }
     }
 
     pub fn request_new_frame(&self) -> AsyncMpscReceiver<FrameResults> {
@@ -76,8 +89,6 @@ impl SchedulerHandle {
         }
         return rx;
     }
-
-    pub(crate) fn schedule_new_frame(&self) {}
 
     pub(crate) fn schedule_reorder_async_work(&self, node: AweakAnyElementNode) {
         self.task_rx
