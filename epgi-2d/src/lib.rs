@@ -1,12 +1,12 @@
 mod r#box;
 mod paint;
 mod text;
-mod vello;
+mod vello_integrations;
 
 pub use paint::*;
 pub use r#box::*;
 pub use text::*;
-pub use vello::*;
+pub use vello_integrations::*;
 
 use epgi_core::{foundation::Canvas, nodes::Provider, tree::ArcParentLayer};
 
