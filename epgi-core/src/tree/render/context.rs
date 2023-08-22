@@ -77,6 +77,22 @@ impl RenderContextNode {
     pub fn clear_subtree_has_layout(&self) {
         self.subtree_has_layout.store(false, Relaxed)
     }
+
+    pub fn is_repaint_boundary(&self) -> bool {
+        self.is_repaint_boundary
+    }
+
+    pub fn needs_paint(&self) -> bool {
+        self.needs_paint.load(Relaxed)
+    }
+
+    pub fn subtree_has_paint(&self) -> bool {
+        self.subtree_has_paint.load(Relaxed)
+    }
+
+    pub fn clear_self_needs_paint(&self) {
+        self.needs_paint.store(false, Relaxed)
+    }
 }
 
 impl RenderContextNode {

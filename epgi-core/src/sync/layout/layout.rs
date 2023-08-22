@@ -15,19 +15,19 @@ impl TreeScheduler {
         &mut self,
         boundaries_needing_relayout: HashSet<PtrEq<AweakAnyRenderObject>>,
     ) {
-        let mut boundaries_needing_relayout = boundaries_needing_relayout
-            .into_iter()
-            .filter_map(|x| {
-                x.0.upgrade()
-                    .filter(|x| !x.element_context().is_unmounted())
-            })
-            .collect::<Vec<_>>();
+        // let mut boundaries_needing_relayout = boundaries_needing_relayout
+        //     .into_iter()
+        //     .filter_map(|x| {
+        //         x.0.upgrade()
+        //             .filter(|x| !x.element_context().is_unmounted())
+        //     })
+        //     .collect::<Vec<_>>();
 
-        boundaries_needing_relayout.sort_unstable_by_key(|object| object.element_context().depth);
+        // boundaries_needing_relayout.sort_unstable_by_key(|object| object.element_context().depth);
 
-        for boundary in boundaries_needing_relayout {
-            boundary.layout_without_resize()
-        }
+        // for boundary in boundaries_needing_relayout {
+        //     boundary.layout_without_resize()
+        // }
     }
 }
 
@@ -53,10 +53,10 @@ where
                 .as_ref()
                 .is_some_and(|x| x.parent_use_size)
     }
-    fn layout_without_resize(&self) {
-        let mut inner = self.inner.lock();
-        inner.perform_layout_without_resize(&self.context)
-    }
+    // fn layout_without_resize(&self) {
+    //     let mut inner = self.inner.lock();
+    //     inner.perform_layout_without_resize(&self.context)
+    // }
 
     fn layout(
         &self,
@@ -91,10 +91,15 @@ where
     fn visit_and_layout(&self) {
         let is_relayout_boundary = self.context.is_relayout_boundary();
         let needs_layout = self.context.needs_layout();
+        let subtree_has_layout = self.context.subtree_has_layout();
         debug_assert!(
             is_relayout_boundary || !needs_layout,
             "A layout walk should not encounter a dirty non-boundary node.
             Such node should be already laied-out by an ancester layout sometime earlier in this walk."
+        );
+        debug_assert!(
+            subtree_has_layout || !needs_layout,
+            "A dirty node should always mark its subtree as dirty"
         );
         if self.context.subtree_has_layout() {
             let children = {
@@ -189,15 +194,15 @@ pub(crate) mod layout_private {
     }
 
     pub trait AnyRenderObjectRelayoutExt {
-        fn layout_without_resize(&self);
+        // fn layout_without_resize(&self);
     }
 
     impl<R> AnyRenderObjectRelayoutExt for RenderObject<R>
     where
         R: Render,
     {
-        fn layout_without_resize(&self) {
-            self.layout_without_resize()
-        }
+        // fn layout_without_resize(&self) {
+        //     self.layout_without_resize()
+        // }
     }
 }
