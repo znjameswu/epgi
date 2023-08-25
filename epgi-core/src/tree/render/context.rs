@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-use crate::{foundation::Asc, tree::ArcElementContextNode};
+use crate::{foundation::Asc, tree::AscLayerScopeContextNode};
 
 pub type AscRenderContextNode = Asc<RenderContextNode>;
 
@@ -107,12 +107,4 @@ impl RenderContextNode {
     pub(crate) fn mark_needs_paint(&self) {
         todo!()
     }
-}
-
-pub type AscLayerScopeContextNode = Asc<LayerScopeContextNode>;
-
-pub struct LayerScopeContextNode {
-    pub(crate) parent: Option<AscLayerScopeContextNode>,
-    // pub(crate) needs_paint: AtomicBool,
-    pub(crate) needs_composite: AtomicBool,
 }
