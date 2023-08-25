@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::tree::{ArcChildRenderObject, ArcParentLayer, ChildRenderObject};
+use crate::tree::{ArcChildRenderObject, ArcParentLayer, ChildRenderObject, ArcChildLayer};
 
 use super::Parallel;
 
@@ -83,8 +83,8 @@ pub trait Canvas: Sized + 'static {
 
     fn paint_layer(
         layer: ArcParentLayer<Self>,
-        scan: impl FnOnce(Self::PaintScanner<'_>),
-        paint: impl FnOnce(Self::PaintContext<'_>),
+        scan: impl FnOnce(&mut Self::PaintScanner<'_>),
+        paint: impl FnOnce(&mut Self::PaintContext<'_>),
     );
 
     // The following methods are here to avoid creating and impl-ing (outside this crate) new traits for vello encodings.
@@ -114,7 +114,7 @@ pub trait PaintContext {
     /// Do not call this method if you do not intend to push a new layer,
     /// even if this method seems to allow arbitrary operation.
     // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
-    fn with_layer(&mut self, op: impl FnOnce(&<Self::Canvas as Canvas>::Transform));
+    fn paint_layered_child(&mut self, op: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> ArcChildLayer<Self::Canvas>);
 
     fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,

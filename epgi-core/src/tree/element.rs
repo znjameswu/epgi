@@ -11,7 +11,7 @@ pub use snapshot::*;
 use crate::{
     foundation::{
         Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol, Provide,
-        SyncMutex, TypeKey, SyncMutexGuard,
+        SyncMutex, SyncMutexGuard, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -383,7 +383,7 @@ where
 pub fn create_root_element<R: Render>(
     widget: <R::Element as Element>::ArcWidget,
     element: R::Element,
-    create_render: impl FnOnce(&ArcElementContextNode) -> R,
+    create_render: impl FnOnce(&AscRenderContextNode) -> R,
     hooks: Hooks,
     constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<R::Element>> {
@@ -396,7 +396,7 @@ pub fn create_root_element<R: Render>(
             context: element_context.nearest_render_context.clone(),
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
-                render: create_render(&element_context),
+                render: create_render(&element_context.nearest_render_context),
             }),
         });
         ElementNode {

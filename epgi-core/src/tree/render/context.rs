@@ -93,6 +93,10 @@ impl RenderContextNode {
     pub fn clear_self_needs_paint(&self) {
         self.needs_paint.store(false, Relaxed)
     }
+
+    pub fn clear_subtree_has_paint(&self) {
+        self.subtree_has_paint.store(false, Relaxed)
+    }
 }
 
 impl RenderContextNode {

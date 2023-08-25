@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::foundation::{Arc, Aweak, Canvas, InlinableDwsizeVec, Protocol, SyncMutex};
 
-use super::{ArcElementContextNode, Element, Render};
+use super::{ArcElementContextNode, AscRenderContextNode, Element, Render};
 
 pub type ArcChildLayer<C> = Arc<dyn ChildLayer<ParentCanvas = C>>;
 pub type ArcParentLayer<C> = Arc<dyn ParentLayer<ChildCanvas = C>>;
@@ -19,7 +19,7 @@ pub type ArcLayerOf<R: Render> = Arc<
 /// A transparent, unretained internal layer.
 pub struct LayerScope<C: Canvas> {
     detached_parent: Option<AweakParentLayer<C>>,
-    element_context: ArcElementContextNode,
+    context: AscRenderContextNode,
     inner: SyncMutex<LayerScopeInner<C>>,
 }
 
@@ -52,10 +52,10 @@ pub trait Layer: Send + Sync {
 
     // fn transform_abs(&self) -> C::Transform;
 
-    fn as_child_layer_arc(
+    fn as_arc_child_layer(
         self: Arc<Self>,
     ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>>;
-    fn as_parent_layer_arc(
+    fn as_arc_parent_layer(
         self: Arc<Self>,
     ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>>;
     fn as_any_layer_arc(self: Arc<Self>) -> Arc<dyn AnyLayer>;
@@ -168,13 +168,13 @@ where
         // inner.detached_children.clear();
     }
 
-    fn as_child_layer_arc(
+    fn as_arc_child_layer(
         self: Arc<Self>,
     ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>> {
         self
     }
 
-    fn as_parent_layer_arc(
+    fn as_arc_parent_layer(
         self: Arc<Self>,
     ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>> {
         self
@@ -189,13 +189,10 @@ impl<C> LayerScope<C>
 where
     C: Canvas,
 {
-    pub fn new_structured(
-        element_context: ArcElementContextNode,
-        transform_abs: C::Transform,
-    ) -> Self {
+    pub fn new_structured(context: AscRenderContextNode, transform_abs: C::Transform) -> Self {
         Self {
             detached_parent: None,
-            element_context,
+            context,
             inner: SyncMutex::new(LayerScopeInner {
                 transform_abs,
                 structured_children: Default::default(),

@@ -146,7 +146,7 @@ pub trait LayerPaint: Render {
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        element_context: &ArcElementContextNode,
+        context: &AscRenderContextNode,
         transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> ArcLayerOf<Self>;
     fn get_layer(&mut self) -> Option<ArcLayerOf<Self>>;
@@ -157,7 +157,7 @@ pub struct PerformLayerPaint<R: Render> {
         size: &<<R::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &R::LayoutMemo,
-        element_context: &ArcElementContextNode,
+        context: &AscRenderContextNode,
         transform_parent: &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> ArcLayerOf<R>,
     pub get_layer: for<'a> fn(

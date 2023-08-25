@@ -330,9 +330,9 @@ impl MainState {
         let element_node = create_root_element::<RenderRootView>(
             root_widget,
             element,
-            |element_context| RenderRootView {
+            |context| RenderRootView {
                 layer: Asc::new(LayerScope::new_structured(
-                    element_context.clone(),
+                    context.clone(),
                     Affine2d::IDENTITY,
                 )),
                 child: None,

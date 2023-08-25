@@ -1,6 +1,6 @@
 use epgi_core::{
     foundation::{Canvas, PaintContext, Parallel, Protocol},
-    tree::{ArcChildRenderObject, ChildRenderObject},
+    tree::{ArcChildLayer, ArcChildRenderObject, ChildRenderObject},
 };
 use peniko::{kurbo::Shape, BrushRef};
 
@@ -68,7 +68,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         self.curr_transform = old_transform;
     }
 
-    fn with_layer(&mut self, op: impl FnOnce(&Affine2d)) {
+    fn paint_layered_child(&mut self, op: impl FnOnce(&Affine2d) -> ArcChildLayer<Self::Canvas>) {
         todo!()
     }
 
@@ -105,7 +105,7 @@ impl<'a> PaintContext for VelloPaintScanner<'a> {
         todo!()
     }
 
-    fn with_layer(&mut self, op: impl FnOnce(&Affine2d)) {
+    fn paint_layered_child(&mut self, op: impl FnOnce(&Affine2d) -> ArcChildLayer<Self::Canvas>) {
         todo!()
     }
 

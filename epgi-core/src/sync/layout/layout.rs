@@ -105,7 +105,7 @@ where
             let children = {
                 let mut inner = self.inner.lock();
                 if is_relayout_boundary && needs_layout {
-                    inner.perform_layout_without_resize(&self.context);
+                    inner.layout_without_resize_inner(&self.context);
                     self.context.clear_self_needs_layout();
                 }
                 inner.render.children()
@@ -138,12 +138,11 @@ where
         } else {
             self.render.perform_layout(&constraints)
         };
-
         return RenderCache::insert_into(&mut self.cache, constraints, parent_use_size, size, memo);
     }
 
     #[inline(always)]
-    fn perform_layout_without_resize(&mut self, context: &RenderContextNode) {
+    fn layout_without_resize_inner(&mut self, context: &RenderContextNode) {
         debug_assert!(self.is_relayout_boundary());
         let Some(cache) = self.cache.as_mut() else {
             panic!("Relayout should only be called on relayout boundaries which must retain their layout caches")
@@ -154,6 +153,7 @@ where
         let constraints = cache.constraints.clone();
         let parent_use_size = cache.parent_use_size;
         self.perform_wet_layout(constraints, parent_use_size);
+        context.clear_self_needs_layout();
     }
 }
 
@@ -167,6 +167,14 @@ pub(crate) mod layout_private {
 
         fn layout(&self, constraints: &PP::Constraints);
 
+        /// Walk the tree and initiate layout on any dirty relayout boundaries.
+        ///
+        /// This method initiate two tree walks after encountering a dirty relayout boundary: first a layout phase, then a recursive visit phase.
+        ///
+        /// Layout tree walk will try to bypass as many subtrees as possible and cover the minimum tree regions as required by user-specified layout logic.
+        ///
+        /// Visit tree walk will walk into all dirty nodes inside the subtree.
+        /// The second tree walk will very likely overlap with the first tree walk, which is an inherent inefficiency in this algorithm.
         fn visit_and_layout(&self);
     }
 

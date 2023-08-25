@@ -38,8 +38,8 @@ impl Canvas for Affine2dCanvas {
 
     fn paint_layer(
         layer: ArcParentLayer<Self>,
-        scan: impl FnOnce(Self::PaintScanner<'_>),
-        paint: impl FnOnce(Self::PaintContext<'_>),
+        scan: impl FnOnce(&mut Self::PaintScanner<'_>),
+        paint: impl FnOnce(&mut Self::PaintContext<'_>),
     ) {
         todo!()
     }

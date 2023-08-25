@@ -5,8 +5,8 @@ use epgi_core::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
-        ArcLayerOf, BuildContext, DryLayout, Element, LayerPaint, LayerScope, ReconcileItem,
-        Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
+        ArcLayerOf, AscRenderContextNode, BuildContext, DryLayout, Element, LayerPaint, LayerScope,
+        ReconcileItem, Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
     },
 };
 
@@ -202,7 +202,7 @@ impl LayerPaint for RenderRootView {
         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        element_context: &ArcElementContextNode,
+        context: &AscRenderContextNode,
         transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     ) -> ArcLayerOf<Self> {
         unimplemented!("Root layer design has not been finalized")
