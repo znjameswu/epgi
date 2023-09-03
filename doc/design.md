@@ -488,3 +488,65 @@ Therefore we can get rid of that ugly LayoutExecutor, since now every layout ope
     > ## Problem: Can we express this bi-directionality in the ElementContextNode?
     > Actually, yes. As long as we strictly binds LayerScope tree to the element tree (i.e. not allowing external references and modifications) and keep it uni-directional.
     
+
+
+
+
+# New Paint and Composition design
+## Cache the paint results for each render object or for each layer fragment?
+### How to cache for each render object
+Each render object can hold a slice into the encodings of its parent layer fragment (By and Arc and index range)
+### Problem
+Vello can only encode absolute transformation in its encoding.
+
+Then the relative transformation betweeen the render object and its layer fragment (or, in a worse implementation, its root canvas) becomes a problem. Since the slice we are referencing are using absolute transformations, we need to invert the old relative transformation before applying new relative transformation, if it has changed. 
+1. However, the relative transformation may be non-invertible or lose precision.
+2. We have to store the relative transformation betweeen the render object and its layer fragment for every render object. Which may be very expensive
+3. Or we could enforce that each transformation MUST create a new layer, so that there will be no relative transformation for each render object. Which sounds wasteful and could lead to abuse of render objects as layers.
+
+### Deicision
+Do not cache encodings for each render object by slice. Only cache for each layer fragment.
+
+## Layout of Layer
+As the previous subsection discussed, there are the following states that the layer tree would have to store:
+1. Child layers
+2. Detached child layers
+3. Transformation of each child
+
+### Absolute transformation or relative transformtion
+We can either store the absolute transformtion between the layer to the canvas root, or the relative transformation between the layer and its parent layer.
+
+If we store the absolute transformation, then when a layer's transformation gets updated, all its descendants' transformation has to be updated as well. This is not incremental painting (Ancester repaint causes unconditional whole subtree repaint).
+
+If we store the relative transformation, then 
+1. When we compositing the layers into the canvas, we have to keep a transformation stack. (Not a big problem)
+2. We cannot start compositing on arbitrary layers since we do not have its absolute transformation. We can only start compositing on canvas layers. (Composition has to be done in this way. Working as intended)
+3. When we perform hit test, we have to start from canvas layers and walk down. (Working as intended)
+
+Decision: Store relative transformation
+### Where to store the transformation
+We can either store the relative transformation in the parent or in the child
+
+When only the relative transformation changed, we should not touch children in theory.
+
+Decision: Store in the parent
+
+### Where to store the detached child layers
+We can either store the detached child layers 
+1. In the parent node they choose when they are painted. When painted, we **walks up** the layer tree and find the parent node it wants.
+2. In the immediate parent node and wait for the composition phase. The child will not meet its chosen parent in the painting phase. In the composition phase, when **walking down** the tree we either keep a layer stack or return a detached children stack, only then we attach the detached children to its chosen parent.
+    1. We still need to store the detached children in its chosen parent's child list, in order to perform hit test.
+
+Decision: Go for immediate parent node for now.
+
+## How to perform hit test
+We can use three types of offset when invoking a hit test method on a render object:
+1. Absolute offset relative to the canvas (Not possible since we decided to store relative transformations in layers)
+2. Relative offset relative to the parent render object
+    1. Translate offset at each render object 
+    2. Offset definition problem? Protocol::Offset is defined to position a span, not a pointer position.
+        1. We would need a dedicated Protocol::HitPosition for pointer position rather than Canvas::HitPosition. (Unacceptable)
+3. Semi-absolute offset relative to the parent layer
+    1. Each render object need to store its semi-absolute transformation to its parent layer during the painting pahse.
+
+Decision: Use semi-absolute offset. Optionally introduce Canvas::HitPosition

@@ -8,45 +8,6 @@ pub use r#box::*;
 pub use text::*;
 pub use vello_integrations::*;
 
-use epgi_core::{foundation::Canvas, nodes::Provider, tree::ArcParentLayer};
-
-pub type Affine2d = vello_encoding::Transform;
-
-pub type Point2d = BoxOffset;
-
-pub struct Affine2dCanvas;
-
-impl Canvas for Affine2dCanvas {
-    type Transform = Affine2d;
-
-    type PaintCommand = Affine2dPaintCommand;
-
-    type PaintContext<'a> = VelloPaintContext<'a>;
-
-    type PaintScanner<'a> = VelloPaintScanner<'a>;
-
-    type Encoding = VelloEncoding;
-
-    fn composite(
-        dst: &mut Self::Encoding,
-        src: &Self::Encoding,
-        transform: Option<&Self::Transform>,
-    ) {
-        // TODO: Vello API design issue.
-        dst.append(src, &transform.cloned())
-    }
-
-    fn paint_layer(
-        layer: ArcParentLayer<Self>,
-        scan: impl FnOnce(&mut Self::PaintScanner<'_>),
-        paint: impl FnOnce(&mut Self::PaintContext<'_>),
-    ) {
-        todo!()
-    }
-
-    fn clear(this: &mut Self::Encoding) {
-        this.reset(true)
-    }
-}
+use epgi_core::nodes::Provider;
 
 pub type BoxProvider<T> = Provider<T, BoxProtocol>;

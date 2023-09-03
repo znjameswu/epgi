@@ -57,7 +57,7 @@ pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + 
             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
-        paint_ctx.paint_child(child, transform)
+        paint_ctx.paint(child, transform)
     }
 
     /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.

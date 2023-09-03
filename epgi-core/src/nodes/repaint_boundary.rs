@@ -1,5 +1,6 @@
 use crate::foundation::{
-    Arc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext, Protocol, Provide,
+    Arc, BuildSuspendedError, Canvas, LayerProtocol, InlinableDwsizeVec, Never, PaintContext,
+    Protocol, Provide,
 };
 
 use crate::tree::{
@@ -67,14 +68,14 @@ where
     type ArcRenderObject = Arc<RenderObject<RenderRepaintBoundary<P>>>;
 }
 
-pub struct RenderRepaintBoundary<P: Protocol> {
+pub struct RenderRepaintBoundary<P: LayerProtocol> {
     layer: Option<Arc<LayerScope<P::Canvas>>>,
-    child: ArcChildRenderObject<P>,
+    pub(crate) child: ArcChildRenderObject<P>,
 }
 
 impl<P> Render for RenderRepaintBoundary<P>
 where
-    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
+    P: LayerProtocol,
 {
     type Element = RepaintBoundaryElement<P>;
 

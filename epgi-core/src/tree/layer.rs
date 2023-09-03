@@ -8,7 +8,7 @@ pub use fragment::*;
 
 use std::any::Any;
 
-use crate::foundation::{Arc, Aweak, Canvas, InlinableDwsizeVec, Protocol, SyncMutex};
+use crate::foundation::{Arc, Aweak, Canvas, Encoding, InlinableDwsizeVec, Protocol, SyncMutex};
 
 use super::{ArcElementContextNode, AscRenderContextNode, Element, Render};
 
@@ -33,8 +33,18 @@ pub struct LayerScope<C: Canvas> {
 
 struct LayerScopeInner<C: Canvas> {
     transform_abs: C::Transform,
-    structured_children: InlinableDwsizeVec<ArcChildLayer<C>>,
-    detached_children: InlinableDwsizeVec<ArcChildLayer<C>>,
+    structured_children: Vec<LayerChild<C>>,
+    detached_children: Vec<ArcChildLayer<C>>,
+}
+
+pub enum LayerChild<C: Canvas> {
+    Fragment {
+        encoding: C::Encoding,
+    },
+    Layer {
+        transform: C::Transform,
+        layer: ArcChildLayer<C>,
+    },
 }
 
 /// Fragments are ephemeral. Scopes are persistent.
@@ -43,8 +53,18 @@ pub struct LayerFragment<C: Canvas> {
 }
 
 struct LayerFragmentInner<C: Canvas> {
-    transform_abs: C::Transform,
     encoding: C::Encoding,
+}
+
+impl<C> LayerFragment<C>
+where
+    C: Canvas,
+{
+    pub fn new(encoding: C::Encoding) -> Self {
+        Self {
+            inner: SyncMutex::new(LayerFragmentInner { encoding }),
+        }
+    }
 }
 
 pub trait Layer: Send + Sync {
@@ -72,6 +92,8 @@ pub trait Layer: Send + Sync {
 pub trait ChildLayer: Send + Sync {
     type ParentCanvas: Canvas;
 
+    fn paint(&self);
+
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding);
     /// Clear all contents to prepare for repaint.
     ///
@@ -84,7 +106,7 @@ pub trait ParentLayer: Send + Sync {
     type ChildCanvas: Canvas;
 }
 
-pub trait AnyLayer {
+pub trait AnyLayer: Send + Sync {
     fn composite_to(&self, encoding: &mut dyn Any);
     fn composite_self(&self) -> Arc<dyn Any + Send + Sync>;
 }
@@ -94,6 +116,10 @@ where
     T: Layer,
 {
     type ParentCanvas = T::ParentCanvas;
+
+    fn paint(&self) {
+        todo!()
+    }
 
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
         Layer::composite_to(self, encoding)
@@ -135,9 +161,14 @@ where
 {
     type ParentCanvas = C;
 
+    fn paint(&self) {
+        todo!()
+    }
+
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
         let inner = &mut *self.inner.lock();
-        C::composite(encoding, &inner.encoding, Some(&inner.transform_abs));
+        // C::composite(encoding, &inner.encoding, Some(&inner.transform_abs));
+        todo!()
     }
 
     fn clear(&self) {
@@ -154,20 +185,21 @@ where
     type ChildCanvas = C;
 
     fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
-        let (structured_children, detached_children) = {
-            let inner = &mut *self.inner.lock();
-            (
-                inner.structured_children.clone(),
-                inner.detached_children.clone(),
-            )
-        };
-        // TODO: Parallel composite.
-        for child in structured_children {
-            child.composite_to(encoding)
-        }
-        for child in detached_children {
-            child.composite_to(encoding)
-        }
+        // let (structured_children, detached_children) = {
+        //     let inner = &mut *self.inner.lock();
+        //     (
+        //         inner.structured_children.clone(),
+        //         inner.detached_children.clone(),
+        //     )
+        // };
+        // // TODO: Parallel composite.
+        // for child in structured_children {
+        //     child.composite_to(encoding)
+        // }
+        // for child in detached_children {
+        //     child.composite_to(encoding)
+        // }
+        todo!()
     }
 
     fn clear(&self) {

@@ -1,19 +1,23 @@
 use epgi_core::{
-    foundation::{Canvas, PaintContext, Parallel, Protocol},
-    tree::{ArcChildLayer, ArcChildRenderObject, ChildRenderObject},
+    foundation::{Asc, Canvas, PaintContext, PaintResults, Parallel, Protocol},
+    tree::{ArcChildLayer, ArcChildRenderObject, ChildRenderObject, LayerChild, LayerFragment},
 };
 use peniko::{kurbo::Shape, BrushRef};
 
-use crate::{Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image, Stroke};
+use crate::{
+    Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image, Stroke, VelloEncoding,
+};
 
+/// This is the serial version of paint context
 pub struct VelloPaintContext<'a> {
     curr_transform: Affine2d,
-    scene: &'a mut vello_encoding::Encoding,
+    // scene: &'a mut vello_encoding::Encoding,
+    curr_fragment_encoding: VelloEncoding,
+    results: &'a mut PaintResults<Affine2dCanvas>,
 }
 
-pub struct VelloPaintScanner<'a> {
-    a: &'a mut i32,
-}
+// We do not need to scan in a serial painter impl. Therefore a unit type with empty methods.
+pub struct VelloPaintScanner;
 
 impl<'a> PaintContext for VelloPaintContext<'a> {
     type Canvas = Affine2dCanvas;
@@ -68,11 +72,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         self.curr_transform = old_transform;
     }
 
-    fn paint_layered_child(&mut self, op: impl FnOnce(&Affine2d) -> ArcChildLayer<Self::Canvas>) {
-        todo!()
-    }
-
-    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
+    fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &dyn ChildRenderObject<P>,
         transform: &P::Transform,
@@ -80,49 +80,68 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         child.paint(transform, self)
     }
 
-    fn paint_children<P: Protocol<Canvas = Self::Canvas>>(
-        &mut self,
-        child: impl Parallel<Item = ArcChildRenderObject<P>>,
-        transform: &P::Transform,
+    fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
+        &'b mut self,
+        child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
     ) {
-        todo!()
+        child_transform_pairs
+            .into_iter()
+            .for_each(|(child, transform)| self.paint(child.as_ref(), transform))
+    }
+
+    fn add_layer(
+        &mut self,
+        layer: ArcChildLayer<Self::Canvas>,
+        transform: Option<&<Self::Canvas as Canvas>::Transform>,
+    ) {
+        if !self.curr_fragment_encoding.is_empty() {
+            let encoding = std::mem::take(&mut self.curr_fragment_encoding);
+            self.results
+                .structured_children
+                .push(LayerChild::Fragment { encoding });
+        }
+        let layer_transform = if let Some(transform) = transform {
+            self.curr_transform * *transform
+        } else {
+            self.curr_transform.clone()
+        };
+        self.results.structured_children.push(LayerChild::Layer {
+            transform: layer_transform,
+            layer,
+        });
     }
 }
 
-impl<'a> PaintContext for VelloPaintScanner<'a> {
+impl PaintContext for VelloPaintScanner {
     type Canvas = Affine2dCanvas;
 
-    #[inline(always)]
-    fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand) {
-        todo!()
-    }
+    fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand) {}
 
     fn with_transform(
         &mut self,
         transform: <Self::Canvas as Canvas>::Transform,
         op: impl FnOnce(&mut Self),
     ) {
-        todo!()
     }
 
-    fn paint_layered_child(&mut self, op: impl FnOnce(&Affine2d) -> ArcChildLayer<Self::Canvas>) {
-        todo!()
-    }
-
-    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
+    fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &dyn ChildRenderObject<P>,
         transform: &P::Transform,
     ) {
-        todo!()
     }
 
-    fn paint_children<P: Protocol<Canvas = Self::Canvas>>(
-        &mut self,
-        child: impl Parallel<Item = ArcChildRenderObject<P>>,
-        transform: &P::Transform,
+    fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
+        &'b mut self,
+        child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
     ) {
-        todo!()
+    }
+
+    fn add_layer(
+        &mut self,
+        layer: ArcChildLayer<Self::Canvas>,
+        transform: Option<&<Self::Canvas as Canvas>::Transform>,
+    ) {
     }
 }
 
@@ -137,20 +156,21 @@ impl<'a> VelloPaintContext<'a> {
         shape: &impl Shape,
     ) {
         let blend = blend.into();
-        self.scene.encode_transform(transform);
-        self.scene.encode_linewidth(-1.0);
-        if !self.scene.encode_shape(shape, true) {
+        self.curr_fragment_encoding.encode_transform(transform);
+        self.curr_fragment_encoding.encode_linewidth(-1.0);
+        if !self.curr_fragment_encoding.encode_shape(shape, true) {
             // If the layer shape is invalid, encode a valid empty path. This suppresses
             // all drawing until the layer is popped.
-            self.scene
+            self.curr_fragment_encoding
                 .encode_shape(&peniko::kurbo::Rect::new(0.0, 0.0, 0.0, 0.0), true);
         }
-        self.scene.encode_begin_clip(blend, alpha.clamp(0.0, 1.0));
+        self.curr_fragment_encoding
+            .encode_begin_clip(blend, alpha.clamp(0.0, 1.0));
     }
 
     /// Pops the current layer.
     fn pop_layer(&mut self) {
-        self.scene.encode_end_clip();
+        self.curr_fragment_encoding.encode_end_clip();
     }
 
     /// Fills a shape using the specified style and brush.
@@ -162,18 +182,21 @@ impl<'a> VelloPaintContext<'a> {
         brush_transform: Option<Affine2d>,
         shape: &impl Shape,
     ) {
-        self.scene.encode_transform(transform);
-        self.scene.encode_linewidth(match style {
+        self.curr_fragment_encoding.encode_transform(transform);
+        self.curr_fragment_encoding.encode_linewidth(match style {
             Fill::NonZero => -1.0,
             Fill::EvenOdd => -2.0,
         });
-        if self.scene.encode_shape(shape, true) {
+        if self.curr_fragment_encoding.encode_shape(shape, true) {
             if let Some(brush_transform) = brush_transform {
-                if self.scene.encode_transform((transform * brush_transform)) {
-                    self.scene.swap_last_path_tags();
+                if self
+                    .curr_fragment_encoding
+                    .encode_transform((transform * brush_transform))
+                {
+                    self.curr_fragment_encoding.swap_last_path_tags();
                 }
             }
-            self.scene.encode_brush(brush, 1.0);
+            self.curr_fragment_encoding.encode_brush(brush, 1.0);
         }
     }
 
@@ -186,15 +209,18 @@ impl<'a> VelloPaintContext<'a> {
         brush_transform: Option<Affine2d>,
         shape: &impl Shape,
     ) {
-        self.scene.encode_transform(transform);
-        self.scene.encode_linewidth(style.width);
-        if self.scene.encode_shape(shape, false) {
+        self.curr_fragment_encoding.encode_transform(transform);
+        self.curr_fragment_encoding.encode_linewidth(style.width);
+        if self.curr_fragment_encoding.encode_shape(shape, false) {
             if let Some(brush_transform) = brush_transform {
-                if self.scene.encode_transform(transform * brush_transform) {
-                    self.scene.swap_last_path_tags();
+                if self
+                    .curr_fragment_encoding
+                    .encode_transform(transform * brush_transform)
+                {
+                    self.curr_fragment_encoding.swap_last_path_tags();
                 }
             }
-            self.scene.encode_brush(brush, 1.0);
+            self.curr_fragment_encoding.encode_brush(brush, 1.0);
         }
     }
 

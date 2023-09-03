@@ -1,6 +1,7 @@
 pub type InlinableUsizeVec<T, const N: usize = 2> = smallvec::SmallVec<[T; N]>;
 pub type Inlinable64Vec<T> = smallvec::SmallVec<[T; (std::mem::size_of::<usize>() * 2) / 8]>;
 pub type InlinableDwsizeVec<T, const N: usize = 1> = smallvec::SmallVec<[T; N]>;
+pub type InlinableVec<T, const N: usize> = smallvec::SmallVec<[T;N]>;
 
 pub type SmallMap<K, V> = linear_map::LinearMap<K, V>;
 pub type SmallSet<T> = linear_map::set::LinearSet<T>;

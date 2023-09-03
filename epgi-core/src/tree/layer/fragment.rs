@@ -6,6 +6,5 @@ pub struct LayerFragment<C: Canvas> {
 }
 
 struct LayerFragmentInner<C: Canvas> {
-    transform_abs: C::Transform,
     encoding: C::Encoding,
 }

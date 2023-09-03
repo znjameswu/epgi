@@ -238,11 +238,6 @@ where
 pub(crate) struct LayoutResults<P: Protocol, M> {
     pub(crate) size: P::Size,
     pub(crate) memo: M,
-    pub(crate) paint: Option<PaintResults<P>>,
-}
-
-pub(crate) struct PaintResults<P: Protocol> {
-    pub(crate) transform_abs: P::Transform,
 }
 
 impl<P, M> RenderCache<P, M>
@@ -274,11 +269,7 @@ where
             layout_results: None,
         })
         .layout_results
-        .insert(LayoutResults {
-            size,
-            memo,
-            paint: None,
-        })
+        .insert(LayoutResults { size, memo })
         .size
     }
 

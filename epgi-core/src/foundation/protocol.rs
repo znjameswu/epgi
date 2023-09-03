@@ -1,8 +1,10 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Mul};
 
-use crate::tree::{ArcChildRenderObject, ArcParentLayer, ChildRenderObject, ArcChildLayer};
+use crate::tree::{
+    ArcAnyLayer, ArcChildLayer, ArcChildRenderObject, ArcParentLayer, ChildRenderObject, LayerChild,
+};
 
-use super::Parallel;
+use super::{InlinableVec, Parallel};
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
@@ -24,6 +26,7 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
 
 pub trait Constraints<Size>: Debug + PartialEq + Clone + Send + Sync + 'static {
     fn is_tight(&self) -> bool;
+    // fn tighten(&self) -> Option<Size>;
     fn constrains(&self, size: Size) -> Size;
 }
 
@@ -72,7 +75,7 @@ where
 }
 
 pub trait Canvas: Sized + 'static {
-    type Transform: Identity + Debug + Clone + Send + Sync + 'static;
+    type Transform: Mul<Self::Transform> + Identity + Debug + Clone + Send + Sync + 'static;
     type PaintCommand: Send + Sync;
 
     type PaintContext<'a>: PaintContext<Canvas = Self>;
@@ -87,6 +90,14 @@ pub trait Canvas: Sized + 'static {
         paint: impl FnOnce(&mut Self::PaintContext<'_>),
     );
 
+    fn paint_render_object<P: Protocol<Canvas = Self>>(
+        render_object: ArcChildRenderObject<P>,
+    ) -> PaintResults<Self>;
+
+    // fn paint_render_objects<P: Protocol<Canvas = Self>>(
+    //     render_objects: impl Parallel<Item = ArcChildRenderObject<P>>,
+    // ) -> PaintResults<Self>;
+
     // The following methods are here to avoid creating and impl-ing (outside this crate) new traits for vello encodings.
     // Although we can wrap vello encoding in a new type, I think it is too inconvenient.
     fn composite(
@@ -96,6 +107,11 @@ pub trait Canvas: Sized + 'static {
     );
 
     fn clear(this: &mut Self::Encoding);
+}
+
+pub struct PaintResults<C: Canvas> {
+    pub structured_children: Vec<LayerChild<C>>,
+    pub detached_children: Vec<(C::Transform, ArcAnyLayer)>,
 }
 
 pub trait PaintContext {
@@ -109,23 +125,31 @@ pub trait PaintContext {
         op: impl FnOnce(&mut Self),
     );
 
-    /// Get access to the parent layer to create a new [Layer].
-    ///
-    /// Do not call this method if you do not intend to push a new layer,
-    /// even if this method seems to allow arbitrary operation.
-    // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
-    fn paint_layered_child(&mut self, op: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> ArcChildLayer<Self::Canvas>);
+    // /// Get access to the parent layer to create a new [Layer].
+    // ///
+    // /// Do not call this method if you do not intend to push a new layer,
+    // /// even if this method seems to allow arbitrary operation.
+    // // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
+    // fn paint_layered_child(
+    //     &mut self,
+    //     op: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> ArcChildLayer<Self::Canvas>,
+    // );
 
-    fn paint_child<P: Protocol<Canvas = Self::Canvas>>(
+    fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &dyn ChildRenderObject<P>,
         transform: &P::Transform,
     );
 
-    fn paint_children<P: Protocol<Canvas = Self::Canvas>>(
+    fn paint_multiple<'a, P: Protocol<Canvas = Self::Canvas>>(
+        &'a mut self,
+        child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'a P::Transform)>,
+    );
+
+    fn add_layer(
         &mut self,
-        child: impl Parallel<Item = ArcChildRenderObject<P>>,
-        transform: &P::Transform,
+        layer: ArcChildLayer<Self::Canvas>,
+        transform: Option<&<Self::Canvas as Canvas>::Transform>,
     );
 }
 
@@ -141,4 +165,14 @@ pub trait Encoding<T>: Send + Sync + 'static {
     fn composite(&mut self, src: &Self, transform: Option<&T>);
 
     fn clear(&mut self);
+}
+
+pub trait LayerProtocol:
+    Protocol<Transform = <<Self as Protocol>::Canvas as Canvas>::Transform>
+{
+}
+
+impl<P> LayerProtocol for P where
+    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>
+{
 }
