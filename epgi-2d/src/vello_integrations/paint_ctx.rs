@@ -1,6 +1,9 @@
 use epgi_core::{
-    foundation::{Asc, Canvas, PaintContext, PaintResults, Parallel, Protocol},
-    tree::{ArcChildLayer, ArcChildRenderObject, ChildRenderObject, LayerChild, LayerFragment},
+    foundation::{Asc, Canvas, PaintContext, Parallel, Protocol},
+    tree::{
+        ArcChildLayer, ArcChildRenderObject, ChildLayerOrFragment, ComposableChildLayer,
+        ChildRenderObject, LayerFragment, PaintResults,
+    },
 };
 use peniko::{kurbo::Shape, BrushRef};
 
@@ -89,26 +92,16 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             .for_each(|(child, transform)| self.paint(child.as_ref(), transform))
     }
 
-    fn add_layer(
-        &mut self,
-        layer: ArcChildLayer<Self::Canvas>,
-        transform: Option<&<Self::Canvas as Canvas>::Transform>,
-    ) {
+    fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {
         if !self.curr_fragment_encoding.is_empty() {
             let encoding = std::mem::take(&mut self.curr_fragment_encoding);
             self.results
                 .structured_children
-                .push(LayerChild::Fragment { encoding });
+                .push(ChildLayerOrFragment::Fragment(encoding));
         }
-        let layer_transform = if let Some(transform) = transform {
-            self.curr_transform * *transform
-        } else {
-            self.curr_transform.clone()
-        };
-        self.results.structured_children.push(LayerChild::Layer {
-            transform: layer_transform,
-            layer,
-        });
+        self.results
+            .structured_children
+            .push(ChildLayerOrFragment::Layer(op()));
     }
 }
 
@@ -137,12 +130,7 @@ impl PaintContext for VelloPaintScanner {
     ) {
     }
 
-    fn add_layer(
-        &mut self,
-        layer: ArcChildLayer<Self::Canvas>,
-        transform: Option<&<Self::Canvas as Canvas>::Transform>,
-    ) {
-    }
+    fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {}
 }
 
 impl<'a> VelloPaintContext<'a> {

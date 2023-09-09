@@ -550,3 +550,32 @@ We can use three types of offset when invoking a hit test method on a render obj
     1. Each render object need to store its semi-absolute transformation to its parent layer during the painting pahse.
 
 Decision: Use semi-absolute offset. Optionally introduce Canvas::HitPosition
+
+## Render Object state when performing hittest
+Flutter says the hit-tested render objects must be already laid out, but not necessarily painted. Flutter's RenderOpacity employs an optimization where painting is skipped when opacity = 0
+
+The same optimization technique might be problematic when we have detached children. If we skip painting a subtree, then its detached chidlren will also be skipped. For example, for a selectable text with opacity = 0, if we skip painting it, then its text selection overlay and handles, as they are detached, will not be registered to the layer tree, making them also invisible. Which is a bad breaking user experience compared with opacity = 0.001.
+
+Also, we decided to use semi-absolute offset for hit testing. Which requires the render objects to store up-to-date painting results.
+
+Therefore, we cannot both have detached layer children design and the flutter painting optimizations.
+
+Decision: Hit-test can only be performed on painted render objects.
+
+
+
+# Two choices in implementing an isomorphic tree subset
+Problem statement: ElementNode tree -> RenderObject tree,  RenderObject tree -> Layer tree. These two mappings is called isomorphic tree subset.
+
+1. Container managed. Containee use an associated type to indicate the mapped node type. The mapped node is stored inside the container
+    0. Good type safety and zero cost abstraction.
+    1. For container node without a mapped node, the associated type in the containee has to be `Never`
+    2. Very bad extensibility. 
+2. Containee managed. The mapped node is directly stored inside the containee.
+    1. Extensibility when coupled with runtime type reflection such as the type registry in `bevy-reflect`.
+    2. Implementers of containees can easily break lifetime guarantees.
+    3. Users of containees may also easily break lifetime guarantees since this field is exposed to them.
+    4. Operations on the mapped node may require fields in the container which are not accessible to the containee.
+    5. If implemented without an associated type, then the caller can only get a trait object. Possibly not zero cost.
+
+Temporary decision: Keep Element -> Render implemented as container mangaged for now. Try implement Render -> Layer as containee managed to see the results.

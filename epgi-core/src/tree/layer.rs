@@ -1,12 +1,10 @@
-mod component;
 mod context;
 mod fragment;
 
-pub use component::*;
 pub use context::*;
 pub use fragment::*;
 
-use std::any::Any;
+use std::{any::Any, ops::Mul};
 
 use crate::foundation::{Arc, Aweak, Canvas, Encoding, InlinableDwsizeVec, Protocol, SyncMutex};
 
@@ -24,59 +22,24 @@ pub type ArcLayerOf<R: Render> = Arc<
     >,
 >;
 
-/// A transparent, unretained internal layer.
-pub struct LayerScope<C: Canvas> {
-    detached_parent: Option<AweakParentLayer<C>>,
-    context: AscRenderContextNode,
-    inner: SyncMutex<LayerScopeInner<C>>,
-}
-
-struct LayerScopeInner<C: Canvas> {
-    transform_abs: C::Transform,
-    structured_children: Vec<LayerChild<C>>,
-    detached_children: Vec<ArcChildLayer<C>>,
-}
-
-pub enum LayerChild<C: Canvas> {
-    Fragment {
-        encoding: C::Encoding,
-    },
-    Layer {
-        transform: C::Transform,
-        layer: ArcChildLayer<C>,
-    },
-}
-
-/// Fragments are ephemeral. Scopes are persistent.
-pub struct LayerFragment<C: Canvas> {
-    inner: SyncMutex<LayerFragmentInner<C>>,
-}
-
-struct LayerFragmentInner<C: Canvas> {
-    encoding: C::Encoding,
-}
-
-impl<C> LayerFragment<C>
-where
-    C: Canvas,
-{
-    pub fn new(encoding: C::Encoding) -> Self {
-        Self {
-            inner: SyncMutex::new(LayerFragmentInner { encoding }),
-        }
-    }
-}
-
 pub trait Layer: Send + Sync {
     type ParentCanvas: Canvas;
     type ChildCanvas: Canvas;
 
-    fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding);
-    /// Clear all contents to prepare for repaint.
-    ///
-    /// For [LayerFragment]s, they will clear their recorded encodings.
-    /// For [LayerScope]s, they will clear their structured children (?).
-    fn clear(&self);
+    fn context(&self) -> &AscLayerContextNode;
+
+    fn composite_to(
+        &self,
+        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+    );
+
+    fn repaint(&self);
+    // /// Clear all contents to prepare for repaint.
+    // ///
+    // /// For [LayerFragment]s, they will clear their recorded encodings.
+    // /// For [LayerScope]s, they will clear their structured children (?).
+    // fn clear(&self);
 
     // fn transform_abs(&self) -> C::Transform;
 
@@ -86,7 +49,7 @@ pub trait Layer: Send + Sync {
     fn as_arc_parent_layer(
         self: Arc<Self>,
     ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>>;
-    fn as_any_layer_arc(self: Arc<Self>) -> Arc<dyn AnyLayer>;
+    fn as_arc_any_layer(self: Arc<Self>) -> Arc<dyn AnyLayer>;
 }
 
 pub trait ChildLayer: Send + Sync {
@@ -94,12 +57,16 @@ pub trait ChildLayer: Send + Sync {
 
     fn paint(&self);
 
-    fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding);
-    /// Clear all contents to prepare for repaint.
-    ///
-    /// For [LayerFragment]s, they will clear their recorded encodings.
-    /// For [LayerScope]s, they will clear their structured children (?).
-    fn clear(&self);
+    fn composite_to(
+        &self,
+        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+    );
+    // /// Clear all contents to prepare for repaint.
+    // ///
+    // /// For [LayerFragment]s, they will clear their recorded encodings.
+    // /// For [LayerScope]s, they will clear their structured children (?).
+    // fn clear(&self);
 }
 
 pub trait ParentLayer: Send + Sync {
@@ -107,7 +74,7 @@ pub trait ParentLayer: Send + Sync {
 }
 
 pub trait AnyLayer: Send + Sync {
-    fn composite_to(&self, encoding: &mut dyn Any);
+    fn composite_to(&self, encoding: &mut dyn Any, composition_config: &dyn Any);
     fn composite_self(&self) -> Arc<dyn Any + Send + Sync>;
 }
 
@@ -121,13 +88,17 @@ where
         todo!()
     }
 
-    fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
-        Layer::composite_to(self, encoding)
+    fn composite_to(
+        &self,
+        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+    ) {
+        Layer::composite_to(self, encoding, composition_config)
     }
 
-    fn clear(&self) {
-        T::clear(self)
-    }
+    // fn clear(&self) {
+    //     T::clear(self)
+    // }
 }
 
 impl<T> ParentLayer for T
@@ -141,13 +112,18 @@ impl<T> AnyLayer for T
 where
     T: Layer,
 {
-    fn composite_to(&self, encoding: &mut dyn Any) {
+    fn composite_to(&self, encoding: &mut dyn Any, composition_config: &dyn Any) {
         let encoding = encoding
             .downcast_mut::<<<Self as Layer>::ParentCanvas as Canvas>::Encoding>()
             .expect(
                 "A Layer should always receives the correct type of encoding in order to composite",
             );
-        Layer::composite_to(self, encoding)
+        let composition_config = composition_config
+            .downcast_ref::<LayerCompositionConfig<T::ParentCanvas>>()
+            .expect(
+                "A Layer should always receives the correct type of encoding in order to composite",
+            );
+        Layer::composite_to(self, encoding, composition_config)
     }
 
     fn composite_self(&self) -> Arc<dyn Any + Send + Sync> {
@@ -155,104 +131,95 @@ where
     }
 }
 
-impl<C> ChildLayer for LayerFragment<C>
+pub struct PaintResults<C: Canvas> {
+    pub structured_children: Vec<ChildLayerOrFragment<C>>,
+    pub detached_children: Vec<ComposableChildLayer<C>>,
+}
+
+impl<C> PaintResults<C>
 where
     C: Canvas,
 {
-    type ParentCanvas = C;
-
-    fn paint(&self) {
-        todo!()
-    }
-
-    fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
-        let inner = &mut *self.inner.lock();
-        // C::composite(encoding, &inner.encoding, Some(&inner.transform_abs));
-        todo!()
-    }
-
-    fn clear(&self) {
-        C::clear(&mut self.inner.lock().encoding)
+    pub fn composite_to(
+        &self,
+        encoding: &mut C::Encoding,
+        composition_config: &LayerCompositionConfig<C>,
+    ) {
+        self.structured_children
+            .iter()
+            .for_each(|child| match child {
+                ChildLayerOrFragment::Fragment(fragment_encoding) => C::composite(
+                    encoding,
+                    fragment_encoding,
+                    composition_config.transform(),
+                    composition_config.clip(),
+                ),
+                ChildLayerOrFragment::Layer(ComposableChildLayer {
+                    config: child_config,
+                    layer,
+                }) => layer.composite_to(encoding, composition_config * child_config),
+            })
     }
 }
 
-impl<C> Layer for LayerScope<C>
+impl<C> Default for PaintResults<C>
 where
     C: Canvas,
 {
-    type ParentCanvas = C;
-
-    type ChildCanvas = C;
-
-    fn composite_to(&self, encoding: &mut <Self::ParentCanvas as Canvas>::Encoding) {
-        // let (structured_children, detached_children) = {
-        //     let inner = &mut *self.inner.lock();
-        //     (
-        //         inner.structured_children.clone(),
-        //         inner.detached_children.clone(),
-        //     )
-        // };
-        // // TODO: Parallel composite.
-        // for child in structured_children {
-        //     child.composite_to(encoding)
-        // }
-        // for child in detached_children {
-        //     child.composite_to(encoding)
-        // }
-        todo!()
-    }
-
-    fn clear(&self) {
-        let mut inner = self.inner.lock();
-        inner.structured_children.clear();
-        // inner.detached_children.clear();
-    }
-
-    fn as_arc_child_layer(
-        self: Arc<Self>,
-    ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>> {
-        self
-    }
-
-    fn as_arc_parent_layer(
-        self: Arc<Self>,
-    ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>> {
-        self
-    }
-
-    fn as_any_layer_arc(self: Arc<Self>) -> Arc<dyn AnyLayer> {
-        self
-    }
-}
-
-impl<C> LayerScope<C>
-where
-    C: Canvas,
-{
-    pub fn new_structured(context: AscRenderContextNode, transform_abs: C::Transform) -> Self {
+    fn default() -> Self {
         Self {
-            detached_parent: None,
-            context,
-            inner: SyncMutex::new(LayerScopeInner {
-                transform_abs,
-                structured_children: Default::default(),
-                detached_children: Default::default(),
-            }),
+            structured_children: Default::default(),
+            detached_children: Default::default(),
         }
     }
+}
 
-    // pub fn new_detached(
-    //     parent_layer: ArcParentLayer<C>,
-    //     element_context: ArcElementContextNode,
-    // ) -> Self {
-    //     Self {
-    //         detached_parent: None,
-    //         element_context,
-    //         inner: SyncMutex::new(LayerScopeInner {
-    //             transform_abs: todo!(),
-    //             structured_children: Default::default(),
-    //             detached_children: Default::default(),
-    //         }),
-    //     }
-    // }
+pub enum ChildLayerOrFragment<C: Canvas> {
+    Fragment(C::Encoding),
+    Layer(ComposableChildLayer<C>),
+}
+
+pub struct ComposableChildLayer<C: Canvas> {
+    pub config: LayerCompositionConfig<C>,
+    pub layer: ArcChildLayer<C>,
+}
+
+#[non_exhaustive]
+pub struct LayerCompositionConfig<C: Canvas> {
+    pub transform: C::Transform,
+}
+
+impl<C> LayerCompositionConfig<C>
+where
+    C: Canvas,
+{
+    pub fn transform(&self) -> Option<&C::Transform> {
+        Some(&self.transform)
+    }
+
+    pub fn clip(&self) -> Option<&C::Clip> {
+        None //TODO
+    }
+}
+
+impl<'a, C> Mul<&'a LayerCompositionConfig<C>> for &'a LayerCompositionConfig<C>
+where
+    C: Canvas,
+{
+    type Output = &'a LayerCompositionConfig<C>;
+
+    fn mul(self, rhs: &'a LayerCompositionConfig<C>) -> Self::Output {
+        todo!()
+    }
+}
+
+impl<C> Mul<LayerCompositionConfig<C>> for LayerCompositionConfig<C>
+where
+    C: Canvas,
+{
+    type Output = LayerCompositionConfig<C>;
+
+    fn mul(self, rhs: LayerCompositionConfig<C>) -> Self::Output {
+        todo!()
+    }
 }

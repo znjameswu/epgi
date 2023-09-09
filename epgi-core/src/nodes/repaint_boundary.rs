@@ -1,22 +1,23 @@
 use crate::foundation::{
-    Arc, BuildSuspendedError, Canvas, LayerProtocol, InlinableDwsizeVec, Never, PaintContext,
-    Protocol, Provide,
+    Arc, Aweak, BuildSuspendedError, Canvas, Identity, InlinableDwsizeVec, LayerProtocol, Never,
+    PaintContext, Protocol, Provide, SyncMutex,
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode, ArcLayerOf,
-    AscRenderContextNode, Element, LayerPaint, LayerScope, Reconciler, Render, RenderObject,
-    RenderObjectUpdateResult, Widget,
+    AnyLayer, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
+    ArcLayerOf, AscLayerContextNode, AscRenderContextNode, ChildLayer, ChildLayerOrFragment,
+    ComposableChildLayer, Element, Layer, LayerCompositionConfig, LayerPaint, PaintResults,
+    ParentLayer, Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
 };
 
 #[derive(Debug)]
-pub struct RepaintBoundary<P: Protocol> {
+pub struct RepaintBoundary<P: LayerProtocol> {
     child: ArcChildWidget<P>,
 }
 
 impl<P> Widget for RepaintBoundary<P>
 where
-    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
+    P: LayerProtocol,
 {
     type Element = RepaintBoundaryElement<P>;
 
@@ -26,13 +27,13 @@ where
 }
 
 #[derive(Clone)]
-pub struct RepaintBoundaryElement<P: Protocol> {
+pub struct RepaintBoundaryElement<P: LayerProtocol> {
     child: ArcChildElementNode<P>,
 }
 
 impl<P> Element for RepaintBoundaryElement<P>
 where
-    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
+    P: LayerProtocol,
 {
     type ArcWidget = Arc<RepaintBoundary<P>>;
 
@@ -69,7 +70,7 @@ where
 }
 
 pub struct RenderRepaintBoundary<P: LayerProtocol> {
-    layer: Option<Arc<LayerScope<P::Canvas>>>,
+    layer: Arc<RepaintBoundaryLayer<P>>,
     pub(crate) child: ArcChildRenderObject<P>,
 }
 
@@ -87,20 +88,38 @@ where
 
     fn try_create_render_object_from_element(
         element: &Self::Element,
-        widget: &<Self::Element as Element>::ArcWidget,
+        _widget: &<Self::Element as Element>::ArcWidget,
+        context: &AscRenderContextNode,
     ) -> Option<Self> {
-        todo!()
+        let child = element.child.get_current_subtree_render_object()?;
+        assert!(
+            context.is_repaint_boundary(),
+            concat!(
+                "Repaint boundaries must be registered in its RenderContextNode. \n",
+                "If this assertion failed, you have encountered a framework bug."
+            )
+        );
+        let layer = Arc::new(RepaintBoundaryLayer::new(
+            context.nearest_repaint_boundary.clone(),
+            child.clone(),
+        ));
+        Some(Self { layer, child })
     }
 
     fn update_render_object(
         &mut self,
-        widget: &<Self::Element as Element>::ArcWidget,
+        _widget: &<Self::Element as Element>::ArcWidget,
     ) -> RenderObjectUpdateResult {
-        todo!()
+        RenderObjectUpdateResult::None
     }
 
     fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
-        todo!()
+        let Some(child) = element.child.get_current_subtree_render_object() else {
+            return Err(())
+        };
+        self.layer.update_child_render_object(child.clone());
+        self.child = child;
+        Ok(())
     }
 
     const NOOP_DETACH: bool = true;
@@ -132,34 +151,126 @@ where
 
 impl<P: Protocol> LayerPaint for RenderRepaintBoundary<P>
 where
-    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>,
+    P: LayerProtocol,
 {
-    fn get_layer_or_insert(
-        &mut self,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+    fn get_layer(&self) -> ArcLayerOf<Self> {
+        self.layer.clone() as _
+        // if let Some(layer) = &self.layer {
+        //     return layer.clone() as _;
+        // }
+
+        // assert!(
+        //     node.context.is_repaint_boundary(),
+        //     concat!(
+        //         "Repaint boundaries must be registered in its RenderContextNode. \n",
+        //         "If this assertion failed, you have encountered a framework bug."
+        //     )
+        // );
+        // let layer = Arc::new(RepaintBoundaryLayer {
+        //     render_object: Arc::downgrade(node),
+        //     context: node.context.nearest_repaint_boundary.clone(),
+        //     inner: SyncMutex::new(RepaintBoundaryLayerInner { paint_cache: None }),
+        // });
+        // self.layer = Some(layer.clone());
+        // return layer;
+    }
+
+    fn get_canvas_transform_ref(
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-        memo: &Self::LayoutMemo,
-        context: &AscRenderContextNode,
-        transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> ArcLayerOf<Self> {
-        match &self.layer {
-            Some(layer) => todo!(),
-            None => {
-                let layer = LayerScope::new_structured(
-                    context.clone(),
-                    <<Self::Element as Element>::ParentProtocol as Protocol>::transform_canvas(
-                        transform,
-                        transform_parent,
-                    ),
-                );
-                let layer = Arc::new(layer);
-                self.layer = Some(layer.clone());
-                layer
-            }
+    ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
+    {
+        transform
+    }
+
+    fn get_canvas_transform(
+        transform: <<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+    ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
+    {
+        transform
+    }
+}
+
+pub struct RepaintBoundaryLayer<P: LayerProtocol> {
+    pub context: AscLayerContextNode,
+    pub inner: SyncMutex<RepaintBoundaryLayerInner<P>>,
+}
+
+pub struct RepaintBoundaryLayerInner<P: LayerProtocol> {
+    /// This field is nullable because we temporarily share implementation with RootLayer
+    child_render_object: ArcChildRenderObject<P>,
+    paint_cache: Option<PaintResults<P::Canvas>>,
+}
+
+impl<P> RepaintBoundaryLayer<P>
+where
+    P: LayerProtocol,
+{
+    pub fn new(context: AscLayerContextNode, child_render_object: ArcChildRenderObject<P>) -> Self {
+        Self {
+            context,
+            inner: SyncMutex::new(RepaintBoundaryLayerInner {
+                child_render_object,
+                paint_cache: None,
+            }),
         }
     }
 
-    fn get_layer(&mut self) -> Option<ArcLayerOf<Self>> {
-        self.layer.clone().map(|x| x as _)
+    pub fn update_child_render_object(&self, child_render_object: ArcChildRenderObject<P>) {
+        let mut inner = self.inner.lock();
+        inner.child_render_object = child_render_object;
+        inner.paint_cache = None;
+    }
+}
+
+impl<P> Layer for RepaintBoundaryLayer<P>
+where
+    P: LayerProtocol,
+{
+    type ParentCanvas = P::Canvas;
+
+    type ChildCanvas = P::Canvas;
+
+    fn context(&self) -> &AscLayerContextNode {
+        &self.context
+    }
+
+    fn composite_to(
+        &self,
+        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+    ) {
+        let inner = self.inner.lock();
+        let paint_cache = inner
+            .paint_cache
+            .as_ref()
+            .expect("A layer can only be composited after it has finished painting");
+
+        paint_cache.composite_to(encoding, composition_config)
+    }
+
+    fn repaint(&self) {
+        let mut inner = self.inner.lock();
+        if !self.context.needs_paint() && inner.paint_cache.is_some() {
+            return;
+        }
+        inner.paint_cache = Some(P::Canvas::paint_render_object(
+            inner.child_render_object.as_ref(),
+        ));
+    }
+
+    fn as_arc_child_layer(
+        self: Arc<Self>,
+    ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>> {
+        self
+    }
+
+    fn as_arc_parent_layer(
+        self: Arc<Self>,
+    ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>> {
+        self
+    }
+
+    fn as_arc_any_layer(self: Arc<Self>) -> Arc<dyn AnyLayer> {
+        self
     }
 }

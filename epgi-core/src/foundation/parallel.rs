@@ -32,7 +32,7 @@ pub trait HktContainer {
         T: Send;
 }
 
-pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> {
+pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> + Send {
     type Item: Send;
 
     type HktContainer: HktContainer<Container<<Self as Parallel>::Item> = Self>;

@@ -1,15 +1,16 @@
 use epgi_2d::{
-    Affine2d, BoxConstraints, BoxProtocol, BoxProvider, RenderRootView, RootView, RootViewElement,
+    Affine2d, BoxConstraints, BoxProtocol, BoxProvider, RenderRootView, RootLayer, RootView,
+    RootViewElement,
 };
 use epgi_common::ConstrainedBox;
 use epgi_core::{
     foundation::{Arc, Asc, SyncMutex},
     hooks::{SetState, StateHook},
-    nodes::Function,
+    nodes::{Function, RepaintBoundaryLayer},
     scheduler::{
         get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, TreeScheduler,
     },
-    tree::{create_root_element, ArcChildWidget, Hooks, LayerScope},
+    tree::{create_root_element, ArcChildWidget, Hooks},
 };
 use glazier::{
     kurbo::{Affine, Size},
@@ -331,10 +332,7 @@ impl MainState {
             root_widget,
             element,
             |context| RenderRootView {
-                layer: Asc::new(LayerScope::new_structured(
-                    context.clone(),
-                    Affine2d::IDENTITY,
-                )),
+                layer: Asc::new(RootLayer::new(context.clone(), None)),
                 child: None,
             },
             Hooks {

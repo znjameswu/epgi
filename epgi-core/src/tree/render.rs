@@ -17,6 +17,12 @@ pub enum RenderObjectUpdateResult {
     MarkNeedsLayout,
 }
 
+impl Default for RenderObjectUpdateResult {
+    fn default() -> Self {
+        RenderObjectUpdateResult::None
+    }
+}
+
 pub trait Render: Sized + Send + Sync + 'static {
     type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
 
@@ -29,6 +35,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn try_create_render_object_from_element(
         element: &Self::Element,
         widget: &<Self::Element as Element>::ArcWidget,
+        context: &AscRenderContextNode,
     ) -> Option<Self>;
 
     fn update_render_object(
@@ -138,31 +145,33 @@ pub struct PerformDryLayout<R: Render> {
 
 pub trait LayerPaint: Render {
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
-        get_layer_or_insert: Self::get_layer_or_insert,
         get_layer: Self::get_layer,
+        get_canvas_transform: Self::get_canvas_transform,
+        get_canvas_transform_ref: Self::get_canvas_transform_ref,
     });
-    fn get_layer_or_insert(
-        &mut self,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+    // Returns Arc by value. Since most likely the implementers needs Arc pointer coercion, and pointer coercion results in temporary values whose reference cannot be returned.
+    fn get_layer(&self) -> ArcLayerOf<Self>;
+
+    fn get_canvas_transform_ref(
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-        memo: &Self::LayoutMemo,
-        context: &AscRenderContextNode,
-        transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> ArcLayerOf<Self>;
-    fn get_layer(&mut self) -> Option<ArcLayerOf<Self>>;
+    ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
+
+    fn get_canvas_transform(
+        transform: <<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+    ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
 }
 pub struct PerformLayerPaint<R: Render> {
-    pub get_layer_or_insert: for<'a> fn(
-        render: &'a mut R,
-        size: &<<R::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-        memo: &R::LayoutMemo,
-        context: &AscRenderContextNode,
-        transform_parent: &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> ArcLayerOf<R>,
-    pub get_layer: for<'a> fn(
-        render: &'a mut R,
-    ) -> Option<ArcLayerOf<R>>,
+    pub get_layer: fn(&R) -> ArcLayerOf<R>,
+    pub get_canvas_transform_ref:
+        fn(
+            &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+        )
+            -> &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+    pub get_canvas_transform:
+        fn(
+            <<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+        )
+            -> <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
 }
 
 pub struct RenderObject<R: Render> {

@@ -5,7 +5,7 @@ use crate::foundation::{
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ChildRenderObject, Element,
     PerformDryLayout, PerformLayerPaint, ReconcileItem, Reconciler, Render, RenderObject,
-    RenderObjectUpdateResult, Widget,
+    RenderObjectUpdateResult, Widget, AscRenderContextNode,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -150,6 +150,7 @@ where
     fn try_create_render_object_from_element(
         element: &Self::Element,
         widget: &<Self::Element as Element>::ArcWidget,
+        context: &AscRenderContextNode
     ) -> Option<Self> {
         let child = element.child.get_current_subtree_render_object()?;
         Some(Self {

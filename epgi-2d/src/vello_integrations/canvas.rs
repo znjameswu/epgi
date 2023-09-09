@@ -1,7 +1,7 @@
 use epgi_core::{
-    foundation::{Canvas, PaintResults, Protocol},
+    foundation::{Canvas, Protocol},
     nodes::Provider,
-    tree::{ArcChildRenderObject, ArcParentLayer},
+    tree::{ArcChildRenderObject, ArcParentLayer, PaintResults, ChildRenderObject},
 };
 
 use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner};
@@ -23,30 +23,37 @@ impl Canvas for Affine2dCanvas {
 
     type Encoding = VelloEncoding;
 
+    type Clip = VelloClip;
+
     fn composite(
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
+        clip: Option<&Self::Clip>
     ) {
         // TODO: Vello API design issue.
         dst.append(src, &transform.cloned())
     }
 
-    fn paint_layer(
-        layer: ArcParentLayer<Self>,
-        scan: impl FnOnce(&mut Self::PaintScanner<'_>),
-        paint: impl FnOnce(&mut Self::PaintContext<'_>),
-    ) {
-        todo!()
-    }
+    // fn paint_layer(
+    //     layer: ArcParentLayer<Self>,
+    //     scan: impl FnOnce(&mut Self::PaintScanner<'_>),
+    //     paint: impl FnOnce(&mut Self::PaintContext<'_>),
+    // ) {
+    //     todo!()
+    // }
 
     fn clear(this: &mut Self::Encoding) {
         this.reset(true)
     }
 
     fn paint_render_object<P: Protocol<Canvas = Self>>(
-        render_object: ArcChildRenderObject<P>,
+        render_object: &dyn ChildRenderObject<P>,
     ) -> PaintResults<Self> {
         todo!()
     }
+
 }
+
+#[derive(Clone)]
+pub struct VelloClip;

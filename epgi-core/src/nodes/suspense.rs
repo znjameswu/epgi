@@ -4,8 +4,8 @@ use crate::{
         PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, GetSuspense,
-        Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, AscRenderContextNode, Element,
+        GetSuspense, Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
     },
 };
 
@@ -91,6 +91,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn try_create_render_object_from_element(
         element: &Self::Element,
         widget: &<Self::Element as Element>::ArcWidget,
+        context: &AscRenderContextNode,
     ) -> Option<Self> {
         todo!()
     }

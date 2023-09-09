@@ -19,9 +19,9 @@ use crate::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, AscRenderContextNode,
-    ReconcileItem, Reconciler, Render, RenderCache, RenderContextNode, RenderObject,
-    RenderObjectInner,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, AscLayerContextNode,
+    AscRenderContextNode, ReconcileItem, Reconciler, Render, RenderCache, RenderContextNode,
+    RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -146,7 +146,15 @@ where
     const GET_RENDER_OBJECT: GetRenderObject<R::Element> = GetRenderObject::RenderObject {
         get_render_object: |x| x,
         try_create_render_object: |element, widget, element_context| {
-            let render = R::try_create_render_object_from_element(element, widget)?;
+            assert!(
+                element_context.has_render,
+                concat!(
+                    "ElementNodes with RenderObject must be registered in its ElementContextNode. \n",
+                    "If this assertion failed, you have encountered a framework bug."
+                )
+            );
+            let render_context = &element_context.nearest_render_context;
+            let render = R::try_create_render_object_from_element(element, widget, render_context)?;
             Some(Arc::new(RenderObject::new(render, element_context.clone())))
         },
         update_render_object: if R::NOOP_UPDATE_RENDER_OBJECT {
@@ -383,7 +391,7 @@ where
 pub fn create_root_element<R: Render>(
     widget: <R::Element as Element>::ArcWidget,
     element: R::Element,
-    create_render: impl FnOnce(&AscRenderContextNode) -> R,
+    create_render: impl FnOnce(&AscLayerContextNode) -> R,
     hooks: Hooks,
     constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<R::Element>> {
@@ -396,7 +404,11 @@ pub fn create_root_element<R: Render>(
             context: element_context.nearest_render_context.clone(),
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
-                render: create_render(&element_context.nearest_render_context),
+                render: create_render(
+                    &element_context
+                        .nearest_render_context
+                        .nearest_repaint_boundary,
+                ),
             }),
         });
         ElementNode {

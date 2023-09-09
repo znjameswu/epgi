@@ -1,12 +1,15 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext, Protocol,
-        Provide,
+        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, LayerProtocol, Never,
+        PaintContext, Protocol, Provide, SyncMutex,
     },
+    nodes::RepaintBoundaryLayer,
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
-        ArcLayerOf, AscRenderContextNode, BuildContext, DryLayout, Element, LayerPaint, LayerScope,
-        ReconcileItem, Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
+        AnyLayer, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
+        ArcLayerOf, AscLayerContextNode, AscRenderContextNode, BuildContext, ChildLayer,
+        ChildLayerOrFragment, DryLayout, Element, Layer, LayerCompositionConfig, LayerPaint,
+        PaintResults, ParentLayer, ReconcileItem, Reconciler, Render, RenderObject,
+        RenderObjectUpdateResult, Widget,
     },
 };
 
@@ -103,7 +106,7 @@ impl Element for RootViewElement {
 }
 
 pub struct RenderRootView {
-    pub layer: Asc<LayerScope<Affine2dCanvas>>,
+    pub layer: Asc<RootLayer<BoxProtocol>>, //TODO!()
     pub child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
@@ -119,6 +122,7 @@ impl Render for RenderRootView {
     fn try_create_render_object_from_element(
         element: &Self::Element,
         widget: &<Self::Element as Element>::ArcWidget,
+        context: &AscRenderContextNode,
     ) -> Option<Self> {
         todo!()
         // Some(Self {
@@ -197,18 +201,115 @@ impl DryLayout for RenderRootView {
 }
 
 impl LayerPaint for RenderRootView {
-    fn get_layer_or_insert(
-        &mut self,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-        memo: &Self::LayoutMemo,
-        context: &AscRenderContextNode,
-        transform_parent: &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    ) -> ArcLayerOf<Self> {
-        unimplemented!("Root layer design has not been finalized")
+    fn get_layer(&self) -> ArcLayerOf<Self> {
+        unimplemented!()
     }
 
-    fn get_layer(&mut self) -> Option<ArcLayerOf<Self>> {
-        Some(self.layer.clone() as _)
+    fn get_canvas_transform_ref(
+        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+    ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
+    {
+        todo!()
+    }
+
+    fn get_canvas_transform(
+        transform: <<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+    ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
+    {
+        todo!()
+    }
+}
+
+pub struct RootLayer<P: LayerProtocol> {
+    pub context: AscLayerContextNode,
+    pub inner: SyncMutex<RootLayerInner<P>>,
+}
+
+pub struct RootLayerInner<P: LayerProtocol> {
+    /// This field is nullable because we temporarily share implementation with RootLayer
+    child_render_object: Option<ArcChildRenderObject<P>>,
+    paint_cache: Option<PaintResults<P::Canvas>>,
+}
+
+impl<P> RootLayer<P>
+where
+    P: LayerProtocol,
+{
+    pub fn new(
+        context: AscLayerContextNode,
+        child_render_object: Option<ArcChildRenderObject<P>>,
+    ) -> Self {
+        Self {
+            context,
+            inner: SyncMutex::new(RootLayerInner {
+                child_render_object,
+                paint_cache: None,
+            }),
+        }
+    }
+
+    pub fn update_child_render_object(&self, child_render_object: ArcChildRenderObject<P>) {
+        let mut inner = self.inner.lock();
+        inner.child_render_object = Some(child_render_object);
+        inner.paint_cache = None;
+    }
+}
+
+impl<P> Layer for RootLayer<P>
+where
+    P: LayerProtocol,
+{
+    type ParentCanvas = P::Canvas;
+
+    type ChildCanvas = P::Canvas;
+
+    fn context(&self) -> &AscLayerContextNode {
+        &self.context
+    }
+
+    fn composite_to(
+        &self,
+        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+    ) {
+        let inner = self.inner.lock();
+        let paint_cache = inner
+            .paint_cache
+            .as_ref()
+            .expect("A layer can only be composited after it has finished painting");
+
+        paint_cache.composite_to(encoding, composition_config)
+    }
+
+    fn repaint(&self) {
+        let mut inner = self.inner.lock();
+        if !self.context.needs_paint() && inner.paint_cache.is_some() {
+            return;
+        }
+        inner.paint_cache = Some(
+            inner
+                .child_render_object
+                .as_ref()
+                .map(|child_render_object| {
+                    P::Canvas::paint_render_object(child_render_object.as_ref())
+                })
+                .unwrap_or_default(),
+        );
+    }
+
+    fn as_arc_child_layer(
+        self: Arc<Self>,
+    ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>> {
+        self
+    }
+
+    fn as_arc_parent_layer(
+        self: Arc<Self>,
+    ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>> {
+        self
+    }
+
+    fn as_arc_any_layer(self: Arc<Self>) -> Arc<dyn AnyLayer> {
+        self
     }
 }

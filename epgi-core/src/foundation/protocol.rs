@@ -1,7 +1,8 @@
 use std::{fmt::Debug, ops::Mul};
 
 use crate::tree::{
-    ArcAnyLayer, ArcChildLayer, ArcChildRenderObject, ArcParentLayer, ChildRenderObject, LayerChild,
+    ArcAnyLayer, ArcChildLayer, ArcChildRenderObject, ArcParentLayer, ChildLayerOrFragment,
+    ChildRenderObject, PaintResults, ComposableChildLayer,
 };
 
 use super::{InlinableVec, Parallel};
@@ -84,14 +85,16 @@ pub trait Canvas: Sized + 'static {
     /// The Picture class in Flutter
     type Encoding: Send + Sync + 'static;
 
-    fn paint_layer(
-        layer: ArcParentLayer<Self>,
-        scan: impl FnOnce(&mut Self::PaintScanner<'_>),
-        paint: impl FnOnce(&mut Self::PaintContext<'_>),
-    );
+    type Clip: Clone + Send + Sync + 'static;
+
+    // fn paint_layer(
+    //     layer: ArcParentLayer<Self>,
+    //     scan: impl FnOnce(&mut Self::PaintScanner<'_>),
+    //     paint: impl FnOnce(&mut Self::PaintContext<'_>),
+    // );
 
     fn paint_render_object<P: Protocol<Canvas = Self>>(
-        render_object: ArcChildRenderObject<P>,
+        render_object: &dyn ChildRenderObject<P>,
     ) -> PaintResults<Self>;
 
     // fn paint_render_objects<P: Protocol<Canvas = Self>>(
@@ -104,14 +107,10 @@ pub trait Canvas: Sized + 'static {
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
+        clip: Option<&Self::Clip>
     );
 
     fn clear(this: &mut Self::Encoding);
-}
-
-pub struct PaintResults<C: Canvas> {
-    pub structured_children: Vec<LayerChild<C>>,
-    pub detached_children: Vec<(C::Transform, ArcAnyLayer)>,
 }
 
 pub trait PaintContext {
@@ -148,8 +147,7 @@ pub trait PaintContext {
 
     fn add_layer(
         &mut self,
-        layer: ArcChildLayer<Self::Canvas>,
-        transform: Option<&<Self::Canvas as Canvas>::Transform>,
+        op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>,
     );
 }
 

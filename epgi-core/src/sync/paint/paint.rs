@@ -1,10 +1,9 @@
 use crate::{
-    foundation::{Canvas, Identity, PaintContext, Parallel, Protocol},
-    scheduler::get_current_scheduler,
+    foundation::{Arc, PaintContext, Protocol},
     sync::TreeScheduler,
     tree::{
-        ArcAnyLayer, AscRenderContextNode, Element, PerformLayerPaint, Render, RenderContextNode,
-        RenderObject, RenderObjectInner,
+        ArcAnyLayer, AscRenderContextNode, ComposableChildLayer, Element, LayerCompositionConfig,
+        PerformLayerPaint, Render, RenderObject,
     },
 };
 
@@ -65,19 +64,20 @@ where
     // }
 }
 
-impl<R> RenderObjectInner<R>
+impl<R> RenderObject<R>
 where
     R: Render,
 {
-    fn paint_inner(
-        &mut self,
+    fn paint(
+        &self,
         context: &AscRenderContextNode,
         transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
         paint_ctx: &mut impl PaintContext<
             Canvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
-        let Some(layout_results) = self
+        let mut inner = self.inner.lock();
+        let Some(layout_results) = inner
             .cache
             .as_ref()
             .and_then(|x| x.layout_results(context))
@@ -86,40 +86,19 @@ where
         };
 
         if let Some(PerformLayerPaint {
-            get_layer_or_insert,
-            get_layer: _,
+            get_layer,
+            get_canvas_transform_ref,
+            ..
         }) = R::PERFORM_LAYER_PAINT
         {
-            todo!()
-            // paint_ctx.paint_layered_child(|transform_parent| {
-            //     let layer = get_layer_or_insert(
-            //         &mut self.render,
-            //         &layout_results.size,
-            //         transform,
-            //         &layout_results.memo,
-            //         context,
-            //         transform_parent,
-            //     );
-            //     if context.needs_paint() {
-
-            //         layer.clear();
-            //         // let child = child(&inner_reborrow.render);
-            //         <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
-            //             layer.clone().as_arc_parent_layer(),
-            //             |paint_scan| {
-            //                 paint_scan.paint_children(self.render.children(),&Identity::IDENTITY);
-            //             },
-            //             |paint_ctx| {
-            //                 paint_ctx.paint_children(self.render.children(),&Identity::IDENTITY);
-            //             },
-            //         );
-            //     } else if context.subtree_has_paint() {
-            //         self.render.children().par_for_each(&get_current_scheduler().sync_threadpool, |child| child.visit_and_paint());
-            //     }
-            //     layer.as_arc_child_layer()
-            // })
+            paint_ctx.add_layer(|| ComposableChildLayer {
+                config: LayerCompositionConfig {
+                    transform: get_canvas_transform_ref(transform).clone(),
+                },
+                layer: get_layer(&mut inner.render).as_arc_child_layer(),
+            })
         } else {
-            self.render.perform_paint(
+            inner.render.perform_paint(
                 &layout_results.size,
                 transform,
                 &layout_results.memo,
@@ -127,35 +106,10 @@ where
             );
         }
     }
-
-    // fn repaint_inner(&mut self) {
-    //     let Some(PerformLayerPaint {
-    //         get_layer_or_insert: _,
-    //         get_layer,
-    //     }) = R::PERFORM_LAYER_PAINT else {
-    //         panic!("Non-RepaintBoundary nodes should not be repainted")
-    //     };
-
-    //     let layer = get_layer(&mut self.render)
-    //         .expect("Repaint can only be called on nodes with an attached layer")
-    //         .clone();
-
-    //     layer.clear();
-    //     <<<R::Element as Element>::ChildProtocol as Protocol>::Canvas as Canvas>::paint_layer(
-    //         layer.clone().as_arc_parent_layer(),
-    //         |paint_scan| {
-    //             paint_scan.paint_children(self.render.children(), &Identity::IDENTITY);
-    //         },
-    //         |paint_ctx| {
-    //             paint_ctx.paint_children(self.render.children(), &Identity::IDENTITY);
-    //         },
-    //     );
-    //     // layer.as_any_layer_arc()
-    // }
 }
 
 pub(crate) mod paint_private {
-    use crate::{foundation::Canvas, tree::ArcAnyLayer};
+    use crate::foundation::Canvas;
 
     use super::*;
     pub trait ChildRenderObjectPaintExt<PP: Protocol> {
@@ -202,10 +156,7 @@ pub(crate) mod paint_private {
             transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
             paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
-            let mut inner = self.inner.lock();
-            inner.paint_inner(&self.context, transform, paint_ctx);
-            self.context.clear_self_needs_paint();
-            self.context.clear_subtree_has_paint();
+            self.paint(&self.context, transform, paint_ctx);
         }
 
         fn paint_scan(
@@ -213,8 +164,7 @@ pub(crate) mod paint_private {
             transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
             paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
-            let mut inner = self.inner.lock();
-            inner.paint_inner(&self.context, transform, paint_ctx);
+            self.paint(&self.context, transform, paint_ctx);
         }
 
         // fn visit_and_paint(&self) {
@@ -236,6 +186,4 @@ pub(crate) mod paint_private {
         //     todo!()
         // }
     }
-
-    
 }
