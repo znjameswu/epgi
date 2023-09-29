@@ -1,6 +1,9 @@
 use crate::{
     scheduler::{BatchResult, JobBatcher, LanePos},
-    tree::{ArcAnyElementNode, ArcAnyRenderObject, AweakAnyElementNode, AweakElementContextNode},
+    tree::{
+        ArcAnyElementNode, ArcAnyLayerNode, ArcAnyRenderObject, AweakAnyElementNode,
+        AweakElementContextNode,
+    },
 };
 
 use super::{CommitBarrier, LaneScheduler};
@@ -8,6 +11,7 @@ pub struct TreeScheduler {
     lane_scheduler: LaneScheduler,
     pub(super) root_element: ArcAnyElementNode,
     pub(super) root_render_object: ArcAnyRenderObject,
+    pub(crate) root_layer: ArcAnyLayerNode,
 }
 
 impl TreeScheduler {
@@ -15,10 +19,14 @@ impl TreeScheduler {
         let root_render_object = root_element.render_object().expect(
             "The render object of the root element should be initilialized and attached manually",
         );
+        let root_layer = root_render_object.layer().expect(
+            "The layer of the root render object should be initilialized and attached manually",
+        );
         Self {
             lane_scheduler: LaneScheduler::new(),
             root_element,
             root_render_object,
+            root_layer,
         }
     }
 

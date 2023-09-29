@@ -1,7 +1,7 @@
 use epgi_core::{
     foundation::{Canvas, Protocol},
     nodes::Provider,
-    tree::{ArcChildRenderObject, ArcParentLayer, PaintResults, ChildRenderObject},
+    tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
 };
 
 use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner};
@@ -25,11 +25,11 @@ impl Canvas for Affine2dCanvas {
 
     type Clip = VelloClip;
 
-    fn composite(
+    fn composite_encoding(
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
-        clip: Option<&Self::Clip>
+        clip: Option<&Self::Clip>,
     ) {
         // TODO: Vello API design issue.
         dst.append(src, &transform.cloned())
@@ -53,6 +53,9 @@ impl Canvas for Affine2dCanvas {
         todo!()
     }
 
+    fn new_encoding() -> Self::Encoding {
+        todo!()
+    }
 }
 
 #[derive(Clone)]

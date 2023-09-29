@@ -2,9 +2,12 @@ mod context;
 
 pub use context::*;
 
-use crate::foundation::{Arc, Aweak, Canvas, PaintContext, Parallel, Protocol, SyncMutex};
+use crate::foundation::{Arc, Aweak, Canvas, Never, PaintContext, Parallel, Protocol, SyncMutex};
 
-use super::{ArcElementContextNode, ArcLayerOf, Element, ElementContextNode, GetSuspense};
+use super::{
+    ArcAnyLayerNode, ArcElementContextNode, Element, ElementContextNode, GetSuspense, Layer,
+    LayerNode,
+};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
@@ -38,7 +41,7 @@ pub trait Render: Sized + Send + Sync + 'static {
         context: &AscRenderContextNode,
     ) -> Option<Self>;
 
-    fn update_render_object(
+    fn  update_render_object(
         &mut self,
         widget: &<Self::Element as Element>::ArcWidget,
     ) -> RenderObjectUpdateResult;
@@ -110,6 +113,8 @@ pub trait Render: Sized + Send + Sync + 'static {
     //     transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
     //     child_offset: &<<Self::Element as Element>::ChildProtocol as Protocol>::Offset,
     // ) -> <<Self::Element as Element>::ChildProtocol as Protocol>::CanvasTransformation;
+
+    type ArcLayerNode: ArcLayerNode<Self>;
 }
 
 pub trait DryLayout: Render {
@@ -145,12 +150,12 @@ pub struct PerformDryLayout<R: Render> {
 
 pub trait LayerPaint: Render {
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
-        get_layer: Self::get_layer,
+        // get_layer: Self::get_layer,
         get_canvas_transform: Self::get_canvas_transform,
         get_canvas_transform_ref: Self::get_canvas_transform_ref,
     });
-    // Returns Arc by value. Since most likely the implementers needs Arc pointer coercion, and pointer coercion results in temporary values whose reference cannot be returned.
-    fn get_layer(&self) -> ArcLayerOf<Self>;
+    // // Returns Arc by value. Since most likely the implementers needs Arc pointer coercion, and pointer coercion results in temporary values whose reference cannot be returned.
+    // fn get_layer(&self) -> ArcLayerNodeOf<Self>;
 
     fn get_canvas_transform_ref(
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
@@ -161,7 +166,7 @@ pub trait LayerPaint: Render {
     ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
 }
 pub struct PerformLayerPaint<R: Render> {
-    pub get_layer: fn(&R) -> ArcLayerOf<R>,
+    // pub get_layer: fn(&R) -> ArcLayerNodeOf<R>,
     pub get_canvas_transform_ref:
         fn(
             &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
@@ -173,6 +178,39 @@ pub struct PerformLayerPaint<R: Render> {
         )
             -> <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
 }
+
+pub trait ArcLayerNode<R>: Clone + Send + Sync + 'static
+where
+    R: Render<ArcLayerNode = Self>,
+{
+    type Layer;
+
+    const GET_LAYER_NODE: Option<GetLayerNode<R>>;
+}
+
+impl<R> ArcLayerNode<R> for Never
+where
+    R: Render<ArcLayerNode = Self>,
+{
+    type Layer = Never;
+
+    const GET_LAYER_NODE: Option<GetLayerNode<R>> = None;
+}
+
+impl<R, L> ArcLayerNode<R> for Arc<LayerNode<L>>
+where
+    R: Render<ArcLayerNode = Self>,
+    L: Layer<
+        ParentCanvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
+        ChildCanvas = <<R::Element as Element>::ChildProtocol as Protocol>::Canvas,
+    >,
+{
+    type Layer = L;
+
+    const GET_LAYER_NODE: Option<GetLayerNode<R>> = Some(todo!());
+}
+
+pub struct GetLayerNode<R: Render> {}
 
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
@@ -195,6 +233,7 @@ where
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,
                 render,
+                layer: None,
             }),
         }
     }
@@ -205,6 +244,7 @@ pub(crate) struct RenderObjectInner<R: Render> {
     // boundaries: Option<RenderObjectBoundaries>,
     pub(crate) cache: Option<RenderCache<<R::Element as Element>::ParentProtocol, R::LayoutMemo>>,
     pub(crate) render: R,
+    pub(crate) layer: Option<R::ArcLayerNode>,
 }
 
 struct RenderObjectBoundaries {
@@ -335,12 +375,13 @@ where
 
 pub trait AnyRenderObject:
     crate::sync::layout_private::AnyRenderObjectRelayoutExt
-    + crate::sync::paint_private::AnyRenderObjectRepaintExt
+    // + crate::sync::paint_private::AnyRenderObjectRepaintExt
     + Send
     + Sync
     + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
+    fn layer(&self) -> Result<ArcAnyLayerNode, &str>;
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -349,6 +390,18 @@ where
 {
     fn element_context(&self) -> &ElementContextNode {
         &self.element_context
+    }
+
+    fn layer(&self) -> Result<ArcAnyLayerNode, &str> {
+        // let Some(PerformLayerPaint {
+        //     get_layer,
+        //     ..
+        // }) = R::PERFORM_LAYER_PAINT else{
+        //     return Err("Layer call should not be called on an RenderObject type that does not associate with a layer")
+        // };
+        // let inner = self.inner.lock();
+        // Ok(get_layer(&inner.render).as_arc_any_layer())
+        todo!()
     }
 }
 

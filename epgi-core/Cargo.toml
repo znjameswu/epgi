@@ -25,6 +25,7 @@ smallvec = { version = "1.10", features = [
     "const_generics",
     "const_new",
 ] }
+derivative = "2.2.0"
 
 
 vello_encoding = { workspace = true }

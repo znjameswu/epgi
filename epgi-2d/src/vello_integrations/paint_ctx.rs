@@ -1,8 +1,8 @@
 use epgi_core::{
     foundation::{Asc, Canvas, PaintContext, Parallel, Protocol},
     tree::{
-        ArcChildLayer, ArcChildRenderObject, ChildLayerOrFragment, ComposableChildLayer,
-        ChildRenderObject, LayerFragment, PaintResults,
+        ArcChildRenderObject, ChildRenderObject, ComposableChildLayer, LayerFragment, PaintResults,
+        StructuredChildLayerOrFragment,
     },
 };
 use peniko::{kurbo::Shape, BrushRef};
@@ -97,11 +97,11 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             let encoding = std::mem::take(&mut self.curr_fragment_encoding);
             self.results
                 .structured_children
-                .push(ChildLayerOrFragment::Fragment(encoding));
+                .push(StructuredChildLayerOrFragment::Fragment(encoding));
         }
         self.results
             .structured_children
-            .push(ChildLayerOrFragment::Layer(op()));
+            .push(StructuredChildLayerOrFragment::StructuredChild(op()));
     }
 }
 

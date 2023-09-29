@@ -85,14 +85,14 @@ impl Scheduler {
                     handle.sync_threadpool.spawn(move || {
                         let scheduler = tree_scheduler.read();
                         paint_started_event.notify(usize::MAX);
-                        let layer = scheduler.perform_paint();
-                        let encodings = layer.composite_self();
-                        for requester in requesters {
-                            let _ = requester.try_send(FrameResults {
-                                encodings: encodings.clone(),
-                                id: frame_id,
-                            }); // TODO: log failure
-                        }
+                        scheduler.perform_paint();
+                        // let encodings = scheduler.root_layer.composite_self();
+                        // for requester in requesters {
+                        //     let _ = requester.try_send(FrameResults {
+                        //         encodings: encodings.clone(),
+                        //         id: frame_id,
+                        //     }); // TODO: log failure
+                        // }
                     });
                     paint_started.wait();
                     drop(read_guard);

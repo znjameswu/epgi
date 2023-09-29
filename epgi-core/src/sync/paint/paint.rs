@@ -2,66 +2,15 @@ use crate::{
     foundation::{Arc, PaintContext, Protocol},
     sync::TreeScheduler,
     tree::{
-        ArcAnyLayer, AscRenderContextNode, ComposableChildLayer, Element, LayerCompositionConfig,
+        ArcAnyLayerNode, AscRenderContextNode, ComposableChildLayer, Element, LayerCompositionConfig,
         PerformLayerPaint, Render, RenderObject,
     },
 };
 
 impl TreeScheduler {
-    pub(crate) fn perform_paint(&self) -> ArcAnyLayer {
-        todo!()
-        // self.root_render_object.repaint()
+    pub(crate) fn perform_paint(&self) {
+        
     }
-}
-
-impl<R> RenderObject<R>
-where
-    R: Render,
-{
-    // fn visit_and_paint(&self) {
-    //     let needs_paint = self.context.needs_paint();
-    //     let subtree_has_paint = self.context.subtree_has_paint();
-    //     let is_repaint_boundary = self.context.is_repaint_boundary();
-    //     debug_assert_eq!(
-    //         is_repaint_boundary,
-    //         R::PERFORM_LAYER_PAINT.is_some(),
-    //         "A repaint boundary should always be marked as so in its context node"
-    //     );
-    //     debug_assert!(
-    //         is_repaint_boundary || !needs_paint,
-    //         "A paint walk should not encounter a dirty non-boundary node.
-    //         Such node should be already painted by an ancester paint sometime earlier in this walk."
-    //     );
-    //     debug_assert!(
-    //         subtree_has_paint || !needs_paint,
-    //         "A dirty node should always mark its subtree as dirty"
-    //     );
-    //     // Paint differs from layout
-    //     //
-    //     // Layout has side effects and thus the invocation order specified by user must be honored,
-    //     // which prohibits us to perform tree walk while perform_layout
-    //     //
-    //     // Paint is pure (in terms of Render state). Therefore we can perform tree walk inside perform_paint
-    //     if subtree_has_paint {
-    //         let mut inner = self
-    //             .inner
-    //             .try_lock()
-    //             .expect("Paint phase work units should have exclusive access to each RenderObject");
-
-    //         if needs_paint {
-    //             inner.repaint_inner();
-    //             self.context.clear_self_needs_paint();
-    //         } else {
-    //             inner
-    //                 .render
-    //                 .children()
-    //                 .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-    //                     child.visit_and_paint()
-    //                 })
-    //         }
-    //         self.context.clear_subtree_has_paint()
-    //     }
-    // }
 }
 
 impl<R> RenderObject<R>
@@ -85,26 +34,26 @@ where
             panic!("Paint should only be called after layout has finished")
         };
 
-        if let Some(PerformLayerPaint {
-            get_layer,
-            get_canvas_transform_ref,
-            ..
-        }) = R::PERFORM_LAYER_PAINT
-        {
-            paint_ctx.add_layer(|| ComposableChildLayer {
-                config: LayerCompositionConfig {
-                    transform: get_canvas_transform_ref(transform).clone(),
-                },
-                layer: get_layer(&mut inner.render).as_arc_child_layer(),
-            })
-        } else {
-            inner.render.perform_paint(
-                &layout_results.size,
-                transform,
-                &layout_results.memo,
-                paint_ctx,
-            );
-        }
+        // if let Some(PerformLayerPaint {
+        //     get_layer,
+        //     get_canvas_transform_ref,
+        //     ..
+        // }) = R::PERFORM_LAYER_PAINT
+        // {
+        //     paint_ctx.add_layer(|| ComposableChildLayer {
+        //         config: LayerCompositionConfig {
+        //             transform: get_canvas_transform_ref(transform).clone(),
+        //         },
+        //         layer: get_layer(&mut inner.render).as_arc_child_layer(),
+        //     })
+        // } else {
+        //     inner.render.perform_paint(
+        //         &layout_results.size,
+        //         transform,
+        //         &layout_results.memo,
+        //         paint_ctx,
+        //     );
+        // }
     }
 }
 
@@ -172,11 +121,11 @@ pub(crate) mod paint_private {
         // }
     }
 
-    pub trait AnyRenderObjectRepaintExt {
+    pub trait AnyLayerPaintExt {
         // fn repaint(&self) -> ArcAnyLayer;
     }
 
-    impl<R> AnyRenderObjectRepaintExt for RenderObject<R>
+    impl<R> AnyLayerPaintExt for RenderObject<R>
     where
         R: Render,
     {

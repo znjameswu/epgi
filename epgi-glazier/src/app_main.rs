@@ -6,7 +6,7 @@ use epgi_common::ConstrainedBox;
 use epgi_core::{
     foundation::{Arc, Asc, SyncMutex},
     hooks::{SetState, StateHook},
-    nodes::{Function, RepaintBoundaryLayer},
+    nodes::Function,
     scheduler::{
         get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, TreeScheduler,
     },

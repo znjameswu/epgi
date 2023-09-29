@@ -3,13 +3,12 @@ use epgi_core::{
         Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, LayerProtocol, Never,
         PaintContext, Protocol, Provide, SyncMutex,
     },
-    nodes::RepaintBoundaryLayer,
     tree::{
-        AnyLayer, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
-        ArcLayerOf, AscLayerContextNode, AscRenderContextNode, BuildContext, ChildLayer,
-        ChildLayerOrFragment, DryLayout, Element, Layer, LayerCompositionConfig, LayerPaint,
-        PaintResults, ParentLayer, ReconcileItem, Reconciler, Render, RenderObject,
-        RenderObjectUpdateResult, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
+        AscLayerContextNode, AscRenderContextNode, BuildContext,
+        CachingChildLayerProducingIterator, DryLayout, Element, Layer, LayerCompositionConfig,
+        LayerPaint, PaintResults, ReconcileItem, Reconciler, Render, RenderObject,
+        RenderObjectUpdateResult, StructuredChildLayerOrFragment, Widget,
     },
 };
 
@@ -201,10 +200,6 @@ impl DryLayout for RenderRootView {
 }
 
 impl LayerPaint for RenderRootView {
-    fn get_layer(&self) -> ArcLayerOf<Self> {
-        unimplemented!()
-    }
-
     fn get_canvas_transform_ref(
         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
     ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
@@ -255,61 +250,36 @@ where
     }
 }
 
-impl<P> Layer for RootLayer<P>
-where
-    P: LayerProtocol,
-{
-    type ParentCanvas = P::Canvas;
+// impl<P> Layer for RootLayer<P>
+// where
+//     P: LayerProtocol,
+// {
+//     type ParentCanvas = P::Canvas;
 
-    type ChildCanvas = P::Canvas;
+//     type ChildCanvas = P::Canvas;
 
-    fn context(&self) -> &AscLayerContextNode {
-        &self.context
-    }
+//     fn context(&self) -> &AscLayerContextNode {
+//         &self.context
+//     }
 
-    fn composite_to(
-        &self,
-        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
-        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
-    ) {
-        let inner = self.inner.lock();
-        let paint_cache = inner
-            .paint_cache
-            .as_ref()
-            .expect("A layer can only be composited after it has finished painting");
+//     fn composite_to(
+//         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+//         child_iterator: &mut ChildLayerProducingIterator<'_, Self>,
+//         composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+//     ) where
+//         Self: Sized,
+//     {
+//         todo!()
+//     }
 
-        paint_cache.composite_to(encoding, composition_config)
-    }
+//     fn detached_config(
+//         self_config: &LayerCompositionConfig<Self::ParentCanvas>,
+//         child_config: &LayerCompositionConfig<Self::ChildCanvas>,
+//     ) -> LayerCompositionConfig<Self::ParentCanvas> {
+//         todo!()
+//     }
 
-    fn repaint(&self) {
-        let mut inner = self.inner.lock();
-        if !self.context.needs_paint() && inner.paint_cache.is_some() {
-            return;
-        }
-        inner.paint_cache = Some(
-            inner
-                .child_render_object
-                .as_ref()
-                .map(|child_render_object| {
-                    P::Canvas::paint_render_object(child_render_object.as_ref())
-                })
-                .unwrap_or_default(),
-        );
-    }
-
-    fn as_arc_child_layer(
-        self: Arc<Self>,
-    ) -> Arc<dyn ChildLayer<ParentCanvas = Self::ParentCanvas>> {
-        self
-    }
-
-    fn as_arc_parent_layer(
-        self: Arc<Self>,
-    ) -> Arc<dyn ParentLayer<ChildCanvas = Self::ChildCanvas>> {
-        self
-    }
-
-    fn as_arc_any_layer(self: Arc<Self>) -> Arc<dyn AnyLayer> {
-        self
-    }
-}
+//     fn key(&self) -> Option<&Arc<dyn epgi_core::foundation::Key>> {
+//         todo!()
+//     }
+// }

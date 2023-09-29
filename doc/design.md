@@ -539,6 +539,34 @@ We can either store the detached child layers
 
 Decision: Go for immediate parent node for now.
 
+### Problem: Nested detached layers adoption behavior
+
+A detached layer A under another detached layer B could miss its adopter C due to B chooses an adopter above C.
+
+#### Solution 1: Fully detached and eager resolution during adoption
+We do not hide A under B. When resolving detached layers for any layer above B, they will see A and B simultaneously. Therefore, C will successfully adopt A even when B remains unadopted.
+
+Problem: 
+0. Eager resolution of detached layers under a subtree
+    1. A layer has to know and report all detached childrens in its subtree, even if they are deep descendants down the tree.
+1. Dynamic child detection WHILE compositing.
+    1. FACT: A layer must know all its adopted child layers and child fragments before compositing to its parent. 
+        1. Example: any retained rendering mechanism
+        2. Example: 3D to 2D adapter layer. A single adopted object could change the rendering results of the whole scene.
+    2. FACT: Most layers are transparent. Generating encoding caches for them is wasteful.
+    3. PROBLEM: Stateless API design becomes hard.
+        1. Retained rendering demands collecting detached layers before finishing compositing.
+        2. Transparent layer demands no extra states to be introduced.
+        3. Leaving all of these to user will expose the layer adoption logic, which is not supposed to be user modifiable.
+        4. Introduce an associated retained state type `Layer::RetainedState`
+2. Detached layer ordering problem
+3. Detached subtree has been eagerly resolved, which means we should not resolve detached child layers anymore when they are composited, which means a different behavior compared to structured child layers.
+
+
+> Generic Function Builder Pattern
+> 
+> https://stackoverflow.com/questions/37606035/pass-generic-function-as-argument
+
 ## How to perform hit test
 We can use three types of offset when invoking a hit test method on a render object:
 1. Absolute offset relative to the canvas (Not possible since we decided to store relative transformations in layers)

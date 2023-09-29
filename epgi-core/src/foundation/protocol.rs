@@ -1,8 +1,8 @@
 use std::{fmt::Debug, ops::Mul};
 
 use crate::tree::{
-    ArcAnyLayer, ArcChildLayer, ArcChildRenderObject, ArcParentLayer, ChildLayerOrFragment,
-    ChildRenderObject, PaintResults, ComposableChildLayer,
+    ArcChildRenderObject, StructuredChildLayerOrFragment, ChildRenderObject, ComposableChildLayer,
+    PaintResults,
 };
 
 use super::{InlinableVec, Parallel};
@@ -103,14 +103,16 @@ pub trait Canvas: Sized + 'static {
 
     // The following methods are here to avoid creating and impl-ing (outside this crate) new traits for vello encodings.
     // Although we can wrap vello encoding in a new type, I think it is too inconvenient.
-    fn composite(
+    fn composite_encoding(
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
-        clip: Option<&Self::Clip>
+        clip: Option<&Self::Clip>,
     );
 
     fn clear(this: &mut Self::Encoding);
+
+    fn new_encoding() -> Self::Encoding;
 }
 
 pub trait PaintContext {
@@ -145,10 +147,7 @@ pub trait PaintContext {
         child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'a P::Transform)>,
     );
 
-    fn add_layer(
-        &mut self,
-        op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>,
-    );
+    fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>);
 }
 
 pub trait Identity {
