@@ -599,6 +599,7 @@ Problem statement: ElementNode tree -> RenderObject tree,  RenderObject tree -> 
     0. Good type safety and zero cost abstraction.
     1. For container node without a mapped node, the associated type in the containee has to be `Never`
     2. Very bad extensibility. 
+    3. Can enforce a constant instance binding.
 2. Containee managed. The mapped node is directly stored inside the containee.
     1. Extensibility when coupled with runtime type reflection such as the type registry in `bevy-reflect`.
     2. Implementers of containees can easily break lifetime guarantees.
@@ -607,3 +608,17 @@ Problem statement: ElementNode tree -> RenderObject tree,  RenderObject tree -> 
     5. If implemented without an associated type, then the caller can only get a trait object. Possibly not zero cost.
 
 Temporary decision: Keep Element -> Render implemented as container mangaged for now. Try implement Render -> Layer as containee managed to see the results.
+
+# Problem with layer lifecycle
+Statement: We have no *efficient* method of detect whether a layer was left unpainted during the paint phase.
+
+Problem 1: This can have an undesired effect of propagating false repaint and recomposition event from an unpainted child layer.
+
+Solution: Record each layers last painted frame id. Stop propagation if found outdated.
+
+Problem 2: Bloated layers not reclaimed until render object goes out of scope
+
+Solution: Leave as-is. To sync two set of tree structures requires some sort of reconciliation mechanism, which is inefficient in nature. We can do it between element node tree and render object tree, but not appropriate for render object tree and layer tree considering the duplicity and the dynamic nature of painting (in contrast with the static nature of isomorphic element-render mapping).
+
+Decision: We do not implement any layer lifecycle mechanism. The lifecycle of a layer is stricly bound to its render object.
+

@@ -144,7 +144,7 @@ where
 {
     type Render = R;
     const GET_RENDER_OBJECT: GetRenderObject<R::Element> = GetRenderObject::RenderObject {
-        get_render_object: |x| x,
+        as_arc_child_render_object: |x| x,
         try_create_render_object: |element, widget, element_context| {
             assert!(
                 element_context.has_render,
@@ -182,7 +182,7 @@ where
 
 pub enum GetRenderObject<E: Element> {
     RenderObject {
-        get_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
+        as_arc_child_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
         try_create_render_object:
             fn(&E, &E::ArcWidget, &ArcElementContextNode) -> Option<E::ArcRenderObject>,
         update_render_object: Option<
@@ -367,7 +367,7 @@ where
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
         let GetRenderObject::RenderObject {
-            get_render_object, ..
+            as_arc_child_render_object, ..
         } = E::ArcRenderObject::GET_RENDER_OBJECT
         else {
             return Err("Render object call should not be called on an Element type that does not associate with a render object");
@@ -384,7 +384,7 @@ where
         else {
             return Err("Render object call should only be called on element nodes that are ready and attached");
         };
-        Ok(get_render_object(render_object.clone()).as_arc_any_render_object())
+        Ok(as_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
     }
 }
 

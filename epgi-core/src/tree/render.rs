@@ -5,8 +5,8 @@ pub use context::*;
 use crate::foundation::{Arc, Aweak, Canvas, Never, PaintContext, Parallel, Protocol, SyncMutex};
 
 use super::{
-    ArcAnyLayerNode, ArcElementContextNode, Element, ElementContextNode, GetSuspense, Layer,
-    LayerNode,
+    ArcAnyLayerNode, ArcChildLayerNode, ArcElementContextNode, AscLayerContextNode, Element,
+    ElementContextNode, GetSuspense, Layer, LayerNode,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -41,7 +41,7 @@ pub trait Render: Sized + Send + Sync + 'static {
         context: &AscRenderContextNode,
     ) -> Option<Self>;
 
-    fn  update_render_object(
+    fn update_render_object(
         &mut self,
         widget: &<Self::Element as Element>::ArcWidget,
     ) -> RenderObjectUpdateResult;
@@ -185,21 +185,27 @@ where
 {
     type Layer;
 
+    fn create(render: &R, layer_context: &AscLayerContextNode) -> Self;
+
     const GET_LAYER_NODE: Option<GetLayerNode<R>>;
 }
 
-impl<R> ArcLayerNode<R> for Never
+impl<R> ArcLayerNode<R> for ()
 where
     R: Render<ArcLayerNode = Self>,
 {
     type Layer = Never;
 
     const GET_LAYER_NODE: Option<GetLayerNode<R>> = None;
+
+    fn create(render: &R, layer_context: &AscLayerContextNode) -> Self {
+        ()
+    }
 }
 
 impl<R, L> ArcLayerNode<R> for Arc<LayerNode<L>>
 where
-    R: Render<ArcLayerNode = Self>,
+    R: LayerRender<ArcLayerNode = Self>,
     L: Layer<
         ParentCanvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
         ChildCanvas = <<R::Element as Element>::ChildProtocol as Protocol>::Canvas,
@@ -207,14 +213,46 @@ where
 {
     type Layer = L;
 
-    const GET_LAYER_NODE: Option<GetLayerNode<R>> = Some(todo!());
+    const GET_LAYER_NODE: Option<GetLayerNode<R>> = Some(GetLayerNode {
+        as_arc_child_layer_node: |x| x,
+        // create_layer_node: R::create_layer_node,
+    });
+
+    fn create(render: &R, layer_context: &AscLayerContextNode) -> Self {
+        R::create_layer_node(render, layer_context)
+    }
 }
 
-pub struct GetLayerNode<R: Render> {}
+pub trait LayerRender: Render {
+    fn create_layer_node(&self, layer_context: &AscLayerContextNode) -> Self::ArcLayerNode;
+}
+
+pub enum GetLayerNode<R: Render> {
+    LayerNode {
+        as_arc_child_layer_node: fn(
+            R::ArcLayerNode,
+        ) -> ArcChildLayerNode<
+            <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
+        >,
+    }, // pub create_layer_node: fn(&R, &AscLayerContextNode) -> R::ArcLayerNode,
+       // // pub update_layer_node: fn(&R, &R::ArcLayerNode) -> LayerNodeUpdateResult,
+    None {
+        
+    }
+}
+
+// #[derive(Debug, Clone, Copy, Default)]
+// pub enum LayerNodeUpdateResult {
+//     NeedsRepaint,
+//     NeedsRecomposite,
+//     #[default]
+//     None
+// }
 
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) context: AscRenderContextNode,
+    pub(crate) layer: R::ArcLayerNode,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
