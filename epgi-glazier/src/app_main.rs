@@ -1,6 +1,6 @@
 use epgi_2d::{
-    Affine2d, BoxConstraints, BoxProtocol, BoxProvider, RenderRootView, RootLayer, RootView,
-    RootViewElement,
+    Affine2d, BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootLayer,
+    RootView,
 };
 use epgi_common::ConstrainedBox;
 use epgi_core::{
@@ -327,14 +327,11 @@ impl MainState {
                 child
             }),
         });
-        let element = RootViewElement { child: None };
-        let element_node = create_root_element::<RenderRootView>(
+        let element = RootElement { child: None };
+        let element_node = create_root_element::<RootElement>(
             root_widget,
             element,
-            |context| RenderRootView {
-                layer: Asc::new(RootLayer::new(context.clone(), None)),
-                child: None,
-            },
+            |context| RenderRoot { child: None },
             Hooks {
                 array_hooks: [Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> {
                     val: None,

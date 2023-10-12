@@ -85,34 +85,47 @@ pub trait SingleChildElement: Element<ArcRenderObject = Never> {
     fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol>;
 }
 
-// pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render>>> {
-//     type Render: Render<Element = Self>;
+pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render>>> {
+    type Render: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>;
 
-//     fn try_create_render_object(
-//         &self,
-//         widget: &Self::ArcWidget,
-//     ) -> Option<Arc<RenderObject<Self::Render>>>;
-//     /// Update necessary properties of render object given by the widget
-//     ///
-//     /// Called during the commit phase, when the widget is updated.
-//     /// Always called after [RenderElement::try_update_render_object_children].
-//     /// If that call failed to update children (indicating suspense), then this call will be skipped.
-//     fn update_render_object_widget(
-//         widget: &Self::ArcWidget,
-//         render_object: &Arc<RenderObject<Self::Render>>,
-//     );
-//     /// Try to re-assemble the children of the givin render object.
-//     ///
-//     /// Called during the commit phase, when subtree structure has changed.
-//     fn try_update_render_object_children(
-//         &self,
-//         render_object: &Arc<RenderObject<Self::Render>>,
-//     ) -> Result<(), ()>;
+    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render>;
+    /// Update necessary properties of render object given by the widget
+    ///
+    /// Called during the commit phase, when the widget is updated.
+    /// Always called after [RenderElement::try_update_render_object_children].
+    /// If that call failed to update children (indicating suspense), then this call will be skipped.
+    fn update_render_object(
+        render_object: &mut Self::Render,
+        widget: &Self::ArcWidget,
+    ) -> RenderObjectUpdateResult;
 
-//     fn detach_render_object(render_object: &Arc<RenderObject<Self::Render>>);
+    /// Whether [Render::update_render_object] is a no-op and always returns None
+    ///
+    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior.
+    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
-//     const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
-// }
+    /// Try to re-assemble the children of the givin render object.
+    ///
+    /// Called during the commit phase, when subtree structure has changed.
+    fn try_update_render_object_children(&self, render_object: &mut Self::Render)
+        -> Result<(), ()>;
+
+    /// Whether [Render::try_update_render_object_children] is a no-op and always succeed
+    ///
+    /// When set to true, [Render::try_update_render_object_children]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::try_update_render_object_children] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior.
+    /// Leaf render objects may consider setting this to true.
+    const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = false;
+
+    const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
+}
 
 pub trait ArcRenderObject<E>: Clone + Send + Sync + 'static
 where
@@ -138,12 +151,13 @@ where
     }
 }
 
-impl<R> ArcRenderObject<R::Element> for Arc<RenderObject<R>>
+impl<E> ArcRenderObject<E> for Arc<RenderObject<E::Render>>
 where
-    R: Render,
+    E: RenderElement<ArcRenderObject = Arc<RenderObject<<E as RenderElement>::Render>>>,
+    E::Render: Render<ParentProtocol = E::ParentProtocol, ChildProtocol = E::ChildProtocol>,
 {
-    type Render = R;
-    const GET_RENDER_OBJECT: GetRenderObject<R::Element> = GetRenderObject::RenderObject {
+    type Render = E::Render;
+    const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::RenderObject {
         as_arc_child_render_object: |x| x,
         try_create_render_object: |element, widget, element_context| {
             assert!(
@@ -154,25 +168,25 @@ where
                 )
             );
             let render_context = &element_context.nearest_render_context;
-            let render = R::try_create_render_object_from_element(element, widget, render_context)?;
+            let render = E::try_create_render_object(element, widget)?;
             Some(Arc::new(RenderObject::new(render, element_context.clone())))
         },
-        update_render_object: if R::NOOP_UPDATE_RENDER_OBJECT {
+        update_render_object: if E::NOOP_UPDATE_RENDER_OBJECT {
             None
         } else {
-            Some(R::update_render_object)
+            Some(E::update_render_object)
         },
-        try_update_render_object_children: if R::NOOP_UPDATE_RENDER_OBJECT_CHILDREN {
+        try_update_render_object_children: if E::NOOP_UPDATE_RENDER_OBJECT_CHILDREN {
             None
         } else {
-            Some(R::try_update_render_object_children)
+            Some(E::try_update_render_object_children)
         },
-        detach_render_object: if R::NOOP_DETACH {
+        detach_render_object: if <E::Render as Render>::NOOP_DETACH {
             None
         } else {
-            Some(R::detach)
+            Some(<E::Render as Render>::detach)
         },
-        get_suspense: R::GET_SUSPENSE,
+        get_suspense: E::GET_SUSPENSE,
     };
 
     fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode)) {
@@ -182,7 +196,8 @@ where
 
 pub enum GetRenderObject<E: Element> {
     RenderObject {
-        as_arc_child_render_object: fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
+        as_arc_child_render_object:
+            fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
         try_create_render_object:
             fn(&E, &E::ArcWidget, &ArcElementContextNode) -> Option<E::ArcRenderObject>,
         update_render_object: Option<
@@ -192,7 +207,7 @@ pub enum GetRenderObject<E: Element> {
             ) -> RenderObjectUpdateResult,
         >,
         try_update_render_object_children: Option<
-            fn(&mut <E::ArcRenderObject as ArcRenderObject<E>>::Render, &E) -> Result<(), ()>,
+            fn(&E, &mut <E::ArcRenderObject as ArcRenderObject<E>>::Render) -> Result<(), ()>,
         >,
         detach_render_object: Option<fn(&mut <E::ArcRenderObject as ArcRenderObject<E>>::Render)>,
         get_suspense: Option<GetSuspense<E>>,
@@ -388,13 +403,13 @@ where
     }
 }
 
-pub fn create_root_element<R: Render>(
-    widget: <R::Element as Element>::ArcWidget,
-    element: R::Element,
-    create_render: impl FnOnce(&AscLayerContextNode) -> R,
+pub fn create_root_element<E: RenderElement>(
+    widget: E::ArcWidget,
+    element: E,
+    create_render: impl FnOnce(&AscLayerContextNode) -> E::Render,
     hooks: Hooks,
-    constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-) -> Arc<ElementNode<R::Element>> {
+    constraints: <E::ParentProtocol as Protocol>::Constraints,
+) -> Arc<ElementNode<E>> {
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
         // let render = R::try_create_render_object_from_element(&element, &widget)
@@ -402,6 +417,7 @@ pub fn create_root_element<R: Render>(
         let render_object = Arc::new(RenderObject {
             element_context: element_context.clone(),
             context: element_context.nearest_render_context.clone(),
+            layer: todo!(),
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
                 render: create_render(
@@ -409,7 +425,6 @@ pub fn create_root_element<R: Render>(
                         .nearest_render_context
                         .nearest_repaint_boundary,
                 ),
-                layer: todo!(),
             }),
         });
         ElementNode {

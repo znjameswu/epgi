@@ -27,45 +27,18 @@ impl Default for RenderObjectUpdateResult {
 }
 
 pub trait Render: Sized + Send + Sync + 'static {
-    type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
+    // type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
 
-    type ChildIter: Parallel<Item = ArcChildRenderObject<<Self::Element as Element>::ChildProtocol>>
+    type ParentProtocol: Protocol;
+    type ChildProtocol: Protocol;
+
+    type ChildIter: Parallel<Item = ArcChildRenderObject<Self::ChildProtocol>>
         + Send
         + Sync
         + 'static;
     fn children(&self) -> Self::ChildIter;
 
-    fn try_create_render_object_from_element(
-        element: &Self::Element,
-        widget: &<Self::Element as Element>::ArcWidget,
-        context: &AscRenderContextNode,
-    ) -> Option<Self>;
-
-    fn update_render_object(
-        &mut self,
-        widget: &<Self::Element as Element>::ArcWidget,
-    ) -> RenderObjectUpdateResult;
-
-    /// Whether [Render::update_render_object] is a no-op and always returns None
-    ///
-    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
-
-    fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()>;
-
-    /// Whether [Render::try_update_render_object_children] is a no-op and always succeed
-    ///
-    /// When set to true, [Render::try_update_render_object_children]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::try_update_render_object_children] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    /// Leaf render objects may consider setting this to true.
-    const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = false;
+    const IS_REPAINT_BOUNDARY: bool = false;
 
     fn detach(&mut self) {}
 
@@ -83,11 +56,8 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     fn perform_layout(
         &self,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> (
-        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    );
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
     const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<Self>> = None;
@@ -96,23 +66,19 @@ pub trait Render: Sized + Send + Sync + 'static {
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
     fn perform_paint(
         &self,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<
-            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
     /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = None;
 
-    const GET_SUSPENSE: Option<GetSuspense<Self::Element>> = None;
-
     // fn compute_child_transformation(
-    //     transformation: &<<Self::Element as Element>::SelfProtocol as Protocol>::CanvasTransformation,
-    //     child_offset: &<<Self::Element as Element>::ChildProtocol as Protocol>::Offset,
-    // ) -> <<Self::Element as Element>::ChildProtocol as Protocol>::CanvasTransformation;
+    //     transformation: &<Self::SelfProtocol as Protocol>::CanvasTransformation,
+    //     child_offset: &<Self::ChildProtocol as Protocol>::Offset,
+    // ) -> <Self::ChildProtocol as Protocol>::CanvasTransformation;
 
     type ArcLayerNode: ArcLayerNode<Self>;
 }
@@ -125,26 +91,26 @@ pub trait DryLayout: Render {
 
     fn compute_dry_layout(
         &self,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> <<Self::Element as Element>::ParentProtocol as Protocol>::Size;
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> <Self::ParentProtocol as Protocol>::Size;
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        size: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+        constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+        size: &'a <Self::ParentProtocol as Protocol>::Size,
     ) -> Self::LayoutMemo;
 }
 
 pub struct PerformDryLayout<R: Render> {
     pub compute_dry_layout: fn(
         &R,
-        &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size,
+        &<R::ParentProtocol as Protocol>::Constraints,
+    ) -> <R::ParentProtocol as Protocol>::Size,
 
     pub perform_layout: for<'a, 'layout> fn(
         &'a R,
-        &'a <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        &'a <<R::Element as Element>::ParentProtocol as Protocol>::Size,
+        &'a <R::ParentProtocol as Protocol>::Constraints,
+        &'a <R::ParentProtocol as Protocol>::Size,
     ) -> R::LayoutMemo,
 }
 
@@ -158,25 +124,23 @@ pub trait LayerPaint: Render {
     // fn get_layer(&self) -> ArcLayerNodeOf<Self>;
 
     fn get_canvas_transform_ref(
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-    ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+    ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
 
     fn get_canvas_transform(
-        transform: <<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-    ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
+        transform: <Self::ParentProtocol as Protocol>::Transform,
+    ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
 }
 pub struct PerformLayerPaint<R: Render> {
     // pub get_layer: fn(&R) -> ArcLayerNodeOf<R>,
     pub get_canvas_transform_ref:
         fn(
-            &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-        )
-            -> &<<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    pub get_canvas_transform:
-        fn(
-            <<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-        )
-            -> <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+            &<R::ParentProtocol as Protocol>::Transform,
+        ) -> &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+    pub get_canvas_transform: fn(
+        <R::ParentProtocol as Protocol>::Transform,
+    )
+        -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
 }
 
 pub trait ArcLayerNode<R>: Clone + Send + Sync + 'static
@@ -185,9 +149,7 @@ where
 {
     type Layer;
 
-    fn create(render: &R, layer_context: &AscLayerContextNode) -> Self;
-
-    const GET_LAYER_NODE: Option<GetLayerNode<R>>;
+    const GET_LAYER_NODE: GetLayerNode<R>;
 }
 
 impl<R> ArcLayerNode<R> for ()
@@ -196,31 +158,25 @@ where
 {
     type Layer = Never;
 
-    const GET_LAYER_NODE: Option<GetLayerNode<R>> = None;
-
-    fn create(render: &R, layer_context: &AscLayerContextNode) -> Self {
-        ()
-    }
+    const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::None { create: todo!() };
 }
 
 impl<R, L> ArcLayerNode<R> for Arc<LayerNode<L>>
 where
     R: LayerRender<ArcLayerNode = Self>,
     L: Layer<
-        ParentCanvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <<R::Element as Element>::ChildProtocol as Protocol>::Canvas,
+        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
+        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
     >,
 {
     type Layer = L;
 
-    const GET_LAYER_NODE: Option<GetLayerNode<R>> = Some(GetLayerNode {
+    const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::LayerNode {
         as_arc_child_layer_node: |x| x,
-        // create_layer_node: R::create_layer_node,
-    });
-
-    fn create(render: &R, layer_context: &AscLayerContextNode) -> Self {
-        R::create_layer_node(render, layer_context)
-    }
+        create_layer_node: R::create_layer_node,
+        get_canvas_transform_ref: todo!(),
+        get_canvas_transform: todo!(),
+    };
 }
 
 pub trait LayerRender: Render {
@@ -229,16 +185,22 @@ pub trait LayerRender: Render {
 
 pub enum GetLayerNode<R: Render> {
     LayerNode {
-        as_arc_child_layer_node: fn(
-            R::ArcLayerNode,
-        ) -> ArcChildLayerNode<
-            <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
-    }, // pub create_layer_node: fn(&R, &AscLayerContextNode) -> R::ArcLayerNode,
-       // // pub update_layer_node: fn(&R, &R::ArcLayerNode) -> LayerNodeUpdateResult,
+        as_arc_child_layer_node:
+            fn(R::ArcLayerNode) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
+        create_layer_node: fn(&R, &AscLayerContextNode) -> R::ArcLayerNode,
+        get_canvas_transform_ref:
+            fn(
+                &<R::ParentProtocol as Protocol>::Transform,
+            ) -> &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+        get_canvas_transform: fn(
+            <R::ParentProtocol as Protocol>::Transform,
+        )
+            -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+    },
+    // // pub update_layer_node: fn(&R, &R::ArcLayerNode) -> LayerNodeUpdateResult,
     None {
-        
-    }
+        create: fn() -> R::ArcLayerNode,
+    },
 }
 
 // #[derive(Debug, Clone, Copy, Default)]
@@ -263,15 +225,31 @@ where
     pub fn new(render: R, element_context: ArcElementContextNode) -> Self {
         debug_assert!(
             element_context.has_render,
-            "A render object node must construct a render context node in its element context ndoe"
+            "A render object node must have a render context node in its element context node"
         );
+        let layer = match R::ArcLayerNode::GET_LAYER_NODE {
+            GetLayerNode::LayerNode {
+                as_arc_child_layer_node,
+                create_layer_node,
+                ..
+            } => {
+                let render_context = &element_context.nearest_render_context;
+                debug_assert!(
+                    render_context.is_repaint_boundary,
+                    "A render object node with layer must have a layer context node \
+                     in its render context node"
+                );
+                create_layer_node(&render, &render_context.nearest_repaint_boundary)
+            }
+            GetLayerNode::None { create } => create(),
+        };
         Self {
             context: element_context.nearest_render_context.clone(),
             element_context,
+            layer,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,
                 render,
-                layer: None,
             }),
         }
     }
@@ -280,9 +258,8 @@ where
 pub(crate) struct RenderObjectInner<R: Render> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
-    pub(crate) cache: Option<RenderCache<<R::Element as Element>::ParentProtocol, R::LayoutMemo>>,
+    pub(crate) cache: Option<RenderCache<R::ParentProtocol, R::LayoutMemo>>,
     pub(crate) render: R,
-    pub(crate) layer: Option<R::ArcLayerNode>,
 }
 
 struct RenderObjectBoundaries {
@@ -402,7 +379,7 @@ pub trait ChildRenderObject<PP: Protocol>:
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
 }
 
-impl<R> ChildRenderObject<<R::Element as Element>::ParentProtocol> for RenderObject<R>
+impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
 where
     R: Render,
 {

@@ -9,7 +9,13 @@ use super::{
     SingleChildRenderObject, SingleChildRenderObjectElement, SingleChildRenderObjectWidget,
 };
 
-pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + Sized {
+pub trait ProxyWidget:
+    Widget<
+        Element = SingleChildRenderObjectElement<Self>,
+        ParentProtocol = Self::Protocol,
+        ChildProtocol = Self::Protocol
+    > + Sized
+{
     type Protocol: Protocol;
     type RenderState: Send + Sync;
 
@@ -32,11 +38,8 @@ pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + 
     fn perform_layout(
         _state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::Protocol>,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> (
-        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    ) {
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         let size = child.layout_use_size(constraints);
         (size, Default::default())
     }
@@ -50,12 +53,10 @@ pub trait ProxyWidget: Widget<Element = SingleChildRenderObjectElement<Self>> + 
     fn perform_paint(
         _state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::Protocol>,
-        _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        _size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<
-            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         paint_ctx.paint(child, transform)
     }
@@ -68,10 +69,6 @@ impl<T> SingleChildRenderObjectWidget for T
 where
     T: ProxyWidget,
 {
-    type ParentProtocol = T::Protocol;
-
-    type ChildProtocol = T::Protocol;
-
     type RenderState = T::RenderState;
 
     #[inline(always)]
@@ -105,11 +102,8 @@ where
     fn perform_layout(
         state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::ChildProtocol>,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> (
-        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    ) {
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         T::perform_layout(state, child, constraints)
     }
 
@@ -120,12 +114,10 @@ where
     fn perform_paint(
         state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::ChildProtocol>,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<
-            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         T::perform_paint(state, child, size, transform, memo, paint_ctx)
     }

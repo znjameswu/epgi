@@ -20,8 +20,8 @@ pub type ArcAnyLayerNode = Arc<dyn AnyLayerNode>;
 // #[allow(type_alias_bounds)]
 // pub type ArcLayerNodeOf<R: Render> = Arc<
 //     dyn Layer<
-//         ParentCanvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
-//         ChildCanvas = <<R::Element as Element>::ChildProtocol as Protocol>::Canvas,
+//         ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
+//         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
 //     >,
 // >;
 

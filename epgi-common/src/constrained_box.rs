@@ -13,6 +13,10 @@ pub struct ConstrainedBox {
 }
 
 impl Widget for ConstrainedBox {
+    type ParentProtocol = BoxProtocol;
+
+    type ChildProtocol = BoxProtocol;
+
     type Element = SingleChildRenderObjectElement<Self>;
 
     fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {

@@ -60,7 +60,7 @@ where
 
     fn layout(
         &self,
-        constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
     ) {
         let mut inner = self.inner.lock();
         if let Some(cache) = &mut inner.cache {
@@ -74,8 +74,8 @@ where
 
     fn layout_use_size(
         &self,
-        constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+    ) -> <R::ParentProtocol as Protocol>::Size {
         let mut inner = self.inner.lock();
 
         if let Some(cache) = &mut inner.cache {
@@ -124,9 +124,9 @@ where
     #[inline(always)]
     fn perform_wet_layout(
         &mut self,
-        constraints: <<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+        constraints: <R::ParentProtocol as Protocol>::Constraints,
         parent_use_size: bool,
-    ) -> &<<R::Element as Element>::ParentProtocol as Protocol>::Size {
+    ) -> &<R::ParentProtocol as Protocol>::Size {
         let (size, memo) = if let Some(PerformDryLayout {
             compute_dry_layout,
             perform_layout,
@@ -178,20 +178,20 @@ pub(crate) mod layout_private {
         fn visit_and_layout(&self);
     }
 
-    impl<R> ChildRenderObjectLayoutExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
+    impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObject<R>
     where
         R: Render,
     {
         fn layout_use_size(
             &self,
-            constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        ) -> <<R::Element as Element>::ParentProtocol as Protocol>::Size {
+            constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        ) -> <R::ParentProtocol as Protocol>::Size {
             self.layout_use_size(constraints)
         }
 
         fn layout(
             &self,
-            constraints: &<<R::Element as Element>::ParentProtocol as Protocol>::Constraints,
+            constraints: &<R::ParentProtocol as Protocol>::Constraints,
         ) {
             self.layout(constraints)
         }

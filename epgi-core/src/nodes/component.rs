@@ -12,7 +12,9 @@ use crate::{
 
 // ComponentWidget and Consumer are separated due to the virtual call overhead in get_consumed_types
 // ComponentWidget and Provider are separated due to type inconsistencies in Element::Provided
-pub trait ComponentWidget<P: Protocol>: Widget<Element = ComponentElement<P>> + WidgetExt {
+pub trait ComponentWidget<P: Protocol>:
+    Widget<Element = ComponentElement<P>, ParentProtocol = P, ChildProtocol = P> + WidgetExt
+{
     fn build_with(&self, ctx: BuildContext) -> ArcChildWidget<P>;
 }
 
@@ -126,6 +128,10 @@ where
     P: Protocol,
     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
 {
+    type ParentProtocol = P;
+
+    type ChildProtocol = P;
+
     type Element = ComponentElement<P>;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {

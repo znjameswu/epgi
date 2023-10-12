@@ -21,7 +21,7 @@
 // {
 //     type Element = RepaintBoundaryElement<P>;
 
-//     fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+//     fn into_arc_widget(self: Arc<Self>) -> Self::ArcWidget {
 //         self
 //     }
 // }
@@ -88,7 +88,7 @@
 
 //     fn try_create_render_object_from_element(
 //         element: &Self::Element,
-//         _widget: &<Self::Element as Element>::ArcWidget,
+//         _widget: &Self::ArcWidget,
 //         context: &AscRenderContextNode,
 //     ) -> Option<Self> {
 //         let child = element.child.get_current_subtree_render_object()?;
@@ -108,7 +108,7 @@
 
 //     fn update_render_object(
 //         &mut self,
-//         _widget: &<Self::Element as Element>::ArcWidget,
+//         _widget: &Self::ArcWidget,
 //     ) -> RenderObjectUpdateResult {
 //         RenderObjectUpdateResult::None
 //     }
@@ -128,9 +128,9 @@
 
 //     fn perform_layout<'a, 'layout>(
 //         &'a self,
-//         constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
+//         constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
 //     ) -> (
-//         <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+//         <Self::ParentProtocol as Protocol>::Size,
 //         Self::LayoutMemo,
 //     ) {
 //         todo!()
@@ -138,11 +138,11 @@
 
 //     fn perform_paint(
 //         &self,
-//         size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-//         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+//         size: &<Self::ParentProtocol as Protocol>::Size,
+//         transform: &<Self::ParentProtocol as Protocol>::Transform,
 //         memo: &Self::LayoutMemo,
 //         paint_ctx: &mut impl PaintContext<
-//             Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
+//             Canvas = <Self::ParentProtocol as Protocol>::Canvas,
 //         >,
 //     ) {
 //         todo!()
@@ -176,15 +176,15 @@
 //     }
 
 //     fn get_canvas_transform_ref(
-//         transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-//     ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
+//         transform: &<Self::ParentProtocol as Protocol>::Transform,
+//     ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
 //     {
 //         transform
 //     }
 
 //     fn get_canvas_transform(
-//         transform: <<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-//     ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
+//         transform: <Self::ParentProtocol as Protocol>::Transform,
+//     ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
 //     {
 //         transform
 //     }

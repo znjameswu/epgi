@@ -3,16 +3,15 @@ use crate::foundation::{
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ChildRenderObject, Element,
-    PerformDryLayout, PerformLayerPaint, ReconcileItem, Reconciler, Render, RenderObject,
-    RenderObjectUpdateResult, Widget, AscRenderContextNode,
+    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, AscLayerContextNode,
+    AscRenderContextNode, ChildRenderObject, Element, PerformDryLayout, PerformLayerPaint,
+    ReconcileItem, Reconciler, Render, RenderElement, RenderObject, RenderObjectUpdateResult,
+    Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
     Widget<Element = SingleChildRenderObjectElement<Self>> + Sized
 {
-    type ParentProtocol: Protocol;
-    type ChildProtocol: Protocol;
     type RenderState: Send + Sync;
 
     fn child(&self) -> &ArcChildWidget<Self::ChildProtocol>;
@@ -33,11 +32,8 @@ pub trait SingleChildRenderObjectWidget:
     fn perform_layout(
         state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::ChildProtocol>,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> (
-        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    );
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
     const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<SingleChildRenderObject<Self>>> = None;
@@ -47,12 +43,10 @@ pub trait SingleChildRenderObjectWidget:
     fn perform_paint(
         state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::ChildProtocol>,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<
-            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
     /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
@@ -128,6 +122,38 @@ where
     type ArcRenderObject = Arc<RenderObject<SingleChildRenderObject<W>>>;
 }
 
+impl<W> RenderElement for SingleChildRenderObjectElement<W>
+where
+    W: SingleChildRenderObjectWidget<Element = Self>,
+{
+    type Render = SingleChildRenderObject<W>;
+
+    #[inline(always)]
+    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render> {
+        let child = self.child.get_current_subtree_render_object()?;
+        Some(SingleChildRenderObject {
+            state: W::create_render_state(widget),
+            child,
+        })
+    }
+
+    #[inline(always)]
+    fn update_render_object(
+        render: &mut Self::Render,
+        widget: &Self::ArcWidget,
+    ) -> RenderObjectUpdateResult {
+        W::update_render_state(widget, &mut render.state)
+    }
+    const NOOP_UPDATE_RENDER_OBJECT: bool = W::NOOP_UPDATE_RENDER_OBJECT;
+
+    #[inline(always)]
+    fn try_update_render_object_children(&self, render: &mut Self::Render) -> Result<(), ()> {
+        let child = self.child.get_current_subtree_render_object().ok_or(())?;
+        render.child = child;
+        Ok(())
+    }
+}
+
 pub struct SingleChildRenderObject<W: SingleChildRenderObjectWidget> {
     pub state: W::RenderState,
     pub child: ArcChildRenderObject<W::ChildProtocol>,
@@ -135,9 +161,11 @@ pub struct SingleChildRenderObject<W: SingleChildRenderObjectWidget> {
 
 impl<W> Render for SingleChildRenderObject<W>
 where
-    W: SingleChildRenderObjectWidget,
+W: SingleChildRenderObjectWidget,
 {
-    type Element = W::Element;
+    type ParentProtocol = W::ParentProtocol;
+    
+    type ChildProtocol = W::ChildProtocol;
 
     type ChildIter = [ArcChildRenderObject<W::ChildProtocol>; 1];
 
@@ -146,37 +174,6 @@ where
         [self.child.clone()]
     }
 
-    #[inline(always)]
-    fn try_create_render_object_from_element(
-        element: &Self::Element,
-        widget: &<Self::Element as Element>::ArcWidget,
-        context: &AscRenderContextNode
-    ) -> Option<Self> {
-        let child = element.child.get_current_subtree_render_object()?;
-        Some(Self {
-            state: W::create_render_state(widget),
-            child,
-        })
-    }
-
-    #[inline(always)]
-    fn update_render_object(
-        &mut self,
-        widget: &<Self::Element as Element>::ArcWidget,
-    ) -> RenderObjectUpdateResult {
-        W::update_render_state(widget, &mut self.state)
-    }
-    const NOOP_UPDATE_RENDER_OBJECT: bool = W::NOOP_UPDATE_RENDER_OBJECT;
-
-    #[inline(always)]
-    fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
-        let child = element
-            .child
-            .get_current_subtree_render_object()
-            .ok_or(())?;
-        self.child = child;
-        Ok(())
-    }
     const NOOP_DETACH: bool = W::NOOP_DETACH;
 
     type LayoutMemo = W::LayoutMemo;
@@ -184,23 +181,18 @@ where
     #[inline(always)]
     fn perform_layout(
         &self,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> (
-        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    ) {
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         W::perform_layout(&self.state, self.child.as_ref(), constraints)
     }
 
     #[inline(always)]
     fn perform_paint(
         &self,
-        size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<
-            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         W::perform_paint(
             &self.state,
@@ -211,4 +203,7 @@ where
             paint_ctx,
         )
     }
+
+    type ArcLayerNode = ();
+
 }

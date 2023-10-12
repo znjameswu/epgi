@@ -1,8 +1,8 @@
 use std::{fmt::Debug, ops::Mul};
 
 use crate::tree::{
-    ArcChildRenderObject, StructuredChildLayerOrFragment, ChildRenderObject, ComposableChildLayer,
-    PaintResults,
+    ArcChildRenderObject, ChildRenderObject, ComposableChildLayer, PaintResults,
+    StructuredChildLayerOrFragment,
 };
 
 use super::{InlinableVec, Parallel};

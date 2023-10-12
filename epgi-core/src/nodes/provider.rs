@@ -54,10 +54,14 @@ where
     T: Provide,
     P: Protocol,
 {
+    type ParentProtocol = P;
+
+    type ChildProtocol = P;
+
     type Element = ProviderElement<T, P>;
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
-        self
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+        todo!()
     }
 }
 

@@ -9,7 +9,7 @@ where
 {
     fn composite(
         &self,
-    ) -> <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding {
+    ) -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding {
         todo!()
     }
 }

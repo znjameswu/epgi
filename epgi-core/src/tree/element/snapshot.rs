@@ -70,7 +70,7 @@ pub(crate) enum MainlineState<E: Element> {
 }
 
 #[derive(Clone, Default)]
-pub struct Hooks { 
+pub struct Hooks {
     pub array_hooks: Vec<Box<dyn Hook>>,
 }
 

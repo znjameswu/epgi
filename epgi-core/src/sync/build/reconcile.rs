@@ -499,7 +499,7 @@ where
                                             try_update_render_object_children
                                                 .expect("Impossible to fail");
                                         let res =
-                                            try_update_render_object_children(render, &element);
+                                            try_update_render_object_children(&element, render);
                                         if res.is_ok() {
                                             context.mark_needs_layout();
                                         } else {

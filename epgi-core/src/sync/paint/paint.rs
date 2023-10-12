@@ -2,15 +2,13 @@ use crate::{
     foundation::{Arc, PaintContext, Protocol},
     sync::TreeScheduler,
     tree::{
-        ArcAnyLayerNode, AscRenderContextNode, ComposableChildLayer, Element, LayerCompositionConfig,
-        PerformLayerPaint, Render, RenderObject,
+        ArcAnyLayerNode, AscRenderContextNode, ComposableChildLayer, Element,
+        LayerCompositionConfig, PerformLayerPaint, Render, RenderObject,
     },
 };
 
 impl TreeScheduler {
-    pub(crate) fn perform_paint(&self) {
-        
-    }
+    pub(crate) fn perform_paint(&self) {}
 }
 
 impl<R> RenderObject<R>
@@ -20,9 +18,9 @@ where
     fn paint(
         &self,
         context: &AscRenderContextNode,
-        transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
+        transform: &<R::ParentProtocol as Protocol>::Transform,
         paint_ctx: &mut impl PaintContext<
-            Canvas = <<R::Element as Element>::ParentProtocol as Protocol>::Canvas,
+            Canvas = <R::ParentProtocol as Protocol>::Canvas,
         >,
     ) {
         let mut inner = self.inner.lock();
@@ -96,22 +94,22 @@ pub(crate) mod paint_private {
         // fn visit_and_paint(&self);
     }
 
-    impl<R> ChildRenderObjectPaintExt<<R::Element as Element>::ParentProtocol> for RenderObject<R>
+    impl<R> ChildRenderObjectPaintExt<R::ParentProtocol> for RenderObject<R>
     where
         R: Render,
     {
         fn paint(
             &self,
-            transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-            paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
+            transform: &<R::ParentProtocol as Protocol>::Transform,
+            paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
             self.paint(&self.context, transform, paint_ctx);
         }
 
         fn paint_scan(
             &self,
-            transform: &<<R::Element as Element>::ParentProtocol as Protocol>::Transform,
-            paint_ctx: &mut <<<R::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
+            transform: &<R::ParentProtocol as Protocol>::Transform,
+            paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
             self.paint(&self.context, transform, paint_ctx);
         }

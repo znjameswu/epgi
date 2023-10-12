@@ -7,8 +7,8 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
         AscLayerContextNode, AscRenderContextNode, BuildContext,
         CachingChildLayerProducingIterator, DryLayout, Element, Layer, LayerCompositionConfig,
-        LayerPaint, PaintResults, ReconcileItem, Reconciler, Render, RenderObject,
-        RenderObjectUpdateResult, StructuredChildLayerOrFragment, Widget,
+        LayerPaint, PaintResults, ReconcileItem, Reconciler, Render, RenderElement, RenderObject,
+        RenderObjectUpdateResult, StructuredChildLayerOrFragment, Widget, LayerNode, LayerRender,
     },
 };
 
@@ -27,7 +27,11 @@ impl std::fmt::Debug for RootView {
 }
 
 impl Widget for RootView {
-    type Element = RootViewElement;
+    type ParentProtocol = BoxProtocol;
+
+    type ChildProtocol = BoxProtocol;
+
+    type Element = RootElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
         self
@@ -35,11 +39,11 @@ impl Widget for RootView {
 }
 
 #[derive(Clone)]
-pub struct RootViewElement {
+pub struct RootElement {
     pub child: Option<ArcChildElementNode<BoxProtocol>>,
 }
 
-impl Element for RootViewElement {
+impl Element for RootElement {
     type ArcWidget = Asc<RootView>;
 
     type ParentProtocol = BoxProtocol;
@@ -101,16 +105,43 @@ impl Element for RootViewElement {
         self.child.clone()
     }
 
-    type ArcRenderObject = Arc<RenderObject<RenderRootView>>;
+    type ArcRenderObject = Arc<RenderObject<RenderRoot>>;
 }
 
-pub struct RenderRootView {
-    pub layer: Asc<RootLayer<BoxProtocol>>, //TODO!()
+impl RenderElement for RootElement {
+    type Render = RenderRoot;
+
+    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render> {
+        todo!()
+    }
+
+    fn update_render_object(
+        render_object: &mut Self::Render,
+        widget: &Self::ArcWidget,
+    ) -> RenderObjectUpdateResult {
+        RenderObjectUpdateResult::None
+    }
+
+    const NOOP_UPDATE_RENDER_OBJECT: bool = true;
+
+    fn try_update_render_object_children(&self, render: &mut Self::Render) -> Result<(), ()> {
+        render.child = self.child.as_ref().map(|child| {
+            child
+                .get_current_subtree_render_object()
+                .expect("Root ElementNode should never receive suspense event")
+        });
+        Ok(())
+    }
+}
+
+pub struct RenderRoot {
     pub child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
-impl Render for RenderRootView {
-    type Element = RootViewElement;
+impl Render for RenderRoot {
+    type ParentProtocol = BoxProtocol;
+
+    type ChildProtocol = BoxProtocol;
 
     type ChildIter = Option<ArcChildRenderObject<BoxProtocol>>;
 
@@ -118,51 +149,12 @@ impl Render for RenderRootView {
         self.child.clone()
     }
 
-    fn try_create_render_object_from_element(
-        element: &Self::Element,
-        widget: &<Self::Element as Element>::ArcWidget,
-        context: &AscRenderContextNode,
-    ) -> Option<Self> {
-        todo!()
-        // Some(Self {
-        //     layer: Asc::new(LayerScope::new_structured(
-        //         element_context,
-        //         Affine2d::IDENTITY,
-        //     )),
-        //     child: element.child.map(|child| {
-        //         child
-        //             .get_current_subtree_render_object()
-        //             .expect("Root ElementNode should never receive suspense event")
-        //     }),
-        // })
-    }
-
-    fn update_render_object(
-        &mut self,
-        _widget: &<Self::Element as Element>::ArcWidget,
-    ) -> RenderObjectUpdateResult {
-        RenderObjectUpdateResult::None
-    }
-    const NOOP_UPDATE_RENDER_OBJECT: bool = true;
-
-    fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
-        self.child = element.child.as_ref().map(|child| {
-            child
-                .get_current_subtree_render_object()
-                .expect("Root ElementNode should never receive suspense event")
-        });
-        Ok(())
-    }
-
     type LayoutMemo = ();
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        _constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> (
-        <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        Self::LayoutMemo,
-    ) {
+        _constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         unreachable!()
     }
 
@@ -171,68 +163,69 @@ impl Render for RenderRootView {
 
     fn perform_paint(
         &self,
-        _size: &<<Self::Element as Element>::ParentProtocol as Protocol>::Size,
-        _transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
+        _size: &<Self::ParentProtocol as Protocol>::Size,
+        _transform: &<Self::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
-        _paint_ctx: &mut impl PaintContext<
-            Canvas = <<Self::Element as Element>::ParentProtocol as Protocol>::Canvas,
-        >,
+        _paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         unreachable!()
     }
+
+    type ArcLayerNode = Arc<LayerNode<RootLayer>>; //TODO
 }
 
-impl DryLayout for RenderRootView {
+impl LayerRender for RenderRoot {
+    fn create_layer_node(&self, layer_context: &AscLayerContextNode) -> Self::ArcLayerNode {
+        todo!()
+    }
+}
+
+impl DryLayout for RenderRoot {
     fn compute_dry_layout(
         &self,
-        constraints: &<<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-    ) -> <<Self::Element as Element>::ParentProtocol as Protocol>::Size {
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> <Self::ParentProtocol as Protocol>::Size {
         todo!()
     }
 
     fn perform_layout<'a, 'layout>(
         &'a self,
-        constraints: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Constraints,
-        size: &'a <<Self::Element as Element>::ParentProtocol as Protocol>::Size,
+        constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+        size: &'a <Self::ParentProtocol as Protocol>::Size,
     ) -> Self::LayoutMemo {
         // self.render_ctx.resize_surface(&mut self.surface, size.width, size.height)
     }
 }
 
-impl LayerPaint for RenderRootView {
+impl LayerPaint for RenderRoot {
     fn get_canvas_transform_ref(
-        transform: &<<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-    ) -> &<<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
-    {
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+    ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
         todo!()
     }
 
     fn get_canvas_transform(
-        transform: <<Self::Element as Element>::ParentProtocol as Protocol>::Transform,
-    ) -> <<<Self::Element as Element>::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
-    {
+        transform: <Self::ParentProtocol as Protocol>::Transform,
+    ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
         todo!()
     }
 }
 
-pub struct RootLayer<P: LayerProtocol> {
+pub struct RootLayer {
     pub context: AscLayerContextNode,
-    pub inner: SyncMutex<RootLayerInner<P>>,
+    pub inner: SyncMutex<RootLayerInner>,
 }
 
-pub struct RootLayerInner<P: LayerProtocol> {
+pub struct RootLayerInner {
     /// This field is nullable because we temporarily share implementation with RootLayer
-    child_render_object: Option<ArcChildRenderObject<P>>,
-    paint_cache: Option<PaintResults<P::Canvas>>,
+    child_render_object: Option<ArcChildRenderObject<BoxProtocol>>,
+    paint_cache: Option<PaintResults<Affine2dCanvas>>,
 }
 
-impl<P> RootLayer<P>
-where
-    P: LayerProtocol,
-{
+impl RootLayer {
     pub fn new(
         context: AscLayerContextNode,
-        child_render_object: Option<ArcChildRenderObject<P>>,
+        child_render_object: Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> Self {
         Self {
             context,
@@ -243,43 +236,48 @@ where
         }
     }
 
-    pub fn update_child_render_object(&self, child_render_object: ArcChildRenderObject<P>) {
+    pub fn update_child_render_object(&self, child_render_object: ArcChildRenderObject<BoxProtocol>) {
         let mut inner = self.inner.lock();
         inner.child_render_object = Some(child_render_object);
         inner.paint_cache = None;
     }
 }
 
-// impl<P> Layer for RootLayer<P>
-// where
-//     P: LayerProtocol,
-// {
-//     type ParentCanvas = P::Canvas;
+impl Layer for RootLayer {
+    type ParentCanvas = Affine2dCanvas;
 
-//     type ChildCanvas = P::Canvas;
+    type ChildCanvas = Affine2dCanvas;
 
-//     fn context(&self) -> &AscLayerContextNode {
-//         &self.context
-//     }
+    fn context(&self) -> &AscLayerContextNode {
+        todo!()
+    }
 
-//     fn composite_to(
-//         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
-//         child_iterator: &mut ChildLayerProducingIterator<'_, Self>,
-//         composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
-//     ) where
-//         Self: Sized,
-//     {
-//         todo!()
-//     }
+    fn composite_to(
+        &self,
+        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        child_iterator: &mut impl epgi_core::tree::ChildLayerProducingIterator<Self::ChildCanvas>,
+        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+    ) {
+        todo!()
+    }
 
-//     fn detached_config(
-//         self_config: &LayerCompositionConfig<Self::ParentCanvas>,
-//         child_config: &LayerCompositionConfig<Self::ChildCanvas>,
-//     ) -> LayerCompositionConfig<Self::ParentCanvas> {
-//         todo!()
-//     }
+    fn transform_config(
+        self_config: &LayerCompositionConfig<Self::ParentCanvas>,
+        child_config: &LayerCompositionConfig<Self::ChildCanvas>,
+    ) -> LayerCompositionConfig<Self::ParentCanvas> {
+        todo!()
+    }
 
-//     fn key(&self) -> Option<&Arc<dyn epgi_core::foundation::Key>> {
-//         todo!()
-//     }
-// }
+    fn repaint(
+        &self,
+        old_results: Option<&PaintResults<Self::ChildCanvas>>,
+    ) -> PaintResults<Self::ChildCanvas> {
+        todo!()
+    }
+
+    fn key(&self) -> Option<&Arc<dyn epgi_core::foundation::Key>> {
+        todo!()
+    }
+
+    type CachedComposition = ();
+}

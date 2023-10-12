@@ -15,7 +15,12 @@ pub type ArcParentWidget<P> = Asc<dyn ParentWidget<ChildProtocol = P>>;
 pub type ArcAnyWidget = Asc<dyn AnyWidget>;
 
 pub trait Widget: AsAny + std::fmt::Debug + 'static + Send + Sync {
-    type Element: Element;
+    type ParentProtocol: Protocol;
+    type ChildProtocol: Protocol;
+    type Element: Element<
+        ParentProtocol = Self::ParentProtocol,
+        ChildProtocol = Self::ChildProtocol,
+    >;
 
     fn key(&self) -> Option<&dyn Key> {
         None
@@ -27,13 +32,9 @@ pub trait Widget: AsAny + std::fmt::Debug + 'static + Send + Sync {
 pub trait WidgetExt: Widget {
     fn as_arc_any_widget(self: Arc<Self>) -> ArcAnyWidget;
 
-    fn as_arc_child_widget(
-        self: Arc<Self>,
-    ) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol>;
+    fn as_arc_child_widget(self: Arc<Self>) -> ArcChildWidget<Self::ParentProtocol>;
 
-    fn as_arc_parent_widget(
-        self: Arc<Self>,
-    ) -> ArcParentWidget<<Self::Element as Element>::ChildProtocol>;
+    fn as_arc_parent_widget(self: Arc<Self>) -> ArcParentWidget<Self::ChildProtocol>;
 
     fn widget_type_id(&self) -> TypeId;
 }
@@ -46,15 +47,11 @@ where
         self
     }
 
-    fn as_arc_child_widget(
-        self: Arc<Self>,
-    ) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol> {
+    fn as_arc_child_widget(self: Arc<Self>) -> ArcChildWidget<Self::ParentProtocol> {
         self
     }
 
-    fn as_arc_parent_widget(
-        self: Arc<Self>,
-    ) -> ArcParentWidget<<Self::Element as Element>::ChildProtocol> {
+    fn as_arc_parent_widget(self: Arc<Self>) -> ArcParentWidget<Self::ChildProtocol> {
         self
     }
 
