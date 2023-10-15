@@ -105,6 +105,18 @@ pub struct PerformCachedComposition<L: Layer> {
 }
 
 pub trait CachedLayer: Layer {
+    const PERFORM_CACHED_COMPOSITION: Option<PerformCachedComposition<Self>> =
+        Some(PerformCachedComposition {
+            composite_to: |layer, encoding, child_iterator, composition_config| {
+                <Self as CachedLayer>::composite_to(
+                    layer,
+                    encoding,
+                    child_iterator,
+                    composition_config,
+                )
+            },
+            composite_from_cache_to: Self::composite_from_cache_to,
+        });
     fn composite_to(
         &self,
         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,

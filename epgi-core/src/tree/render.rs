@@ -224,7 +224,7 @@ where
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) context: AscRenderContextNode,
-    pub(crate) layer: R::ArcLayerNode,
+    pub(crate) layer_node: R::ArcLayerNode,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
@@ -256,7 +256,7 @@ where
         Self {
             context: element_context.nearest_render_context.clone(),
             element_context,
-            layer,
+            layer_node: layer,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,
                 render,

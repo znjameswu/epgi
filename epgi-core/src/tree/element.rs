@@ -419,15 +419,15 @@ where
 {
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
+        let render_context = element_context.nearest_render_context.clone();
+        let layer_context = render_context.nearest_repaint_boundary.clone();
         // let render = R::try_create_render_object_from_element(&element, &widget)
         //     .expect("Root render object creation should always be successfully");
+        let layer_node = Asc::new(LayerNode::new(layer_context, layer));
         let render_object = Arc::new(RenderObject {
             element_context: element_context.clone(),
-            context: element_context.nearest_render_context.clone(),
-            layer: Asc::new(LayerNode {
-                context: todo!(),
-                inner: todo!(),
-            }),
+            context: render_context,
+            layer_node,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
                 render,

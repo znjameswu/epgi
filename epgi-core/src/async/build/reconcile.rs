@@ -54,30 +54,31 @@ where
     ) -> Arc<Self> {
         // We cannot reserve our subscription before the node is fully constructed.
         // Otherwise a contending async writing commit may find an uninstantiated node in its reservation list. Which is odd.
-        let subscription_diff = Self::calc_subscription_diff(
-            E::get_consumed_types(&widget),
-            EMPTY_CONSUMED_TYPES,
-            &work_context.reserved_provider_values,
-            &parent_context.provider_map_for_child,
-        );
-        Arc::new_cyclic(move |node| Self {
-            context: Arc::new(ElementContextNode::new_no_provide(
-                node.clone() as _,
-                parent_context,
-                E::ArcRenderObject::GET_RENDER_OBJECT.is_some(),
-            )),
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget,
-                inner: ElementSnapshotInner::AsyncInflating(AsyncInflating {
-                    work_context,
-                    stash: AsyncStash {
-                        handle,
-                        subscription_diff,
-                        reserved_provider_write: false,
-                        output: AsyncOutput::Uninitiated { barrier },
-                    },
+
+        Arc::new_cyclic(move |node| {
+            let element_context =
+                ElementContextNode::new_for::<E>(node.clone() as _, parent_context, &widget);
+            let subscription_diff = Self::calc_subscription_diff(
+                E::get_consumed_types(&widget),
+                EMPTY_CONSUMED_TYPES,
+                &work_context.reserved_provider_values,
+                &element_context.provider_map,
+            );
+            Self {
+                context: Arc::new(element_context),
+                snapshot: SyncMutex::new(ElementSnapshot {
+                    widget,
+                    inner: ElementSnapshotInner::AsyncInflating(AsyncInflating {
+                        work_context,
+                        stash: AsyncStash {
+                            handle,
+                            subscription_diff,
+                            reserved_provider_write: false,
+                            output: AsyncOutput::Uninitiated { barrier },
+                        },
+                    }),
                 }),
-            }),
+            }
         })
         // We could either read the subscription here or in the inflate method since async inflating is a two-step process. \
         // Decision: in the inflate method.
