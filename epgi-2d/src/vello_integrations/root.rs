@@ -7,8 +7,9 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
         AscLayerContextNode, AscRenderContextNode, BuildContext,
         CachingChildLayerProducingIterator, DryLayout, Element, Layer, LayerCompositionConfig,
-        LayerPaint, PaintResults, ReconcileItem, Reconciler, Render, RenderElement, RenderObject,
-        RenderObjectUpdateResult, StructuredChildLayerOrFragment, Widget, LayerNode, LayerRender,
+        LayerNode, LayerPaint, LayerRender, PaintResults, ReconcileItem, Reconciler, Render,
+        RenderElement, RenderObject, RenderObjectUpdateResult, StructuredChildLayerOrFragment,
+        Widget,
     },
 };
 
@@ -212,31 +213,23 @@ impl LayerPaint for RenderRoot {
 }
 
 pub struct RootLayer {
-    pub context: AscLayerContextNode,
-    pub inner: SyncMutex<RootLayerInner>,
-}
-
-pub struct RootLayerInner {
     /// This field is nullable because we temporarily share implementation with RootLayer
     child_render_object: Option<ArcChildRenderObject<BoxProtocol>>,
     paint_cache: Option<PaintResults<Affine2dCanvas>>,
 }
 
 impl RootLayer {
-    pub fn new(
-        context: AscLayerContextNode,
-        child_render_object: Option<ArcChildRenderObject<BoxProtocol>>,
-    ) -> Self {
+    pub fn new(child_render_object: Option<ArcChildRenderObject<BoxProtocol>>) -> Self {
         Self {
-            context,
-            inner: SyncMutex::new(RootLayerInner {
-                child_render_object,
-                paint_cache: None,
-            }),
+            child_render_object,
+            paint_cache: None,
         }
     }
 
-    pub fn update_child_render_object(&self, child_render_object: ArcChildRenderObject<BoxProtocol>) {
+    pub fn update_child_render_object(
+        &self,
+        child_render_object: ArcChildRenderObject<BoxProtocol>,
+    ) {
         let mut inner = self.inner.lock();
         inner.child_render_object = Some(child_render_object);
         inner.paint_cache = None;

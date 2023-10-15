@@ -10,7 +10,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcElementContextNode, ArcRenderObject, AsyncWorkQueue, Element,
         ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, GetRenderObject,
-        HookContext, Hooks, Mainline, MainlineState, RenderObjectUpdateResult,
+        HookContext, Hooks, Mainline, MainlineState, RenderContextNode, RenderObjectUpdateResult,
     },
 };
 
@@ -237,31 +237,19 @@ where
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
     ) -> (Arc<ElementNode<E>>, SubtreeCommitResult) {
-        let node = Arc::new_cyclic(|weak| {
-            let context = if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
-                ElementContextNode::new_with_provide(
-                    weak.clone() as _,
-                    parent_context,
-                    get_provided_value(&widget),
-                    E::ArcRenderObject::GET_RENDER_OBJECT.is_some(),
-                )
-            } else {
-                ElementContextNode::new_no_provide(
-                    weak.clone() as _,
-                    parent_context,
-                    E::ArcRenderObject::GET_RENDER_OBJECT.is_some(),
-                )
-            };
-            ElementNode {
-                context: Arc::new(context),
-                snapshot: SyncMutex::new(ElementSnapshot {
-                    widget: widget.clone(),
-                    inner: ElementSnapshotInner::Mainline(Mainline {
-                        state: None,
-                        async_queue: AsyncWorkQueue::new_empty(),
-                    }),
+        let node = Arc::new_cyclic(|weak| ElementNode {
+            context: Arc::new(ElementContextNode::new_for::<E>(
+                weak.clone() as _,
+                parent_context,
+                widget,
+            )),
+            snapshot: SyncMutex::new(ElementSnapshot {
+                widget: widget.clone(),
+                inner: ElementSnapshotInner::Mainline(Mainline {
+                    state: None,
+                    async_queue: AsyncWorkQueue::new_empty(),
                 }),
-            }
+            }),
         });
 
         // let weak_node: AweakAnyElementNode = Arc::downgrade(&node) as _;

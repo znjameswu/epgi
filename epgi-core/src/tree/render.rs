@@ -163,7 +163,7 @@ where
 
 impl<R, L> ArcLayerNode<R> for Arc<LayerNode<L>>
 where
-    R: LayerRender<ArcLayerNode = Self>,
+    R: LayerRender<Layer = L>,
     L: Layer<
         ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
@@ -179,7 +179,8 @@ where
     };
 }
 
-pub trait LayerRender: Render {
+pub trait LayerRender: Render<ArcLayerNode = Arc<LayerNode<Self::Layer>>> {
+    type Layer: Layer;
     fn create_layer_node(&self, layer_context: &AscLayerContextNode) -> Self::ArcLayerNode;
 }
 
@@ -201,6 +202,15 @@ pub enum GetLayerNode<R: Render> {
     None {
         create: fn() -> R::ArcLayerNode,
     },
+}
+
+impl<R> GetLayerNode<R>
+where
+    R: Render,
+{
+    pub const fn is_some(&self) -> bool {
+        matches!(self, GetLayerNode::LayerNode { .. })
+    }
 }
 
 // #[derive(Debug, Clone, Copy, Default)]

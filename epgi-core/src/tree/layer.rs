@@ -29,8 +29,6 @@ pub trait Layer: Send + Sync + Sized + 'static {
     type ParentCanvas: Canvas;
     type ChildCanvas: Canvas;
 
-    fn context(&self) -> &AscLayerContextNode;
-
     fn composite_to(
         &self,
         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
@@ -300,7 +298,17 @@ pub struct CompositionResults<C: Canvas, T> {
     cached_composition: T,
 }
 
-impl<L> LayerNode<L> where L: Layer {}
+impl<L> LayerNode<L>
+where
+    L: Layer,
+{
+    pub(crate) fn new(context: AscLayerContextNode, layer: L) -> Self {
+        Self {
+            context,
+            inner: SyncMutex::new(LayerNodeInner { layer, cache: None }),
+        }
+    }
+}
 
 pub trait ChildLayerNode<PC: Canvas>: Send + Sync {
     fn composite_to(

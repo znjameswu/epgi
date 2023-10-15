@@ -1,6 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-use crate::{foundation::Asc, tree::AscLayerContextNode};
+use crate::{
+    foundation::Asc,
+    tree::{AscLayerContextNode, LayerContextNode},
+};
 
 pub type AscRenderContextNode = Asc<RenderContextNode>;
 
@@ -16,45 +19,56 @@ pub struct RenderContextNode {
 }
 
 impl RenderContextNode {
-    pub(crate) fn new(parent: AscRenderContextNode) -> Self {
-        Self {
-            nearest_repaint_boundary: parent.nearest_repaint_boundary.clone(),
-            parent: Some(parent),
-            is_repaint_boundary: false,
-            needs_layout: AtomicBool::new(false),
-            // needs_paint: AtomicBool::new(false),
-            subtree_has_layout: AtomicBool::new(false),
-            // subtree_has_paint: AtomicBool::new(false),
-            is_relayout_boundary: AtomicBool::new(false),
-        }
+    pub(crate) fn new_render(parent: AscRenderContextNode) -> Self {
+        Self::new(Some(parent), None)
     }
 
-    pub(crate) fn new_repaint_boundary(
-        parent: AscRenderContextNode,
-        layer_context: AscLayerContextNode,
-    ) -> Self {
-        Self {
-            parent: Some(parent),
-            nearest_repaint_boundary: layer_context,
-            is_repaint_boundary: false,
-            needs_layout: AtomicBool::new(false),
-            // needs_paint: AtomicBool::new(false),
-            subtree_has_layout: AtomicBool::new(false),
-            // subtree_has_paint: AtomicBool::new(false),
-            is_relayout_boundary: AtomicBool::new(false),
-        }
+    pub(crate) fn new_repaint_boundary(parent: AscRenderContextNode) -> Self {
+        let layer_context = Asc::new(LayerContextNode::new(Some(
+            parent.nearest_repaint_boundary.clone(),
+        )));
+        Self::new(Some(parent), Some(layer_context))
     }
 
     pub(crate) fn new_root() -> Self {
-        Self {
-            parent: None,
-            nearest_repaint_boundary: todo!(),
-            is_repaint_boundary: true,
-            needs_layout: false.into(),
-            // needs_paint: false.into(),
-            subtree_has_layout: false.into(),
-            // subtree_has_paint: false.into(),
-            is_relayout_boundary: true.into(),
+        let layer_context = Asc::new(LayerContextNode::new(None));
+        Self::new(None, Some(layer_context))
+    }
+
+    #[inline(always)]
+    fn new(
+        parent: Option<AscRenderContextNode>,
+        layer_context: Option<AscLayerContextNode>,
+    ) -> Self {
+        if let Some(parent) = parent {
+            let (nearest_repaint_boundary, is_repaint_boundary) =
+                if let Some(layer_context) = layer_context {
+                    (layer_context, true)
+                } else {
+                    (parent.nearest_repaint_boundary.clone(), false)
+                };
+            Self {
+                parent: Some(parent),
+                nearest_repaint_boundary,
+                is_repaint_boundary,
+                needs_layout: AtomicBool::new(false),
+                // needs_paint: AtomicBool::new(false),
+                subtree_has_layout: AtomicBool::new(false),
+                // subtree_has_paint: AtomicBool::new(false),
+                is_relayout_boundary: AtomicBool::new(false),
+            }
+        } else {
+            Self {
+                parent: None,
+                nearest_repaint_boundary: layer_context
+                    .expect("A root render object must have a layer"),
+                is_repaint_boundary: true,
+                needs_layout: AtomicBool::new(false),
+                // needs_paint: AtomicBool::new(false),
+                subtree_has_layout: AtomicBool::new(false),
+                // subtree_has_paint: AtomicBool::new(false),
+                is_relayout_boundary: AtomicBool::new(true),
+            }
         }
     }
 

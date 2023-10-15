@@ -10,8 +10,8 @@ pub use snapshot::*;
 
 use crate::{
     foundation::{
-        Arc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol, Provide,
-        SyncMutex, SyncMutexGuard, TypeKey,
+        Arc, Asc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol,
+        Provide, SyncMutex, SyncMutexGuard, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -19,9 +19,9 @@ use crate::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, AscLayerContextNode,
-    AscRenderContextNode, ReconcileItem, Reconciler, Render, RenderCache, RenderContextNode,
-    RenderObject, RenderObjectInner,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcLayerNode, ArcWidget,
+    AscLayerContextNode, AscRenderContextNode, LayerNode, LayerRender, ReconcileItem, Reconciler,
+    Render, RenderCache, RenderContextNode, RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -187,6 +187,8 @@ where
             Some(<E::Render as Render>::detach)
         },
         get_suspense: E::GET_SUSPENSE,
+        has_layer: <<E::Render as Render>::ArcLayerNode as ArcLayerNode<_>>::GET_LAYER_NODE
+            .is_some(),
     };
 
     fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode)) {
@@ -211,6 +213,7 @@ pub enum GetRenderObject<E: Element> {
         >,
         detach_render_object: Option<fn(&mut <E::ArcRenderObject as ArcRenderObject<E>>::Render)>,
         get_suspense: Option<GetSuspense<E>>,
+        has_layer: bool,
     },
     None(fn(&E) -> &ArcChildElementNode<E::ParentProtocol>),
 }
@@ -406,10 +409,14 @@ where
 pub fn create_root_element<E: RenderElement>(
     widget: E::ArcWidget,
     element: E,
-    create_render: impl FnOnce(&AscLayerContextNode) -> E::Render,
+    render: E::Render,
+    layer: <E::Render as LayerRender>::Layer,
     hooks: Hooks,
     constraints: <E::ParentProtocol as Protocol>::Constraints,
-) -> Arc<ElementNode<E>> {
+) -> Arc<ElementNode<E>>
+where
+    E::Render: LayerRender,
+{
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
         // let render = R::try_create_render_object_from_element(&element, &widget)
@@ -417,14 +424,13 @@ pub fn create_root_element<E: RenderElement>(
         let render_object = Arc::new(RenderObject {
             element_context: element_context.clone(),
             context: element_context.nearest_render_context.clone(),
-            layer: todo!(),
+            layer: Asc::new(LayerNode {
+                context: todo!(),
+                inner: todo!(),
+            }),
             inner: SyncMutex::new(RenderObjectInner {
                 cache: Some(RenderCache::new(constraints, false, None)),
-                render: create_render(
-                    &element_context
-                        .nearest_render_context
-                        .nearest_repaint_boundary,
-                ),
+                render,
             }),
         });
         ElementNode {

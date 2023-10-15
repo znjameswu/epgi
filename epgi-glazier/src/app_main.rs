@@ -331,7 +331,8 @@ impl MainState {
         let element_node = create_root_element::<RootElement>(
             root_widget,
             element,
-            |context| RenderRoot { child: None },
+            RenderRoot { child: None },
+            RootLayer::new(None),
             Hooks {
                 array_hooks: [Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> {
                     val: None,

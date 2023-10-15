@@ -14,12 +14,21 @@ use super::{AweakAnyElementNode, AweakElementContextNode, ElementContextNode};
 pub(crate) struct ProviderObject {
     value: SyncRwLock<Arc<dyn Provide>>, // TODO ArcSwapAny<ThinArcProvide>
     inner: SyncMutex<ProviderObjectInner>, // TODO Test against RwLock
-    pub(crate) type_id: TypeKey,
+    pub(crate) type_key: TypeKey,
 }
 
 struct ProviderObjectInner {
     consumers: HashSet<PtrEq<AweakElementContextNode>>,
     occupation: AsyncProviderOccupation,
+}
+
+impl ProviderObject {
+    pub(crate) fn new<T: Provide>(value: Arc<T>) -> Self {
+        todo!()
+    }
+    pub(crate) fn get_value(&self) -> Arc<dyn Provide> {
+        self.value.read().clone()
+    }
 }
 
 enum AsyncProviderOccupation {
