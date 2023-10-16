@@ -14,8 +14,8 @@ use epgi_core::{
 };
 use glazier::{
     kurbo::{Affine, Size},
-    Application, HotKey, IdleToken, Menu, MouseEvent, Region, Scalable, SysMods, WinHandler,
-    WindowBuilder, WindowHandle,
+    Application, HotKey, IdleToken, Menu,  Region, Scalable, SysMods, WinHandler,
+    WindowBuilder, WindowHandle, PointerEvent,
 };
 use std::{
     any::Any,
@@ -59,16 +59,17 @@ impl AppLauncher {
         menubar.add_dropdown(Menu::new(), "Application", true);
         menubar.add_dropdown(file_menu, "&File", true);
         let glazier_app = Application::new().unwrap();
-        let mut builder = WindowBuilder::new(glazier_app.clone());
 
         let mut main_state = MainState::new();
         main_state.spin_up_scheduler(self.app);
 
-        builder.set_handler(Box::new(main_state));
-        builder.set_title(self.title);
-        builder.set_menu(menubar);
-        builder.set_size(Size::new(1024., 768.));
-        let window = builder.build().unwrap();
+        let window = WindowBuilder::new(glazier_app.clone())
+            .handler(Box::new(main_state))
+            .title(self.title)
+            .menu(menubar)
+            .size(Size::new(1024., 768.))
+            .build()
+            .unwrap();
         window.show();
         glazier_app.run(None);
     }
@@ -103,9 +104,7 @@ impl WinHandler for MainState {
         self.schedule_render();
     }
 
-    // TODO: temporary hack
     fn idle(&mut self, _: IdleToken) {
-        self.render();
     }
 
     fn command(&mut self, id: u32) {
@@ -131,32 +130,32 @@ impl WinHandler for MainState {
         // self.handle.invalidate();
     }
 
-    fn mouse_down(&mut self, event: &MouseEvent) {
+    fn pointer_down(&mut self, event: &PointerEvent) {
         todo!()
         // self.app.window_event(Event::MouseDown(event.into()));
         // self.handle.invalidate();
     }
 
-    fn mouse_up(&mut self, event: &MouseEvent) {
+    fn pointer_up(&mut self, event: &PointerEvent) {
         todo!()
         // self.app.window_event(Event::MouseUp(event.into()));
         // self.handle.invalidate();
     }
 
-    fn mouse_move(&mut self, event: &MouseEvent) {
+    fn pointer_move(&mut self, event: &PointerEvent) {
         todo!()
         // self.app.window_event(Event::MouseMove(event.into()));
         // self.handle.invalidate();
         // self.handle.set_cursor(&Cursor::Arrow);
     }
 
-    fn wheel(&mut self, event: &MouseEvent) {
+    fn wheel(&mut self, event: &PointerEvent) {
         todo!()
         // self.app.window_event(Event::MouseWheel(event.into()));
         // self.handle.invalidate();
     }
 
-    fn mouse_leave(&mut self) {
+    fn pointer_leave(&mut self) {
         todo!()
         // self.app.window_event(Event::MouseLeft());
         // self.handle.invalidate();
@@ -258,9 +257,10 @@ impl MainState {
         let height = size.height as u32;
         if self.surface.is_none() {
             //println!("render size: {:?}", size);
-            self.surface = Some(futures::executor::block_on(
-                self.render_cx.create_surface(handle, width, height),
-            ));
+            self.surface = Some(
+                futures::executor::block_on(self.render_cx.create_surface(handle, width, height))
+                    .unwrap(),
+            );
         }
         if let Some(surface) = self.surface.as_mut() {
             if surface.config.width != width || surface.config.height != height {
@@ -284,6 +284,7 @@ impl MainState {
             let queue = &self.render_cx.devices[dev_id].queue;
             let renderer_options = RendererOptions {
                 surface_format: Some(surface.format),
+                timestamp_period: queue.get_timestamp_period(),
             };
             let render_params = RenderParams {
                 base_color: Color::BLACK,

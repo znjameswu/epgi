@@ -5,10 +5,10 @@ use epgi_core::{
         StructuredChildLayerOrFragment,
     },
 };
-use peniko::{kurbo::Shape, BrushRef};
+use peniko::{kurbo::Shape, BrushRef, Stroke};
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image, Stroke, VelloEncoding,
+    Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image, VelloEncoding,
 };
 
 /// This is the serial version of paint context
