@@ -158,7 +158,7 @@ where
 {
     type Layer = Never;
 
-    const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::None { create: todo!() };
+    const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::None { create: || () };
 }
 
 impl<R, L> ArcLayerNode<R> for Arc<LayerNode<L>>

@@ -1,6 +1,7 @@
 use std::ops::BitAnd;
 
 use epgi_core::foundation::{Canvas, PaintContext};
+use peniko::kurbo::{self, PathEl};
 pub use peniko::{
     BlendMode, Brush, Cap, Color, ColorStops, Dashes, Extend, Fill, Format, Gradient, GradientKind,
     Image, Join, Stroke,
@@ -9,83 +10,107 @@ pub use peniko::{
 use crate::{Affine2d, BoxOffset, BoxSize, Paragraph, Point2d};
 
 pub enum Affine2dPaintCommand {
-    // TODO: New clip should stack on top of existing clip
-    ClipPath {
-        path: Path,
-    },
-    ClipRect {
-        rect: Rect,
-    },
-    ClipRRect {
-        rect: Rect,
-        radius: RRectRadius,
-    },
-    Arc {
-        rect: Rect,
-        start_angle: f32,
-        sweep_angle: f32,
-        use_center: bool,
+    DrawShape {
+        shape: Affine2dShape,
         painter: Painter,
     },
-    // Atlas,
-    Circle {
-        center: Point2d,
-        radius: f32,
-        use_center: bool,
-        painter: Painter,
-    },
-    Color {
-        color: Color,
-        blend_mode: BlendMode,
-    },
-    DRRect {
-        outer: RRect,
-        inner: RRect,
-        painter: Painter,
-    },
-    Image {
-        image: Image,
-        top_left: Point2d,
-        // TODO: ImageFilter, FilterQuality, ColorFilter, InvertColors, MaskFilter
-    },
-    // ImageNine, // TODO
-    ImageRect {
-        image: Image,
-        src: Rect,
-        dst: Rect,
-        // TODO: ImageFilter, FilterQuality, ColorFilter, InvertColors, MaskFilter
-    },
-    Line {
+    DrawLine {
         p1: Point2d,
         p2: Point2d,
         painter: StrokePainter,
     },
-    Oval {
-        rect: Rect,
-        painter: Painter,
+    ClipShape {
+        shape: Affine2dShape,
+        blend: BlendMode,
+        alpha: f32,
     },
-    Paint {
-        painter: FillPainter,
-    },
+    PopClip,
     Paragraph {
         paragraph: Paragraph,
         offset: BoxOffset,
     },
-    Path {
-        path: Path,
-        paint: Painter,
+}
+
+pub enum Affine2dShape {
+    Rect(Rect),
+    Circle(Circle),
+    // RRect(RRect),
+    CircleSegment {
+        circle: Circle,
+        start_angle: f32,
+        sweep_angle: f32,
     },
-    // Picture,
-    // Points, //https://stackoverflow.com/a/56896362
-    Rect {
-        rect: Rect,
+    CircleSector {
+        circle: Circle,
+        start_angle: f32,
+        sweep_angle: f32,
     },
-    RRect {
-        rect: Rect,
-        radius: RRectRadius,
+    RingSector {
+        outer_circle: Circle,
+        inner_radius: f32,
+        start_angle: f32,
+        sweep_angle: f32,
     },
-    // Shadow, // TODO
-    // Vertices, // TODO
+    Triangle(Point2d, Point2d, Point2d),
+    // Tetragon(Point2d, Point2d, Point2d, Point2d),
+    Polygon(Vec<Affine2dPathEl>),
+    Oval(Rect),
+    Ellipse(Affine2d),
+    EllipseSegment {
+        transform: Affine2d,
+        sweep_angle: f32,
+    },
+    EllipseRingSegment,
+    Path(Vec<Affine2dPathEl>),
+}
+
+pub enum Affine2dPathSeg {
+    Line(Line),
+    EllipticalArc(EllipticalArc),
+    QuadBez(QuadBez),
+    CubicBez(CubicBez),
+}
+
+pub enum Affine2dPathEl {
+    MoveTo(Point2d),
+    LineTo(Point2d),
+    QuadTo(Point2d, Point2d),
+    CubicTo(Point2d, Point2d, Point2d),
+    EllipticalArcTo {
+        dst: Point2d,
+        center: Point2d,
+        sweep_angle: f32,
+    },
+    ClosePath,
+}
+
+pub struct Line {
+    p0: Point2d,
+    p1: Point2d,
+}
+
+pub struct EllipticalArc {
+    sweep_angle: f32,
+    transform: Affine2d,
+}
+
+pub struct Arc {
+    c: Point2d,
+    r: Point2d,
+    sweep_angle: f32,
+}
+
+pub struct QuadBez {
+    p0: Point2d,
+    p1: Point2d,
+    p2: Point2d,
+}
+
+pub struct CubicBez {
+    p0: Point2d,
+    p1: Point2d,
+    p2: Point2d,
+    p3: Point2d,
 }
 
 pub enum Painter {
@@ -106,19 +131,37 @@ pub struct StrokePainter {
 }
 
 pub struct Rect {
-    pub left: f32,
-    pub top: f32,
-    pub right: f32,
-    pub botton: f32,
+    pub l: f32,
+    pub t: f32,
+    pub r: f32,
+    pub b: f32,
 }
 
 impl Rect {
-    pub fn new(left: f32, top: f32, right: f32, botton: f32) -> Self {
+    pub fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
         Self {
-            left,
-            top,
-            right,
-            botton,
+            l: left,
+            t: top,
+            r: right,
+            b: bottom,
+        }
+    }
+    pub fn width(&self) -> f32 {
+        self.r - self.l
+    }
+
+    pub fn height(&self) -> f32 {
+        self.b - self.t
+    }
+
+    pub fn is_sqaure(&self) -> bool {
+        self.width() == self.height()
+    }
+
+    pub fn center(&self) -> Point2d {
+        Point2d {
+            x: (self.l + self.r) / 2.0,
+            y: (self.t + self.b) / 2.0,
         }
     }
 }
@@ -128,27 +171,31 @@ impl BitAnd<BoxSize> for BoxOffset {
 
     fn bitand(self, rhs: BoxSize) -> Self::Output {
         Rect {
-            left: self.x,
-            top: self.y,
-            right: self.x + rhs.width,
-            botton: self.y + rhs.height,
+            l: self.x,
+            t: self.y,
+            r: self.x + rhs.width,
+            b: self.y + rhs.height,
         }
     }
 }
 
 pub struct RRect {
-    pub left: f32,
-    pub top: f32,
-    pub right: f32,
-    pub botton: f32,
-    pub radius: RRectRadius,
+    pub l: f32,
+    pub t: f32,
+    pub r: f32,
+    pub b: f32,
+    pub radius: Box<RRectRadius>,
 }
 
 pub struct RRectRadius {
-    pub tl_radius: f32,
-    pub tr_radius: f32,
-    pub bl_radius: f32,
-    pub br_radius: f32,
+    pub tl_t_ratio: f32,
+    pub tl_l_ratio: f32,
+    pub tr_t_ratio: f32,
+    pub tr_r_ratio: f32,
+    pub bl_b_ratio: f32,
+    pub bl_l_ratio: f32,
+    pub br_b_ratio: f32,
+    pub br_r_ratio: f32,
 }
 
 pub struct Circle {
@@ -160,7 +207,9 @@ pub struct Ellipse {
     pub affine: Affine2d,
 }
 
-pub struct Path {}
+pub struct Path {
+    pub(crate) path_els: Vec<kurbo::PathEl>,
+}
 
 pub trait Affine2dPaintContextExt {
     fn clip_path(&mut self, path: Path);
@@ -174,8 +223,8 @@ pub trait Affine2dPaintContextExt {
         use_center: bool,
         painter: Painter,
     );
-    fn draw_circle(&mut self, center: Point2d, radius: f32, use_center: bool, painter: Painter);
-    fn draw_color(&mut self, color: Color, blend_mode: BlendMode);
+    fn draw_circle(&mut self, center: Point2d, radius: f32, painter: Painter);
+    fn draw_color(&mut self, color: Color);
     fn draw_drrect(&mut self, outer: RRect, inner: RRect, painter: Painter);
     fn draw_image(&mut self, image: Image, top_left: Point2d);
     fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect);
@@ -183,9 +232,9 @@ pub trait Affine2dPaintContextExt {
     fn draw_oval(&mut self, rect: Rect, painter: Painter);
     fn draw_paint(&mut self, painter: FillPainter);
     fn draw_paragraph(&mut self, paragraph: Paragraph, offset: BoxOffset);
-    fn draw_path(&mut self, path: Path, paint: Painter);
-    fn draw_rect(&mut self, rect: Rect);
-    fn draw_rrect(&mut self, rect: Rect, radius: RRectRadius);
+    fn draw_path(&mut self, path: Path, painter: Painter);
+    fn draw_rect(&mut self, rect: Rect, painter: Painter);
+    fn draw_rrect(&mut self, rect: Rect, radius: RRectRadius, painter: Painter);
 }
 
 impl<T> Affine2dPaintContextExt for T
@@ -223,17 +272,16 @@ where
         })
     }
     #[inline(always)]
-    fn draw_circle(&mut self, center: Point2d, radius: f32, use_center: bool, painter: Painter) {
+    fn draw_circle(&mut self, center: Point2d, radius: f32, painter: Painter) {
         self.add_command(Affine2dPaintCommand::Circle {
             center,
             radius,
-            use_center,
             painter,
         })
     }
     #[inline(always)]
-    fn draw_color(&mut self, color: Color, blend_mode: BlendMode) {
-        self.add_command(Affine2dPaintCommand::Color { color, blend_mode })
+    fn draw_color(&mut self, color: Color) {
+        self.add_command(Affine2dPaintCommand::Color { color })
     }
     #[inline(always)]
     fn draw_drrect(&mut self, outer: RRect, inner: RRect, painter: Painter) {
@@ -268,16 +316,20 @@ where
         self.add_command(Affine2dPaintCommand::Paragraph { paragraph, offset })
     }
     #[inline(always)]
-    fn draw_path(&mut self, path: Path, paint: Painter) {
-        self.add_command(Affine2dPaintCommand::Path { path, paint })
+    fn draw_path(&mut self, path: Path, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::Path { path, painter })
     }
     #[inline(always)]
-    fn draw_rect(&mut self, rect: Rect) {
-        self.add_command(Affine2dPaintCommand::Rect { rect })
+    fn draw_rect(&mut self, rect: Rect, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::Rect { rect, painter })
     }
     #[inline(always)]
-    fn draw_rrect(&mut self, rect: Rect, radius: RRectRadius) {
-        self.add_command(Affine2dPaintCommand::RRect { rect, radius })
+    fn draw_rrect(&mut self, rect: Rect, radius: RRectRadius, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::RRect {
+            rect,
+            radius,
+            painter,
+        })
     }
 }
 

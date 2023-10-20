@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Canvas, Protocol},
+    foundation::{Canvas, Identity, Protocol},
     nodes::Provider,
     tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
 };
@@ -31,6 +31,7 @@ impl Canvas for Affine2dCanvas {
         transform: Option<&Self::Transform>,
         clip: Option<&Self::Clip>,
     ) {
+        assert!(clip.is_none(), "Clip is currently not supported");
         // TODO: Vello API design issue.
         dst.append(src, &transform.cloned())
     }
@@ -50,11 +51,21 @@ impl Canvas for Affine2dCanvas {
     fn paint_render_object<P: Protocol<Canvas = Self>>(
         render_object: &dyn ChildRenderObject<P>,
     ) -> PaintResults<Self> {
-        todo!()
+        let mut paint_results = PaintResults {
+            structured_children: Default::default(),
+            detached_children: Default::default(),
+        };
+        let mut paint_ctx = VelloPaintContext {
+            curr_transform: Affine2d::IDENTITY,
+            curr_fragment_encoding: VelloEncoding::new(),
+            results: &mut paint_results,
+        };
+        render_object.paint(&<P::Transform as Identity>::IDENTITY, &mut paint_ctx);
+        paint_results
     }
 
     fn new_encoding() -> Self::Encoding {
-        todo!()
+        VelloEncoding::new()
     }
 }
 

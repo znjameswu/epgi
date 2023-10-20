@@ -104,3 +104,10 @@ Besides, restricting one rasterization at the same time greatly reduces complexi
 Currently the async batch commits are only allowed to happen at specific time points via polling, particularly, at the start and the end of the synchronous build phase. If we allow them to freely commit upon completion, it would take up less budget of frame building time. 
 
 However, it is detrimental to the pipeline design. Batch commit invalidates the element tree and render object tree immediately (if we do not implement faithful interactivity), disabling event dispatching (since the hit test dependes on valid layout information), forcing the event dispatching to end before the first async batch completion it encounters (which is unpredictable), and the event collection to stop even before that. The event distribution system would be in a very sorry and unpredictable shape. Hence we have to force async batch commits to happen at specific time points with regular intervals.
+
+# PaintCommand for Non-layer node paint caching
+`Canvas::PaintCommand` was an effort to enable caching of painting results for arbitrary render objects. It introduces another encoding scheme which would be more ergonomic and storable on top of vello encoding.
+
+It was ultimately decided that caching would only be performed on layer and fragments, not for individual render objects.
+
+However, `PaintCommand` would still function as a universal interface between epgi canvas and renderer implementations for various canvas protocols.

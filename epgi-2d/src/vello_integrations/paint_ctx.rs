@@ -8,19 +8,27 @@ use epgi_core::{
 use peniko::{kurbo::Shape, BrushRef, Stroke};
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image, VelloEncoding,
+    into_kurbo_rrect, Affine2d, Affine2dCanvas, Affine2dPaintCommand, BlendMode, Fill, Image,
+    IntoKurbo, Painter, VelloEncoding, KURBO_RECT_ALL,
 };
 
 /// This is the serial version of paint context
 pub struct VelloPaintContext<'a> {
-    curr_transform: Affine2d,
+    /// Vello does not store transform on stack (i.e. transform is absolute).
+    /// However, our canvas design requires a transform stack. Hence we store it here.
+    pub(crate) curr_transform: Affine2d,
     // scene: &'a mut vello_encoding::Encoding,
-    curr_fragment_encoding: VelloEncoding,
-    results: &'a mut PaintResults<Affine2dCanvas>,
+    pub(crate) curr_fragment_encoding: VelloEncoding,
+    pub(crate) results: &'a mut PaintResults<Affine2dCanvas>,
 }
 
 // We do not need to scan in a serial painter impl. Therefore a unit type with empty methods.
 pub struct VelloPaintScanner;
+
+const BLEND_SRC_OVER: BlendMode = BlendMode {
+    mix: peniko::Mix::Normal,
+    compose: peniko::Compose::SrcOver,
+};
 
 impl<'a> PaintContext for VelloPaintContext<'a> {
     type Canvas = Affine2dCanvas;
@@ -29,23 +37,110 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
     fn add_command(&mut self, command: Affine2dPaintCommand) {
         use Affine2dPaintCommand::*;
         match command {
-            ClipPath { path } => todo!(),
-            ClipRect { rect } => todo!(),
-            ClipRRect { rect, radius } => todo!(),
+            ClipPath { path } => {
+                self.push_layer(BLEND_SRC_OVER, 1.0, None, &path.path_els.as_slice())
+            }
+            ClipRect { rect } => self.push_layer(BLEND_SRC_OVER, 1.0, None, &rect.into_kurbo()),
+            ClipRRect { rect, radius } => {
+                self.push_layer(BLEND_SRC_OVER, 1.0, None, &into_kurbo_rrect(rect, radius))
+            }
             Arc {
                 rect,
                 start_angle,
                 sweep_angle,
                 use_center,
                 painter,
-            } => todo!(),
+            } => {
+                if use_center {
+                    assert!(
+                        rect.is_sqaure(),
+                        "Elliptical circle segment support is unimplemented"
+                    );
+                    let shape = peniko::kurbo::CircleSegment {
+                        center: rect.center().into_kurbo(),
+                        outer_radius: (rect.height() / 2.0) as _,
+                        inner_radius: 0.0,
+                        start_angle: start_angle as _,
+                        sweep_angle: sweep_angle as _,
+                    };
+                    match painter {
+                        Painter::Fill(painter) => self.fill(
+                            painter.fill,
+                            None,
+                            &painter.brush,
+                            painter.transform,
+                            &shape,
+                        ),
+                        Painter::Stroke(painter) => self.stroke(
+                            &painter.stroke,
+                            None,
+                            &painter.brush,
+                            painter.transform,
+                            &shape,
+                        ),
+                    }
+                } else {
+                    let shape = peniko::kurbo::Arc {
+                        center: rect.center().into_kurbo(),
+                        radii: peniko::kurbo::Vec2 {
+                            x: (rect.width() / 2.0) as _,
+                            y: (rect.height() / 2.0) as _,
+                        },
+                        start_angle: start_angle as _,
+                        sweep_angle: sweep_angle as _,
+                        x_rotation: 0.0,
+                    };
+                    match painter {
+                        Painter::Fill(painter) => self.fill(
+                            painter.fill,
+                            None,
+                            &painter.brush,
+                            painter.transform,
+                            &shape,
+                        ),
+                        Painter::Stroke(painter) => self.stroke(
+                            &painter.stroke,
+                            None,
+                            &painter.brush,
+                            painter.transform,
+                            &shape,
+                        ),
+                    }
+                }
+            }
             Circle {
                 center,
                 radius,
-                use_center,
                 painter,
-            } => todo!(),
-            Color { color, blend_mode } => todo!(),
+            } => {
+                let shape = peniko::kurbo::Circle {
+                    center: center.into_kurbo(),
+                    radius: radius as _,
+                };
+                match painter {
+                    Painter::Fill(painter) => self.fill(
+                        painter.fill,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                    Painter::Stroke(painter) => self.stroke(
+                        &painter.stroke,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                }
+            }
+            Color { color } => self.fill(
+                Fill::EvenOdd,
+                None,
+                &peniko::Brush::Solid(color),
+                None,
+                &KURBO_RECT_ALL,
+            ),
             DRRect {
                 outer,
                 inner,
@@ -53,13 +148,107 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             } => todo!(),
             Image { image, top_left } => todo!(),
             ImageRect { image, src, dst } => todo!(),
-            Line { p1, p2, painter } => todo!(),
-            Oval { rect, painter } => todo!(),
+            Line { p1, p2, painter } => self.stroke(
+                &painter.stroke,
+                None,
+                &painter.brush,
+                painter.transform,
+                &peniko::kurbo::Line {
+                    p0: p1.into_kurbo(),
+                    p1: p2.into_kurbo(),
+                },
+            ),
+            Oval { rect, painter } => {
+                let shape = peniko::kurbo::Ellipse::new(
+                    rect.center().into_kurbo(),
+                    peniko::kurbo::Vec2 {
+                        x: (rect.width() / 2.0) as _,
+                        y: (rect.height() / 2.0) as _,
+                    },
+                    0.0,
+                );
+                match painter {
+                    Painter::Fill(painter) => self.fill(
+                        painter.fill,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                    Painter::Stroke(painter) => self.stroke(
+                        &painter.stroke,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                }
+            }
             Paint { painter } => todo!(),
             Paragraph { paragraph, offset } => todo!(),
-            Path { path, paint } => todo!(),
-            Rect { rect } => todo!(),
-            RRect { rect, radius } => todo!(),
+            Path { path, painter } => {
+                let shape = path.path_els.as_slice();
+                match painter {
+                    Painter::Fill(painter) => self.fill(
+                        painter.fill,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                    Painter::Stroke(painter) => self.stroke(
+                        &painter.stroke,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                }
+            }
+            Rect { rect, painter } => {
+                let shape = rect.into_kurbo();
+                match painter {
+                    Painter::Fill(painter) => self.fill(
+                        painter.fill,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                    Painter::Stroke(painter) => self.stroke(
+                        &painter.stroke,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                }
+            }
+            RRect {
+                rect,
+                radius,
+                painter,
+            } => {
+                let shape = into_kurbo_rrect(rect, radius);
+                match painter {
+                    Painter::Fill(painter) => self.fill(
+                        painter.fill,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                    Painter::Stroke(painter) => self.stroke(
+                        &painter.stroke,
+                        None,
+                        &painter.brush,
+                        painter.transform,
+                        &shape,
+                    ),
+                }
+            }
+            PopClip => self.pop_layer(),
+            Transform { transform } => {},
         }
     }
 
@@ -140,11 +329,15 @@ impl<'a> VelloPaintContext<'a> {
         &mut self,
         blend: impl Into<BlendMode>,
         alpha: f32,
-        transform: Affine2d,
+        transform: Option<Affine2d>,
         shape: &impl Shape,
     ) {
         let blend = blend.into();
-        self.curr_fragment_encoding.encode_transform(transform);
+        if let Some(transform) = transform {
+            self.curr_transform = transform;
+        }
+        self.curr_fragment_encoding
+            .encode_transform(self.curr_transform);
         self.curr_fragment_encoding.encode_linewidth(-1.0);
         if !self.curr_fragment_encoding.encode_shape(shape, true) {
             // If the layer shape is invalid, encode a valid empty path. This suppresses
@@ -165,21 +358,26 @@ impl<'a> VelloPaintContext<'a> {
     fn fill<'b>(
         &mut self,
         style: Fill,
-        transform: Affine2d,
+        transform: Option<Affine2d>,
         brush: impl Into<BrushRef<'b>>,
         brush_transform: Option<Affine2d>,
         shape: &impl Shape,
     ) {
-        self.curr_fragment_encoding.encode_transform(transform);
+        if let Some(transform) = transform {
+            self.curr_transform = transform;
+        }
+        self.curr_fragment_encoding
+            .encode_transform(self.curr_transform);
         self.curr_fragment_encoding.encode_linewidth(match style {
             Fill::NonZero => -1.0,
             Fill::EvenOdd => -2.0,
         });
         if self.curr_fragment_encoding.encode_shape(shape, true) {
             if let Some(brush_transform) = brush_transform {
+                // Only encode transform after we can confirm shape encoding success
                 if self
                     .curr_fragment_encoding
-                    .encode_transform((transform * brush_transform))
+                    .encode_transform((self.curr_transform * brush_transform))
                 {
                     self.curr_fragment_encoding.swap_last_path_tags();
                 }
@@ -192,18 +390,22 @@ impl<'a> VelloPaintContext<'a> {
     fn stroke<'b>(
         &mut self,
         style: &Stroke,
-        transform: Affine2d,
+        transform: Option<Affine2d>,
         brush: impl Into<BrushRef<'b>>,
         brush_transform: Option<Affine2d>,
         shape: &impl Shape,
     ) {
-        self.curr_fragment_encoding.encode_transform(transform);
+        if let Some(transform) = transform {
+            self.curr_transform = transform;
+        }
+        self.curr_fragment_encoding
+            .encode_transform(self.curr_transform);
         self.curr_fragment_encoding.encode_linewidth(style.width);
         if self.curr_fragment_encoding.encode_shape(shape, false) {
             if let Some(brush_transform) = brush_transform {
                 if self
                     .curr_fragment_encoding
-                    .encode_transform(transform * brush_transform)
+                    .encode_transform(self.curr_transform * brush_transform)
                 {
                     self.curr_fragment_encoding.swap_last_path_tags();
                 }
@@ -213,7 +415,7 @@ impl<'a> VelloPaintContext<'a> {
     }
 
     /// Draws an image at its natural size with the given transform.
-    fn draw_image(&mut self, image: &Image, transform: Affine2d) {
+    fn draw_image(&mut self, image: &Image, transform: Option<Affine2d>) {
         self.fill(
             Fill::NonZero,
             transform,
