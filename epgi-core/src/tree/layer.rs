@@ -546,9 +546,6 @@ where
         Some(&self.transform)
     }
 
-    pub fn clip(&self) -> Option<&C::Clip> {
-        None //TODO
-    }
 }
 
 impl<'a, C> Mul<&'a LayerCompositionConfig<C>> for &'a LayerCompositionConfig<C>

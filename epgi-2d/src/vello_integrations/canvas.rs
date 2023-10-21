@@ -4,7 +4,7 @@ use epgi_core::{
     tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
 };
 
-use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner};
+use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner, Affine2dCanvasShape};
 
 pub type Affine2d = vello_encoding::Transform;
 
@@ -23,15 +23,11 @@ impl Canvas for Affine2dCanvas {
 
     type Encoding = VelloEncoding;
 
-    type Clip = VelloClip;
-
     fn composite_encoding(
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
-        clip: Option<&Self::Clip>,
     ) {
-        assert!(clip.is_none(), "Clip is currently not supported");
         // TODO: Vello API design issue.
         dst.append(src, &transform.cloned())
     }
@@ -69,5 +65,3 @@ impl Canvas for Affine2dCanvas {
     }
 }
 
-#[derive(Clone)]
-pub struct VelloClip;

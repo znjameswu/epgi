@@ -85,8 +85,6 @@ pub trait Canvas: Sized + 'static {
     /// The Picture class in Flutter
     type Encoding: Send + Sync + 'static;
 
-    type Clip: Clone + Send + Sync + 'static;
-
     // fn paint_layer(
     //     layer: ArcParentLayer<Self>,
     //     scan: impl FnOnce(&mut Self::PaintScanner<'_>),
@@ -107,7 +105,6 @@ pub trait Canvas: Sized + 'static {
         dst: &mut Self::Encoding,
         src: &Self::Encoding,
         transform: Option<&Self::Transform>,
-        clip: Option<&Self::Clip>,
     );
 
     fn clear(this: &mut Self::Encoding);

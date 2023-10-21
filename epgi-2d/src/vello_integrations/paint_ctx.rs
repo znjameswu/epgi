@@ -185,7 +185,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
                 }
             }
             Paint { painter } => todo!(),
-            Paragraph { paragraph, offset } => todo!(),
+            DrawParagraph { paragraph, offset } => todo!(),
             Path { path, painter } => {
                 let shape = path.path_els.as_slice();
                 match painter {

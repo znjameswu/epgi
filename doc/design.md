@@ -622,3 +622,29 @@ Solution: Leave as-is. To sync two set of tree structures requires some sort of 
 
 Decision: We do not implement any layer lifecycle mechanism. The lifecycle of a layer is stricly bound to its render object.
 
+# Should paint command shape be closed under affine 2d transform?
+Statement: introducing axis-aligned rectangle primitives and circle primitives reduces verbosity of encoding. However, they are not closed under affine transform
+
+1. If we record paintcommand and 
+## In which pipeline stage should we handle transform
+1. Pre-calculation in each individual render objects
+    1. Inherently hostile to SIMD optimizations.
+    2. Strongly prefers draw primitives that are closed under affine2d transform.
+2. No pre-calculation and defer to vello transform stream
+
+## How should we interact with vello trasnfrom stream.
+1. Implicit current transform
+Since vello will just use whatever transform left at the time of drawing, we can calculate transform ahead of time and simply skip encoding transform for most our shapes. This saves time of dedup transforms in vello.
+
+Requires pre-calculation in render object
+
+Problem: brush transforms are also pushed onto transform stream. We will have to restore transform after brush transform overwrites. 
+
+2. Explicit transform for all elements, with most elements pre-calculated and receive identity transform
+A bad idea.
+
+3. Explicit transform for all elements, with no pre-calculations(as exposed in vello API)
+
+Temporary decision: Go with vello intended usage.
+
+Temporary decision: As a result, include shapes that are not closed under affine 2d transform.

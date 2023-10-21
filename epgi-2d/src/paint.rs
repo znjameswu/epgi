@@ -11,67 +11,52 @@ use crate::{Affine2d, BoxOffset, BoxSize, Paragraph, Point2d};
 
 pub enum Affine2dPaintCommand {
     DrawShape {
-        shape: Affine2dShape,
+        shape: Affine2dCanvasShape,
+        transform: Affine2d,
         painter: Painter,
     },
-    DrawLine {
-        p1: Point2d,
-        p2: Point2d,
+    DrawPathSeg {
+        path_seg: Affine2dCanvasPathSeg,
+        transform: Affine2d,
         painter: StrokePainter,
     },
     ClipShape {
-        shape: Affine2dShape,
+        shape: Affine2dCanvasShape,
+        transform: Affine2d,
         blend: BlendMode,
         alpha: f32,
     },
     PopClip,
-    Paragraph {
+    DrawParagraph {
         paragraph: Paragraph,
-        offset: BoxOffset,
+        transform: Affine2d,
     },
 }
 
-pub enum Affine2dShape {
+/// Although we provide a circle primitive, but vello does not have a precise circle encoding.
+/// Scaling under a cached layer will cause distortion when scaling
+/// Consider this as a known bug, won't fix.
+/// This also affects any shape with arc component, such as RRect
+pub enum Affine2dCanvasShape {
     Rect(Rect),
     Circle(Circle),
-    // RRect(RRect),
-    CircleSegment {
-        circle: Circle,
-        start_angle: f32,
-        sweep_angle: f32,
-    },
-    CircleSector {
-        circle: Circle,
-        start_angle: f32,
-        sweep_angle: f32,
-    },
-    RingSector {
-        outer_circle: Circle,
-        inner_radius: f32,
-        start_angle: f32,
-        sweep_angle: f32,
-    },
+    RRect(RRect),
+    RingSector(RingSector),
     Triangle(Point2d, Point2d, Point2d),
-    // Tetragon(Point2d, Point2d, Point2d, Point2d),
-    Polygon(Vec<Affine2dPathEl>),
-    Oval(Rect),
-    Ellipse(Affine2d),
-    EllipseSegment {
-        transform: Affine2d,
-        sweep_angle: f32,
-    },
-    EllipseRingSegment,
-    Path(Vec<Affine2dPathEl>),
+    Polygon(Vec<Point2d>),
+    Path(Path),
+    CircularArc(CircularArc),
+    EllipticalArc(EllipticalArc)
 }
 
-pub enum Affine2dPathSeg {
+pub enum Affine2dCanvasPathSeg {
     Line(Line),
     EllipticalArc(EllipticalArc),
     QuadBez(QuadBez),
     CubicBez(CubicBez),
 }
 
-pub enum Affine2dPathEl {
+pub enum Affine2dCanvasPathEl {
     MoveTo(Point2d),
     LineTo(Point2d),
     QuadTo(Point2d, Point2d),
@@ -92,12 +77,6 @@ pub struct Line {
 pub struct EllipticalArc {
     sweep_angle: f32,
     transform: Affine2d,
-}
-
-pub struct Arc {
-    c: Point2d,
-    r: Point2d,
-    sweep_angle: f32,
 }
 
 pub struct QuadBez {
@@ -203,18 +182,33 @@ pub struct Circle {
     pub r: f32,
 }
 
-pub struct Ellipse {
-    pub affine: Affine2d,
+pub struct RingSector {
+    pub outer_cicle: Circle,
+    pub inner_radius: f32,
+    pub start_angle: f32,
+    pub sweep_angle: f32
+}
+
+pub struct CircularArc {
+    pub circle: Circle,
+    pub start_angle: f32,
+    pub sweep_angle: f32
 }
 
 pub struct Path {
-    pub(crate) path_els: Vec<kurbo::PathEl>,
+    pub path_els: Vec<Affine2dCanvasPathEl>,
 }
 
 pub trait Affine2dPaintContextExt {
-    fn clip_path(&mut self, path: Path);
-    fn clip_rect(&mut self, rect: Rect);
-    fn clip_rrect(&mut self, rect: Rect, radius: RRectRadius);
+    fn clip_path(&mut self, path: Path, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_rect(&mut self, rect: Rect, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_rrect(&mut self, rrect: RRect, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_oval(&mut self, oval: Rect, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_circle(&mut self, circle: Circle, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_circle_sector(&mut self, circle_sector: RingSector, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_ring_sector(&mut self, ring_sector: RingSector,transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_triangle(&mut self, p0: Point2d, p1: Point2d, p2: Point2d, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
+    fn clip_polygon(&mut self, polygon: Vec<Point2d>, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
     fn draw_arc(
         &mut self,
         rect: Rect,
@@ -223,8 +217,7 @@ pub trait Affine2dPaintContextExt {
         use_center: bool,
         painter: Painter,
     );
-    fn draw_circle(&mut self, center: Point2d, radius: f32, painter: Painter);
-    fn draw_color(&mut self, color: Color);
+    fn draw_circle(&mut self, circle: Circle, painter: Painter);
     fn draw_drrect(&mut self, outer: RRect, inner: RRect, painter: Painter);
     fn draw_image(&mut self, image: Image, top_left: Point2d);
     fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect);
@@ -312,8 +305,11 @@ where
         self.add_command(Affine2dPaintCommand::Paint { painter })
     }
     #[inline(always)]
-    fn draw_paragraph(&mut self, paragraph: Paragraph, offset: BoxOffset) {
-        self.add_command(Affine2dPaintCommand::Paragraph { paragraph, offset })
+    fn draw_paragraph(&mut self, paragraph: Paragraph, transform: Affine2d) {
+        self.add_command(Affine2dPaintCommand::DrawParagraph {
+            paragraph,
+            transform,
+        })
     }
     #[inline(always)]
     fn draw_path(&mut self, path: Path, painter: Painter) {
