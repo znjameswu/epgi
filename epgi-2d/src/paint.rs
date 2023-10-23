@@ -1,24 +1,20 @@
-use std::ops::BitAnd;
-
 use epgi_core::foundation::{Canvas, PaintContext};
-use peniko::kurbo::{self, PathEl};
+
 pub use peniko::{
     BlendMode, Brush, Cap, Color, ColorStops, Dashes, Extend, Fill, Format, Gradient, GradientKind,
     Image, Join, Stroke,
 };
 
-use crate::{Affine2d, BoxOffset, BoxSize, Paragraph, Point2d};
+use crate::{
+    Affine2d, BoxOffset, BoxSize, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line,
+    Paragraph, Point2d, QuadBez, RRect, RRectBorder, RRectRadius, Rect, RingSector,
+};
 
 pub enum Affine2dPaintCommand {
     DrawShape {
         shape: Affine2dCanvasShape,
         transform: Affine2d,
         painter: Painter,
-    },
-    DrawPathSeg {
-        path_seg: Affine2dCanvasPathSeg,
-        transform: Affine2d,
-        painter: StrokePainter,
     },
     ClipShape {
         shape: Affine2dCanvasShape,
@@ -39,14 +35,19 @@ pub enum Affine2dPaintCommand {
 /// This also affects any shape with arc component, such as RRect
 pub enum Affine2dCanvasShape {
     Rect(Rect),
-    Circle(Circle),
     RRect(RRect),
+    RRectPadding { rrect: RRect, padding: f32 },
+    Circle(Circle),
+    Ellipse(Ellipse),
     RingSector(RingSector),
     Triangle(Point2d, Point2d, Point2d),
     Polygon(Vec<Point2d>),
     Path(Path),
+    Line(Line),
     CircularArc(CircularArc),
-    EllipticalArc(EllipticalArc)
+    EllipticalArc(EllipticalArc),
+    QuadBez(QuadBez),
+    CubicBez(CubicBez),
 }
 
 pub enum Affine2dCanvasPathSeg {
@@ -69,29 +70,6 @@ pub enum Affine2dCanvasPathEl {
     ClosePath,
 }
 
-pub struct Line {
-    p0: Point2d,
-    p1: Point2d,
-}
-
-pub struct EllipticalArc {
-    sweep_angle: f32,
-    transform: Affine2d,
-}
-
-pub struct QuadBez {
-    p0: Point2d,
-    p1: Point2d,
-    p2: Point2d,
-}
-
-pub struct CubicBez {
-    p0: Point2d,
-    p1: Point2d,
-    p2: Point2d,
-    p3: Point2d,
-}
-
 pub enum Painter {
     Fill(FillPainter),
     Stroke(StrokePainter),
@@ -109,223 +87,480 @@ pub struct StrokePainter {
     pub transform: Option<Affine2d>,
 }
 
-pub struct Rect {
-    pub l: f32,
-    pub t: f32,
-    pub r: f32,
-    pub b: f32,
-}
-
-impl Rect {
-    pub fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
-        Self {
-            l: left,
-            t: top,
-            r: right,
-            b: bottom,
-        }
-    }
-    pub fn width(&self) -> f32 {
-        self.r - self.l
-    }
-
-    pub fn height(&self) -> f32 {
-        self.b - self.t
-    }
-
-    pub fn is_sqaure(&self) -> bool {
-        self.width() == self.height()
-    }
-
-    pub fn center(&self) -> Point2d {
-        Point2d {
-            x: (self.l + self.r) / 2.0,
-            y: (self.t + self.b) / 2.0,
-        }
-    }
-}
-
-impl BitAnd<BoxSize> for BoxOffset {
-    type Output = Rect;
-
-    fn bitand(self, rhs: BoxSize) -> Self::Output {
-        Rect {
-            l: self.x,
-            t: self.y,
-            r: self.x + rhs.width,
-            b: self.y + rhs.height,
-        }
-    }
-}
-
-pub struct RRect {
-    pub l: f32,
-    pub t: f32,
-    pub r: f32,
-    pub b: f32,
-    pub radius: Box<RRectRadius>,
-}
-
-pub struct RRectRadius {
-    pub tl_t_ratio: f32,
-    pub tl_l_ratio: f32,
-    pub tr_t_ratio: f32,
-    pub tr_r_ratio: f32,
-    pub bl_b_ratio: f32,
-    pub bl_l_ratio: f32,
-    pub br_b_ratio: f32,
-    pub br_r_ratio: f32,
-}
-
-pub struct Circle {
-    pub c: Point2d,
-    pub r: f32,
-}
-
-pub struct RingSector {
-    pub outer_cicle: Circle,
-    pub inner_radius: f32,
-    pub start_angle: f32,
-    pub sweep_angle: f32
-}
-
-pub struct CircularArc {
-    pub circle: Circle,
-    pub start_angle: f32,
-    pub sweep_angle: f32
-}
-
 pub struct Path {
     pub path_els: Vec<Affine2dCanvasPathEl>,
 }
 
 pub trait Affine2dPaintContextExt {
-    fn clip_path(&mut self, path: Path, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_rect(&mut self, rect: Rect, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_rrect(&mut self, rrect: RRect, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_oval(&mut self, oval: Rect, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_circle(&mut self, circle: Circle, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_circle_sector(&mut self, circle_sector: RingSector, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_ring_sector(&mut self, ring_sector: RingSector,transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_triangle(&mut self, p0: Point2d, p1: Point2d, p2: Point2d, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn clip_polygon(&mut self, polygon: Vec<Point2d>, transform: Affine2d, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
-    fn draw_arc(
+    fn clip_rect(
         &mut self,
         rect: Rect,
-        start_angle: f32,
-        sweep_angle: f32,
-        use_center: bool,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_rrect(
+        &mut self,
+        rrect: RRect,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_circle(
+        &mut self,
+        circle: Circle,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_ellipse(
+        &mut self,
+        ellipse: Ellipse,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_ring_sector(
+        &mut self,
+        ring_sector: RingSector,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_triangle(
+        &mut self,
+        p0: Point2d,
+        p1: Point2d,
+        p2: Point2d,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_polygon(
+        &mut self,
+        polygon: Vec<Point2d>,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_path(
+        &mut self,
+        path: Path,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+    fn clip_circle_segment(
+        &mut self,
+        segment: CircularArc,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    );
+
+    fn draw_rect(&mut self, rect: Rect, transform: Affine2d, painter: Painter);
+    fn draw_rrect(&mut self, rrect: RRect, transform: Affine2d, painter: Painter);
+    fn draw_circle(&mut self, circle: Circle, transform: Affine2d, painter: Painter);
+    fn draw_ellipse(&mut self, ellipse: Ellipse, transform: Affine2d, painter: Painter);
+    fn draw_ring_sector(&mut self, ring_sector: RingSector, transform: Affine2d, painter: Painter);
+    fn draw_triangle(
+        &mut self,
+        p0: Point2d,
+        p1: Point2d,
+        p2: Point2d,
+        transform: Affine2d,
         painter: Painter,
     );
-    fn draw_circle(&mut self, circle: Circle, painter: Painter);
-    fn draw_drrect(&mut self, outer: RRect, inner: RRect, painter: Painter);
-    fn draw_image(&mut self, image: Image, top_left: Point2d);
-    fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect);
-    fn draw_line(&mut self, p1: Point2d, p2: Point2d, painter: StrokePainter);
-    fn draw_oval(&mut self, rect: Rect, painter: Painter);
-    fn draw_paint(&mut self, painter: FillPainter);
+    fn draw_polygon(&mut self, polygon: Vec<Point2d>, transform: Affine2d, painter: Painter);
+    fn draw_path(&mut self, path: Path, transform: Affine2d, painter: Painter);
+
+    fn stroke_line(&mut self, line: Line, transform: Affine2d, painter: StrokePainter);
+    fn stroke_arc(&mut self, arc: CircularArc, transform: Affine2d, painter: StrokePainter);
+    fn stroke_elliptical_arc(
+        &mut self,
+        arc: EllipticalArc,
+        transform: Affine2d,
+        painter: StrokePainter,
+    );
+    fn stroke_quad_bez(&mut self, seg: QuadBez, transform: Affine2d, painter: StrokePainter);
+    fn stroke_cubic_bez(&mut self, seg: CubicBez, transform: Affine2d, painter: StrokePainter);
+
+    fn fill_circle_segment(
+        &mut self,
+        segment: CircularArc,
+        transform: Affine2d,
+        painter: FillPainter,
+    );
+    fn fill_rrect_padding(
+        &mut self,
+        rrect: RRect,
+        linewidth: f32,
+        transform: Affine2d,
+        painter: FillPainter,
+    );
+
+    fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect, dst_transform: Affine2d);
+
     fn draw_paragraph(&mut self, paragraph: Paragraph, offset: BoxOffset);
-    fn draw_path(&mut self, path: Path, painter: Painter);
-    fn draw_rect(&mut self, rect: Rect, painter: Painter);
-    fn draw_rrect(&mut self, rect: Rect, radius: RRectRadius, painter: Painter);
 }
 
-impl<T> Affine2dPaintContextExt for T
+impl<T: ?Sized> Affine2dPaintContextExt for T
 where
     T: PaintContext,
     T::Canvas: Canvas<Transform = Affine2d, PaintCommand = Affine2dPaintCommand>,
 {
     #[inline(always)]
-    fn clip_path(&mut self, path: Path) {
-        self.add_command(Affine2dPaintCommand::ClipPath { path })
-    }
-    #[inline(always)]
-    fn clip_rect(&mut self, rect: Rect) {
-        self.add_command(Affine2dPaintCommand::ClipRect { rect })
-    }
-    #[inline(always)]
-    fn clip_rrect(&mut self, rect: Rect, radius: RRectRadius) {
-        self.add_command(Affine2dPaintCommand::ClipRRect { rect, radius })
-    }
-    #[inline(always)]
-    fn draw_arc(
+    fn clip_rect(
         &mut self,
         rect: Rect,
-        start_angle: f32,
-        sweep_angle: f32,
-        use_center: bool,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::Rect(rect),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_rrect(
+        &mut self,
+        rrect: RRect,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::RRect(rrect),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_circle(
+        &mut self,
+        circle: Circle,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::Circle(circle),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_ellipse(
+        &mut self,
+        ellipse: Ellipse,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::Ellipse(ellipse),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_ring_sector(
+        &mut self,
+        ring_sector: RingSector,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::RingSector(ring_sector),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_triangle(
+        &mut self,
+        p0: Point2d,
+        p1: Point2d,
+        p2: Point2d,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::Triangle(p0, p1, p2),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_polygon(
+        &mut self,
+        polygon: Vec<Point2d>,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::Polygon(polygon),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_path(
+        &mut self,
+        path: Path,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::Path(path),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn clip_circle_segment(
+        &mut self,
+        segment: CircularArc,
+        transform: Affine2d,
+        blend: BlendMode,
+        alpha: f32,
+        op: impl FnOnce(&mut Self),
+    ) {
+        self.add_command(Affine2dPaintCommand::ClipShape {
+            shape: Affine2dCanvasShape::CircularArc(segment),
+            transform: transform,
+            blend,
+            alpha,
+        });
+        op(self);
+        self.add_command(Affine2dPaintCommand::PopClip);
+    }
+
+    #[inline(always)]
+    fn draw_rect(&mut self, rect: Rect, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Rect(rect),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn draw_rrect(&mut self, rrect: RRect, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::RRect(rrect),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn draw_circle(&mut self, circle: Circle, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Circle(circle),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn draw_ellipse(&mut self, ellipse: Ellipse, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Ellipse(ellipse),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn draw_ring_sector(&mut self, ring_sector: RingSector, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::RingSector(ring_sector),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn draw_triangle(
+        &mut self,
+        p0: Point2d,
+        p1: Point2d,
+        p2: Point2d,
+        transform: Affine2d,
         painter: Painter,
     ) {
-        self.add_command(Affine2dPaintCommand::Arc {
-            rect,
-            start_angle,
-            sweep_angle,
-            use_center,
-            painter,
-        })
-    }
-    #[inline(always)]
-    fn draw_circle(&mut self, center: Point2d, radius: f32, painter: Painter) {
-        self.add_command(Affine2dPaintCommand::Circle {
-            center,
-            radius,
-            painter,
-        })
-    }
-    #[inline(always)]
-    fn draw_color(&mut self, color: Color) {
-        self.add_command(Affine2dPaintCommand::Color { color })
-    }
-    #[inline(always)]
-    fn draw_drrect(&mut self, outer: RRect, inner: RRect, painter: Painter) {
-        self.add_command(Affine2dPaintCommand::DRRect {
-            outer,
-            inner,
-            painter,
-        })
-    }
-    #[inline(always)]
-    fn draw_image(&mut self, image: Image, top_left: Point2d) {
-        self.add_command(Affine2dPaintCommand::Image { image, top_left })
-    }
-    #[inline(always)]
-    fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect) {
-        self.add_command(Affine2dPaintCommand::ImageRect { image, src, dst })
-    }
-    #[inline(always)]
-    fn draw_line(&mut self, p1: Point2d, p2: Point2d, painter: StrokePainter) {
-        self.add_command(Affine2dPaintCommand::Line { p1, p2, painter })
-    }
-    #[inline(always)]
-    fn draw_oval(&mut self, rect: Rect, painter: Painter) {
-        self.add_command(Affine2dPaintCommand::Oval { rect, painter })
-    }
-    #[inline(always)]
-    fn draw_paint(&mut self, painter: FillPainter) {
-        self.add_command(Affine2dPaintCommand::Paint { painter })
-    }
-    #[inline(always)]
-    fn draw_paragraph(&mut self, paragraph: Paragraph, transform: Affine2d) {
-        self.add_command(Affine2dPaintCommand::DrawParagraph {
-            paragraph,
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Triangle(p0, p1, p2),
             transform,
-        })
-    }
-    #[inline(always)]
-    fn draw_path(&mut self, path: Path, painter: Painter) {
-        self.add_command(Affine2dPaintCommand::Path { path, painter })
-    }
-    #[inline(always)]
-    fn draw_rect(&mut self, rect: Rect, painter: Painter) {
-        self.add_command(Affine2dPaintCommand::Rect { rect, painter })
-    }
-    #[inline(always)]
-    fn draw_rrect(&mut self, rect: Rect, radius: RRectRadius, painter: Painter) {
-        self.add_command(Affine2dPaintCommand::RRect {
-            rect,
-            radius,
             painter,
-        })
+        });
+    }
+
+    #[inline(always)]
+    fn draw_polygon(&mut self, polygon: Vec<Point2d>, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Polygon(polygon),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn draw_path(&mut self, path: Path, transform: Affine2d, painter: Painter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Path(path),
+            transform,
+            painter,
+        });
+    }
+
+    #[inline(always)]
+    fn stroke_line(&mut self, line: Line, transform: Affine2d, painter: StrokePainter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Line(line),
+            transform,
+            painter: Painter::Stroke(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn stroke_arc(&mut self, arc: CircularArc, transform: Affine2d, painter: StrokePainter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::CircularArc(arc),
+            transform,
+            painter: Painter::Stroke(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn stroke_elliptical_arc(
+        &mut self,
+        arc: EllipticalArc,
+        transform: Affine2d,
+        painter: StrokePainter,
+    ) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::EllipticalArc(arc),
+            transform,
+            painter: Painter::Stroke(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn stroke_quad_bez(&mut self, seg: QuadBez, transform: Affine2d, painter: StrokePainter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::QuadBez(seg),
+            transform,
+            painter: Painter::Stroke(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn stroke_cubic_bez(&mut self, seg: CubicBez, transform: Affine2d, painter: StrokePainter) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::CubicBez(seg),
+            transform,
+            painter: Painter::Stroke(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn fill_circle_segment(
+        &mut self,
+        segment: CircularArc,
+        transform: Affine2d,
+        painter: FillPainter,
+    ) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::CircularArc(segment),
+            transform,
+            painter: Painter::Fill(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn fill_rrect_padding(
+        &mut self,
+        rrect: RRect,
+        padding: f32,
+        transform: Affine2d,
+        painter: FillPainter,
+    ) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::RRectPadding { rrect, padding },
+            transform,
+            painter: Painter::Fill(painter),
+        });
+    }
+
+    #[inline(always)]
+    fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect, dst_transform: Affine2d) {
+        self.add_command(Affine2dPaintCommand::DrawShape {
+            shape: Affine2dCanvasShape::Rect(dst),
+            transform: dst_transform,
+            painter: Painter::Fill(FillPainter { fill: Fill::EvenOdd, brush: Brush::Image(image), transform: Some(dst_transform) }),
+        });
+    }
+
+    #[inline(always)]
+    fn draw_paragraph(&mut self, paragraph: Paragraph, offset: BoxOffset) {
+        todo!()
     }
 }
 

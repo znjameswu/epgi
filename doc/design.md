@@ -644,7 +644,10 @@ Problem: brush transforms are also pushed onto transform stream. We will have to
 A bad idea.
 
 3. Explicit transform for all elements, with no pre-calculations(as exposed in vello API)
+    1. Circumstantial transforms relative to contextual transforms handled during vello lowering
+        1. Requires richer, closed-under-affine primitives.
+    2. Circumstantial transforms merged with contextual transforms and pack in encoding
 
-Temporary decision: Go with vello intended usage.
+Temporary decision: Go with vello intended usage. Circumstantial transforms handled during lowering.
 
 Temporary decision: As a result, include shapes that are not closed under affine 2d transform.

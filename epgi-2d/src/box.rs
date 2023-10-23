@@ -61,6 +61,15 @@ pub struct BoxOffset {
     pub y: f32,
 }
 
+impl From<[f32;2]> for BoxOffset {
+    fn from(value: [f32;2]) -> Self {
+        Self {
+            x: value[0],
+            y: value[1],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum BoxIntrinsics {
     MinWidth { height: f32, res: Option<f32> },

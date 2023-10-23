@@ -117,12 +117,6 @@ pub trait PaintContext {
 
     fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand);
 
-    fn with_transform(
-        &mut self,
-        transform: <Self::Canvas as Canvas>::Transform,
-        op: impl FnOnce(&mut Self),
-    );
-
     // /// Get access to the parent layer to create a new [Layer].
     // ///
     // /// Do not call this method if you do not intend to push a new layer,
