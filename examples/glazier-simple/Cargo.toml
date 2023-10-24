@@ -1,0 +1,15 @@
+[package]
+name = "glazier-simple"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+epgi-glazier = {workspace = true}
+epgi-core = {workspace = true}
+epgi-common = {workspace = true}
+epgi-2d = {workspace = true}

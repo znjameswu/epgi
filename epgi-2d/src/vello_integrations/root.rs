@@ -191,10 +191,10 @@ impl DryLayout for RenderRoot {
         todo!()
     }
 
-    fn perform_layout<'a, 'layout>(
-        &'a self,
-        constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
-        size: &'a <Self::ParentProtocol as Protocol>::Size,
+    fn compute_layout_memo(
+        &self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        size: &<Self::ParentProtocol as Protocol>::Size,
     ) -> Self::LayoutMemo {
         // self.render_ctx.resize_surface(&mut self.surface, size.width, size.height)
     }

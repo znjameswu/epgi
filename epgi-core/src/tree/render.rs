@@ -86,7 +86,7 @@ pub trait Render: Sized + Send + Sync + 'static {
 pub trait DryLayout: Render {
     const PERFORM_DRY_LAYOUT: PerformDryLayout<Self> = PerformDryLayout {
         compute_dry_layout: Self::compute_dry_layout,
-        perform_layout: <Self as DryLayout>::perform_layout,
+        compute_layout_memo: <Self as DryLayout>::compute_layout_memo,
     };
 
     fn compute_dry_layout(
@@ -94,10 +94,10 @@ pub trait DryLayout: Render {
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
     ) -> <Self::ParentProtocol as Protocol>::Size;
 
-    fn perform_layout<'a, 'layout>(
-        &'a self,
-        constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
-        size: &'a <Self::ParentProtocol as Protocol>::Size,
+    fn compute_layout_memo(
+        &self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        size: &<Self::ParentProtocol as Protocol>::Size,
     ) -> Self::LayoutMemo;
 }
 
@@ -107,7 +107,7 @@ pub struct PerformDryLayout<R: Render> {
         &<R::ParentProtocol as Protocol>::Constraints,
     ) -> <R::ParentProtocol as Protocol>::Size,
 
-    pub perform_layout: for<'a, 'layout> fn(
+    pub compute_layout_memo: for<'a, 'layout> fn(
         &'a R,
         &'a <R::ParentProtocol as Protocol>::Constraints,
         &'a <R::ParentProtocol as Protocol>::Size,

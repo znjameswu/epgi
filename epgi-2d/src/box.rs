@@ -27,6 +27,14 @@ impl Constraints<BoxSize> for BoxConstraints {
 }
 
 impl BoxConstraints {
+    pub fn new_tight(width: f32, height: f32) -> Self {
+        Self {
+            min_width: width,
+            max_width: width,
+            min_height: height,
+            max_height: height,
+        }
+    }
     #[inline(always)]
     pub fn enforce(&self, other: &Self) -> Self {
         Self {
@@ -35,6 +43,10 @@ impl BoxConstraints {
             min_height: self.min_height.clamp(other.min_height, other.max_height),
             max_height: self.max_height.clamp(other.min_height, other.max_height),
         }
+    }
+
+    pub fn smallest(&self) -> BoxSize {
+        self.constrains(BoxSize::ZERO)
     }
 }
 
@@ -55,14 +67,25 @@ pub struct BoxSize {
     pub height: f32,
 }
 
+impl BoxSize {
+    const ZERO: Self = Self {
+        width: 0.0,
+        height: 0.0,
+    };
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct BoxOffset {
     pub x: f32,
     pub y: f32,
 }
 
-impl From<[f32;2]> for BoxOffset {
-    fn from(value: [f32;2]) -> Self {
+impl BoxOffset {
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+}
+
+impl From<[f32; 2]> for BoxOffset {
+    fn from(value: [f32; 2]) -> Self {
         Self {
             x: value[0],
             y: value[1],

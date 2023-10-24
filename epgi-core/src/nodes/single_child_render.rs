@@ -161,10 +161,10 @@ pub struct SingleChildRenderObject<W: SingleChildRenderObjectWidget> {
 
 impl<W> Render for SingleChildRenderObject<W>
 where
-W: SingleChildRenderObjectWidget,
+    W: SingleChildRenderObjectWidget,
 {
     type ParentProtocol = W::ParentProtocol;
-    
+
     type ChildProtocol = W::ChildProtocol;
 
     type ChildIter = [ArcChildRenderObject<W::ChildProtocol>; 1];
@@ -205,5 +205,4 @@ W: SingleChildRenderObjectWidget,
     }
 
     type ArcLayerNode = ();
-
 }

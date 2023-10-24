@@ -35,8 +35,9 @@ pub trait ProxyWidget:
     type LayoutMemo: Send + Sync + Default + 'static;
 
     #[inline(always)]
+    #[allow(unused_variables)]
     fn perform_layout(
-        _state: &Self::RenderState,
+        state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::Protocol>,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
@@ -50,12 +51,13 @@ pub trait ProxyWidget:
     // We don't make perform paint into an associated constant because it has an generic paramter
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
     #[inline(always)]
+    #[allow(unused_variables)]
     fn perform_paint(
-        _state: &Self::RenderState,
+        state: &Self::RenderState,
         child: &dyn ChildRenderObject<Self::Protocol>,
-        _size: &<Self::ParentProtocol as Protocol>::Size,
+        size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
-        _memo: &Self::LayoutMemo,
+        memo: &Self::LayoutMemo,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         paint_ctx.paint(child, transform)

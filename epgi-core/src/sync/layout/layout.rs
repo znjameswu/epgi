@@ -129,7 +129,7 @@ where
     ) -> &<R::ParentProtocol as Protocol>::Size {
         let (size, memo) = if let Some(PerformDryLayout {
             compute_dry_layout,
-            perform_layout,
+            compute_layout_memo: perform_layout,
         }) = R::PERFORM_DRY_LAYOUT
         {
             let size = compute_dry_layout(&self.render, &constraints);

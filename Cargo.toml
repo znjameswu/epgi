@@ -5,6 +5,7 @@ members = [
     "epgi-futures",
     "epgi-2d",
     "epgi-glazier",
+    "examples/*"
 ]
 resolver = "2"
 

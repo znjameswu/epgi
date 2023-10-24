@@ -20,7 +20,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn new_LTRB(left: f32, top: f32, right: f32, bottom: f32) -> Self {
+    pub fn new_ltrb(left: f32, top: f32, right: f32, bottom: f32) -> Self {
         Self {
             l: left,
             t: top,
@@ -38,12 +38,21 @@ impl Rect {
         }
     }
 
-    pub fn new_LTWH(left: f32, top: f32, width: f32, height: f32) -> Self {
+    pub fn new_ltwh(left: f32, top: f32, width: f32, height: f32) -> Self {
         Self {
             l: left,
             t: top,
             r: left + width,
             b: top + height,
+        }
+    }
+
+    pub fn new_point_size(point: Point2d, size: BoxSize) -> Self {
+        Self {
+            l: point.x,
+            t: point.y,
+            r: point.x + size.width,
+            b: point.y + size.height,
         }
     }
 
@@ -99,7 +108,6 @@ pub struct RRectRadius {
     pub tr: f32,
     pub bl: f32,
     pub br: f32,
-
     // pub tl_t: f32,
     // pub tl_l: f32,
     // pub tr_t: f32,
