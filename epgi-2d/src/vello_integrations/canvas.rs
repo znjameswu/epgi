@@ -4,7 +4,10 @@ use epgi_core::{
     tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
 };
 
-use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner, Affine2dCanvasShape};
+use crate::{
+    Affine2dCanvasShape, Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext,
+    VelloPaintScanner,
+};
 
 pub type Affine2d = vello_encoding::Transform;
 
@@ -64,4 +67,3 @@ impl Canvas for Affine2dCanvas {
         VelloEncoding::new()
     }
 }
-

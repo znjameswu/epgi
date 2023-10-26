@@ -1,6 +1,6 @@
 use crate::{
-    foundation::Asc,
-    scheduler::{BatchConf, BatchResult, LaneMask, LanePos},
+    foundation::{Asc, Inlinable64Vec, SmallSet},
+    scheduler::{BatchConf, BatchResult, JobId, LaneMask, LanePos},
     tree::ArcAnyElementNode,
 };
 
@@ -49,6 +49,12 @@ impl LaneScheduler {
             return None;
         };
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
+    }
+
+    pub(crate) fn get_sync_job_id(&self) -> Option<&Inlinable64Vec<JobId>> {
+        self.sync_lane
+            .as_ref()
+            .map(|sync_lane| &sync_lane.batch.jobs)
     }
 
     pub(crate) fn apply_batcher_result(

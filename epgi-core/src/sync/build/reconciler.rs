@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{HktContainer, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
+    foundation::{HktContainer, Inlinable64Vec, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
     scheduler::JobId,
     sync::{SubtreeCommitResult, TreeScheduler},
     tree::{
@@ -9,7 +9,7 @@ use crate::{
 };
 
 pub(super) struct SyncReconciler<'a, 'batch, CP: Protocol> {
-    pub(super) job_ids: &'a SmallSet<JobId>,
+    pub(super) job_ids: &'a Inlinable64Vec<JobId>,
     pub(super) scope: &'a rayon::Scope<'batch>,
     pub(super) tree_scheduler: &'batch TreeScheduler,
     pub(super) subtree_results: &'a mut SubtreeCommitResult,
@@ -48,14 +48,14 @@ pub(crate) mod reconciler_private {
     pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
         fn rebuild_sync<'a, 'batch>(
             self,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (ArcChildElementNode<P>, SubtreeCommitResult);
 
         fn rebuild_sync_box<'a, 'batch>(
             self: Box<Self>,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (ArcChildElementNode<P>, SubtreeCommitResult);
@@ -67,7 +67,7 @@ pub(crate) mod reconciler_private {
     {
         fn rebuild_sync<'a, 'batch>(
             self,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (ArcChildElementNode<E::ParentProtocol>, SubtreeCommitResult) {
@@ -79,7 +79,7 @@ pub(crate) mod reconciler_private {
 
         fn rebuild_sync_box<'a, 'batch>(
             self: Box<Self>,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (ArcChildElementNode<E::ParentProtocol>, SubtreeCommitResult) {
@@ -91,7 +91,7 @@ pub(crate) mod reconciler_private {
         fn inflate_sync<'a, 'batch>(
             self: Arc<Self>,
             parent_context: ArcElementContextNode,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (ArcChildElementNode<PP>, SubtreeCommitResult);
@@ -104,7 +104,7 @@ pub(crate) mod reconciler_private {
         fn inflate_sync<'a, 'batch>(
             self: Arc<Self>,
             parent_context: ArcElementContextNode,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> (

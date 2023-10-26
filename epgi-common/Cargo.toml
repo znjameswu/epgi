@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 epgi-core = { workspace = true }
 epgi-2d = { workspace = true }
+lazy_static = "1.4"

@@ -11,6 +11,7 @@ use hashbrown::HashSet;
 use crate::{
     foundation::{
         bounded_channel, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
+        SyncRwLock,
     },
     sync::CommitBarrier,
     tree::{
@@ -44,7 +45,8 @@ pub struct SchedulerHandle {
 
     pub(super) task_rx: SchedulerTaskReceiver,
 
-    job_id: AtomicJobIdCounter,
+    pub(super) sync_job_building_lock: SyncRwLock<()>,
+    pub(super) job_id_counter: AtomicJobIdCounter,
 
     // mode: LatencyMode,
     nodes_needing_paint: MpscQueue<AweakAnyRenderObject>,
@@ -60,7 +62,8 @@ impl SchedulerHandle {
             sync_threadpool,
             async_threadpool,
             task_rx: SchedulerTaskReceiver::new(),
-            job_id: AtomicJobIdCounter::new(),
+            sync_job_building_lock: SyncRwLock::new(()),
+            job_id_counter: AtomicJobIdCounter::new(),
             // is_executing_sync: (),
             nodes_needing_paint: Default::default(),
             nodes_needing_layout: Default::default(),
@@ -69,11 +72,29 @@ impl SchedulerHandle {
         }
     }
 
-    pub fn request_sync_job(&self, op: impl FnOnce(&mut JobBuilder)) {
-        // Note: if the op takes a long time, then we can see this very outdated sync job in a later frame.
-        let job_id = self.job_id.generate_sync_job_id();
+    pub fn create_sync_job(&self, builder: impl FnOnce(&mut JobBuilder)) {
+        // Note the additional lock compared to the async version.
+        // This lock is to ensure the scheduler could not process jobs before all sync jobs create in the previous frame have finished building.
+        // Therefore, the scheduler will never see an outdated sync job from previous frames.
+        // However, it also means that blocking in the job builder will block the entire event loop.
+        let guard = self.sync_job_building_lock.read();
+        let job_id = self.job_id_counter.generate_sync_job_id();
         let mut job_builder = JobBuilder::new(job_id, Instant::now());
-        op(&mut job_builder);
+        builder(&mut job_builder);
+        if !job_builder.is_empty() {
+            get_current_scheduler()
+                .accumulated_jobs
+                .lock()
+                .push(job_builder);
+        }
+        drop(guard);
+    }
+
+    pub fn create_async_job(&self, builder: impl FnOnce(&mut JobBuilder)) {
+        // Note: if the builder takes a long time, then we can see this very outdated async job in a later frame. Which is perfectly fine
+        let job_id = self.job_id_counter.generate_async_job_id();
+        let mut job_builder = JobBuilder::new(job_id, Instant::now());
+        builder(&mut job_builder);
         if !job_builder.is_empty() {
             get_current_scheduler()
                 .accumulated_jobs
@@ -87,6 +108,7 @@ impl SchedulerHandle {
         {
             self.task_rx.request_frame.lock().requesters.push(tx);
         }
+        self.task_rx.new_scheduler_task.notify(usize::MAX);
         return rx;
     }
 
@@ -146,7 +168,7 @@ struct RequestFrame {
 }
 
 pub struct FrameResults {
-    pub encodings: Asc<dyn Any + Send + Sync>,
+    pub composited: Box<dyn Any + Send + Sync>,
     pub id: u64,
 }
 

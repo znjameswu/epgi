@@ -15,23 +15,33 @@ pub(crate) struct ElementMark {
     pub(super) self_mailbox_lanes: AtomicLaneMask,
     /// Indicate whether this node requested for a sync poll
     pub(super) is_poll_ready: AtomicBool,
+    // pub(super) needs_layout: AtomicBool,
 
-    pub(super) needs_layout: AtomicBool,
+    // pub(super) subtree_has_layout: AtomicBool,
 
-    pub(super) subtree_has_layout: AtomicBool,
+    // pub(super) is_relayout_boundary: AtomicBool,
 
-    pub(super) is_relayout_boundary: AtomicBool,
+    // pub(super) needs_paint: AtomicBool,
 
-    pub(super) needs_paint: AtomicBool,
+    // pub(super) subtree_has_paint: AtomicBool,
 
-    pub(super) subtree_has_paint: AtomicBool,
-
-    pub(super) is_repaint_boundary: bool,
+    // pub(super) is_repaint_boundary: bool,
 }
 
 impl ElementMark {
     pub(crate) fn new() -> Self {
-        todo!()
+        Self {
+            subtree_lanes: AtomicLaneMask::new(LaneMask::new()),
+            self_lanes: AtomicLaneMask::new(LaneMask::new()),
+            self_mailbox_lanes: AtomicLaneMask::new(LaneMask::new()),
+            is_poll_ready: AtomicBool::new(false),
+            // needs_layout: (),
+            // subtree_has_layout: (),
+            // is_relayout_boundary: (),
+            // needs_paint: (),
+            // subtree_has_paint: (),
+            // is_repaint_boundary: (),
+        }
     }
 }
 
@@ -48,13 +58,13 @@ impl ElementContextNode {
         self.mark.is_poll_ready.load(Relaxed)
     }
 
-    pub(crate) fn needs_layout(&self) -> bool {
-        self.mark.needs_layout.load(Relaxed)
-    }
+    // pub(crate) fn needs_layout(&self) -> bool {
+    //     self.mark.needs_layout.load(Relaxed)
+    // }
 
-    pub(crate) fn needs_paint(&self) -> bool {
-        self.mark.needs_paint.load(Relaxed)
-    }
+    // pub(crate) fn needs_paint(&self) -> bool {
+    //     self.mark.needs_paint.load(Relaxed)
+    // }
 
     pub(crate) fn mark_secondary_root(&self, lane_pos: LanePos) {
         self.mark.self_lanes.fetch_insert_single(lane_pos, Relaxed);
@@ -71,67 +81,6 @@ impl ElementContextNode {
                 break;
             };
             cur = parent.as_ref();
-        }
-    }
-
-    pub(super) fn mark_needs_layout(&self) {
-        let mut cur = self;
-        // Mark up to the nearest relayout boundary
-        loop {
-            let old_needs_relayout = cur.mark.needs_layout.swap(true, Relaxed);
-            cur.mark.subtree_has_layout.store(true, Relaxed);
-            cur.mark_needs_paint();
-            if cur.mark.is_relayout_boundary.load(Relaxed) {
-                break;
-            }
-            if old_needs_relayout {
-                break;
-            }
-            let Some(parent) = &cur.parent else {
-                break;
-            };
-            cur = parent.as_ref();
-        }
-        // Then, mark all the way up to the root
-        loop {
-            let Some(parent) = &cur.parent else {
-                break;
-            };
-            cur = parent.as_ref();
-            let old_subtree_contains_relayout = cur.mark.subtree_has_layout.swap(true, Relaxed);
-            if old_subtree_contains_relayout {
-                break;
-            }
-        }
-    }
-
-    pub(super) fn mark_needs_paint(&self) {
-        let mut cur = self;
-        // Mark up to the nearest repaint boundary
-        loop {
-            let old_needs_repaint = cur.mark.needs_paint.swap(true, Relaxed);
-            cur.mark.subtree_has_paint.store(true, Relaxed);
-            if cur.mark.is_repaint_boundary {
-                break;
-            }
-            if old_needs_repaint {
-                break;
-            }
-            let Some(parent) = &cur.parent else {
-                break;
-            };
-            cur = parent.as_ref();
-        }
-        // Then, mark all the way up to the root
-        loop {
-            let Some(parent) = &cur.parent else {
-                break;
-            };
-            cur = parent.as_ref();
-            let old_subtree_contains_repaint = cur.mark.subtree_has_paint.swap(true, Relaxed);
-            if old_subtree_contains_repaint {
-                break;
-            }
         }
     }
 }

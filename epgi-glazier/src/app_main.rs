@@ -1,8 +1,8 @@
 use epgi_2d::{
     Affine2d, BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootLayer,
-    RootView,
+    RootView, VelloEncoding,
 };
-use epgi_common::ConstrainedBox;
+use epgi_common::{ConstrainedBox, PhantomBox};
 use epgi_core::{
     foundation::{Arc, Asc, SyncMutex},
     hooks::{SetState, StateHook},
@@ -10,12 +10,12 @@ use epgi_core::{
     scheduler::{
         get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, TreeScheduler,
     },
-    tree::{create_root_element, ArcChildWidget, Hooks},
+    tree::{create_root_element, ArcChildWidget, ElementNode, Hooks},
 };
 use glazier::{
     kurbo::{Affine, Size},
-    Application, HotKey, IdleToken, Menu,  Region, Scalable, SysMods, WinHandler,
-    WindowBuilder, WindowHandle, PointerEvent,
+    Application, HotKey, IdleToken, Menu, PointerEvent, Region, Scalable, SysMods, WinHandler,
+    WindowBuilder, WindowHandle,
 };
 use std::{
     any::Any,
@@ -47,6 +47,7 @@ impl AppLauncher {
     }
 
     pub fn run(self) {
+        let glazier_app = Application::new().unwrap();
         let mut file_menu = Menu::new();
         file_menu.add_item(
             QUIT_MENU_ID,
@@ -58,7 +59,6 @@ impl AppLauncher {
         let mut menubar = Menu::new();
         menubar.add_dropdown(Menu::new(), "Application", true);
         menubar.add_dropdown(file_menu, "&File", true);
-        let glazier_app = Application::new().unwrap();
 
         let mut main_state = MainState::new();
         main_state.spin_up_scheduler(self.app);
@@ -104,8 +104,7 @@ impl WinHandler for MainState {
         self.schedule_render();
     }
 
-    fn idle(&mut self, _: IdleToken) {
-    }
+    fn idle(&mut self, _: IdleToken) {}
 
     fn command(&mut self, id: u32) {
         match id {
@@ -216,7 +215,7 @@ impl MainState {
             max_height: size_dp.height as f32,
         };
         if let Some(set_constraints) = &*self.constraints_binding.lock() {
-            get_current_scheduler().request_sync_job(|job_builder| {
+            get_current_scheduler().create_sync_job(|job_builder| {
                 set_constraints.set(constraints, job_builder);
             });
         }
@@ -224,7 +223,7 @@ impl MainState {
 
     fn update_frame(&self, counter: u64) {
         if let Some(set_frame) = &*self.frame_binding.lock() {
-            get_current_scheduler().request_sync_job(|job_builder| {
+            get_current_scheduler().create_sync_job(|job_builder| {
                 set_frame.set(FrameInfo::now(self.counter), job_builder);
             });
         }
@@ -246,7 +245,10 @@ impl MainState {
         self.update_size(size_dp);
         self.update_frame(self.counter);
         let frame_results = scheduler.request_new_frame().recv_blocking().unwrap();
-        let encoding = Arc::downcast::<SceneFragment>(frame_results.encodings).unwrap();
+        let encoding = frame_results
+            .composited
+            .downcast::<Arc<VelloEncoding>>()
+            .unwrap();
 
         let scale = handle.get_scale().unwrap_or_default();
         let insets = insets_dp.to_px(scale);
@@ -393,8 +395,14 @@ impl MainState {
         }));
 
         let tree_scheduler = TreeScheduler::new(element_node);
-        let sync_threadpool = rayon::ThreadPoolBuilder::new().build().unwrap();
-        let async_threadpool = rayon::ThreadPoolBuilder::new().build().unwrap();
+        let sync_threadpool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
+        let async_threadpool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
         let scheduler_handle = SchedulerHandle::new(sync_threadpool, async_threadpool);
         unsafe {
             setup_scheduler(scheduler_handle);
@@ -406,7 +414,7 @@ impl MainState {
         });
 
         // Now we call the scheduler to inject the wrapped widget
-        get_current_scheduler().request_sync_job(|job_builder| {
+        get_current_scheduler().create_sync_job(|job_builder| {
             widget_binding.set(Some(child), job_builder);
         });
 

@@ -64,7 +64,11 @@ impl Scheduler {
                 } => {
                     let mut tree_scheduler = self.tree_scheduler.write();
                     tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
-                    let new_jobs = std::mem::take(&mut *handle.accumulated_jobs.lock());
+                    let new_jobs = {
+                        let _guard = handle.sync_job_building_lock.write();
+                        handle.job_id_counter.increment_frame();
+                        std::mem::take(&mut *handle.accumulated_jobs.lock())
+                    };
                     self.job_batcher.update_with_new_jobs(new_jobs);
                     let updates = self.job_batcher.get_batch_updates();
                     tree_scheduler.apply_batcher_result(updates);
@@ -86,13 +90,13 @@ impl Scheduler {
                         let scheduler = tree_scheduler.read();
                         paint_started_event.notify(usize::MAX);
                         scheduler.perform_paint();
-                        // let encodings = scheduler.root_layer.composite_self();
-                        // for requester in requesters {
-                        //     let _ = requester.try_send(FrameResults {
-                        //         encodings: encodings.clone(),
-                        //         id: frame_id,
-                        //     }); // TODO: log failure
-                        // }
+                        // TODO: Composition
+                        for requester in requesters {
+                            let _ = requester.try_send(FrameResults {
+                                composited: scheduler.root_layer.get_composited_cache_box().expect("Root layer should have cached composition results after composition phase"),
+                                id: frame_id,
+                            }); // TODO: log failure
+                        }
                     });
                     paint_started.wait();
                     drop(read_guard);

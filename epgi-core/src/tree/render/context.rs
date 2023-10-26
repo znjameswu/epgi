@@ -115,7 +115,34 @@ impl RenderContextNode {
 
 impl RenderContextNode {
     pub(crate) fn mark_needs_layout(&self) {
-        todo!()
+        let mut cur = self;
+        // Mark up to the nearest relayout boundary
+        loop {
+            let old_needs_relayout = cur.needs_layout.swap(true, Relaxed);
+            cur.subtree_has_layout.store(true, Relaxed);
+            cur.mark_needs_paint();
+            if cur.is_relayout_boundary.load(Relaxed) {
+                break;
+            }
+            if old_needs_relayout {
+                break;
+            }
+            let Some(parent) = &cur.parent else {
+                break;
+            };
+            cur = parent.as_ref();
+        }
+        // Then, mark all the way up to the root
+        loop {
+            let Some(parent) = &cur.parent else {
+                break;
+            };
+            cur = parent.as_ref();
+            let old_subtree_contains_relayout = cur.subtree_has_layout.swap(true, Relaxed);
+            if old_subtree_contains_relayout {
+                break;
+            }
+        }
     }
 
     pub(crate) fn mark_needs_paint(&self) {

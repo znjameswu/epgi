@@ -58,10 +58,7 @@ where
     //     inner.perform_layout_without_resize(&self.context)
     // }
 
-    fn layout(
-        &self,
-        constraints: &<R::ParentProtocol as Protocol>::Constraints,
-    ) {
+    fn layout(&self, constraints: &<R::ParentProtocol as Protocol>::Constraints) {
         let mut inner = self.inner.lock();
         if let Some(cache) = &mut inner.cache {
             if cache.get_layout_for(&constraints).is_some() {
@@ -189,10 +186,7 @@ pub(crate) mod layout_private {
             self.layout_use_size(constraints)
         }
 
-        fn layout(
-            &self,
-            constraints: &<R::ParentProtocol as Protocol>::Constraints,
-        ) {
+        fn layout(&self, constraints: &<R::ParentProtocol as Protocol>::Constraints) {
             self.layout(constraints)
         }
 

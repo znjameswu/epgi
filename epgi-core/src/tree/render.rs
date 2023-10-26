@@ -2,7 +2,9 @@ mod context;
 
 pub use context::*;
 
-use crate::foundation::{Arc, Aweak, Canvas, Never, PaintContext, Parallel, Protocol, SyncMutex};
+use crate::foundation::{
+    Arc, Aweak, Canvas, LayerProtocol, Never, PaintContext, Parallel, Protocol, SyncMutex,
+};
 
 use super::{
     ArcAnyLayerNode, ArcChildLayerNode, ArcElementContextNode, AscLayerContextNode, Element,
@@ -117,11 +119,14 @@ pub struct PerformDryLayout<R: Render> {
 pub trait LayerPaint: Render {
     const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
         // get_layer: Self::get_layer,
+        as_any_layer_node: Self::as_any_layer_node,
         get_canvas_transform: Self::get_canvas_transform,
         get_canvas_transform_ref: Self::get_canvas_transform_ref,
     });
     // // Returns Arc by value. Since most likely the implementers needs Arc pointer coercion, and pointer coercion results in temporary values whose reference cannot be returned.
     // fn get_layer(&self) -> ArcLayerNodeOf<Self>;
+
+    fn as_any_layer_node(layer: Self::ArcLayerNode) -> ArcAnyLayerNode;
 
     fn get_canvas_transform_ref(
         transform: &<Self::ParentProtocol as Protocol>::Transform,
@@ -133,6 +138,7 @@ pub trait LayerPaint: Render {
 }
 pub struct PerformLayerPaint<R: Render> {
     // pub get_layer: fn(&R) -> ArcLayerNodeOf<R>,
+    pub as_any_layer_node: fn(R::ArcLayerNode) -> ArcAnyLayerNode,
     pub get_canvas_transform_ref:
         fn(
             &<R::ParentProtocol as Protocol>::Transform,
@@ -168,14 +174,16 @@ where
         ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
     >,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
 {
     type Layer = L;
 
     const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::LayerNode {
         as_arc_child_layer_node: |x| x,
         create_layer_node: R::create_layer_node,
-        get_canvas_transform_ref: todo!(),
-        get_canvas_transform: todo!(),
+        get_canvas_transform_ref: |x| x,
+        get_canvas_transform: |x| x,
     };
 }
 
@@ -406,7 +414,7 @@ pub trait AnyRenderObject:
     + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
-    fn layer(&self) -> Result<ArcAnyLayerNode, &str>;
+    fn layer(&self) -> Option<ArcAnyLayerNode>;
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -417,16 +425,14 @@ where
         &self.element_context
     }
 
-    fn layer(&self) -> Result<ArcAnyLayerNode, &str> {
-        // let Some(PerformLayerPaint {
-        //     get_layer,
-        //     ..
-        // }) = R::PERFORM_LAYER_PAINT else{
-        //     return Err("Layer call should not be called on an RenderObject type that does not associate with a layer")
-        // };
-        // let inner = self.inner.lock();
-        // Ok(get_layer(&inner.render).as_arc_any_layer())
-        todo!()
+    fn layer(&self) -> Option<ArcAnyLayerNode> {
+        let Some(PerformLayerPaint {
+            as_any_layer_node,
+            ..
+        }) = R::PERFORM_LAYER_PAINT else{
+            return None
+        };
+        Some(as_any_layer_node(self.layer_node.clone()))
     }
 }
 

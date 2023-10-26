@@ -19,9 +19,7 @@ where
         &self,
         context: &AscRenderContextNode,
         transform: &<R::ParentProtocol as Protocol>::Transform,
-        paint_ctx: &mut impl PaintContext<
-            Canvas = <R::ParentProtocol as Protocol>::Canvas,
-        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
         let mut inner = self.inner.lock();
         let Some(layout_results) = inner

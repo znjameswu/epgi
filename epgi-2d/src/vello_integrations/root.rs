@@ -4,10 +4,10 @@ use epgi_core::{
         PaintContext, Protocol, Provide, SyncMutex,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode,
-        AscLayerContextNode, AscRenderContextNode, BuildContext, CachedLayer,
-        CachingChildLayerProducingIterator, ChildLayerProducingIterator, DryLayout, Element, Layer,
-        LayerCompositionConfig, LayerNode, LayerPaint, LayerRender, PaintResults,
+        ArcAnyLayerNode, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
+        ArcElementContextNode, AscLayerContextNode, AscRenderContextNode, BuildContext,
+        CachedLayer, CachingChildLayerProducingIterator, ChildLayerProducingIterator, DryLayout,
+        Element, Layer, LayerCompositionConfig, LayerNode, LayerPaint, LayerRender, PaintResults,
         PerformCachedComposition, ReconcileItem, Reconciler, Render, RenderElement, RenderObject,
         RenderObjectUpdateResult, StructuredChildLayerOrFragment, Widget,
     },
@@ -172,6 +172,9 @@ impl Render for RenderRoot {
         unreachable!()
     }
 
+    const PERFORM_LAYER_PAINT: Option<epgi_core::tree::PerformLayerPaint<Self>> =
+        <Self as LayerPaint>::PERFORM_LAYER_PAINT;
+
     type ArcLayerNode = Arc<LayerNode<RootLayer>>; //TODO
 }
 
@@ -211,6 +214,10 @@ impl LayerPaint for RenderRoot {
         transform: <Self::ParentProtocol as Protocol>::Transform,
     ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
         todo!()
+    }
+
+    fn as_any_layer_node(layer: Self::ArcLayerNode) -> ArcAnyLayerNode {
+        layer
     }
 }
 

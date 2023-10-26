@@ -51,7 +51,7 @@ pub trait Layer: Send + Sync + Sized + 'static {
     // const PERFORM_ORPHAN_COMPOSITION: Option<PerformOrphanComposition<Self>> = None;
 
     /// Should default to the unit type `()` or [Never].
-    type CachedComposition: Send + Sync;
+    type CachedComposition: Clone + Send + Sync;
     const PERFORM_CACHED_COMPOSITION: Option<PerformCachedComposition<Self>> = None;
 }
 
@@ -449,6 +449,22 @@ where
 
 pub trait AnyLayerNode: Send + Sync {
     fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any>;
+
+    fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>>;
+}
+
+impl<L> AnyLayerNode for LayerNode<L>
+where
+    L: Layer,
+{
+    fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any> {
+        todo!()
+    }
+
+    fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>> {
+        todo!()
+        // self.inner.lock().cache.map(f)
+    }
 }
 
 trait ArcAnyLayerNodeExt {
@@ -545,7 +561,6 @@ where
     pub fn transform(&self) -> Option<&C::Transform> {
         Some(&self.transform)
     }
-
 }
 
 impl<'a, C> Mul<&'a LayerCompositionConfig<C>> for &'a LayerCompositionConfig<C>

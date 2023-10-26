@@ -2,8 +2,8 @@ use linear_map::LinearMap;
 
 use crate::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, LinearMapEntryExt, Parallel, Provide,
-        SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, BuildSuspendedError, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt,
+        Parallel, Provide, SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeCommitResult, TreeScheduler},
@@ -24,7 +24,7 @@ where
     pub(in super::super) fn rebuild_node_sync<'a, 'batch>(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
     ) -> SubtreeCommitResult {
@@ -233,7 +233,7 @@ where
     pub(in super::super) fn inflate_node_sync<'a, 'batch>(
         widget: &E::ArcWidget,
         parent_context: ArcElementContextNode,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
     ) -> (Arc<ElementNode<E>>, SubtreeCommitResult) {
@@ -275,7 +275,7 @@ where
     fn perform_rebuild_node_sync<'a, 'batch>(
         self: &'a Arc<Self>,
         widget: &'a E::ArcWidget,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         mut hooks: Hooks,
         element: E,
         old_attached_object: Option<E::ArcRenderObject>,
@@ -331,7 +331,7 @@ where
     fn perform_inflate_node_sync<'a, 'batch>(
         self: &'a Arc<Self>,
         widget: &E::ArcWidget,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
@@ -366,7 +366,7 @@ where
     fn perform_poll_rebuild_node_sync<'a, 'batch>(
         self: &'a Arc<Self>,
         widget: &E::ArcWidget,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         hooks: Hooks,
         last_element: E,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
@@ -404,7 +404,7 @@ where
     fn perform_poll_inflate_node_sync<'a, 'batch>(
         self: &'a Arc<Self>,
         widget: &E::ArcWidget,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         last_hooks: Hooks,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
@@ -443,7 +443,7 @@ where
         results: Result<E, (E, BuildSuspendedError)>,
         hooks_iter: HookContext,
         widget: &E::ArcWidget,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         mut render_object: Option<E::ArcRenderObject>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         subtree_results: SubtreeCommitResult,
@@ -610,7 +610,7 @@ where
         results: Result<E, BuildSuspendedError>,
         hooks_iter: HookContext,
         widget: &E::ArcWidget,
-        job_ids: &'a SmallSet<JobId>,
+        job_ids: &'a Inlinable64Vec<JobId>,
         subtree_results: SubtreeCommitResult,
         tree_scheduler: &'batch TreeScheduler,
     ) -> (MainlineState<E>, SubtreeCommitResult) {
@@ -798,12 +798,14 @@ where
 }
 
 pub(crate) mod sync_build_private {
+    use crate::foundation::Inlinable64Vec;
+
     use super::*;
 
     pub trait AnyElementSyncTreeWalkExt {
         fn visit_and_work_sync<'a, 'batch>(
             self: Arc<Self>,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> SubtreeCommitResult;
@@ -815,7 +817,7 @@ pub(crate) mod sync_build_private {
     {
         fn visit_and_work_sync<'a, 'batch>(
             self: Arc<Self>,
-            job_ids: &'a SmallSet<JobId>,
+            job_ids: &'a Inlinable64Vec<JobId>,
             scope: &'a rayon::Scope<'batch>,
             tree_scheduler: &'batch TreeScheduler,
         ) -> SubtreeCommitResult {

@@ -40,7 +40,7 @@ impl TreeScheduler {
     }
 
     pub(crate) fn commit_completed_async_batches(&mut self, job_batcher: &mut JobBatcher) {
-        todo!()
+        // todo!()
         // for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
         //     let Some(async_lane) = async_lane else {
         //         continue;
@@ -53,11 +53,17 @@ impl TreeScheduler {
     }
 
     pub(crate) fn dispatch_sync_batch(&mut self) {
-        todo!()
+        if let Some(sync_job_ids) = self.lane_scheduler.get_sync_job_id() {
+            rayon::scope(|scope| {
+                self.root_element
+                    .clone()
+                    .visit_and_work_sync(sync_job_ids, scope, self);
+            });
+        }
     }
 
     pub(crate) fn dispatch_async_batches(&self) {
-        todo!()
+        // todo!()
     }
 
     pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {
@@ -65,6 +71,6 @@ impl TreeScheduler {
     }
 
     pub(crate) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
-        todo!()
+        // todo!()
     }
 }

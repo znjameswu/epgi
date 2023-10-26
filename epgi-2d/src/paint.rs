@@ -554,7 +554,11 @@ where
         self.add_command(Affine2dPaintCommand::DrawShape {
             shape: Affine2dCanvasShape::Rect(dst),
             transform: dst_transform,
-            painter: Painter::Fill(FillPainter { fill: Fill::EvenOdd, brush: Brush::Image(image), transform: Some(dst_transform) }),
+            painter: Painter::Fill(FillPainter {
+                fill: Fill::EvenOdd,
+                brush: Brush::Image(image),
+                transform: Some(dst_transform),
+            }),
         });
     }
 

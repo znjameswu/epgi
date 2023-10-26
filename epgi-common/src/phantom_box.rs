@@ -4,10 +4,14 @@ use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize};
 use epgi_core::{
     foundation::{BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide},
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, DryLayout, Element, Reconciler, Render,
-        RenderElement, RenderObject, RenderObjectUpdateResult, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, Reconciler,
+        Render, RenderElement, RenderObject, RenderObjectUpdateResult, Widget,
     },
 };
+
+lazy_static! {
+    static ref ARC_PHANTOM_BOX: Arc<PhantomBox> = Arc::new(PhantomBox {});
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct PhantomBox {}

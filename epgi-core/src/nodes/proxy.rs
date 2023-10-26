@@ -13,7 +13,7 @@ pub trait ProxyWidget:
     Widget<
         Element = SingleChildRenderObjectElement<Self>,
         ParentProtocol = Self::Protocol,
-        ChildProtocol = Self::Protocol
+        ChildProtocol = Self::Protocol,
     > + Sized
 {
     type Protocol: Protocol;
