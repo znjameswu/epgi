@@ -1,15 +1,12 @@
 mod context;
+mod layer_paint;
 
 pub use context::*;
+pub use layer_paint::*;
 
-use crate::foundation::{
-    Arc, Aweak, Canvas, LayerProtocol, Never, PaintContext, Parallel, Protocol, SyncMutex,
-};
+use crate::foundation::{Arc, Aweak, PaintContext, Parallel, Protocol, SyncMutex};
 
-use super::{
-    ArcAnyLayerNode, ArcChildLayerNode, ArcElementContextNode, AscLayerContextNode, Element,
-    ElementContextNode, GetSuspense, Layer, LayerNode,
-};
+use super::{ArcAnyLayerNode, ArcElementContextNode, ElementContextNode, Layer};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
@@ -62,7 +59,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
-    const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<Self>> = None;
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> = None;
 
     // We don't make perform paint into an associated constant because it has an generic paramter
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
@@ -74,22 +71,15 @@ pub trait Render: Sized + Send + Sync + 'static {
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
-    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = None;
-
-    // fn compute_child_transformation(
-    //     transformation: &<Self::SelfProtocol as Protocol>::CanvasTransformation,
-    //     child_offset: &<Self::ChildProtocol as Protocol>::Offset,
-    // ) -> <Self::ChildProtocol as Protocol>::CanvasTransformation;
-
-    type ArcLayerNode: ArcLayerNode<Self>;
+    type LayerOrUnit: LayerOrUnit<Self>;
 }
 
 pub trait DryLayout: Render {
-    const PERFORM_DRY_LAYOUT: PerformDryLayout<Self> = PerformDryLayout {
-        compute_dry_layout: Self::compute_dry_layout,
-        compute_layout_memo: <Self as DryLayout>::compute_layout_memo,
-    };
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> =
+        Some(DryLayoutFunctionTable {
+            compute_dry_layout: Self::compute_dry_layout,
+            compute_layout_memo: Self::compute_layout_memo,
+        });
 
     fn compute_dry_layout(
         &self,
@@ -103,7 +93,7 @@ pub trait DryLayout: Render {
     ) -> Self::LayoutMemo;
 }
 
-pub struct PerformDryLayout<R: Render> {
+pub struct DryLayoutFunctionTable<R: Render> {
     pub compute_dry_layout: fn(
         &R,
         &<R::ParentProtocol as Protocol>::Constraints,
@@ -116,123 +106,20 @@ pub struct PerformDryLayout<R: Render> {
     ) -> R::LayoutMemo,
 }
 
-pub trait LayerPaint: Render {
-    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<Self>> = Some(PerformLayerPaint {
-        // get_layer: Self::get_layer,
-        as_any_layer_node: Self::as_any_layer_node,
-        get_canvas_transform: Self::get_canvas_transform,
-        get_canvas_transform_ref: Self::get_canvas_transform_ref,
-    });
-    // // Returns Arc by value. Since most likely the implementers needs Arc pointer coercion, and pointer coercion results in temporary values whose reference cannot be returned.
-    // fn get_layer(&self) -> ArcLayerNodeOf<Self>;
-
-    fn as_any_layer_node(layer: Self::ArcLayerNode) -> ArcAnyLayerNode;
-
-    fn get_canvas_transform_ref(
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
-    ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
-
-    fn get_canvas_transform(
-        transform: <Self::ParentProtocol as Protocol>::Transform,
-    ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform;
-}
-pub struct PerformLayerPaint<R: Render> {
-    // pub get_layer: fn(&R) -> ArcLayerNodeOf<R>,
-    pub as_any_layer_node: fn(R::ArcLayerNode) -> ArcAnyLayerNode,
-    pub get_canvas_transform_ref:
-        fn(
-            &<R::ParentProtocol as Protocol>::Transform,
-        ) -> &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    pub get_canvas_transform: fn(
-        <R::ParentProtocol as Protocol>::Transform,
-    )
-        -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-}
-
-pub trait ArcLayerNode<R>: Clone + Send + Sync + 'static
-where
-    R: Render<ArcLayerNode = Self>,
-{
-    type Layer;
-
-    const GET_LAYER_NODE: GetLayerNode<R>;
-}
-
-impl<R> ArcLayerNode<R> for ()
-where
-    R: Render<ArcLayerNode = Self>,
-{
-    type Layer = Never;
-
-    const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::None { create: || () };
-}
-
-impl<R, L> ArcLayerNode<R> for Arc<LayerNode<L>>
-where
-    R: LayerRender<Layer = L>,
+pub trait LayerRender<
     L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
+        ParentCanvas = <Self::ParentProtocol as Protocol>::Canvas,
+        ChildCanvas = <Self::ChildProtocol as Protocol>::Canvas,
     >,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
+>: Render<LayerOrUnit = L>
 {
-    type Layer = L;
-
-    const GET_LAYER_NODE: GetLayerNode<R> = GetLayerNode::LayerNode {
-        as_arc_child_layer_node: |x| x,
-        create_layer_node: R::create_layer_node,
-        get_canvas_transform_ref: |x| x,
-        get_canvas_transform: |x| x,
-    };
+    fn create_layer(&self) -> L;
 }
-
-pub trait LayerRender: Render<ArcLayerNode = Arc<LayerNode<Self::Layer>>> {
-    type Layer: Layer;
-    fn create_layer_node(&self, layer_context: &AscLayerContextNode) -> Self::ArcLayerNode;
-}
-
-pub enum GetLayerNode<R: Render> {
-    LayerNode {
-        as_arc_child_layer_node:
-            fn(R::ArcLayerNode) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
-        create_layer_node: fn(&R, &AscLayerContextNode) -> R::ArcLayerNode,
-        get_canvas_transform_ref:
-            fn(
-                &<R::ParentProtocol as Protocol>::Transform,
-            ) -> &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-        get_canvas_transform: fn(
-            <R::ParentProtocol as Protocol>::Transform,
-        )
-            -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-    },
-    // // pub update_layer_node: fn(&R, &R::ArcLayerNode) -> LayerNodeUpdateResult,
-    None {
-        create: fn() -> R::ArcLayerNode,
-    },
-}
-
-impl<R> GetLayerNode<R>
-where
-    R: Render,
-{
-    pub const fn is_some(&self) -> bool {
-        matches!(self, GetLayerNode::LayerNode { .. })
-    }
-}
-
-// #[derive(Debug, Clone, Copy, Default)]
-// pub enum LayerNodeUpdateResult {
-//     NeedsRepaint,
-//     NeedsRecomposite,
-//     #[default]
-//     None
-// }
 
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) context: AscRenderContextNode,
-    pub(crate) layer_node: R::ArcLayerNode,
+    pub(crate) layer_node: ArcLayerNodeOf<R>,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
@@ -245,10 +132,10 @@ where
             element_context.has_render,
             "A render object node must have a render context node in its element context node"
         );
-        let layer = match R::ArcLayerNode::GET_LAYER_NODE {
-            GetLayerNode::LayerNode {
+        let layer = match layer_render_function_table_of::<R>() {
+            LayerRenderFunctionTable::LayerNode {
                 as_arc_child_layer_node,
-                create_layer_node,
+                create_arc_layer_node: create_layer_node,
                 ..
             } => {
                 let render_context = &element_context.nearest_render_context;
@@ -259,7 +146,7 @@ where
                 );
                 create_layer_node(&render, &render_context.nearest_repaint_boundary)
             }
-            GetLayerNode::None { create } => create(),
+            LayerRenderFunctionTable::None { create } => create(),
         };
         Self {
             context: element_context.nearest_render_context.clone(),
@@ -426,13 +313,15 @@ where
     }
 
     fn layer(&self) -> Option<ArcAnyLayerNode> {
-        let Some(PerformLayerPaint {
-            as_any_layer_node,
+        if let LayerRenderFunctionTable::LayerNode {
+            as_arc_any_layer_node,
             ..
-        }) = R::PERFORM_LAYER_PAINT else{
-            return None
-        };
-        Some(as_any_layer_node(self.layer_node.clone()))
+        } = layer_render_function_table_of::<R>()
+        {
+            Some(as_arc_any_layer_node(self.layer_node.clone()))
+        } else {
+            None
+        }
     }
 }
 

@@ -3,14 +3,15 @@ use linear_map::LinearMap;
 use crate::{
     foundation::{
         Arc, Asc, BuildSuspendedError, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt,
-        Parallel, Provide, SmallSet, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
+        Parallel, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeCommitResult, TreeScheduler},
     tree::{
-        ArcChildElementNode, ArcElementContextNode, ArcRenderObject, AsyncWorkQueue, Element,
-        ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, GetRenderObject,
-        HookContext, Hooks, Mainline, MainlineState, RenderContextNode, RenderObjectUpdateResult,
+        render_element_function_table_of, ArcChildElementNode, ArcElementContextNode,
+        ArcRenderObjectOf, AsyncWorkQueue, Element, ElementContextNode, ElementNode,
+        ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, MainlineState,
+        RenderElementFunctionTable, RenderObjectUpdateResult, RenderOrUnit,
     },
 };
 
@@ -278,7 +279,7 @@ where
         job_ids: &'a Inlinable64Vec<JobId>,
         mut hooks: Hooks,
         element: E,
-        old_attached_object: Option<E::ArcRenderObject>,
+        old_attached_object: Option<ArcRenderObjectOf<E>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
@@ -444,14 +445,14 @@ where
         hooks_iter: HookContext,
         widget: &E::ArcWidget,
         job_ids: &'a Inlinable64Vec<JobId>,
-        mut render_object: Option<E::ArcRenderObject>,
+        mut render_object: Option<ArcRenderObjectOf<E>>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         subtree_results: SubtreeCommitResult,
         tree_scheduler: &'batch TreeScheduler,
     ) -> (MainlineState<E>, SubtreeCommitResult) {
         match results {
-            Ok(mut element) => match E::ArcRenderObject::GET_RENDER_OBJECT {
-                GetRenderObject::None(_) => {
+            Ok(mut element) => match render_element_function_table_of::<E>() {
+                RenderElementFunctionTable::None(_) => {
                     debug_assert!(
                         render_object.is_none(),
                         "ComponentElement should not have a render object"
@@ -465,7 +466,7 @@ where
                         subtree_results,
                     );
                 }
-                GetRenderObject::RenderObject {
+                RenderElementFunctionTable::RenderObject {
                     get_suspense: None,
                     try_create_render_object,
                     update_render_object,
@@ -481,7 +482,7 @@ where
                                 && try_update_render_object_children.is_some();
                             let can_update_render_object = update_render_object.is_some();
                             if should_update_render_object_children || can_update_render_object {
-                                render_object.lock_with(|render, context| {
+                                E::RenderOrUnit::lock_with(render_object, |render, context| {
                                     if should_update_render_object_children {
                                         let try_update_render_object_children =
                                             try_update_render_object_children
@@ -518,8 +519,9 @@ where
                             .take() // rust-analyzer#14933
                             .map(|render_object| {
                                 if let Some(detach_render_object) = detach_render_object {
-                                    render_object
-                                        .lock_with(|render, _| detach_render_object(render))
+                                    E::RenderOrUnit::lock_with(&render_object, |render, _| {
+                                        detach_render_object(render)
+                                    })
                                 }
                             });
                     }
@@ -539,7 +541,7 @@ where
                         },
                     );
                 }
-                GetRenderObject::RenderObject {
+                RenderElementFunctionTable::RenderObject {
                     get_suspense: Some(get_suspense),
                     try_update_render_object_children,
                     ..
@@ -615,8 +617,8 @@ where
         tree_scheduler: &'batch TreeScheduler,
     ) -> (MainlineState<E>, SubtreeCommitResult) {
         match results {
-            Ok(mut element) => match E::ArcRenderObject::GET_RENDER_OBJECT {
-                GetRenderObject::None(_) => (
+            Ok(mut element) => match render_element_function_table_of::<E>() {
+                RenderElementFunctionTable::None(_) => (
                     MainlineState::Ready {
                         hooks: hooks_iter.hooks,
                         render_object: None,
@@ -624,7 +626,7 @@ where
                     },
                     SubtreeCommitResult::Suspended,
                 ),
-                GetRenderObject::RenderObject {
+                RenderElementFunctionTable::RenderObject {
                     try_create_render_object,
                     get_suspense: None,
                     ..
@@ -641,7 +643,7 @@ where
                         subtree_results.absorb(),
                     )
                 }
-                GetRenderObject::RenderObject {
+                RenderElementFunctionTable::RenderObject {
                     try_create_render_object,
                     get_suspense: Some(get_suspense),
                     ..

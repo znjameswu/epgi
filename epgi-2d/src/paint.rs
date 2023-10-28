@@ -6,8 +6,8 @@ pub use peniko::{
 };
 
 use crate::{
-    Affine2d, BoxOffset, BoxSize, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line,
-    Paragraph, Point2d, QuadBez, RRect, RRectBorder, RRectRadius, Rect, RingSector,
+    Affine2d, BoxOffset, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Paragraph,
+    Point2d, QuadBez, RRect, Rect, RingSector,
 };
 
 pub enum Affine2dPaintCommand {

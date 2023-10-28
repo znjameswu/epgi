@@ -4,8 +4,8 @@ use crate::{
         PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, GetSuspense,
-        Reconciler, Render, RenderElement, RenderObject, RenderObjectUpdateResult, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, Reconciler, Render,
+        RenderElement, RenderObjectUpdateResult, SuspenseElementFunctionTable, Widget,
     },
 };
 
@@ -72,24 +72,22 @@ impl<P: Protocol> Element for SuspenseElement<P> {
         todo!()
     }
 
-    type ArcRenderObject = Arc<RenderObject<RenderSuspense<P>>>;
+    type RenderOrUnit = RenderSuspense<P>;
 }
 
-impl<P: Protocol> RenderElement for SuspenseElement<P> {
-    type Render = RenderSuspense<P>;
-
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render> {
+impl<P: Protocol> RenderElement<RenderSuspense<P>> for SuspenseElement<P> {
+    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<RenderSuspense<P>> {
         todo!()
     }
 
     fn update_render_object(
-        render_object: &mut Self::Render,
+        render_object: &mut RenderSuspense<P>,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult {
         todo!()
     }
 
-    fn try_update_render_object_children(&self, render: &mut Self::Render) -> Result<(), ()> {
+    fn try_update_render_object_children(&self, render: &mut RenderSuspense<P>) -> Result<(), ()> {
         let child_render_object = self
             .fallback
             .as_ref()
@@ -104,12 +102,13 @@ impl<P: Protocol> RenderElement for SuspenseElement<P> {
         Ok(())
     }
 
-    const GET_SUSPENSE: Option<GetSuspense<Self>> = Some(GetSuspense {
-        get_suspense_element_mut: |x| x,
-        get_suspense_widget_ref: |x| x,
-        get_suspense_render_object: |x| x,
-        into_arc_render_object: |x| x,
-    });
+    const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> =
+        Some(SuspenseElementFunctionTable {
+            get_suspense_element_mut: |x| x,
+            get_suspense_widget_ref: |x| x,
+            get_suspense_render_object: |x| x,
+            into_arc_render_object: |x| x,
+        });
 }
 
 pub struct RenderSuspense<P: Protocol> {
@@ -150,5 +149,5 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         todo!()
     }
 
-    type ArcLayerNode = ();
+    type LayerOrUnit = ();
 }

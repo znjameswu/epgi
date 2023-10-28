@@ -60,4 +60,6 @@ impl ProxyWidget for ConstrainedBox {
         let size = child.layout_use_size(&child_constraints);
         (size, ())
     }
+
+    type LayerRenderDelegate = ();
 }

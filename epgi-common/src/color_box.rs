@@ -77,4 +77,6 @@ impl ProxyWidget for ColorBox {
         );
         paint_ctx.paint(child, transform);
     }
+
+    type LayerRenderDelegate = ();
 }

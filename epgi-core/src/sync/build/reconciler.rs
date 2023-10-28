@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{HktContainer, Inlinable64Vec, InlinableDwsizeVec, Parallel, Protocol, SmallSet},
+    foundation::{HktContainer, Inlinable64Vec, InlinableDwsizeVec, Parallel, Protocol},
     scheduler::JobId,
     sync::{SubtreeCommitResult, TreeScheduler},
     tree::{

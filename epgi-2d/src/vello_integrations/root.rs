@@ -1,15 +1,13 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, LayerProtocol, Never,
-        PaintContext, Protocol, Provide, SyncMutex,
+        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext, Protocol,
+        Provide,
     },
     tree::{
-        ArcAnyLayerNode, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
-        ArcElementContextNode, AscLayerContextNode, AscRenderContextNode, BuildContext,
-        CachedLayer, CachingChildLayerProducingIterator, ChildLayerProducingIterator, DryLayout,
-        Element, Layer, LayerCompositionConfig, LayerNode, LayerPaint, LayerRender, PaintResults,
-        PerformCachedComposition, ReconcileItem, Reconciler, Render, RenderElement, RenderObject,
-        RenderObjectUpdateResult, StructuredChildLayerOrFragment, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedLayer,
+        ChildLayerProducingIterator, DryLayout, Element, Layer, LayerCompositionConfig,
+        LayerRender, PaintResults, CachedCompositionFunctionTable, ReconcileItem, Reconciler, Render,
+        RenderElement, RenderObjectUpdateResult, Widget,
     },
 };
 
@@ -106,18 +104,16 @@ impl Element for RootElement {
         self.child.clone()
     }
 
-    type ArcRenderObject = Arc<RenderObject<RenderRoot>>;
+    type RenderOrUnit = RenderRoot;
 }
 
-impl RenderElement for RootElement {
-    type Render = RenderRoot;
-
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render> {
+impl RenderElement<RenderRoot> for RootElement {
+    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<RenderRoot> {
         todo!()
     }
 
     fn update_render_object(
-        render_object: &mut Self::Render,
+        render_object: &mut RenderRoot,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult {
         RenderObjectUpdateResult::None
@@ -125,7 +121,7 @@ impl RenderElement for RootElement {
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = true;
 
-    fn try_update_render_object_children(&self, render: &mut Self::Render) -> Result<(), ()> {
+    fn try_update_render_object_children(&self, render: &mut RenderRoot) -> Result<(), ()> {
         render.child = self.child.as_ref().map(|child| {
             child
                 .get_current_subtree_render_object()
@@ -159,8 +155,8 @@ impl Render for RenderRoot {
         unreachable!()
     }
 
-    const PERFORM_DRY_LAYOUT: Option<epgi_core::tree::PerformDryLayout<Self>> =
-        Some(<Self as DryLayout>::PERFORM_DRY_LAYOUT);
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<epgi_core::tree::DryLayoutFunctionTable<Self>> =
+        <Self as DryLayout>::DRY_LAYOUT_FUNCTION_TABLE;
 
     fn perform_paint(
         &self,
@@ -172,18 +168,7 @@ impl Render for RenderRoot {
         unreachable!()
     }
 
-    const PERFORM_LAYER_PAINT: Option<epgi_core::tree::PerformLayerPaint<Self>> =
-        <Self as LayerPaint>::PERFORM_LAYER_PAINT;
-
-    type ArcLayerNode = Arc<LayerNode<RootLayer>>; //TODO
-}
-
-impl LayerRender for RenderRoot {
-    type Layer = RootLayer;
-
-    fn create_layer_node(&self, layer_context: &AscLayerContextNode) -> Self::ArcLayerNode {
-        todo!()
-    }
+    type LayerOrUnit = RootLayer;
 }
 
 impl DryLayout for RenderRoot {
@@ -203,21 +188,9 @@ impl DryLayout for RenderRoot {
     }
 }
 
-impl LayerPaint for RenderRoot {
-    fn get_canvas_transform_ref(
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
-    ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
+impl LayerRender<RootLayer> for RenderRoot {
+    fn create_layer(&self) -> Self::LayerOrUnit {
         todo!()
-    }
-
-    fn get_canvas_transform(
-        transform: <Self::ParentProtocol as Protocol>::Transform,
-    ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
-        todo!()
-    }
-
-    fn as_any_layer_node(layer: Self::ArcLayerNode) -> ArcAnyLayerNode {
-        layer
     }
 }
 
@@ -275,7 +248,7 @@ impl Layer for RootLayer {
 
     type CachedComposition = Arc<VelloEncoding>;
 
-    const PERFORM_CACHED_COMPOSITION: Option<PerformCachedComposition<Self>> =
+    const CACHED_COMPOSITION_FUNCTION_TABLE: Option<CachedCompositionFunctionTable<Self>> =
         <Self as CachedLayer>::PERFORM_CACHED_COMPOSITION;
 }
 

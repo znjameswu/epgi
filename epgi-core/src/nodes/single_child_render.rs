@@ -3,10 +3,9 @@ use crate::foundation::{
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, AscLayerContextNode,
-    AscRenderContextNode, ChildRenderObject, Element, PerformDryLayout, PerformLayerPaint,
-    ReconcileItem, Reconciler, Render, RenderElement, RenderObject, RenderObjectUpdateResult,
-    Widget,
+    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ChildRenderObject,
+    DryLayoutFunctionTable, Element, LayerOrUnit, ReconcileItem, Reconciler, Render, RenderElement,
+    RenderObjectUpdateResult, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -36,7 +35,7 @@ pub trait SingleChildRenderObjectWidget:
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
-    const PERFORM_DRY_LAYOUT: Option<PerformDryLayout<SingleChildRenderObject<Self>>> = None;
+    const PERFORM_DRY_LAYOUT: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> = None;
 
     // We don't make perform paint into an associated constant because it has an generic paramter
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
@@ -49,8 +48,7 @@ pub trait SingleChildRenderObjectWidget:
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    /// If this is not None, then [`Self::perform_paint`]'s implementation will be ignored.
-    const PERFORM_LAYER_PAINT: Option<PerformLayerPaint<SingleChildRenderObject<Self>>> = None;
+    type LayerRenderDelegate: LayerOrUnit<SingleChildRenderObject<Self>>;
 }
 
 pub struct SingleChildRenderObjectElement<W: SingleChildRenderObjectWidget> {
@@ -119,17 +117,18 @@ where
         [self.child.clone()]
     }
 
-    type ArcRenderObject = Arc<RenderObject<SingleChildRenderObject<W>>>;
+    type RenderOrUnit = SingleChildRenderObject<W>;
 }
 
-impl<W> RenderElement for SingleChildRenderObjectElement<W>
+impl<W> RenderElement<SingleChildRenderObject<W>> for SingleChildRenderObjectElement<W>
 where
     W: SingleChildRenderObjectWidget<Element = Self>,
 {
-    type Render = SingleChildRenderObject<W>;
-
     #[inline(always)]
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render> {
+    fn try_create_render_object(
+        &self,
+        widget: &Self::ArcWidget,
+    ) -> Option<SingleChildRenderObject<W>> {
         let child = self.child.get_current_subtree_render_object()?;
         Some(SingleChildRenderObject {
             state: W::create_render_state(widget),
@@ -139,7 +138,7 @@ where
 
     #[inline(always)]
     fn update_render_object(
-        render: &mut Self::Render,
+        render: &mut SingleChildRenderObject<W>,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult {
         W::update_render_state(widget, &mut render.state)
@@ -147,7 +146,10 @@ where
     const NOOP_UPDATE_RENDER_OBJECT: bool = W::NOOP_UPDATE_RENDER_OBJECT;
 
     #[inline(always)]
-    fn try_update_render_object_children(&self, render: &mut Self::Render) -> Result<(), ()> {
+    fn try_update_render_object_children(
+        &self,
+        render: &mut SingleChildRenderObject<W>,
+    ) -> Result<(), ()> {
         let child = self.child.get_current_subtree_render_object().ok_or(())?;
         render.child = child;
         Ok(())
@@ -204,5 +206,5 @@ where
         )
     }
 
-    type ArcLayerNode = ();
+    type LayerOrUnit = ();
 }

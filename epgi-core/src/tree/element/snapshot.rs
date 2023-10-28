@@ -8,7 +8,7 @@ use crate::{
     tree::{AsyncInflating, Hook, HookContext},
 };
 
-use super::{ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, Element};
+use super::{ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, Element};
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
@@ -56,7 +56,7 @@ pub(crate) enum MainlineState<E: Element> {
     Ready {
         hooks: Hooks,
         element: E,
-        render_object: Option<E::ArcRenderObject>,
+        render_object: Option<ArcRenderObjectOf<E>>,
     },
     InflateSuspended {
         last_hooks: Hooks,

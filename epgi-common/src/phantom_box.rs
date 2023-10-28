@@ -4,8 +4,8 @@ use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize};
 use epgi_core::{
     foundation::{BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide},
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, Reconciler,
-        Render, RenderElement, RenderObject, RenderObjectUpdateResult, Widget,
+        ArcChildElementNode, ArcChildRenderObject, DryLayout, Element, Reconciler, Render,
+        RenderElement, RenderObjectUpdateResult, Widget,
     },
 };
 
@@ -63,12 +63,10 @@ impl Element for PhantomBoxElement {
         []
     }
 
-    type ArcRenderObject = Arc<RenderObject<RenderPhantomBox>>;
+    type RenderOrUnit = RenderPhantomBox;
 }
 
-impl RenderElement for PhantomBoxElement {
-    type Render = RenderPhantomBox;
-
+impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
     fn try_create_render_object(&self, _widget: &Arc<PhantomBox>) -> Option<RenderPhantomBox> {
         Some(RenderPhantomBox {})
     }
@@ -122,7 +120,7 @@ impl Render for RenderPhantomBox {
     ) {
     }
 
-    type ArcLayerNode = ();
+    type LayerOrUnit = ();
 }
 
 impl DryLayout for RenderPhantomBox {

@@ -11,7 +11,7 @@ pub use job_batcher::*;
 pub use lane::*;
 
 use crate::{
-    foundation::{Asc, AsyncMpscSender, SyncMutex, SyncRwLock},
+    foundation::{Asc, AsyncMpscSender, SyncRwLock},
     sync::CommitBarrier,
     tree::{AweakAnyElementNode, AweakElementContextNode, WorkContext, WorkHandle},
 };

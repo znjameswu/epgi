@@ -1,16 +1,16 @@
 use epgi_2d::{
-    Affine2d, BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootLayer,
-    RootView, VelloEncoding,
+    BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootLayer, RootView,
+    VelloEncoding,
 };
-use epgi_common::{ConstrainedBox, PhantomBox};
+use epgi_common::ConstrainedBox;
 use epgi_core::{
-    foundation::{Arc, Asc, SyncMutex},
+    foundation::{Arc, SyncMutex},
     hooks::{SetState, StateHook},
     nodes::Function,
     scheduler::{
         get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, TreeScheduler,
     },
-    tree::{create_root_element, ArcChildWidget, ElementNode, Hooks},
+    tree::{create_root_element, ArcChildWidget, Hooks},
 };
 use glazier::{
     kurbo::{Affine, Size},
@@ -24,7 +24,7 @@ use std::{
 use vello::{
     peniko::Color,
     util::{RenderContext, RenderSurface},
-    RenderParams, Renderer, RendererOptions, Scene, SceneBuilder, SceneFragment,
+    RenderParams, Renderer, RendererOptions, Scene, SceneBuilder,
 };
 
 pub struct AppLauncher {
@@ -275,7 +275,7 @@ impl MainState {
                 None
             };
             let mut builder = SceneBuilder::for_scene(&mut self.scene);
-            builder.append(&encoding, transform);
+            todo!(); // builder.append(&encoding, transform);
             self.counter += 1;
             let surface_texture = surface
                 .surface
@@ -331,7 +331,7 @@ impl MainState {
             }),
         });
         let element = RootElement { child: None };
-        let element_node = create_root_element::<RootElement>(
+        let element_node = create_root_element::<RootElement, RenderRoot, RootLayer>(
             root_widget,
             element,
             RenderRoot { child: None },

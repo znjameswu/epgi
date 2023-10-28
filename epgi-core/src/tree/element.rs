@@ -1,17 +1,19 @@
 mod async_queue;
 mod context;
 mod provider;
+mod render_element;
 mod snapshot;
 
 pub use async_queue::*;
 pub use context::*;
 pub use provider::*;
+pub use render_element::*;
 pub use snapshot::*;
 
 use crate::{
     foundation::{
-        Arc, Asc, Aweak, BuildSuspendedError, InlinableDwsizeVec, Never, Parallel, Protocol,
-        Provide, SyncMutex, SyncMutexGuard, TypeKey,
+        Arc, Asc, Aweak, BuildSuspendedError, InlinableDwsizeVec, LayerProtocol, Parallel,
+        Protocol, Provide, SyncMutex, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -19,9 +21,8 @@ use crate::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcLayerNode, ArcWidget,
-    AscLayerContextNode, AscRenderContextNode, LayerNode, LayerRender, ReconcileItem, Reconciler,
-    Render, RenderCache, RenderContextNode, RenderObject, RenderObjectInner,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, Layer, LayerNode,
+    LayerRender, ReconcileItem, Reconciler, Render, RenderCache, RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -78,24 +79,25 @@ pub trait Element: Send + Sync + Clone + 'static {
     // This is designed in such a way that we do not need to lock the mutex to know whether a render object is present.
     // Rust const is inlined, so we can safely expect that no actual function pointers will occur in binary causing indirection.
     // const GET_RENDER_OBJECT: GetRenderObject<Self>;
-    type ArcRenderObject: ArcRenderObject<Self>;
+    type RenderOrUnit: RenderOrUnit<Self>;
 }
 
-pub trait SingleChildElement: Element<ArcRenderObject = Never> {
+pub trait SingleChildElement: Element<RenderOrUnit = ()> {
     fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol>;
 }
 
-pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render>>> {
-    type Render: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>;
-
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<Self::Render>;
+pub trait RenderElement<
+    R: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>,
+>: Element<RenderOrUnit = R>
+{
+    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<R>;
     /// Update necessary properties of render object given by the widget
     ///
     /// Called during the commit phase, when the widget is updated.
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
     fn update_render_object(
-        render_object: &mut Self::Render,
+        render_object: &mut R,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult;
 
@@ -111,8 +113,7 @@ pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render
     /// Try to re-assemble the children of the givin render object.
     ///
     /// Called during the commit phase, when subtree structure has changed.
-    fn try_update_render_object_children(&self, render_object: &mut Self::Render)
-        -> Result<(), ()>;
+    fn try_update_render_object_children(&self, render_object: &mut R) -> Result<(), ()>;
 
     /// Whether [Render::try_update_render_object_children] is a no-op and always succeed
     ///
@@ -124,123 +125,16 @@ pub trait RenderElement: Element<ArcRenderObject = Arc<RenderObject<Self::Render
     /// Leaf render objects may consider setting this to true.
     const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = false;
 
-    const GET_SUSPENSE: Option<GetSuspense<Self>> = None;
+    const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> = None;
 }
 
-pub trait ArcRenderObject<E>: Clone + Send + Sync + 'static
-where
-    E: Element<ArcRenderObject = Self>,
-{
-    type Render;
-    const GET_RENDER_OBJECT: GetRenderObject<E>;
-    fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode));
-}
-
-impl<E> ArcRenderObject<E> for Never
-where
-    E: SingleChildElement<ArcRenderObject = Self>,
-{
-    type Render = Never;
-    const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::None(E::child);
-
-    fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode)) {
-        debug_assert!(
-            false,
-            "Never should never be dereferenced as ArcRenderObject"
-        )
-    }
-}
-
-impl<E> ArcRenderObject<E> for Arc<RenderObject<E::Render>>
-where
-    E: RenderElement<ArcRenderObject = Arc<RenderObject<<E as RenderElement>::Render>>>,
-    E::Render: Render<ParentProtocol = E::ParentProtocol, ChildProtocol = E::ChildProtocol>,
-{
-    type Render = E::Render;
-    const GET_RENDER_OBJECT: GetRenderObject<E> = GetRenderObject::RenderObject {
-        as_arc_child_render_object: |x| x,
-        try_create_render_object: |element, widget, element_context| {
-            assert!(
-                element_context.has_render,
-                concat!(
-                    "ElementNodes with RenderObject must be registered in its ElementContextNode. \n",
-                    "If this assertion failed, you have encountered a framework bug."
-                )
-            );
-            let render_context = &element_context.nearest_render_context;
-            let render = E::try_create_render_object(element, widget)?;
-            Some(Arc::new(RenderObject::new(render, element_context.clone())))
-        },
-        update_render_object: if E::NOOP_UPDATE_RENDER_OBJECT {
-            None
-        } else {
-            Some(E::update_render_object)
-        },
-        try_update_render_object_children: if E::NOOP_UPDATE_RENDER_OBJECT_CHILDREN {
-            None
-        } else {
-            Some(E::try_update_render_object_children)
-        },
-        detach_render_object: if <E::Render as Render>::NOOP_DETACH {
-            None
-        } else {
-            Some(<E::Render as Render>::detach)
-        },
-        get_suspense: E::GET_SUSPENSE,
-        has_layer: <<E::Render as Render>::ArcLayerNode as ArcLayerNode<_>>::GET_LAYER_NODE
-            .is_some(),
-    };
-
-    fn lock_with(&self, op: impl FnOnce(&mut Self::Render, &RenderContextNode)) {
-        op(&mut self.inner.lock().render, &self.context)
-    }
-}
-
-pub enum GetRenderObject<E: Element> {
-    RenderObject {
-        as_arc_child_render_object:
-            fn(E::ArcRenderObject) -> ArcChildRenderObject<E::ParentProtocol>,
-        try_create_render_object:
-            fn(&E, &E::ArcWidget, &ArcElementContextNode) -> Option<E::ArcRenderObject>,
-        update_render_object: Option<
-            fn(
-                &mut <E::ArcRenderObject as ArcRenderObject<E>>::Render,
-                &E::ArcWidget,
-            ) -> RenderObjectUpdateResult,
-        >,
-        try_update_render_object_children: Option<
-            fn(&E, &mut <E::ArcRenderObject as ArcRenderObject<E>>::Render) -> Result<(), ()>,
-        >,
-        detach_render_object: Option<fn(&mut <E::ArcRenderObject as ArcRenderObject<E>>::Render)>,
-        get_suspense: Option<GetSuspense<E>>,
-        has_layer: bool,
-    },
-    None(fn(&E) -> &ArcChildElementNode<E::ParentProtocol>),
-}
-
-impl<E> GetRenderObject<E>
-where
-    E: Element,
-{
-    pub const fn is_none(&self) -> bool {
-        match self {
-            GetRenderObject::RenderObject { .. } => false,
-            GetRenderObject::None(_) => true,
-        }
-    }
-
-    pub const fn is_some(&self) -> bool {
-        !self.is_none()
-    }
-}
-
-pub struct GetSuspense<E: Element> {
+pub struct SuspenseElementFunctionTable<E: Element> {
     pub(crate) get_suspense_element_mut: fn(&mut E) -> &mut SuspenseElement<E::ChildProtocol>,
     pub(crate) get_suspense_widget_ref: fn(&E::ArcWidget) -> &Suspense<E::ParentProtocol>,
     pub(crate) get_suspense_render_object:
-        fn(E::ArcRenderObject) -> Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>,
+        fn(ArcRenderObjectOf<E>) -> Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>,
     pub(crate) into_arc_render_object:
-        fn(Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>) -> E::ArcRenderObject,
+        fn(Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>) -> ArcRenderObjectOf<E>,
 }
 
 pub struct ElementNode<E: Element> {
@@ -384,9 +278,9 @@ where
     }
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
-        let GetRenderObject::RenderObject {
+        let RenderElementFunctionTable::RenderObject {
             as_arc_child_render_object, ..
-        } = E::ArcRenderObject::GET_RENDER_OBJECT
+        } = render_element_function_table_of::<E>()
         else {
             return Err("Render object call should not be called on an Element type that does not associate with a render object");
         };
@@ -406,16 +300,23 @@ where
     }
 }
 
-pub fn create_root_element<E: RenderElement>(
+pub fn create_root_element<E, R, L>(
     widget: E::ArcWidget,
     element: E,
-    render: E::Render,
-    layer: <E::Render as LayerRender>::Layer,
+    render: R,
+    layer: L,
     hooks: Hooks,
     constraints: <E::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<E>>
 where
-    E::Render: LayerRender,
+    E: RenderElement<R>,
+    R: LayerRender<L, ParentProtocol = E::ParentProtocol, ChildProtocol = E::ChildProtocol>,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+    L: Layer<
+        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
+        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
+    >,
 {
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));

@@ -97,7 +97,7 @@ where
         [self.child.clone()]
     }
 
-    type ArcRenderObject = Never;
+    type RenderOrUnit = ();
 }
 
 impl<P> SingleChildElement for ComponentElement<P>

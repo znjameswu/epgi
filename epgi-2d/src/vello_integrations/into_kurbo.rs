@@ -1,8 +1,8 @@
 use peniko::kurbo;
 
 use crate::{
-    Affine2d, BoxOffset, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Path,
-    Point2d, QuadBez, RRect, RRectRadius, Rect, RingSector,
+    Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Point2d, QuadBez, RRect, Rect,
+    RingSector,
 };
 
 pub trait IntoKurbo {

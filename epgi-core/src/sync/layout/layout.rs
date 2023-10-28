@@ -5,7 +5,7 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::TreeScheduler,
     tree::{
-        AweakAnyRenderObject, Element, PerformDryLayout, Render, RenderCache, RenderContextNode,
+        AweakAnyRenderObject, DryLayoutFunctionTable, Render, RenderCache, RenderContextNode,
         RenderObject, RenderObjectInner,
     },
 };
@@ -36,7 +36,8 @@ where
     R: Render,
 {
     fn is_relayout_boundary(&self) -> bool {
-        R::PERFORM_DRY_LAYOUT.is_some() || self.cache.as_ref().is_some_and(|x| x.parent_use_size)
+        R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
+            || self.cache.as_ref().is_some_and(|x| x.parent_use_size)
     }
 }
 
@@ -45,7 +46,7 @@ where
     R: Render,
 {
     fn is_relayout_boundary(&self) -> bool {
-        R::PERFORM_DRY_LAYOUT.is_some()
+        R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
             || self
                 .inner
                 .lock()
@@ -124,10 +125,10 @@ where
         constraints: <R::ParentProtocol as Protocol>::Constraints,
         parent_use_size: bool,
     ) -> &<R::ParentProtocol as Protocol>::Size {
-        let (size, memo) = if let Some(PerformDryLayout {
+        let (size, memo) = if let Some(DryLayoutFunctionTable {
             compute_dry_layout,
             compute_layout_memo: perform_layout,
-        }) = R::PERFORM_DRY_LAYOUT
+        }) = R::DRY_LAYOUT_FUNCTION_TABLE
         {
             let size = compute_dry_layout(&self.render, &constraints);
             let memo = perform_layout(&self.render, &constraints, &size);

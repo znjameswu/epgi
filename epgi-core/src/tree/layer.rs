@@ -52,7 +52,7 @@ pub trait Layer: Send + Sync + Sized + 'static {
 
     /// Should default to the unit type `()` or [Never].
     type CachedComposition: Clone + Send + Sync;
-    const PERFORM_CACHED_COMPOSITION: Option<PerformCachedComposition<Self>> = None;
+    const CACHED_COMPOSITION_FUNCTION_TABLE: Option<CachedCompositionFunctionTable<Self>> = None;
 }
 
 // pub struct PerformOrphanComposition<L>
@@ -88,7 +88,7 @@ pub trait OrphanLayer: Layer {
     fn adopter_key(&self) -> Option<&Arc<dyn Key>>;
 }
 
-pub struct PerformCachedComposition<L: Layer> {
+pub struct CachedCompositionFunctionTable<L: Layer> {
     composite_to: fn(
         &L,
         encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
@@ -105,8 +105,8 @@ pub struct PerformCachedComposition<L: Layer> {
 }
 
 pub trait CachedLayer: Layer {
-    const PERFORM_CACHED_COMPOSITION: Option<PerformCachedComposition<Self>> =
-        Some(PerformCachedComposition {
+    const PERFORM_CACHED_COMPOSITION: Option<CachedCompositionFunctionTable<Self>> =
+        Some(CachedCompositionFunctionTable {
             composite_to: |layer, encoding, child_iterator, composition_config| {
                 <Self as CachedLayer>::composite_to(
                     layer,
@@ -347,10 +347,10 @@ where
             .cache
             .as_mut()
             .expect("Layer should only be composited after they are painted");
-        if let Some(PerformCachedComposition {
+        if let Some(CachedCompositionFunctionTable {
             composite_to,
             composite_from_cache_to,
-        }) = L::PERFORM_CACHED_COMPOSITION
+        }) = L::CACHED_COMPOSITION_FUNCTION_TABLE
         {
             let composition_cache = 'composition_cache: {
                 if !self.context.needs_composite() {

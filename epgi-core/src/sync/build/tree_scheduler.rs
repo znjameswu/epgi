@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Asc, Inlinable64Vec, SmallSet},
+    foundation::{Asc, Inlinable64Vec},
     scheduler::{BatchConf, BatchResult, JobId, LaneMask, LanePos},
     tree::ArcAnyElementNode,
 };

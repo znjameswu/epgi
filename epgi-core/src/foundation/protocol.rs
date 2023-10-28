@@ -1,11 +1,8 @@
 use std::{fmt::Debug, ops::Mul};
 
-use crate::tree::{
-    ArcChildRenderObject, ChildRenderObject, ComposableChildLayer, PaintResults,
-    StructuredChildLayerOrFragment,
-};
+use crate::tree::{ArcChildRenderObject, ChildRenderObject, ComposableChildLayer, PaintResults};
 
-use super::{InlinableVec, Parallel};
+use super::Parallel;
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;

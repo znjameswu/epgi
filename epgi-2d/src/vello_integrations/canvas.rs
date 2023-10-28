@@ -1,13 +1,9 @@
 use epgi_core::{
     foundation::{Canvas, Identity, Protocol},
-    nodes::Provider,
-    tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
+    tree::{ChildRenderObject, PaintResults},
 };
 
-use crate::{
-    Affine2dCanvasShape, Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext,
-    VelloPaintScanner,
-};
+use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner};
 
 pub type Affine2d = vello_encoding::Transform;
 

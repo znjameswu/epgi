@@ -3,13 +3,16 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use hashbrown::HashMap;
 
 use crate::{
-    foundation::{Arc, Asc, Aweak, InlinableUsizeVec, Provide, SyncMutex, TypeKey},
+    foundation::{Arc, Asc, Aweak, InlinableUsizeVec, SyncMutex, TypeKey},
     scheduler::JobId,
     sync::ElementMark,
     tree::{AscRenderContextNode, RenderContextNode, Update},
 };
 
-use super::{ArcRenderObject, AweakAnyElementNode, Element, GetRenderObject, ProviderObject};
+use super::{
+    render_element_function_table_of, AweakAnyElementNode, Element, ProviderObject,
+    RenderElementFunctionTable,
+};
 
 pub type ArcElementContextNode = Arc<ElementContextNode>;
 pub type AweakElementContextNode = Aweak<ElementContextNode>;
@@ -110,8 +113,8 @@ impl ElementContextNode {
         parent_context: ArcElementContextNode,
         widget: &E::ArcWidget,
     ) -> Self {
-        let render_context = if let GetRenderObject::RenderObject { has_layer, .. } =
-            <E::ArcRenderObject as ArcRenderObject<_>>::GET_RENDER_OBJECT
+        let render_context = if let RenderElementFunctionTable::RenderObject { has_layer, .. } =
+            render_element_function_table_of::<E>()
         {
             let parent_render_context = parent_context.nearest_render_context.clone();
             Some(Asc::new(if has_layer {

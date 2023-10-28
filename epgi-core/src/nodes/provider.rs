@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Never, Protocol, Provide},
+    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
     tree::{
         ArcChildElementNode, ArcChildWidget, Element, ReconcileItem, Reconciler,
         SingleChildElement, Widget,
@@ -143,7 +143,7 @@ where
         [self.child.clone()]
     }
 
-    type ArcRenderObject = Never;
+    type RenderOrUnit = ();
 }
 
 impl<T, P> SingleChildElement for ProviderElement<T, P>

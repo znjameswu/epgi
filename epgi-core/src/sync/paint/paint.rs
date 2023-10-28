@@ -1,10 +1,7 @@
 use crate::{
-    foundation::{Arc, PaintContext, Protocol},
+    foundation::{PaintContext, Protocol},
     sync::TreeScheduler,
-    tree::{
-        ArcAnyLayerNode, AscRenderContextNode, ComposableChildLayer, Element,
-        LayerCompositionConfig, PerformLayerPaint, Render, RenderObject,
-    },
+    tree::{AscRenderContextNode, Render, RenderObject},
 };
 
 impl TreeScheduler {
