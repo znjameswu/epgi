@@ -632,7 +632,7 @@ Statement: introducing axis-aligned rectangle primitives and circle primitives r
     2. Strongly prefers draw primitives that are closed under affine2d transform.
 2. No pre-calculation and defer to vello transform stream
 
-## How should we interact with vello trasnfrom stream.
+## How should we interact with vello transfrom stream.
 1. Implicit current transform
 Since vello will just use whatever transform left at the time of drawing, we can calculate transform ahead of time and simply skip encoding transform for most our shapes. This saves time of dedup transforms in vello.
 
@@ -651,3 +651,20 @@ A bad idea.
 Temporary decision: Go with vello intended usage. Circumstantial transforms handled during lowering.
 
 Temporary decision: As a result, include shapes that are not closed under affine 2d transform.
+
+
+
+# Layer adoption during commit phase or during composition phase?
+In theory, we have all the sufficient information to perform layer adoption during the commit phase.
+
+~~And it would be preferable to complete layer adoption as soon as possible, since we can only start hit-test after the layer adoption and layout.~~
+
+~~The problem is that there is no efficient and reliable to perform layer adoption during commit phase.~~
+
+No, it would simply be unnecessary. Hit test can only be performed after layout phase, and preferrably after paint phase. This is because in our design, layout simply calculates the "local" position between any render object and its immediate parent/children. The "global" positioning, which the hit test requires, would come sometime later when we perform a whole top-down layout resolution. Since the paint requires a layer-local layout resolution anyway, it would be rather unwise to perform the global layout resolution before the paint phase. Since the only point of layer adoption is to help determine visual heirarchy, which is pointless without a global layout resolution. Therefore, early layer adoption is simply unnecessary. 
+
+If we want to start hit test a.s.a.p., we should speed up the whole process up to the layer adoption and global layout resolution. 
+1. A dedicated tree walk after paint phase can achieve both without compositing the encodings. However, it would be way too wasteful, since encoding composition is practically a free lunch during this visit (which would be our actual composition phase tree walk). It would be unwise to forward hit-testing a little bit at the expense of an extra pass of tree walk just to composite encodings.
+2. We can cancel the paint phase altogether, and incorporate the paint phase into the composition phase tree walk. However, paint phase is embarrassingly parallel, which makes it actually a optimization for the whole paint+composition phase. A separate paint phase actually speeds up the progress for hit-testing.
+
+Temporary decision: Perform layer adoption during the composition phase.

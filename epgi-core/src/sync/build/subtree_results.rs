@@ -22,3 +22,5 @@ impl Default for SubtreeCommitResult {
         SubtreeCommitResult::NoUpdate
     }
 }
+
+// struct CommitResult

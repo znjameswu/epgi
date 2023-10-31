@@ -452,7 +452,7 @@ where
     ) -> (MainlineState<E>, SubtreeCommitResult) {
         match results {
             Ok(mut element) => match render_element_function_table_of::<E>() {
-                RenderElementFunctionTable::None(_) => {
+                RenderElementFunctionTable::None { .. } => {
                     debug_assert!(
                         render_object.is_none(),
                         "ComponentElement should not have a render object"
@@ -618,7 +618,7 @@ where
     ) -> (MainlineState<E>, SubtreeCommitResult) {
         match results {
             Ok(mut element) => match render_element_function_table_of::<E>() {
-                RenderElementFunctionTable::None(_) => (
+                RenderElementFunctionTable::None { .. } => (
                     MainlineState::Ready {
                         hooks: hooks_iter.hooks,
                         render_object: None,

@@ -89,14 +89,14 @@ pub trait OrphanLayer: Layer {
 }
 
 pub struct CachedCompositionFunctionTable<L: Layer> {
-    composite_to: fn(
+    pub composite_to: fn(
         &L,
         encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
         child_iterator: &mut CachingChildLayerProducingIterator<'_, L::ChildCanvas>,
         composition_config: &LayerCompositionConfig<L::ParentCanvas>,
     ) -> L::CachedComposition,
 
-    composite_from_cache_to: fn(
+    pub composite_from_cache_to: fn(
         &L,
         encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
         cache: &L::CachedComposition,
@@ -289,25 +289,25 @@ where
 }
 
 pub struct LayerNode<L: Layer> {
-    context: AscLayerContextNode,
-    inner: SyncMutex<LayerNodeInner<L>>,
+    pub(crate) context: AscLayerContextNode,
+    pub(crate) inner: SyncMutex<LayerNodeInner<L>>,
 }
 
-struct LayerNodeInner<L: Layer> {
-    layer: L,
-    cache: Option<LayerCache<L::ChildCanvas, L::CachedComposition>>,
+pub struct LayerNodeInner<L: Layer> {
+    pub(crate) layer: L,
+    pub(crate) cache: Option<LayerCache<L::ChildCanvas, L::CachedComposition>>,
 }
 
-struct LayerCache<C: Canvas, T> {
-    paint_results: PaintResults<C>,
+pub struct LayerCache<C: Canvas, T> {
+    pub(crate) paint_results: PaintResults<C>,
     /// This field should always be None if the layer does not enable cached composition
     /// There is no point in storing adopt results if the layer is going to perform tree walk anyway
-    composition_cache: Option<CompositionResults<C, T>>,
+    pub(crate) composition_cache: Option<CompositionResults<C, T>>,
 }
 
 pub struct CompositionResults<C: Canvas, T> {
-    unadopted_layers: Vec<ComposableUnadoptedLayer<C>>,
-    cached_composition: T,
+    pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<C>>,
+    pub(crate) cached_composition: T,
 }
 
 impl<L> LayerNode<L>
@@ -462,8 +462,16 @@ where
     }
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>> {
-        todo!()
-        // self.inner.lock().cache.map(f)
+        if let Some(CachedCompositionFunctionTable { .. }) = L::CACHED_COMPOSITION_FUNCTION_TABLE {
+            self.inner
+                .lock()
+                .cache
+                .as_ref()
+                .and_then(|cache| cache.composition_cache.as_ref())
+                .map(|cache| Box::new(cache.cached_composition.clone()) as _)
+        } else {
+            None
+        }
     }
 }
 

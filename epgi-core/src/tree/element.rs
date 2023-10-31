@@ -1,11 +1,13 @@
 mod async_queue;
 mod context;
+mod node;
 mod provider;
 mod render_element;
 mod snapshot;
 
 pub use async_queue::*;
 pub use context::*;
+pub use node::*;
 pub use provider::*;
 pub use render_element::*;
 pub use snapshot::*;
@@ -43,15 +45,6 @@ pub trait Element: Send + Sync + Clone + 'static {
     type Provided: Provide;
     const GET_PROVIDED_VALUE: Option<fn(&Self::ArcWidget) -> Arc<Self::Provided>> = None;
 
-    // GAT has serious lifetime bug, do not use the following GAT implementation!
-    // type Yield<T>: FutureOr<T> + Send + 'static where T: Send + 'static;
-
-    // type ReturnResults: MaybeFuture<BoxFuture<'static, BuildResults<Self>>> + Send + 'static;
-
-    // type Return: MaybeFallible<Self, SubtreeSuspendedError>;
-    /// This method does not need a GAT-specified return tpye. Since the results would have to be converted to BoxFuture<..,BoxFuture<..>> in case of interrupts.
-    ///
-    ///
     // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
     // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
     fn perform_rebuild_element(
@@ -242,26 +235,25 @@ where
     fn get_current_subtree_render_object(
         &self,
     ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
-        todo!()
-        // let snapshot = self.snapshot.lock();
+        let snapshot = self.snapshot.lock();
 
-        // let Some(attached_object)  = &snapshot.attached_object  else {
-        //     return Err(())
-        // };
-        // match E::GET_RENDER_OBJECT {
-        //     GetRenderObjectOrChild::Child(get_child) => match &snapshot.inner {
-        //         ElementSnapshotInner::Mainline(Mainline {
-        //             state: Some(MainlineState::Ready { element, .. }),
-        //             ..
-        //         }) => get_child(element).get_current_subtree_render_object(),
-        //         _ => panic!(
-        //             "This method can only be called on mounted and unsuspended element nodes."
-        //         ),
-        //     },
-        //     GetRenderObjectOrChild::RenderObject { render_object, .. } => {
-        //         Ok(render_object(attached_object).clone())
-        //     }
-        // }
+        let MainlineState::Ready { render_object, .. } =
+            snapshot.inner.mainline_ref()?.state.as_ref()?
+        else {
+            return None;
+        };
+        let render_object = render_object.clone();
+
+        match render_element_function_table_of::<E>() {
+            RenderElementFunctionTable::RenderObject {
+                into_arc_child_render_object,
+                ..
+            } => render_object.map(into_arc_child_render_object),
+            RenderElementFunctionTable::None {
+                into_arc_child_render_object,
+                ..
+            } => render_object.map(into_arc_child_render_object),
+        }
     }
 }
 
@@ -279,7 +271,8 @@ where
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
         let RenderElementFunctionTable::RenderObject {
-            as_arc_child_render_object, ..
+            into_arc_child_render_object,
+            ..
         } = render_element_function_table_of::<E>()
         else {
             return Err("Render object call should not be called on an Element type that does not associate with a render object");
@@ -292,11 +285,11 @@ where
                     ..
                 }),
             ..
-        }) = snapshot.inner.mainline()
+        }) = snapshot.inner.mainline_ref()
         else {
             return Err("Render object call should only be called on element nodes that are ready and attached");
         };
-        Ok(as_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
+        Ok(into_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
     }
 }
 

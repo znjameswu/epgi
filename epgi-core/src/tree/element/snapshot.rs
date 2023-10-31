@@ -18,7 +18,7 @@ pub(crate) enum ElementSnapshotInner<E: Element> {
 }
 
 impl<E: Element> ElementSnapshotInner<E> {
-    pub(crate) fn mainline(&self) -> Option<&Mainline<E>> {
+    pub(crate) fn mainline_ref(&self) -> Option<&Mainline<E>> {
         match self {
             ElementSnapshotInner::Mainline(mainline) => Some(mainline),
             ElementSnapshotInner::AsyncInflating(_) => None,
@@ -32,7 +32,7 @@ impl<E: Element> ElementSnapshotInner<E> {
         }
     }
 
-    pub(crate) fn async_inflating(&self) -> Option<&AsyncInflating<E>> {
+    pub(crate) fn async_inflating_ref(&self) -> Option<&AsyncInflating<E>> {
         match self {
             ElementSnapshotInner::AsyncInflating(x) => Some(x),
             ElementSnapshotInner::Mainline(_) => None,

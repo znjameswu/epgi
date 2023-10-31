@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Never},
+    foundation::Arc,
     tree::{
         render_has_layer, ArcChildRenderObject, Render, RenderContextNode, RenderObject,
         RenderObjectUpdateResult,
@@ -22,7 +22,7 @@ pub trait RenderOrUnit<E: Element> {
 
 pub enum RenderElementFunctionTable<E: Element> {
     RenderObject {
-        as_arc_child_render_object:
+        into_arc_child_render_object:
             fn(ArcRenderObjectOf<E>) -> ArcChildRenderObject<E::ParentProtocol>,
         try_create_render_object:
             fn(&E, &E::ArcWidget, &ArcElementContextNode) -> Option<ArcRenderObjectOf<E>>,
@@ -33,7 +33,11 @@ pub enum RenderElementFunctionTable<E: Element> {
         get_suspense: Option<SuspenseElementFunctionTable<E>>,
         has_layer: bool,
     },
-    None(fn(&E) -> &ArcChildElementNode<E::ParentProtocol>),
+    None {
+        child: fn(&E) -> &ArcChildElementNode<E::ParentProtocol>,
+        into_arc_child_render_object:
+            fn(ArcRenderObjectOf<E>) -> ArcChildRenderObject<E::ParentProtocol>,
+    },
 }
 
 impl<E> RenderElementFunctionTable<E>
@@ -43,7 +47,7 @@ where
     pub const fn is_none(&self) -> bool {
         match self {
             RenderElementFunctionTable::RenderObject { .. } => false,
-            RenderElementFunctionTable::None(_) => true,
+            RenderElementFunctionTable::None { .. } => true,
         }
     }
 
@@ -61,7 +65,7 @@ where
 
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::RenderObject {
-            as_arc_child_render_object: |x| x,
+            into_arc_child_render_object: |x| x,
             try_create_render_object: |element, widget, element_context| {
                 assert!(
                 element_context.has_render,
@@ -106,10 +110,13 @@ impl<E> RenderOrUnit<E> for ()
 where
     E: SingleChildElement<RenderOrUnit = Self>,
 {
-    type ArcRenderObject = Never;
+    type ArcRenderObject = ArcChildRenderObject<E::ParentProtocol>;
 
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
-        RenderElementFunctionTable::None(E::child);
+        RenderElementFunctionTable::None {
+            child: E::child,
+            into_arc_child_render_object: |x| x,
+        };
 
     fn lock_with(
         render_object: &Self::ArcRenderObject,

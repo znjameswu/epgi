@@ -19,10 +19,7 @@ where
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
         let mut inner = self.inner.lock();
-        let Some(layout_results) = inner
-            .cache
-            .as_ref()
-            .and_then(|x| x.layout_results(context))
+        let Some(layout_results) = inner.cache.as_ref().and_then(|x| x.layout_results(context))
         else {
             panic!("Paint should only be called after layout has finished")
         };
