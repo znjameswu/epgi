@@ -25,12 +25,12 @@ use crate::{
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair,
     Layer, LayerNode, LayerRender, ReconcileItem, Reconciler, Render, RenderCache, RenderObject,
-    RenderObjectInner,
+    RenderObjectInner, BuildContext,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
 pub type AweakAnyElementNode = Aweak<dyn AnyElementNode>;
-pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<ParentProtocol = P>>;
+pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
 
 pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
     dyn FnOnce(
@@ -72,14 +72,19 @@ pub trait Element: Send + Sync + Clone + 'static {
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>
     ) -> Result<
         (
             ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
             Option<ChildRenderObjectsUpdateCallback<Self>>,
         ),
-        BuildSuspendedError,
+        (
+            ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+            BuildSuspendedError,
+        ),
     >;
 
     fn perform_inflate_element(
@@ -188,7 +193,7 @@ where
 
 pub trait AnyElementNode:
     crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
-    + crate::sync::sync_build_private::AnyElementSyncTreeWalkExt
+    + crate::sync::sync_build_private::AnyElementSyncReconcileExt
     + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
     + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
     + Send
@@ -201,15 +206,14 @@ pub trait AnyElementNode:
     // fn context(&self) -> &ArcElementContextNode;
 }
 
-pub trait ChildElementNode:
-    crate::sync::sync_build_private::AnyElementSyncTreeWalkExt
+pub trait ChildElementNode<PP: Protocol>:
+    crate::sync::sync_build_private::ChildElementSyncReconcileExt<PP>
 //
 // super::build::tree_walk_private::ElementTreeWalkExt
 + crate::sync::commit_private::ChildElementNodeCommitWalkExt
 + crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
 + Send + Sync + 'static
 {
-    type ParentProtocol: Protocol;
 
     fn context(&self) -> &ElementContextNode;
 
@@ -219,18 +223,17 @@ pub trait ChildElementNode:
     // Which may not be a bad thing after all, considering how a fat &Arc would look like in memory layout.
     fn can_rebuild_with(
         self: Arc<Self>,
-        widget: ArcChildWidget<Self::ParentProtocol>,
-    ) -> Result<ReconcileItem<Self::ParentProtocol>, (ArcChildElementNode<Self::ParentProtocol>, ArcChildWidget<Self::ParentProtocol>)>;
+        widget: ArcChildWidget<PP>,
+    ) -> Result<ReconcileItem<PP>, (ArcChildElementNode<PP>, ArcChildWidget<PP>)>;
 
     fn get_current_subtree_render_object(&self)
-        -> Option<ArcChildRenderObject<Self::ParentProtocol>>;
+        -> Option<ArcChildRenderObject<PP>>;
 }
 
-impl<E> ChildElementNode for ElementNode<E>
+impl<E> ChildElementNode<E::ParentProtocol> for ElementNode<E>
 where
     E: Element,
 {
-    type ParentProtocol = E::ParentProtocol;
 
     fn context(&self) -> &ElementContextNode {
         self.context.as_ref()
@@ -242,12 +245,12 @@ where
 
     fn can_rebuild_with(
         self: Arc<Self>,
-        widget: ArcChildWidget<Self::ParentProtocol>,
+        widget: ArcChildWidget<E::ParentProtocol>,
     ) -> Result<
-        ReconcileItem<Self::ParentProtocol>,
+        ReconcileItem<E::ParentProtocol>,
         (
-            ArcChildElementNode<Self::ParentProtocol>,
-            ArcChildWidget<Self::ParentProtocol>,
+            ArcChildElementNode<E::ParentProtocol>,
+            ArcChildWidget<E::ParentProtocol>,
         ),
     > {
         ElementNode::<E>::can_rebuild_with(self, widget)
@@ -256,7 +259,7 @@ where
 
     fn get_current_subtree_render_object(
         &self,
-    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
+    ) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
         let snapshot = self.snapshot.lock();
 
         let MainlineState::Ready { render_object, .. } =

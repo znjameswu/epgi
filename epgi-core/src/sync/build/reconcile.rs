@@ -6,12 +6,14 @@ use crate::{
         Parallel, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{SubtreeCommitResult, TreeScheduler},
+    sync::{SubtreeVisitResult, TreeScheduler},
     tree::{
         render_element_function_table_of, ArcChildElementNode, ArcElementContextNode,
-        ArcRenderObjectOf, AsyncWorkQueue, Element, ElementContextNode, ElementNode,
+        ArcRenderObjectOf, AsyncWorkQueue, BuildContext, ChildRenderObjectsUpdateCallback,
+        ContainerOf, Element, ElementContextNode, ElementNode, ElementReconcileItem,
         ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, MainlineState,
-        RenderElementFunctionTable, RenderObjectUpdateResult, RenderOrUnit,
+        RenderElementFunctionTable, RenderObjectReconcileItem, RenderObjectUpdateResult,
+        RenderOrUnit,
     },
 };
 
@@ -28,9 +30,9 @@ where
         job_ids: &'a Inlinable64Vec<JobId>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> SubtreeCommitResult {
+    ) -> SubtreeVisitResult<E::ParentProtocol> {
         if !self.context.subtree_lanes().contains(LanePos::Sync) {
-            return SubtreeCommitResult::NoUpdate;
+            return SubtreeVisitResult::NoUpdate;
         }
 
         // Skip variant will not occupy the node (i.e., Option::take() from the shared states)
@@ -38,9 +40,13 @@ where
             is_poll: bool,
             old_widget: E::ArcWidget,
             state: MainlineState<E>,
-            cancel_async: Option<CancelAsync<E::ChildIter>>,
+            cancel_async:
+                Option<CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>>,
         }
-        let rebuild: Result<SyncRebuild<E>, Option<E::ChildIter>> = {
+        let rebuild: Result<
+            SyncRebuild<E>,
+            Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        > = {
             let mut snapshot = self.snapshot.lock();
             // https://bevy-cheatbook.github.io/pitfalls/split-borrows.html
             let snapshot_reborrow = &mut *snapshot;
@@ -162,8 +168,8 @@ where
                         )
                     }
                     MainlineState::RebuildSuspended {
-                        hooks,
-                        last_element,
+                        suspended_hooks: hooks,
+                        element: last_element,
                         waker,
                     } => {
                         waker.abort();
@@ -190,7 +196,10 @@ where
                             )
                         }
                     }
-                    MainlineState::InflateSuspended { last_hooks, waker } => {
+                    MainlineState::InflateSuspended {
+                        suspended_hooks: last_hooks,
+                        waker,
+                    } => {
                         waker.abort();
                         if !is_poll {
                             self.perform_inflate_node_sync(
@@ -220,13 +229,13 @@ where
                         child.visit_and_work_sync(job_ids, scope, tree_scheduler)
                     })
                     .into_iter()
-                    .reduce(SubtreeCommitResult::merge)
+                    .reduce(SubtreeVisitResult::merge)
                     .unwrap_or_default();
                 // TODO: Absorb new renderobject from subtree by updating the children of this renderobject
                 return todo!();
             }
 
-            Err(None) => SubtreeCommitResult::NoUpdate,
+            Err(None) => SubtreeVisitResult::NoUpdate,
         }
     }
 
@@ -237,7 +246,7 @@ where
         job_ids: &'a Inlinable64Vec<JobId>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> (Arc<ElementNode<E>>, SubtreeCommitResult) {
+    ) -> (Arc<ElementNode<E>>, SubtreeVisitResult<E::ParentProtocol>) {
         let node = Arc::new_cyclic(|weak| ElementNode {
             context: Arc::new(ElementContextNode::new_for::<E>(
                 weak.clone() as _,
@@ -283,7 +292,7 @@ where
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> SubtreeCommitResult {
+    ) -> SubtreeVisitResult<E::ParentProtocol> {
         let mut jobs = {
             self.context
                 .mailbox
@@ -303,7 +312,7 @@ where
         }
 
         let mut hooks_iter = HookContext::new_rebuild(hooks);
-        let mut subtree_results = SubtreeCommitResult::NoUpdate;
+        let mut subtree_results = SubtreeVisitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
             job_ids,
@@ -336,9 +345,9 @@ where
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> SubtreeCommitResult {
+    ) -> SubtreeVisitResult<E::ParentProtocol> {
         let mut hooks_iter = HookContext::new_inflate();
-        let mut subtree_results = SubtreeCommitResult::NoUpdate;
+        let mut subtree_results = SubtreeVisitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
             job_ids,
@@ -373,9 +382,9 @@ where
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> SubtreeCommitResult {
+    ) -> SubtreeVisitResult<E::ParentProtocol> {
         let mut hooks_iter = HookContext::new_rebuild(hooks);
-        let mut subtree_results = SubtreeCommitResult::NoUpdate;
+        let mut subtree_results = SubtreeVisitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
             job_ids,
@@ -410,9 +419,9 @@ where
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         scope: &'a rayon::Scope<'batch>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> SubtreeCommitResult {
+    ) -> SubtreeVisitResult<E::ParentProtocol> {
         let mut hooks_iter = HookContext::new_poll_inflate(last_hooks);
-        let mut subtree_results = SubtreeCommitResult::NoUpdate;
+        let mut subtree_results = SubtreeVisitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
         let reconciler = SyncReconciler {
             job_ids,
@@ -447,9 +456,9 @@ where
         job_ids: &'a Inlinable64Vec<JobId>,
         mut render_object: Option<ArcRenderObjectOf<E>>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-        subtree_results: SubtreeCommitResult,
+        subtree_results: SubtreeVisitResult<E::ParentProtocol>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> (MainlineState<E>, SubtreeCommitResult) {
+    ) -> (MainlineState<E>, SubtreeVisitResult<E::ParentProtocol>) {
         match results {
             Ok(mut element) => match render_element_function_table_of::<E>() {
                 RenderElementFunctionTable::None { .. } => {
@@ -474,11 +483,11 @@ where
                     detach_render_object,
                     ..
                 } => {
-                    let mut suspended = subtree_results == SubtreeCommitResult::Suspended;
+                    let mut suspended = subtree_results == SubtreeVisitResult::Suspended;
                     if !suspended {
                         if let Some(render_object) = render_object.as_ref() {
                             let should_update_render_object_children = subtree_results
-                                == SubtreeCommitResult::NewRenderObject
+                                == SubtreeVisitResult::NewRenderObject
                                 && try_update_render_object_children.is_some();
                             let can_update_render_object = update_render_object.is_some();
                             if should_update_render_object_children || can_update_render_object {
@@ -535,9 +544,9 @@ where
                             element,
                         },
                         if !suspended {
-                            SubtreeCommitResult::NoUpdate
+                            SubtreeVisitResult::NoUpdate
                         } else {
-                            SubtreeCommitResult::Suspended
+                            SubtreeVisitResult::Suspended
                         },
                     );
                 }
@@ -550,7 +559,7 @@ where
                     // We only need to handle structural changes (i.e. creation and unmount of fallback element, update render object instances) here.
                     // Since those not changing the structure (i.e. updates inside both the child and the fallback) were already handled by the rebuild.
                     match (suspense.fallback.as_ref(), subtree_results) {
-                        (Some(_), SubtreeCommitResult::NewRenderObject) => {
+                        (Some(_), SubtreeVisitResult::NewRenderObject) => {
                             // If we have mounted a fallback, then the subtree_results is merged from the subtree_results from both the child and the fallback.
                             // If neither the child nor the fallback was suspended, and at least one of them has a new render object, then we need to check both of them for updates.
                             if let Some(_) = suspense.child.get_current_subtree_render_object() {
@@ -559,7 +568,7 @@ where
                                 nodes_needing_unmount.push(fallback_node);
                             }
                         }
-                        (None, SubtreeCommitResult::Suspended) => {
+                        (None, SubtreeVisitResult::Suspended) => {
                             let (node, subtree_results) = rayon::scope(|scope| {
                                 suspense.fallback_widget.clone().inflate_sync(
                                     self.context.clone(),
@@ -568,7 +577,7 @@ where
                                     tree_scheduler,
                                 )
                             });
-                            assert_eq!(subtree_results, SubtreeCommitResult::NewRenderObject,
+                            assert_eq!(subtree_results, SubtreeVisitResult::NewRenderObject,
                                     "Fallback widget must not suspend and its subtree must always provide an attached renderobject");
                             suspense.fallback = Some(node);
                         }
@@ -597,11 +606,11 @@ where
 
             Err((element, err)) => (
                 MainlineState::RebuildSuspended {
-                    hooks: hooks_iter.hooks,
-                    last_element: element,
+                    suspended_hooks: hooks_iter.hooks,
+                    element,
                     waker: err.waker,
                 },
-                SubtreeCommitResult::Suspended,
+                SubtreeVisitResult::Suspended,
             ),
         }
     }
@@ -613,9 +622,9 @@ where
         hooks_iter: HookContext,
         widget: &E::ArcWidget,
         job_ids: &'a Inlinable64Vec<JobId>,
-        subtree_results: SubtreeCommitResult,
+        subtree_results: SubtreeVisitResult<E::ParentProtocol>,
         tree_scheduler: &'batch TreeScheduler,
-    ) -> (MainlineState<E>, SubtreeCommitResult) {
+    ) -> (MainlineState<E>, SubtreeVisitResult<E::ParentProtocol>) {
         match results {
             Ok(mut element) => match render_element_function_table_of::<E>() {
                 RenderElementFunctionTable::None { .. } => (
@@ -624,14 +633,14 @@ where
                         render_object: None,
                         element,
                     },
-                    SubtreeCommitResult::Suspended,
+                    SubtreeVisitResult::Suspended,
                 ),
                 RenderElementFunctionTable::RenderObject {
                     try_create_render_object,
                     get_suspense: None,
                     ..
                 } => {
-                    let render_object = (subtree_results != SubtreeCommitResult::Suspended).then(|| {
+                    let render_object = (subtree_results != SubtreeVisitResult::Suspended).then(|| {
                         try_create_render_object(&element, widget, &self.context).expect("Unsuspended inflating subtree should succeed in creating render object")
                     });
                     (
@@ -649,7 +658,7 @@ where
                     ..
                 } => {
                     let suspense = (get_suspense.get_suspense_element_mut)(&mut element);
-                    if subtree_results == SubtreeCommitResult::Suspended {
+                    if subtree_results == SubtreeVisitResult::Suspended {
                         let (node, subtree_results) = rayon::scope(|scope| {
                             suspense.fallback_widget.clone().inflate_sync(
                                 self.context.clone(),
@@ -658,7 +667,7 @@ where
                                 tree_scheduler,
                             )
                         });
-                        assert_eq!(subtree_results, SubtreeCommitResult::NewRenderObject,
+                        assert_eq!(subtree_results, SubtreeVisitResult::NewRenderObject,
                                 "Fallback widget must not suspend and its subtree must always provide an attached renderobject");
                         suspense.fallback = Some(node);
                     }
@@ -670,16 +679,16 @@ where
                             render_object,
                             element,
                         },
-                        SubtreeCommitResult::NoUpdate,
+                        SubtreeVisitResult::NoUpdate,
                     )
                 }
             },
             Err(err) => (
                 MainlineState::InflateSuspended {
-                    last_hooks: hooks_iter.hooks,
+                    suspended_hooks: hooks_iter.hooks,
                     waker: err.waker,
                 },
-                SubtreeCommitResult::Suspended,
+                SubtreeVisitResult::Suspended,
             ),
         }
     }
@@ -800,37 +809,56 @@ where
 }
 
 pub(crate) mod sync_build_private {
-    use crate::foundation::Inlinable64Vec;
+    use crate::foundation::{Inlinable64Vec, Protocol};
 
     use super::*;
 
-    pub trait AnyElementSyncTreeWalkExt {
+    pub trait AnyElementSyncReconcileExt {
         fn visit_and_work_sync<'a, 'batch>(
             self: Arc<Self>,
-            job_ids: &'a Inlinable64Vec<JobId>,
-            scope: &'a rayon::Scope<'batch>,
-            tree_scheduler: &'batch TreeScheduler,
-        ) -> SubtreeCommitResult;
+            reconcile_context: SyncReconcileContext<'a, 'batch>,
+        ) -> Arc<Self>;
     }
 
-    impl<E> AnyElementSyncTreeWalkExt for ElementNode<E>
+    impl<E> AnyElementSyncReconcileExt for ElementNode<E>
     where
         E: Element,
     {
         fn visit_and_work_sync<'a, 'batch>(
             self: Arc<Self>,
-            job_ids: &'a Inlinable64Vec<JobId>,
-            scope: &'a rayon::Scope<'batch>,
-            tree_scheduler: &'batch TreeScheduler,
-        ) -> SubtreeCommitResult {
-            self.rebuild_node_sync(None, job_ids, scope, tree_scheduler)
+            reconcile_context: SyncReconcileContext<'a, 'batch>,
+        ) -> Arc<Self> {
+            self.rebuild_node_sync(None, reconcile_context);
+            self
+        }
+    }
+
+    pub trait ChildElementSyncReconcileExt<PP: Protocol> {
+        fn visit_and_work_sync<'a, 'batch>(
+            self: Arc<Self>,
+            reconcile_context: SyncReconcileContext<'a, 'batch>,
+        ) -> (ArcChildElementNode<PP>, SubtreeVisitResult<PP>);
+    }
+
+    impl<E> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNode<E>
+    where
+        E: Element,
+    {
+        fn visit_and_work_sync<'a, 'batch>(
+            self: Arc<Self>,
+            reconcile_context: SyncReconcileContext<'a, 'batch>,
+        ) -> (
+            ArcChildElementNode<E::ParentProtocol>,
+            SubtreeVisitResult<E::ParentProtocol>,
+        ) {
+            let result = self.rebuild_node_sync(None, reconcile_context);
+            (self, result)
         }
     }
 }
 
 #[derive(Clone, Copy)]
-struct ReconcileContext<'a, 'batch, E: Element> {
-    widget: &'a E::ArcWidget,
+pub(crate) struct SyncReconcileContext<'a, 'batch> {
     job_ids: &'a Inlinable64Vec<JobId>,
     scope: &'a rayon::Scope<'batch>,
     tree_scheduler: &'batch TreeScheduler,
@@ -842,7 +870,7 @@ where
 {
     fn apply_updates_sync<'a, 'batch>(
         self: &'a Arc<Self>,
-        reconcile_context: ReconcileContext<'a, 'batch, E>,
+        reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) {
         let mut jobs = {
             self.context
@@ -866,39 +894,85 @@ where
     fn perform_rebuild_node_sync_new<'a, 'batch>(
         self: &'a Arc<Self>,
         widget: &'a E::ArcWidget,
-        mut hooks: Hooks,
         element: E,
+        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        mut hooks: Hooks,
         old_attached_object: Option<ArcRenderObjectOf<E>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconcile_context: ReconcileContext<'a, 'batch, E>,
+        reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> MainlineState<E> {
         let mut hooks_iter = HookContext::new_rebuild(hooks);
-        let mut subtree_results = SubtreeCommitResult::NoUpdate;
         let mut nodes_needing_unmount = Default::default();
-        let reconciler = SyncReconciler {
-            job_ids: reconcile_context.job_ids,
-            scope: reconcile_context.scope,
-            tree_scheduler: reconcile_context.tree_scheduler,
-            subtree_results: &mut subtree_results,
-            host_context: &self.context,
-            hooks: &mut hooks_iter,
-            nodes_needing_unmount: &mut nodes_needing_unmount,
-        };
-        let results = element.perform_rebuild_element(&widget, provider_values, reconciler);
+        let results = element.perform_rebuild_element(
+            &widget,
+            BuildContext {
+                hooks: &mut hooks_iter,
+                element_context: &self.context,
+            },
+            provider_values,
+            children,
+            &mut nodes_needing_unmount,
+        );
 
-        let mainline = match results {
-            Err((last_element, err)) => MainlineState::RebuildSuspended {
-                hooks: hooks_iter.hooks,
-                last_element,
-                waker: err.waker,
-            },
-            Ok(element) => MainlineState::Ready {
-                hooks: hooks_iter.hooks,
-                render_object: None,
-                element,
-            },
-        };
+        match results {
+            Err((children, err)) => {
+                return MainlineState::RebuildSuspended {
+                    suspended_hooks: hooks_iter.hooks,
+                    element,
+                    children,
+                    waker: err.waker,
+                }
+            }
+            Ok((items, callback)) => {
+                let results =
+                    items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
+                        use ElementReconcileItem::*;
+                        match item {
+                            Keep(node) => node.visit_and_work_sync(reconcile_context),
+                            Update(pair) => pair.rebuild_sync(reconcile_context),
+                            Inflate(widget) => {
+                                widget.inflate_sync(self.context.clone(), reconcile_context)
+                            }
+                        }
+                    });
+                let (children, updates) = results.unzip_collect(|x| x);
+
+                return MainlineState::Ready {
+                    element,
+                    children,
+                    hooks: hooks_iter.hooks,
+                    render_object: None,
+                };
+            }
+        }
 
         return (mainline, nodes_needing_unmount, subtree_results);
+    }
+
+    fn commit_render_object_changes(
+        old_attached_object: Option<ArcRenderObjectOf<E>>,
+        callback: Option<ChildRenderObjectsUpdateCallback<E>>,
+        updates: ContainerOf<E, SubtreeVisitResult<E::ChildProtocol>>,
+    ) {
+        match render_element_function_table_of::<E>() {
+            RenderElementFunctionTable::None {
+                child,
+                into_arc_child_render_object,
+            } => {
+                debug_assert!(callback.is_none(), "Non-renderable Element should not return a render object children update callback!")
+            },
+            RenderElementFunctionTable::RenderObject {
+                into_arc_child_render_object,
+                try_create_render_object,
+                update_render_object,
+                try_update_render_object_children,
+                detach_render_object,
+                get_suspense,
+                has_layer,
+            } => {
+                let suspended = updates.any(SubtreeVisitResult::is_suspended);
+                match (suspended)
+            },
+        }
     }
 }

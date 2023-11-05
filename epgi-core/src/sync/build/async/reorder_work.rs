@@ -8,7 +8,8 @@ use crate::{
 use super::cancel::CancelAsync;
 
 pub(in super::super) struct ReorderAsync<E: Element> {
-    pub(in super::super) cancel: Option<CancelAsync<E::ChildIter>>,
+    pub(in super::super) cancel:
+        Option<CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>>,
     pub(in super::super) start: AsyncRebuild<E>,
 }
 

@@ -8,6 +8,8 @@ use crate::{
     },
 };
 
+use super::{ArcChildElementNode, ContainerOf};
+
 pub(crate) struct AsyncWorkQueue<E: Element> {
     pub(crate) inner: Option<Box<AsyncWorkQueueInner<E>>>,
 }
@@ -266,7 +268,7 @@ pub(crate) enum AsyncOutput<E: Element> {
     },
     Completed {
         results: BuildResults<E>,
-        children: E::ChildIter,
+        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
     },
 }
 

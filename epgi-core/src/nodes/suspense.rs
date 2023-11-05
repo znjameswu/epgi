@@ -66,11 +66,7 @@ impl<P: Protocol> Element for SuspenseElement<P> {
         todo!()
     }
 
-    type ChildIter = EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>;
 
-    fn children(&self) -> Self::ChildIter {
-        todo!()
-    }
 
     type RenderOrUnit = RenderSuspense<P>;
 }

@@ -33,6 +33,7 @@ pub trait HktContainer {
 }
 
 pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> + Send {
+    // We use a duplicate type parameter because it helps to avoid GAT lifetime error (TODO: issue link)
     type Item: Send;
 
     // We use an explicit centralized HKT type instead of GAT, because GAT cannot guarantee type equality after two hops away.
@@ -65,6 +66,22 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> +
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
+
+    fn zip_collect<T: Send + Sync, R: Send + Sync>(
+        self,
+        other: <Self::HktContainer as HktContainer>::Container<T>,
+        op: impl Fn(<Self as Parallel>::Item, T) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R>;
+
+    fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
+        self,
+        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    );
+
+    fn any(self, op: impl Fn(&<Self as Parallel>::Item) -> bool,) -> bool;
 }
 
 pub struct VecContainer;

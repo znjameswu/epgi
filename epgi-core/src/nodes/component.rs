@@ -91,11 +91,7 @@ where
         Ok(Self { child })
     }
 
-    type ChildIter = [ArcChildElementNode<P>; 1];
 
-    fn children(&self) -> Self::ChildIter {
-        [self.child.clone()]
-    }
 
     type RenderOrUnit = ();
 }
@@ -104,9 +100,7 @@ impl<P> SingleChildElement for ComponentElement<P>
 where
     P: Protocol,
 {
-    fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol> {
-        &self.child
-    }
+
 }
 
 pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol>(

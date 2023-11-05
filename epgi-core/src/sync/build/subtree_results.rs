@@ -1,7 +1,7 @@
 use crate::{foundation::Protocol, tree::ArcChildRenderObject};
 
-#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Clone, Copy)]
-pub enum SubtreeCommitResult<P: Protocol> {
+#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Clone)]
+pub enum SubtreeVisitResult<P: Protocol> {
     NoUpdate = 0,
     NewRenderObject(ArcChildRenderObject<P>) = 1,
     Suspended = 2,
@@ -19,12 +19,21 @@ pub enum SubtreeCommitResult<P: Protocol> {
 //         }
 //     }
 // }
-impl<P> Default for SubtreeCommitResult<P>
+
+impl<P> SubtreeVisitResult<P> where P: Protocol {
+    pub fn is_suspended(&self) -> bool {
+        match self {
+            SubtreeVisitResult::Suspended => true,
+            _ => false,
+        }
+    }
+}
+impl<P> Default for SubtreeVisitResult<P>
 where
     P: Protocol,
 {
     fn default() -> Self {
-        SubtreeCommitResult::NoUpdate
+        SubtreeVisitResult::NoUpdate
     }
 }
 

@@ -206,7 +206,7 @@ where
                     }
                     use crate::tree::MainlineState::*;
                     let rebuild = match state {
-                        InflateSuspended { last_hooks, waker } => AsyncRebuild {
+                        InflateSuspended { suspended_hooks: last_hooks, waker } => AsyncRebuild {
                             handle,
                             old_widget: old_widget.clone(),
                             provider_values,
@@ -216,8 +216,8 @@ where
                         },
                         Ready { hooks, element, .. }
                         | RebuildSuspended {
-                            hooks,
-                            last_element: element,
+                            suspended_hooks: hooks,
+                            element,
                             ..
                         } => AsyncRebuild {
                             handle,

@@ -137,11 +137,7 @@ where
         })
     }
 
-    type ChildIter = [ArcChildElementNode<P>; 1];
 
-    fn children(&self) -> Self::ChildIter {
-        [self.child.clone()]
-    }
 
     type RenderOrUnit = ();
 }
@@ -151,7 +147,5 @@ where
     T: Provide,
     P: Protocol,
 {
-    fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol> {
-        &self.child
-    }
+
 }

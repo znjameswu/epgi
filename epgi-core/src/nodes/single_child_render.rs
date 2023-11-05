@@ -110,13 +110,6 @@ where
         Ok(Self { child })
     }
 
-    type ChildIter = [ArcChildElementNode<W::ChildProtocol>; 1];
-
-    #[inline(always)]
-    fn children(&self) -> Self::ChildIter {
-        [self.child.clone()]
-    }
-
     type RenderOrUnit = SingleChildRenderObject<W>;
 }
 

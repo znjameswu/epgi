@@ -24,7 +24,10 @@ pub(in super::super) struct CancelAsync<I> {
 }
 
 pub(in super::super) struct RemoveAsync<E: Element> {
-    purge: Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>>,
+    purge: Result<
+        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+    >,
     start: Option<AsyncRebuild<E>>,
 }
 
@@ -62,7 +65,10 @@ where
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
         tree_scheduler: &TreeScheduler,
-    ) -> Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>> {
+    ) -> Result<
+        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+    > {
         let Mainline { state, async_queue } = mainline;
         use AsyncDequeueResult::*;
         use AsyncOutput::*;
@@ -105,7 +111,7 @@ where
 
     pub(in super::super) fn perform_cancel_async_work(
         self: &Arc<Self>,
-        cancel: CancelAsync<E::ChildIter>,
+        cancel: CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
     ) {
         let CancelAsync {
             lane_pos,
@@ -215,7 +221,10 @@ where
     pub(super) fn prepare_purge_async_work(
         snapshot: &mut ElementSnapshot<E>,
         lane_pos: LanePos,
-    ) -> Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>> {
+    ) -> Result<
+        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+    > {
         match &mut snapshot.inner {
             ElementSnapshotInner::AsyncInflating(async_inflating) => {
                 Self::prepare_purge_async_work_async_inflating(async_inflating, lane_pos)
@@ -229,7 +238,10 @@ where
     pub(super) fn prepare_purge_async_work_async_inflating(
         async_inflating: &mut AsyncInflating<E>,
         lane_pos: LanePos,
-    ) -> Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>> {
+    ) -> Result<
+        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+    > {
         let AsyncInflating {
             work_context,
             stash:
@@ -269,7 +281,10 @@ where
     pub(in super::super) fn prepare_purge_async_work_mainline(
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
-    ) -> Result<CancelAsync<E::ChildIter>, Option<E::ChildIter>> {
+    ) -> Result<
+        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+    > {
         let Mainline { state, async_queue } = mainline;
         use AsyncDequeueResult::*;
         use AsyncOutput::*;
@@ -338,7 +353,7 @@ where
 
     pub(in super::super) fn perform_purge_async_work(
         self: &Arc<Self>,
-        cancel: CancelAsync<E::ChildIter>,
+        cancel: CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
     ) {
         let CancelAsync {
             lane_pos,

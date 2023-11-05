@@ -8,7 +8,7 @@ use crate::{
     tree::{AsyncInflating, Hook, HookContext},
 };
 
-use super::{ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, Element};
+use super::{ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, Element, ContainerOf};
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
@@ -54,17 +54,20 @@ pub(crate) struct Mainline<E: Element> {
 
 pub(crate) enum MainlineState<E: Element> {
     Ready {
-        hooks: Hooks,
         element: E,
+        hooks: Hooks,
+        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object: Option<ArcRenderObjectOf<E>>,
     },
     InflateSuspended {
-        last_hooks: Hooks,
+        element: E,
+        suspended_hooks: Hooks,
         waker: SuspendWaker,
     }, // The hooks may be partially initialized
     RebuildSuspended {
-        hooks: Hooks,
-        last_element: E,
+        element: E,
+        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        suspended_hooks: Hooks,
         waker: SuspendWaker,
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }
@@ -108,7 +111,7 @@ impl<E: Element> MainlineState<E> {
                 element: last_element,
                 ..
             }
-            | MainlineState::RebuildSuspended { last_element, .. } => Some(last_element),
+            | MainlineState::RebuildSuspended { element: last_element, .. } => Some(last_element),
         }
     }
 
@@ -119,14 +122,14 @@ impl<E: Element> MainlineState<E> {
                 element: last_element,
                 ..
             }
-            | MainlineState::RebuildSuspended { last_element, .. } => Some(last_element),
+            | MainlineState::RebuildSuspended { element: last_element, .. } => Some(last_element),
         }
     }
 
     pub(crate) fn hooks(self) -> Option<Hooks> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { hooks, .. } | MainlineState::RebuildSuspended { hooks, .. } => {
+            MainlineState::Ready { hooks, .. } | MainlineState::RebuildSuspended { suspended_hooks: hooks, .. } => {
                 Some(hooks)
             }
         }
@@ -135,7 +138,7 @@ impl<E: Element> MainlineState<E> {
     pub(crate) fn hooks_ref(&self) -> Option<&Hooks> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { hooks, .. } | MainlineState::RebuildSuspended { hooks, .. } => {
+            MainlineState::Ready { hooks, .. } | MainlineState::RebuildSuspended { suspended_hooks: hooks, .. } => {
                 Some(hooks)
             }
         }
