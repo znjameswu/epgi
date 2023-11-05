@@ -14,8 +14,8 @@ pub use snapshot::*;
 
 use crate::{
     foundation::{
-        Arc, Asc, Aweak, BuildSuspendedError, InlinableDwsizeVec, LayerProtocol, Parallel,
-        Protocol, Provide, SyncMutex, TypeKey,
+        Arc, ArrayContainer, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec,
+        LayerProtocol, Parallel, Protocol, Provide, SyncMutex, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -23,13 +23,33 @@ use crate::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, Layer, LayerNode,
-    LayerRender, ReconcileItem, Reconciler, Render, RenderCache, RenderObject, RenderObjectInner,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair,
+    Layer, LayerNode, LayerRender, ReconcileItem, Reconciler, Render, RenderCache, RenderObject,
+    RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
 pub type AweakAnyElementNode = Aweak<dyn AnyElementNode>;
 pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<ParentProtocol = P>>;
+
+pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
+    dyn FnOnce(
+        ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
+    ) -> ContainerOf<E, RenderObjectReconcileItem<E::ChildProtocol>>,
+>;
+
+pub enum ElementReconcileItem<P: Protocol> {
+    Keep(ArcChildElementNode<P>),
+    Update(Box<dyn ChildElementWidgetPair<P>>),
+    Inflate(ArcChildWidget<P>),
+}
+
+pub enum RenderObjectReconcileItem<P: Protocol> {
+    New,
+    Keep(ArcChildRenderObject<P>),
+}
+
+pub type ContainerOf<E: Element, T> = <E::ChildContainer as HktContainer>::Container<T>;
 
 pub trait Element: Send + Sync + Clone + 'static {
     type ArcWidget: ArcWidget<Element = Self>; //<Element = Self>;
@@ -47,26 +67,27 @@ pub trait Element: Send + Sync + Clone + 'static {
 
     // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
     // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
+    /// If a hook suspended, then the untouched Self should be returned along with the suspended error
+    /// If nothing suspended, then the new Self should be returned.
     fn perform_rebuild_element(
-        self,
+        &mut self,
         widget: &Self::ArcWidget,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)>;
+        children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
+            Option<ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        BuildSuspendedError,
+    >;
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-    ) -> Result<Self, BuildSuspendedError>;
+    ) -> Result<ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>, BuildSuspendedError>;
 
-    // Cannot use GAT due to this rustc bug https://github.com/rust-lang/rust/issues/102211
-    // Choose clone semantic due to a cloned array is needed in the end, while converting from ref to cloned is not zero-cost abstraction without GAT.
-    type ChildIter: Parallel<Item = ArcChildElementNode<Self::ChildProtocol>>
-        + Send
-        + Sync
-        + 'static;
-    fn children(&self) -> Self::ChildIter;
+    type ChildContainer: HktContainer;
 
     // A workaround for specialization.
     // This is designed in such a way that we do not need to lock the mutex to know whether a render object is present.
@@ -75,8 +96,9 @@ pub trait Element: Send + Sync + Clone + 'static {
     type RenderOrUnit: RenderOrUnit<Self>;
 }
 
-pub trait SingleChildElement: Element<RenderOrUnit = ()> {
-    fn child(&self) -> &ArcChildElementNode<Self::ParentProtocol>;
+pub trait SingleChildElement:
+    Element<ChildContainer = ArrayContainer<1>, RenderOrUnit = ()>
+{
 }
 
 pub trait RenderElement<

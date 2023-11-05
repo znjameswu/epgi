@@ -27,14 +27,17 @@ where
 }
 
 pub trait HktContainer {
-    type Container<T>: Parallel<Item = T, HktContainer = Self>
+    type Container<T>: Parallel<Item = T, HktContainer = Self> + Send + Sync
     where
-        T: Send;
+        T: Send + Sync;
 }
 
 pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> + Send {
     type Item: Send;
 
+    // We use an explicit centralized HKT type instead of GAT, because GAT cannot guarantee type equality after two hops away.
+    // E.g., GAT can guarantee `Vec::<i32>::Container<i64>::Container::<i32> == Vec<i32>`.
+    // But GAT cannot infer anything on `Vec::<i32>::Container<i64>::Container::<i16>::Container<i32>`.
     type HktContainer: HktContainer<Container<<Self as Parallel>::Item> = Self>;
 
     fn par_for_each<F: Fn(<Self as Parallel>::Item) + Send + Sync, P: ThreadPoolExt>(
@@ -53,12 +56,12 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> +
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
-    fn map<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
-    fn map_ref<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
@@ -98,14 +101,14 @@ where
         pool.par_map_collect_vec(self, f)
     }
 
-    fn map<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         self.into_iter().map(f).collect()
     }
 
-    fn map_ref<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -147,14 +150,14 @@ where
         pool.par_map_collect_arr(self, f)
     }
 
-    fn map<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         self.map(f)
     }
 
-    fn map_ref<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -196,14 +199,14 @@ where
         todo!()
     }
 
-    fn map<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
 
-    fn map_ref<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -265,23 +268,23 @@ where
         todo!()
     }
 
-    fn map<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         match self.0 {
-            either::Either::Left(a) => EitherParallel(either::Either::Left(a.map(f))),
-            either::Either::Right(b) => EitherParallel(either::Either::Right(b.map(f))),
+            either::Either::Left(a) => EitherParallel(either::Either::Left(a.map_collect(f))),
+            either::Either::Right(b) => EitherParallel(either::Either::Right(b.map_collect(f))),
         }
     }
 
-    fn map_ref<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         match &self.0 {
-            either::Either::Left(a) => EitherParallel(either::Either::Left(a.map_ref(f))),
-            either::Either::Right(b) => EitherParallel(either::Either::Right(b.map_ref(f))),
+            either::Either::Left(a) => EitherParallel(either::Either::Left(a.map_ref_collect(f))),
+            either::Either::Right(b) => EitherParallel(either::Either::Right(b.map_ref_collect(f))),
         }
     }
 }

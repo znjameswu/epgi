@@ -424,6 +424,7 @@ where
         new_stash: AsyncOutput<E>,
         lane_pos: LanePos,
         handle: &WorkHandle,
+        // When this is true, it means that we are inflating a new suspense above this suspended node. And we should commit the suspended result as-is rather than wait for it.
         allow_suspend: bool,
     ) {
         let mut snapshot = self.snapshot.lock();

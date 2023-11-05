@@ -668,3 +668,14 @@ If we want to start hit test a.s.a.p., we should speed up the whole process up t
 2. We can cancel the paint phase altogether, and incorporate the paint phase into the composition phase tree walk. However, paint phase is embarrassingly parallel, which makes it actually a optimization for the whole paint+composition phase. A separate paint phase actually speeds up the progress for hit-testing.
 
 Temporary decision: Perform layer adoption during the composition phase.
+
+
+
+# Intrusive node design or non-intrusive?
+Intrusive node design: We let users store their list of child nodes inside their node structure.
+
+Non-intrusive node design: We manage the list of child nodes outside user-defined structure.
+
+Intrusive node design
+1. It would be easier to store exotic child node types such as a sized type instead of a trait object.
+2. It would be more intuitive when impl-ing specific methods? (Really?)

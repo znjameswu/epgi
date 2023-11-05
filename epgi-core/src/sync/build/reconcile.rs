@@ -147,7 +147,7 @@ where
                     MainlineState::Ready {
                         hooks,
                         element: last_element,
-                        render_object: attached_object,
+                        render_object,
                     } => {
                         assert!(!is_poll, "A non-suspended node should not be polled");
                         self.perform_rebuild_node_sync(
@@ -155,7 +155,7 @@ where
                             job_ids,
                             hooks,
                             last_element,
-                            attached_object,
+                            render_object,
                             consumed_values,
                             scope,
                             tree_scheduler,
@@ -825,5 +825,80 @@ pub(crate) mod sync_build_private {
         ) -> SubtreeCommitResult {
             self.rebuild_node_sync(None, job_ids, scope, tree_scheduler)
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ReconcileContext<'a, 'batch, E: Element> {
+    widget: &'a E::ArcWidget,
+    job_ids: &'a Inlinable64Vec<JobId>,
+    scope: &'a rayon::Scope<'batch>,
+    tree_scheduler: &'batch TreeScheduler,
+}
+
+impl<E> ElementNode<E>
+where
+    E: Element,
+{
+    fn apply_updates_sync<'a, 'batch>(
+        self: &'a Arc<Self>,
+        reconcile_context: ReconcileContext<'a, 'batch, E>,
+    ) {
+        let mut jobs = {
+            self.context
+                .mailbox
+                .lock()
+                .extract_if(|job_id, _| reconcile_context.job_ids.contains(job_id))
+                .collect::<Vec<_>>()
+        };
+        jobs.sort_by_key(|(job_id, ..)| *job_id);
+
+        let updates = jobs
+            .into_iter()
+            .flat_map(|(_, updates)| updates)
+            .collect::<Vec<_>>();
+
+        for update in updates {
+            todo!()
+        }
+    }
+
+    fn perform_rebuild_node_sync_new<'a, 'batch>(
+        self: &'a Arc<Self>,
+        widget: &'a E::ArcWidget,
+        mut hooks: Hooks,
+        element: E,
+        old_attached_object: Option<ArcRenderObjectOf<E>>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        reconcile_context: ReconcileContext<'a, 'batch, E>,
+    ) -> MainlineState<E> {
+        let mut hooks_iter = HookContext::new_rebuild(hooks);
+        let mut subtree_results = SubtreeCommitResult::NoUpdate;
+        let mut nodes_needing_unmount = Default::default();
+        let reconciler = SyncReconciler {
+            job_ids: reconcile_context.job_ids,
+            scope: reconcile_context.scope,
+            tree_scheduler: reconcile_context.tree_scheduler,
+            subtree_results: &mut subtree_results,
+            host_context: &self.context,
+            hooks: &mut hooks_iter,
+            nodes_needing_unmount: &mut nodes_needing_unmount,
+        };
+        let results = element.perform_rebuild_element(&widget, provider_values, reconciler);
+
+        let mainline = match results {
+            Err((last_element, err)) => MainlineState::RebuildSuspended {
+                hooks: hooks_iter.hooks,
+                last_element,
+                waker: err.waker,
+            },
+            Ok(element) => MainlineState::Ready {
+                hooks: hooks_iter.hooks,
+                render_object: None,
+                element,
+            },
+        };
+
+        return (mainline, nodes_needing_unmount, subtree_results);
     }
 }
