@@ -71,7 +71,7 @@ impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
         Some(RenderPhantomBox {})
     }
 
-    fn update_render_object(
+    fn update_render(
         _render_object: &mut RenderPhantomBox,
         _widget: &Arc<PhantomBox>,
     ) -> RenderObjectUpdateResult {

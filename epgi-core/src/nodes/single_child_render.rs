@@ -130,7 +130,7 @@ where
     }
 
     #[inline(always)]
-    fn update_render_object(
+    fn update_render(
         render: &mut SingleChildRenderObject<W>,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult {

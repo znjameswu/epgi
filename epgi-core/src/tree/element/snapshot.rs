@@ -8,7 +8,10 @@ use crate::{
     tree::{AsyncInflating, Hook, HookContext},
 };
 
-use super::{ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, Element, ContainerOf};
+use super::{
+    ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, ContainerOf,
+    Element,
+};
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
@@ -60,7 +63,6 @@ pub(crate) enum MainlineState<E: Element> {
         render_object: Option<ArcRenderObjectOf<E>>,
     },
     InflateSuspended {
-        element: E,
         suspended_hooks: Hooks,
         waker: SuspendWaker,
     }, // The hooks may be partially initialized
@@ -84,63 +86,52 @@ impl<E: Element> MainlineState<E> {
             MainlineState::InflateSuspended { .. } | MainlineState::RebuildSuspended { .. } => true,
         }
     }
+
     pub(crate) fn element(self) -> Option<E> {
         match self {
-            MainlineState::Ready {
-                element: last_element,
-                ..
-            } => Some(last_element),
-            _ => None,
+            MainlineState::InflateSuspended { .. } => None,
+            MainlineState::Ready { element, .. }
+            | MainlineState::RebuildSuspended { element, .. } => Some(element),
         }
     }
 
     pub(crate) fn element_ref(&self) -> Option<&E> {
         match self {
-            MainlineState::Ready {
-                element: last_element,
-                ..
-            } => Some(last_element),
-            _ => None,
+            MainlineState::InflateSuspended { .. } => None,
+            MainlineState::Ready { element, .. }
+            | MainlineState::RebuildSuspended { element, .. } => Some(element),
         }
     }
 
-    pub(crate) fn last_element(self) -> Option<E> {
+    pub(crate) fn children_ref(
+        &self,
+    ) -> Option<&ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready {
-                element: last_element,
-                ..
-            }
-            | MainlineState::RebuildSuspended { element: last_element, .. } => Some(last_element),
-        }
-    }
-
-    pub(crate) fn last_element_ref(&self) -> Option<&E> {
-        match self {
-            MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready {
-                element: last_element,
-                ..
-            }
-            | MainlineState::RebuildSuspended { element: last_element, .. } => Some(last_element),
+            MainlineState::Ready { children, .. }
+            | MainlineState::RebuildSuspended { children, .. } => Some(children),
         }
     }
 
     pub(crate) fn hooks(self) -> Option<Hooks> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { hooks, .. } | MainlineState::RebuildSuspended { suspended_hooks: hooks, .. } => {
-                Some(hooks)
-            }
+            MainlineState::Ready { hooks, .. }
+            | MainlineState::RebuildSuspended {
+                suspended_hooks: hooks,
+                ..
+            } => Some(hooks),
         }
     }
 
     pub(crate) fn hooks_ref(&self) -> Option<&Hooks> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { hooks, .. } | MainlineState::RebuildSuspended { suspended_hooks: hooks, .. } => {
-                Some(hooks)
-            }
+            MainlineState::Ready { hooks, .. }
+            | MainlineState::RebuildSuspended {
+                suspended_hooks: hooks,
+                ..
+            } => Some(hooks),
         }
     }
 

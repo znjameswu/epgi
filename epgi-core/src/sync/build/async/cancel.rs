@@ -11,8 +11,9 @@ use crate::{
     scheduler::{get_current_scheduler, LanePos},
     sync::TreeScheduler,
     tree::{
-        AsyncDequeueResult, AsyncInflating, AsyncOutput, AsyncQueueCurrentEntry, AsyncStash,
-        Element, ElementNode, ElementSnapshot, ElementSnapshotInner, Mainline, SubscriptionDiff,
+        ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
+        AsyncQueueCurrentEntry, AsyncStash, ContainerOf, Element, ElementNode, ElementSnapshot,
+        ElementSnapshotInner, Mainline, SubscriptionDiff,
     },
 };
 
@@ -103,7 +104,7 @@ where
             FoundBackqueue(_) => Err(state
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work.")
-                .last_element_ref()
+                .element_ref()
                 .map(Element::children)),
             NotFound => Err(None),
         }
@@ -313,7 +314,7 @@ where
             FoundBackqueue(_) => Err(state
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work.")
-                .last_element_ref()
+                .element_ref()
                 .map(Element::children)),
             NotFound => Err(None),
         }

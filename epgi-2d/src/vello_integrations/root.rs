@@ -112,7 +112,7 @@ impl RenderElement<RenderRoot> for RootElement {
         todo!()
     }
 
-    fn update_render_object(
+    fn update_render(
         render_object: &mut RenderRoot,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult {

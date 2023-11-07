@@ -40,7 +40,7 @@ impl<E: Element> ElementNode<E> {
                 .state
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work");
-            let children = state.last_element_ref().map(Element::children);
+            let children = state.element_ref().map(Element::children);
             state.waker_ref().map(SuspendWaker::abort);
             (children, snapshot.widget.clone(), purge)
         };

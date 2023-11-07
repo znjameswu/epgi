@@ -76,7 +76,7 @@ impl<P: Protocol> RenderElement<RenderSuspense<P>> for SuspenseElement<P> {
         todo!()
     }
 
-    fn update_render_object(
+    fn update_render(
         render_object: &mut RenderSuspense<P>,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult {

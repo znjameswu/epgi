@@ -34,7 +34,7 @@ pub trait HktContainer {
 
 pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> + Send {
     // We use a duplicate type parameter because it helps to avoid GAT lifetime error (TODO: issue link)
-    type Item: Send;
+    type Item: Send + Sync;
 
     // We use an explicit centralized HKT type instead of GAT, because GAT cannot guarantee type equality after two hops away.
     // E.g., GAT can guarantee `Vec::<i32>::Container<i64>::Container::<i32> == Vec<i32>`.
@@ -49,7 +49,7 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> +
 
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
-        R: Send,
+        R: Send + Sync,
         P: ThreadPoolExt,
     >(
         self,
@@ -57,12 +57,12 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> +
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
-    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send + Sync>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
-    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send + Sync>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
@@ -81,18 +81,26 @@ pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> +
         <Self::HktContainer as HktContainer>::Container<R2>,
     );
 
-    fn any(self, op: impl Fn(&<Self as Parallel>::Item) -> bool,) -> bool;
+    fn zip_ref_collect<T: Send + Sync, R: Send + Sync>(
+        &self,
+        other: <Self::HktContainer as HktContainer>::Container<T>,
+        op: impl Fn(&<Self as Parallel>::Item, T) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R>;
+
+    fn any(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool;
+
+    fn all(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool;
 }
 
 pub struct VecContainer;
 
 impl HktContainer for VecContainer {
-    type Container<T> = Vec<T> where T:Send;
+    type Container<T> = Vec<T> where T:Send + Sync;
 }
 
 impl<T> Parallel for Vec<T>
 where
-    T: Send,
+    T: Send + Sync,
 {
     type Item = T;
 
@@ -108,7 +116,7 @@ where
 
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
-        R: Send,
+        R: Send + Sync,
         P: ThreadPoolExt,
     >(
         self,
@@ -118,14 +126,14 @@ where
         pool.par_map_collect_vec(self, f)
     }
 
-    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send + Sync>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         self.into_iter().map(f).collect()
     }
 
-    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send + Sync>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -136,12 +144,12 @@ where
 pub struct ArrayContainer<const N: usize>;
 
 impl<const N: usize> HktContainer for ArrayContainer<N> {
-    type Container<T> = [T;N] where T:Send;
+    type Container<T> = [T;N] where T:Send + Sync;
 }
 
 impl<T, const N: usize> Parallel for [T; N]
 where
-    T: Send,
+    T: Send + Sync,
 {
     type Item = T;
 
@@ -157,7 +165,7 @@ where
 
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
-        R: Send,
+        R: Send + Sync,
         P: ThreadPoolExt,
     >(
         self,
@@ -167,14 +175,14 @@ where
         pool.par_map_collect_arr(self, f)
     }
 
-    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send + Sync>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         self.map(f)
     }
 
-    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send + Sync>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -185,12 +193,12 @@ where
 pub struct OptionContainer;
 
 impl HktContainer for OptionContainer {
-    type Container<T> = Option<T> where T: Send;
+    type Container<T> = Option<T> where T: Send + Sync;
 }
 
 impl<T> Parallel for Option<T>
 where
-    T: Send,
+    T: Send + Sync,
 {
     type Item = T;
 
@@ -206,7 +214,7 @@ where
 
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
-        R: Send,
+        R: Send + Sync,
         P: ThreadPoolExt,
     >(
         self,
@@ -216,14 +224,14 @@ where
         todo!()
     }
 
-    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send + Sync>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
 
-    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send + Sync>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -253,7 +261,7 @@ where
     A: HktContainer,
     B: HktContainer,
 {
-    type Container<T> = EitherParallel<A::Container<T>, B::Container<T>> where T:Send;
+    type Container<T> = EitherParallel<A::Container<T>, B::Container<T>> where T:Send + Sync;
 }
 
 impl<A, B> Parallel for EitherParallel<A, B>
@@ -275,7 +283,7 @@ where
 
     fn par_map_collect<
         F: Fn(<Self as Parallel>::Item) -> R + Send + Sync,
-        R: Send,
+        R: Send + Sync,
         P: ThreadPoolExt,
     >(
         self,
@@ -285,7 +293,7 @@ where
         todo!()
     }
 
-    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_collect<F: FnMut(<Self as Parallel>::Item) -> R, R: Send + Sync>(
         self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
@@ -295,7 +303,7 @@ where
         }
     }
 
-    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send>(
+    fn map_ref_collect<F: FnMut(&<Self as Parallel>::Item) -> R, R: Send + Sync>(
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {

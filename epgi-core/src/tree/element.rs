@@ -23,9 +23,9 @@ use crate::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair,
-    Layer, LayerNode, LayerRender, ReconcileItem, Reconciler, Render, RenderCache, RenderObject,
-    RenderObjectInner, BuildContext,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
+    ChildElementWidgetPair, Layer, LayerNode, LayerRender, ReconcileItem, Reconciler, Render,
+    RenderCache, RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -75,7 +75,7 @@ pub trait Element: Send + Sync + Clone + 'static {
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
     ) -> Result<
         (
             ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
@@ -89,8 +89,9 @@ pub trait Element: Send + Sync + Clone + 'static {
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>, BuildSuspendedError>;
+    ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
 
     type ChildContainer: HktContainer;
 
@@ -116,7 +117,7 @@ pub trait RenderElement<
     /// Called during the commit phase, when the widget is updated.
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render_object(
+    fn update_render(
         render_object: &mut R,
         widget: &Self::ArcWidget,
     ) -> RenderObjectUpdateResult;
@@ -234,7 +235,6 @@ impl<E> ChildElementNode<E::ParentProtocol> for ElementNode<E>
 where
     E: Element,
 {
-
     fn context(&self) -> &ElementContextNode {
         self.context.as_ref()
     }
@@ -257,9 +257,7 @@ where
             .map_err(|(element, widget)| (element as _, widget))
     }
 
-    fn get_current_subtree_render_object(
-        &self,
-    ) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
+    fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
         let snapshot = self.snapshot.lock();
 
         let MainlineState::Ready { render_object, .. } =
@@ -321,6 +319,7 @@ where
 pub fn create_root_element<E, R, L>(
     widget: E::ArcWidget,
     element: E,
+    element_children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
     render: R,
     layer: L,
     hooks: Hooks,
@@ -358,8 +357,9 @@ where
                 widget,
                 inner: ElementSnapshotInner::Mainline(Mainline {
                     state: Some(MainlineState::Ready {
-                        hooks,
                         element,
+                        children: element_children,
+                        hooks,
                         render_object: Some(render_object),
                     }),
                     async_queue: AsyncWorkQueue::new_empty(),

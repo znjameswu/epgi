@@ -2,7 +2,7 @@ use crate::{
     foundation::Arc,
     r#async::AsyncRebuild,
     sync::TreeScheduler,
-    tree::{Element, ElementNode, Mainline},
+    tree::{Element, ElementNode, Mainline, ContainerOf, ArcChildElementNode},
 };
 
 use super::cancel::CancelAsync;
