@@ -679,3 +679,64 @@ Non-intrusive node design: We manage the list of child nodes outside user-define
 Intrusive node design
 1. It would be easier to store exotic child node types such as a sized type instead of a trait object.
 2. It would be more intuitive when impl-ing specific methods? (Really?)
+
+
+# How does a suspended node affect its sibling render object subtrees?
+1. Cause siblings to detach, all the way up to the nearest suspense.
+    1. We now guarantee all render objects are connected
+    2. Detach is recursive
+    3. How COULD we create ANY render object efficiently, before first clearing an entire Suspense subtree? (FATAL!!!)
+2. Preserve siblings
+    1. We would have isolated islands of render objects.
+        1. Bogus relayout and repaint up-marking.
+            1. Can be prevented. Though would require very delicate ordering during up-marking.
+                1. The very careful ordering can be done instead in the up-walking phase of commit. (*)
+    2. Detach is local
+
+Decision: Preserve siblings. Localized detach. **Mark relayout and repaint during up-walking phase of commit.**
+
+# How to mark needs layout and mark needs paint?
+
+We have two options here: intrusive or non-intrusive.
+
+Intrusive: forcefully remove layout/paint cache during commit.
+- Would require a much larger API surface to implement relayout
+- Would require a even larger API surface to even get to layer cache.
+- Eliminates RenderContextNode/LayerContextNode
+
+Non-intrusive: write into an atomic flag. During layout/paint-phase we actively query the flag to determine if we use the cache.
+- Would have extra atomic read/writes. During layout/paint-phase we also need to clear the flag after everything.
+    - A good news is that the atomic variable can be stored in the node itself, eliminating RenderContextNode/LayerContextNode
+- We would not disrupt the render results during a commit. It's possible to perform hit test even after an async commit. Though the benefit is questionable.
+
+Decision: Non-intrusive
+
+
+# Should we cache/track children's suspend state?
+For a multi-child render object, when its subtree commit result indicate only part of its children become suspended, what should we do about the result?
+1. Discard the commit result. When children commit results are not suspended, try create the render object by walking down and collecting child render objects.
+    1. Problem: Bogus try_create_render_object. A render element may receive a bunch of NoUpdate signal from its children, even when deep down the child subtree there is a suspended node. The collecting would be wasted.
+        1. Not THAT damaging. 
+            1. The commit process will only be fooled once at the lowest render element that it visited. The element above will properly know of this suspended subtree.
+            2. It won't be triggered in a subtree inflating whatsoever.
+            3. It won't be triggered when rebuilding a non-suspended subtree either.
+            4. If you don't suspend, it won't be triggered.
+        2. It is still damaging when a big list of child suspended and unsuspended independently. O(n^2) depending on the children.
+2. Cache (track) children state by saving children that are ready and leaving empty slots for suspended ones.
+    1. WHERE should we cache? Considering that we will purge the render object on suspended anyway.
+        1. We could only cache it in ElementNode, which is awkward to be the very least
+    2. How to salvage the children list from a suspended render object?
+    3. Problem!: How to handle suspended non-render element?? (Which is the majority case)
+        1. They don't cache their children for sure. Nor are they supposed to know anything about their children.
+        2. During the rebuild that finally unsuspended the node, it is very likely that their subtree commit result would be KeepRenderObject, which force us then to walk down anyway.
+            1. Needless to say that during the rebuild that suspended the node, it is even more impossible to know anything about its child.
+        3. One solution: Forbid render elements from using suspendable hookds, or even hooks at all. (No it will not work)
+        4. This effectively creates three state to cache
+            1. The child is not suspended
+            2. The child render object is present, but an intermediate non-render element suspended
+            3. The child render object is suspended due to somewhere suspended in its subtree.
+        5. Two solutions: 
+            1. Walk down on un-suspend. Igore child render object update.
+            2. Walk down on suspend and then cache the render object. Pop-up the cache when un-suspended
+
+

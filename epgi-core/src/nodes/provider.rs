@@ -1,10 +1,12 @@
 use std::marker::PhantomData;
 
 use crate::{
-    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
+    foundation::{
+        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide,
+    },
     tree::{
-        ArcChildElementNode, ArcChildWidget, Element, ReconcileItem, Reconciler,
-        SingleChildElement, Widget,
+        ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObjectsUpdateCallback,
+        Element, ElementReconcileItem, ReconcileItem, Reconciler, Widget,
     },
 };
 
@@ -65,10 +67,7 @@ where
     }
 }
 
-pub struct ProviderElement<T: Provide, P: Protocol> {
-    pub child: ArcChildElementNode<P>,
-    phantom: PhantomData<T>,
-}
+pub struct ProviderElement<T: Provide, P: Protocol>(PhantomData<(T, P)>);
 
 impl<T, P> Clone for ProviderElement<T, P>
 where
@@ -76,10 +75,7 @@ where
     P: Protocol,
 {
     fn clone(&self) -> Self {
-        Self {
-            child: self.child.clone(),
-            phantom: self.phantom.clone(),
-        }
+        Self(PhantomData)
     }
 }
 
@@ -94,58 +90,46 @@ where
 
     type ChildProtocol = P;
 
+    type ChildContainer = ArrayContainer<1>;
+
     type Provided = T;
     const GET_PROVIDED_VALUE: Option<fn(&Self::ArcWidget) -> Arc<Self::Provided>> =
         Some(|widget| (widget.init)());
 
     fn perform_rebuild_element(
-        self,
+        &mut self,
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        mut reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)> {
-        match self.child.can_rebuild_with(widget.child.clone()) {
-            Ok(item) => {
-                let child = reconciler.into_reconcile_single(item);
-                Ok(Self {
-                    child,
-                    phantom: PhantomData,
-                })
-            }
+        children: [ArcChildElementNode<Self::ChildProtocol>; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            [ElementReconcileItem<Self::ChildProtocol>; 1],
+            Option<ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        (
+            [ArcChildElementNode<Self::ChildProtocol>; 1],
+            BuildSuspendedError,
+        ),
+    > {
+        match children[0].can_rebuild_with(widget.child.clone()) {
+            Ok(item) => Ok(([item], None)),
             Err((child, child_widget)) => {
-                reconciler.nodes_needing_unmount_mut().push(child);
-                let child =
-                    reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
-                Ok(Self {
-                    child,
-                    phantom: PhantomData,
-                })
+                nodes_needing_unmount.push(child);
+                Ok(([ElementReconcileItem::new_inflate(child_widget)], None))
             }
         }
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-    ) -> Result<Self, BuildSuspendedError> {
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
         let child_widget = widget.child.clone();
-        let child = reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
-        Ok(Self {
-            child,
-            phantom: PhantomData,
-        })
+        Ok((Self(PhantomData), [child_widget]))
     }
 
-
-
     type RenderOrUnit = ();
-}
-
-impl<T, P> SingleChildElement for ProviderElement<T, P>
-where
-    T: Provide,
-    P: Protocol,
-{
-
 }

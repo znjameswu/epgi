@@ -1,10 +1,12 @@
 mod context;
 mod layer_paint;
 
+use std::sync::atomic::AtomicBool;
+
 pub use context::*;
 pub use layer_paint::*;
 
-use crate::foundation::{Arc, Aweak, PaintContext, Parallel, Protocol, SyncMutex};
+use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Parallel, Protocol, SyncMutex};
 
 use super::{ArcAnyLayerNode, ArcElementContextNode, ElementContextNode, Layer};
 
@@ -13,15 +15,17 @@ pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
 
-pub enum RenderObjectUpdateResult {
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
+pub enum RerenderAction {
     None,
-    MarkNeedsPaint,
-    MarkNeedsLayout,
+    Recomposite,
+    Repaint,
+    Relayout,
 }
 
-impl Default for RenderObjectUpdateResult {
+impl Default for RerenderAction {
     fn default() -> Self {
-        RenderObjectUpdateResult::None
+        RerenderAction::None
     }
 }
 
@@ -31,11 +35,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     type ParentProtocol: Protocol;
     type ChildProtocol: Protocol;
 
-    type ChildIter: Parallel<Item = ArcChildRenderObject<Self::ChildProtocol>>
-        + Send
-        + Sync
-        + 'static;
-    fn children(&self) -> Self::ChildIter;
+    type ChildContainer: HktContainer;
 
     const IS_REPAINT_BOUNDARY: bool = false;
 
@@ -116,8 +116,23 @@ pub trait LayerRender<
     fn create_layer(&self) -> L;
 }
 
+pub(crate) struct RenderNodeMark {
+    pub(crate) needs_layout: AtomicBool,
+    pub(crate) subtree_has_relayout: AtomicBool,
+}
+
+impl RenderNodeMark {
+    fn new() -> Self {
+        Self {
+            needs_layout: false.into(),
+            subtree_has_relayout: false.into(),
+        }
+    }
+}
+
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
+    pub(crate) mark: RenderNodeMark,
     pub(crate) context: AscRenderContextNode,
     pub(crate) layer_node: ArcLayerNodeOf<R>,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
@@ -127,7 +142,13 @@ impl<R> RenderObject<R>
 where
     R: Render,
 {
-    pub fn new(render: R, element_context: ArcElementContextNode) -> Self {
+    pub fn new(
+        render: R,
+        children: <R::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<R::ChildProtocol>,
+        >,
+        element_context: ArcElementContextNode,
+    ) -> Self {
         debug_assert!(
             element_context.has_render,
             "A render object node must have a render context node in its element context node"
@@ -151,10 +172,12 @@ where
         Self {
             context: element_context.nearest_render_context.clone(),
             element_context,
+            mark: RenderNodeMark::new(),
             layer_node: layer,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,
                 render,
+                children,
             }),
         }
     }
@@ -165,6 +188,8 @@ pub(crate) struct RenderObjectInner<R: Render> {
     // boundaries: Option<RenderObjectBoundaries>,
     pub(crate) cache: Option<RenderCache<R::ParentProtocol, R::LayoutMemo>>,
     pub(crate) render: R,
+    pub(crate) children:
+        <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
 }
 
 struct RenderObjectBoundaries {

@@ -26,13 +26,39 @@ where
     type IntoIter = T::IntoIter;
 }
 
+pub trait AsIterator {
+    type IntoIter<'a>: Iterator<Item = &'a <Self as AsIterator>::Item>
+    where
+        Self: 'a;
+
+    type Item;
+
+    fn as_iter(&self) -> Self::IntoIter<'_>;
+}
+
+impl<T: ?Sized> AsIterator for T
+where
+    T: IntoIterator,
+    for<'any> &'any T: IntoIterator<Item = &'any <T as IntoIterator>::Item>,
+{
+    type IntoIter<'a> = <&'a Self as IntoIterator>::IntoIter where Self: 'a;
+    type Item = <T as IntoIterator>::Item;
+    fn as_iter(&self) -> Self::IntoIter<'_> {
+        self.into_iter()
+    }
+}
+
 pub trait HktContainer {
     type Container<T>: Parallel<Item = T, HktContainer = Self> + Send + Sync
     where
         T: Send + Sync;
 }
 
-pub trait Parallel: IntoSendExactSizeIterator<Item = <Self as Parallel>::Item> + Send {
+pub trait Parallel:
+    IntoSendExactSizeIterator<Item = <Self as Parallel>::Item>
+    + AsIterator<Item = <Self as Parallel>::Item>
+    + Send
+{
     // We use a duplicate type parameter because it helps to avoid GAT lifetime error (TODO: issue link)
     type Item: Send + Sync;
 
@@ -137,7 +163,41 @@ where
         &self,
         f: F,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
-        self.iter().map(f).collect()
+        self.as_iter().map(f).collect()
+    }
+
+    fn zip_collect<T1: Send + Sync, R: Send + Sync>(
+        self,
+        other: <Self::HktContainer as HktContainer>::Container<T1>,
+        op: impl Fn(<Self as Parallel>::Item, T1) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
+        self,
+        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    ) {
+        todo!()
+    }
+
+    fn zip_ref_collect<T1: Send + Sync, R: Send + Sync>(
+        &self,
+        other: <Self::HktContainer as HktContainer>::Container<T1>,
+        op: impl Fn(&<Self as Parallel>::Item, T1) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn any(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
+    }
+
+    fn all(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
     }
 }
 
@@ -188,6 +248,40 @@ where
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         std::array::from_fn::<_, N, _>(|i| &self[i]).map(f)
     }
+
+    fn zip_collect<T1: Send + Sync, R: Send + Sync>(
+        self,
+        other: <Self::HktContainer as HktContainer>::Container<T1>,
+        op: impl Fn(<Self as Parallel>::Item, T1) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
+        self,
+        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    ) {
+        todo!()
+    }
+
+    fn zip_ref_collect<T1: Send + Sync, R: Send + Sync>(
+        &self,
+        other: <Self::HktContainer as HktContainer>::Container<T1>,
+        op: impl Fn(&<Self as Parallel>::Item, T1) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn any(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
+    }
+
+    fn all(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
+    }
 }
 
 pub struct OptionContainer;
@@ -237,20 +331,73 @@ where
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
+
+    fn zip_collect<T1: Send + Sync, R: Send + Sync>(
+        self,
+        other: <Self::HktContainer as HktContainer>::Container<T1>,
+        op: impl Fn(<Self as Parallel>::Item, T1) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
+        self,
+        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    ) {
+        todo!()
+    }
+
+    fn zip_ref_collect<T1: Send + Sync, R: Send + Sync>(
+        &self,
+        other: <Self::HktContainer as HktContainer>::Container<T1>,
+        op: impl Fn(&<Self as Parallel>::Item, T1) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn any(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
+    }
+
+    fn all(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
+    }
 }
 
-pub struct EitherParallel<Left, Right>(pub either::Either<Left, Right>);
+pub struct EitherParallel<Left, Right>(pub either::Either<Left, Right>)
+where
+    Left: Parallel,
+    Right: Parallel<Item = <Left as Parallel>::Item>;
 
 impl<A, B> IntoIterator for EitherParallel<A, B>
 where
-    A: IntoIterator,
-    B: IntoIterator<Item = A::Item>,
+    A: Parallel,
+    B: Parallel<Item = <A as Parallel>::Item>,
 {
-    type IntoIter = either::Either<A::IntoIter, B::IntoIter>;
-    type Item = A::Item;
+    type IntoIter = either::Either<<A as IntoIterator>::IntoIter, <B as IntoIterator>::IntoIter>;
+    type Item = <A as Parallel>::Item;
 
     fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl<'a, A, B> IntoIterator for &'a EitherParallel<A, B>
+where
+    A: Parallel,
+    B: Parallel<Item = <A as Parallel>::Item>,
+{
+    type IntoIter =
+        either::Either<<A as AsIterator>::IntoIter<'a>, <B as AsIterator>::IntoIter<'a>>;
+    type Item = &'a <EitherParallel<A, B> as IntoIterator>::Item;
+
+    fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
+        self.0
+            .as_ref()
+            .map_either(AsIterator::as_iter, AsIterator::as_iter)
     }
 }
 
@@ -311,5 +458,39 @@ where
             either::Either::Left(a) => EitherParallel(either::Either::Left(a.map_ref_collect(f))),
             either::Either::Right(b) => EitherParallel(either::Either::Right(b.map_ref_collect(f))),
         }
+    }
+
+    fn zip_collect<T: Send + Sync, R: Send + Sync>(
+        self,
+        other: <Self::HktContainer as HktContainer>::Container<T>,
+        op: impl Fn(<Self as Parallel>::Item, T) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
+        self,
+        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    ) {
+        todo!()
+    }
+
+    fn zip_ref_collect<T: Send + Sync, R: Send + Sync>(
+        &self,
+        other: <Self::HktContainer as HktContainer>::Container<T>,
+        op: impl Fn(&<Self as Parallel>::Item, T) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        todo!()
+    }
+
+    fn any(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
+    }
+
+    fn all(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool {
+        todo!()
     }
 }

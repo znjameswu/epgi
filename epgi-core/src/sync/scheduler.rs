@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use super::{CommitBarrier, LaneScheduler};
+use super::{CommitBarrier, LaneScheduler, SyncReconcileContext};
 pub struct TreeScheduler {
     lane_scheduler: LaneScheduler,
     pub(super) root_element: ArcAnyElementNode,
@@ -57,7 +57,11 @@ impl TreeScheduler {
             rayon::scope(|scope| {
                 self.root_element
                     .clone()
-                    .visit_and_work_sync(sync_job_ids, scope, self);
+                    .visit_and_work_sync(SyncReconcileContext {
+                        job_ids: sync_job_ids,
+                        scope,
+                        tree_scheduler: self,
+                    });
             });
         }
     }

@@ -4,7 +4,7 @@ mod fragment;
 pub use context::*;
 pub use fragment::*;
 
-use std::{any::Any, ops::Mul};
+use std::{any::Any, ops::Mul, sync::atomic::AtomicBool};
 
 use crate::foundation::{Arc, Canvas, Key, SyncMutex};
 
@@ -290,6 +290,8 @@ where
 
 pub struct LayerNode<L: Layer> {
     pub(crate) context: AscLayerContextNode,
+    pub(crate) needs_paint: AtomicBool,
+    pub(crate) needs_composite: AtomicBool,
     pub(crate) inner: SyncMutex<LayerNodeInner<L>>,
 }
 
@@ -317,6 +319,8 @@ where
     pub(crate) fn new(context: AscLayerContextNode, layer: L) -> Self {
         Self {
             context,
+            needs_paint: false.into(),
+            needs_composite: false.into(),
             inner: SyncMutex::new(LayerNodeInner { layer, cache: None }),
         }
     }

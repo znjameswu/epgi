@@ -19,19 +19,24 @@ use crate::{
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    tree::RenderObjectUpdateResult,
+    tree::RerenderAction,
 };
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, Layer, LayerNode, LayerRender, ReconcileItem, Reconciler, Render,
-    RenderCache, RenderObject, RenderObjectInner,
+    ChildElementWidgetPair, ElementWidgetPair, Layer, LayerNode, LayerRender, ReconcileItem,
+    Reconciler, Render, RenderCache, RenderObject, RenderObjectInner,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
 pub type AweakAnyElementNode = Aweak<dyn AnyElementNode>;
 pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
 
+/// We assume the render has the same child container with the element,
+/// ignoring the fact that Suspense may have different child containers.
+///
+/// However, we designate Suspense to be the only component to have different containers,
+/// which will be handled by Suspense's specialized function pointers.
 pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
     dyn FnOnce(
         ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
@@ -42,6 +47,26 @@ pub enum ElementReconcileItem<P: Protocol> {
     Keep(ArcChildElementNode<P>),
     Update(Box<dyn ChildElementWidgetPair<P>>),
     Inflate(ArcChildWidget<P>),
+}
+
+impl<CP> ElementReconcileItem<CP>
+where
+    CP: Protocol,
+{
+    pub fn new_update<E: Element<ParentProtocol = CP>>(
+        element: Arc<ElementNode<E>>,
+        widget: E::ArcWidget,
+    ) -> Self {
+        Self::Update(Box::new(ElementWidgetPair { element, widget }))
+    }
+
+    pub fn new_inflate(widget: ArcChildWidget<CP>) -> Self {
+        Self::Inflate(widget)
+    }
+
+    pub fn new_keep(element: ArcChildElementNode<CP>) -> Self {
+        Self::Keep(element)
+    }
 }
 
 pub enum RenderObjectReconcileItem<P: Protocol> {
@@ -55,6 +80,8 @@ pub trait Element: Send + Sync + Clone + 'static {
     type ArcWidget: ArcWidget<Element = Self>; //<Element = Self>;
     type ParentProtocol: Protocol;
     type ChildProtocol: Protocol;
+
+    type ChildContainer: HktContainer;
 
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
@@ -93,8 +120,6 @@ pub trait Element: Send + Sync + Clone + 'static {
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
 
-    type ChildContainer: HktContainer;
-
     // A workaround for specialization.
     // This is designed in such a way that we do not need to lock the mutex to know whether a render object is present.
     // Rust const is inlined, so we can safely expect that no actual function pointers will occur in binary causing indirection.
@@ -102,25 +127,17 @@ pub trait Element: Send + Sync + Clone + 'static {
     type RenderOrUnit: RenderOrUnit<Self>;
 }
 
-pub trait SingleChildElement:
-    Element<ChildContainer = ArrayContainer<1>, RenderOrUnit = ()>
-{
-}
-
 pub trait RenderElement<
     R: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>,
 >: Element<RenderOrUnit = R>
 {
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<R>;
+    fn create_render(&self, widget: &Self::ArcWidget) -> R;
     /// Update necessary properties of render object given by the widget
     ///
     /// Called during the commit phase, when the widget is updated.
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(
-        render_object: &mut R,
-        widget: &Self::ArcWidget,
-    ) -> RenderObjectUpdateResult;
+    fn update_render(render_object: &mut R, widget: &Self::ArcWidget) -> RerenderAction;
 
     /// Whether [Render::update_render_object] is a no-op and always returns None
     ///
@@ -131,20 +148,10 @@ pub trait RenderElement<
     /// Setting to false will always guarantee the correct behavior.
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
-    /// Try to re-assemble the children of the givin render object.
-    ///
-    /// Called during the commit phase, when subtree structure has changed.
-    fn try_update_render_object_children(&self, render_object: &mut R) -> Result<(), ()>;
-
-    /// Whether [Render::try_update_render_object_children] is a no-op and always succeed
-    ///
-    /// When set to true, [Render::try_update_render_object_children]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::try_update_render_object_children] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    /// Leaf render objects may consider setting this to true.
-    const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = false;
+    fn element_render_children_mapping<T: Send + Sync>(
+        &self,
+        element_children: <Self::ChildContainer as HktContainer>::Container<T>,
+    ) -> <R::ChildContainer as HktContainer>::Container<T>;
 
     const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> = None;
 }
@@ -225,7 +232,7 @@ pub trait ChildElementNode<PP: Protocol>:
     fn can_rebuild_with(
         self: Arc<Self>,
         widget: ArcChildWidget<PP>,
-    ) -> Result<ReconcileItem<PP>, (ArcChildElementNode<PP>, ArcChildWidget<PP>)>;
+    ) -> Result<ElementReconcileItem<PP>, (ArcChildElementNode<PP>, ArcChildWidget<PP>)>;
 
     fn get_current_subtree_render_object(&self)
         -> Option<ArcChildRenderObject<PP>>;
@@ -247,7 +254,7 @@ where
         self: Arc<Self>,
         widget: ArcChildWidget<E::ParentProtocol>,
     ) -> Result<
-        ReconcileItem<E::ParentProtocol>,
+        ElementReconcileItem<E::ParentProtocol>,
         (
             ArcChildElementNode<E::ParentProtocol>,
             ArcChildWidget<E::ParentProtocol>,
@@ -260,22 +267,25 @@ where
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
         let snapshot = self.snapshot.lock();
 
-        let MainlineState::Ready { render_object, .. } =
-            snapshot.inner.mainline_ref()?.state.as_ref()?
+        let MainlineState::Ready {
+            children,
+            render_object,
+            ..
+        } = snapshot.inner.mainline_ref()?.state.as_ref()?
         else {
             return None;
         };
         let render_object = render_object.clone();
 
+        // todo!();
         match render_element_function_table_of::<E>() {
             RenderElementFunctionTable::RenderObject {
                 into_arc_child_render_object,
                 ..
-            } => render_object.map(into_arc_child_render_object),
-            RenderElementFunctionTable::None {
-                into_arc_child_render_object,
-                ..
-            } => render_object.map(into_arc_child_render_object),
+            } => render_object.map(into_arc_child_render_object).ok(),
+            RenderElementFunctionTable::None { as_child, .. } => {
+                as_child(children).get_current_subtree_render_object()
+            }
         }
     }
 }
@@ -304,7 +314,7 @@ where
         let Some(Mainline {
             state:
                 Some(MainlineState::Ready {
-                    render_object: Some(render_object),
+                    render_object: Ok(render_object),
                     ..
                 }),
             ..
@@ -335,37 +345,38 @@ where
         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
     >,
 {
-    let element_node = Arc::new_cyclic(move |node| {
-        let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
-        let render_context = element_context.nearest_render_context.clone();
-        let layer_context = render_context.nearest_repaint_boundary.clone();
-        // let render = R::try_create_render_object_from_element(&element, &widget)
-        //     .expect("Root render object creation should always be successfully");
-        let layer_node = Asc::new(LayerNode::new(layer_context, layer));
-        let render_object = Arc::new(RenderObject {
-            element_context: element_context.clone(),
-            context: render_context,
-            layer_node,
-            inner: SyncMutex::new(RenderObjectInner {
-                cache: Some(RenderCache::new(constraints, false, None)),
-                render,
-            }),
-        });
-        ElementNode {
-            context: element_context,
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget,
-                inner: ElementSnapshotInner::Mainline(Mainline {
-                    state: Some(MainlineState::Ready {
-                        element,
-                        children: element_children,
-                        hooks,
-                        render_object: Some(render_object),
-                    }),
-                    async_queue: AsyncWorkQueue::new_empty(),
-                }),
-            }),
-        }
-    });
-    element_node
+    // let element_node = Arc::new_cyclic(move |node| {
+    //     let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
+    //     let render_context = element_context.nearest_render_context.clone();
+    //     let layer_context = render_context.nearest_repaint_boundary.clone();
+    //     // let render = R::try_create_render_object_from_element(&element, &widget)
+    //     //     .expect("Root render object creation should always be successfully");
+    //     let layer_node = Asc::new(LayerNode::new(layer_context, layer));
+    //     let render_object = Arc::new(RenderObject {
+    //         element_context: element_context.clone(),
+    //         context: render_context,
+    //         layer_node,
+    //         inner: SyncMutex::new(RenderObjectInner {
+    //             cache: Some(RenderCache::new(constraints, false, None)),
+    //             render,
+    //         }),
+    //     });
+    //     ElementNode {
+    //         context: element_context,
+    //         snapshot: SyncMutex::new(ElementSnapshot {
+    //             widget,
+    //             inner: ElementSnapshotInner::Mainline(Mainline {
+    //                 state: Some(MainlineState::Ready {
+    //                     element,
+    //                     children: element_children,
+    //                     hooks,
+    //                     render_object: Some(render_object),
+    //                 }),
+    //                 async_queue: AsyncWorkQueue::new_empty(),
+    //             }),
+    //         }),
+    //     }
+    // });
+    // element_node
+    todo!()
 }

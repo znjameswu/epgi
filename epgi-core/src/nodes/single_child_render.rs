@@ -1,11 +1,15 @@
+use std::marker::PhantomData;
+
 use crate::foundation::{
-    Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Protocol, Provide,
+    Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext,
+    Protocol, Provide,
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ChildRenderObject,
-    DryLayoutFunctionTable, Element, LayerOrUnit, ReconcileItem, Reconciler, Render, RenderElement,
-    RenderObjectUpdateResult, Widget,
+    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
+    ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
+    LayerOrUnit, ReconcileItem, Reconciler, Render, RenderElement, RerenderAction,
+    Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -18,7 +22,7 @@ pub trait SingleChildRenderObjectWidget:
     fn create_render_state(&self) -> Self::RenderState;
 
     fn update_render_state(&self, render_state: &mut Self::RenderState)
-        -> RenderObjectUpdateResult;
+        -> RerenderAction;
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
@@ -51,18 +55,14 @@ pub trait SingleChildRenderObjectWidget:
     type LayerRenderDelegate: LayerOrUnit<SingleChildRenderObject<Self>>;
 }
 
-pub struct SingleChildRenderObjectElement<W: SingleChildRenderObjectWidget> {
-    pub child: ArcChildElementNode<W::ChildProtocol>,
-}
+pub struct SingleChildRenderObjectElement<W: SingleChildRenderObjectWidget>(PhantomData<W>);
 
 impl<W> Clone for SingleChildRenderObjectElement<W>
 where
     W: SingleChildRenderObjectWidget,
 {
     fn clone(&self) -> Self {
-        Self {
-            child: self.child.clone(),
-        }
+        Self(PhantomData)
     }
 }
 
@@ -74,40 +74,45 @@ where
 
     type ParentProtocol = W::ParentProtocol;
 
+    type ChildContainer = ArrayContainer<1>;
+
     type ChildProtocol = W::ChildProtocol;
 
     type Provided = Never;
 
-    #[inline(always)]
     fn perform_rebuild_element(
-        self,
+        &mut self,
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        mut reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)> {
-        match self.child.can_rebuild_with(widget.child().clone()) {
-            Ok(item) => {
-                let child = reconciler.into_reconcile_single(item);
-                Ok(Self { child })
-            }
+        children: [ArcChildElementNode<Self::ChildProtocol>; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            [ElementReconcileItem<Self::ChildProtocol>; 1],
+            Option<ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        (
+            [ArcChildElementNode<Self::ChildProtocol>; 1],
+            BuildSuspendedError,
+        ),
+    > {
+        match children[0].can_rebuild_with(widget.child().clone()) {
+            Ok(item) => Ok(([item], None)),
             Err((child, child_widget)) => {
-                reconciler.nodes_needing_unmount_mut().push(child);
-                let child =
-                    reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
-                Ok(Self { child })
+                nodes_needing_unmount.push(child);
+                Ok(([ElementReconcileItem::new_inflate(child_widget)], None))
             }
         }
     }
 
-    #[inline(always)]
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-    ) -> Result<Self, BuildSuspendedError> {
-        let child =
-            reconciler.into_reconcile_single(ReconcileItem::new_inflate(widget.child().clone()));
-        Ok(Self { child })
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
+        let child_widget = widget.child().clone();
+        Ok((Self(PhantomData), [child_widget]))
     }
 
     type RenderOrUnit = SingleChildRenderObject<W>;
@@ -118,40 +123,31 @@ where
     W: SingleChildRenderObjectWidget<Element = Self>,
 {
     #[inline(always)]
-    fn try_create_render_object(
-        &self,
-        widget: &Self::ArcWidget,
-    ) -> Option<SingleChildRenderObject<W>> {
-        let child = self.child.get_current_subtree_render_object()?;
-        Some(SingleChildRenderObject {
+    fn create_render(&self, widget: &Self::ArcWidget) -> SingleChildRenderObject<W> {
+        SingleChildRenderObject {
             state: W::create_render_state(widget),
-            child,
-        })
+        }
     }
 
     #[inline(always)]
     fn update_render(
         render: &mut SingleChildRenderObject<W>,
         widget: &Self::ArcWidget,
-    ) -> RenderObjectUpdateResult {
+    ) -> RerenderAction {
         W::update_render_state(widget, &mut render.state)
     }
     const NOOP_UPDATE_RENDER_OBJECT: bool = W::NOOP_UPDATE_RENDER_OBJECT;
 
-    #[inline(always)]
-    fn try_update_render_object_children(
+    fn element_render_children_mapping<T: Send + Sync>(
         &self,
-        render: &mut SingleChildRenderObject<W>,
-    ) -> Result<(), ()> {
-        let child = self.child.get_current_subtree_render_object().ok_or(())?;
-        render.child = child;
-        Ok(())
+        element_children: <Self::ChildContainer as crate::foundation::HktContainer>::Container<T>,
+    ) -> <<SingleChildRenderObject<W> as Render>::ChildContainer as crate::foundation::HktContainer>::Container<T>{
+        element_children
     }
 }
 
 pub struct SingleChildRenderObject<W: SingleChildRenderObjectWidget> {
     pub state: W::RenderState,
-    pub child: ArcChildRenderObject<W::ChildProtocol>,
 }
 
 impl<W> Render for SingleChildRenderObject<W>
@@ -162,12 +158,7 @@ where
 
     type ChildProtocol = W::ChildProtocol;
 
-    type ChildIter = [ArcChildRenderObject<W::ChildProtocol>; 1];
-
-    #[inline(always)]
-    fn children(&self) -> Self::ChildIter {
-        [self.child.clone()]
-    }
+    type ChildContainer = ArrayContainer<1>;
 
     const NOOP_DETACH: bool = W::NOOP_DETACH;
 
@@ -178,7 +169,8 @@ where
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        W::perform_layout(&self.state, self.child.as_ref(), constraints)
+        todo!()
+        // W::perform_layout(&self.state, self.child.as_ref(), constraints)
     }
 
     #[inline(always)]
@@ -189,14 +181,14 @@ where
         memo: &Self::LayoutMemo,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
-        W::perform_paint(
-            &self.state,
-            self.child.as_ref(),
-            size,
-            transform,
-            memo,
-            paint_ctx,
-        )
+        // W::perform_paint(
+        //     &self.state,
+        //     self.child.as_ref(),
+        //     size,
+        //     transform,
+        //     memo,
+        //     paint_ctx,
+        // )
     }
 
     type LayerOrUnit = ();

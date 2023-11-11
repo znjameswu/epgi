@@ -1,7 +1,7 @@
 use crate::{
     foundation::{HktContainer, Inlinable64Vec, InlinableDwsizeVec, Parallel, Protocol},
     scheduler::JobId,
-    sync::{SubtreeRenderObjectUpdate, TreeScheduler},
+    sync::{SubtreeRenderObjectCommitResult, TreeScheduler},
     tree::{
         ArcChildElementNode, ArcElementContextNode, BuildContext, Element, ElementWidgetPair,
         HookContext, ReconcileItem, Reconciler,
@@ -50,12 +50,12 @@ pub(crate) mod reconciler_private {
         fn rebuild_sync<'a, 'batch>(
             self,
             reconcile_context: SyncReconcileContext<'a, 'batch>,
-        ) -> (ArcChildElementNode<P>, SubtreeRenderObjectUpdate<P>);
+        ) -> (ArcChildElementNode<P>, SubtreeRenderObjectCommitResult<P>);
 
         fn rebuild_sync_box<'a, 'batch>(
             self: Box<Self>,
             reconcile_context: SyncReconcileContext<'a, 'batch>,
-        ) -> (ArcChildElementNode<P>, SubtreeRenderObjectUpdate<P>);
+        ) -> (ArcChildElementNode<P>, SubtreeRenderObjectCommitResult<P>);
     }
 
     impl<E> ChildElementWidgetPairSyncBuildExt<E::ParentProtocol> for ElementWidgetPair<E>
@@ -67,11 +67,11 @@ pub(crate) mod reconciler_private {
             reconcile_context: SyncReconcileContext<'a, 'batch>,
         ) -> (
             ArcChildElementNode<E::ParentProtocol>,
-            SubtreeRenderObjectUpdate<E::ParentProtocol>,
+            SubtreeRenderObjectCommitResult<E::ParentProtocol>,
         ) {
-            let subtree_results =
-                self.element
-                    .rebuild_node_sync(Some(self.widget), reconcile_context);
+            let subtree_results = self
+                .element
+                .rebuild_node_sync(Some(self.widget), reconcile_context);
             (self.element, subtree_results)
         }
 
@@ -80,7 +80,7 @@ pub(crate) mod reconciler_private {
             reconcile_context: SyncReconcileContext<'a, 'batch>,
         ) -> (
             ArcChildElementNode<E::ParentProtocol>,
-            SubtreeRenderObjectUpdate<E::ParentProtocol>,
+            SubtreeRenderObjectCommitResult<E::ParentProtocol>,
         ) {
             self.rebuild_sync(reconcile_context)
         }
@@ -91,7 +91,7 @@ pub(crate) mod reconciler_private {
             self: Arc<Self>,
             parent_context: ArcElementContextNode,
             reconcile_context: SyncReconcileContext<'a, 'batch>,
-        ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectUpdate<PP>);
+        ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectCommitResult<PP>);
     }
 
     impl<T> ChildWidgetSyncInflateExt<<<T as Widget>::Element as Element>::ParentProtocol> for T
@@ -104,7 +104,7 @@ pub(crate) mod reconciler_private {
             reconcile_context: SyncReconcileContext<'a, 'batch>,
         ) -> (
             ArcChildElementNode<<<T as Widget>::Element as Element>::ParentProtocol>,
-            SubtreeRenderObjectUpdate<<<T as Widget>::Element as Element>::ParentProtocol>,
+            SubtreeRenderObjectCommitResult<<<T as Widget>::Element as Element>::ParentProtocol>,
         ) {
             let (node, results) = ElementNode::<<T as Widget>::Element>::inflate_node_sync(
                 &self.into_arc_widget(),

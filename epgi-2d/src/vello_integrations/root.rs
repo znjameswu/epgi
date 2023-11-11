@@ -7,7 +7,7 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator, DryLayout,
         Element, Layer, LayerCompositionConfig, LayerRender, PaintResults, ReconcileItem,
-        Reconciler, Render, RenderElement, RenderObjectUpdateResult, Widget,
+        Reconciler, Render, RenderElement, RerenderAction, Widget,
     },
 };
 
@@ -108,15 +108,12 @@ impl Element for RootElement {
 }
 
 impl RenderElement<RenderRoot> for RootElement {
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<RenderRoot> {
+    fn create_render(&self, widget: &Self::ArcWidget) -> Option<RenderRoot> {
         todo!()
     }
 
-    fn update_render(
-        render_object: &mut RenderRoot,
-        widget: &Self::ArcWidget,
-    ) -> RenderObjectUpdateResult {
-        RenderObjectUpdateResult::None
+    fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RerenderAction {
+        RerenderAction::None
     }
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = true;

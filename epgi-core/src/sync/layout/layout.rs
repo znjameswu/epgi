@@ -106,7 +106,7 @@ where
                     inner.layout_without_resize_inner(&self.context);
                     self.context.clear_self_needs_layout();
                 }
-                inner.render.children()
+                inner.children.map_ref_collect(Clone::clone)
             };
             children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.visit_and_layout()

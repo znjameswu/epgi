@@ -206,7 +206,10 @@ where
                     }
                     use crate::tree::MainlineState::*;
                     let rebuild = match state {
-                        InflateSuspended { suspended_hooks: last_hooks, waker } => AsyncRebuild {
+                        InflateSuspended {
+                            suspended_hooks: last_hooks,
+                            waker,
+                        } => AsyncRebuild {
                             handle,
                             old_widget: old_widget.clone(),
                             provider_values,
@@ -353,31 +356,31 @@ where
             todo!()
         }
 
-        let mut hooks_iter = HookContext::new_rebuild(hooks);
-        let mut child_tasks = Default::default();
-        let mut nodes_needing_unmount = Default::default();
-        let reconciler = AsyncReconciler {
-            host_handle: handle,
-            work_context,
-            child_tasks: &mut child_tasks,
-            barrier,
-            host_context: &self.context,
-            hooks: &mut hooks_iter,
-            nodes_needing_unmount: &mut nodes_needing_unmount,
-        };
-        let results = element.perform_rebuild_element(widget, provider_values, reconciler);
-        let new_stash = match results {
-            Ok(element) => AsyncOutput::Completed {
-                children: element.children(),
-                results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
-            },
-            Err(err) => AsyncOutput::Suspended {
-                suspend: Some(BuildSuspendResults::new(hooks_iter)),
-                barrier: None,
-            },
-        };
+        // let mut hooks_iter = HookContext::new_rebuild(hooks);
+        // let mut child_tasks = Default::default();
+        // let mut nodes_needing_unmount = Default::default();
+        // let reconciler = AsyncReconciler {
+        //     host_handle: handle,
+        //     work_context,
+        //     child_tasks: &mut child_tasks,
+        //     barrier,
+        //     host_context: &self.context,
+        //     hooks: &mut hooks_iter,
+        //     nodes_needing_unmount: &mut nodes_needing_unmount,
+        // };
+        // let results = element.perform_rebuild_element(widget, provider_values, reconciler);
+        // let new_stash = match results {
+        //     Ok(element) => AsyncOutput::Completed {
+        //         children: element.children(),
+        //         results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
+        //     },
+        //     Err(err) => AsyncOutput::Suspended {
+        //         suspend: Some(BuildSuspendResults::new(hooks_iter)),
+        //         barrier: None,
+        //     },
+        // };
 
-        self.write_back_build_results::<false>(new_stash, lane_pos, handle, todo!());
+        // self.write_back_build_results::<false>(new_stash, lane_pos, handle, todo!());
         todo!("Child Tasks");
     }
 
@@ -391,31 +394,31 @@ where
     ) {
         let lane_pos = work_context.lane_pos;
 
-        let mut hooks_iter = HookContext::new_inflate();
-        let mut child_tasks = Default::default();
-        let mut nodes_needing_unmount = Default::default();
-        let reconciler = AsyncReconciler {
-            host_handle: handle,
-            work_context,
-            child_tasks: &mut child_tasks,
-            barrier,
-            host_context: &self.context,
-            hooks: &mut hooks_iter,
-            nodes_needing_unmount: &mut nodes_needing_unmount,
-        };
-        let results = E::perform_inflate_element(widget, provider_values, reconciler);
-        let new_stash = match results {
-            Ok(element) => AsyncOutput::Completed {
-                children: element.children(),
-                results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
-            },
-            Err(err) => AsyncOutput::Suspended {
-                suspend: Some(BuildSuspendResults::new(hooks_iter)),
-                barrier: None,
-            },
-        };
+        // let mut hooks_iter = HookContext::new_inflate();
+        // let mut child_tasks = Default::default();
+        // let mut nodes_needing_unmount = Default::default();
+        // let reconciler = AsyncReconciler {
+        //     host_handle: handle,
+        //     work_context,
+        //     child_tasks: &mut child_tasks,
+        //     barrier,
+        //     host_context: &self.context,
+        //     hooks: &mut hooks_iter,
+        //     nodes_needing_unmount: &mut nodes_needing_unmount,
+        // };
+        // let results = E::perform_inflate_element(widget, provider_values, reconciler);
+        // let new_stash = match results {
+        //     Ok(element) => AsyncOutput::Completed {
+        //         children: element.children(),
+        //         results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
+        //     },
+        //     Err(err) => AsyncOutput::Suspended {
+        //         suspend: Some(BuildSuspendResults::new(hooks_iter)),
+        //         barrier: None,
+        //     },
+        // };
 
-        self.write_back_build_results::<IS_NEW_INFLATE>(new_stash, lane_pos, handle, todo!());
+        // self.write_back_build_results::<IS_NEW_INFLATE>(new_stash, lane_pos, handle, todo!());
         todo!("Child Tasks");
     }
 

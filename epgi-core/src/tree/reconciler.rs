@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, BuildContext, Element, ElementNode, WorkContext, WorkHandle,
+    ArcWidget, BuildContext, Element, ElementNode, ElementReconcileItem, WorkContext, WorkHandle,
 };
 
 pub trait Reconciler<CP: Protocol>: Sized {
@@ -104,14 +104,16 @@ where
     pub(crate) fn can_rebuild_with(
         self: Arc<Self>,
         widget: ArcChildWidget<E::ParentProtocol>,
-    ) -> Result<ReconcileItem<E::ParentProtocol>, (Arc<Self>, ArcChildWidget<E::ParentProtocol>)>
-    {
+    ) -> Result<
+        ElementReconcileItem<E::ParentProtocol>,
+        (Arc<Self>, ArcChildWidget<E::ParentProtocol>),
+    > {
         let old_widget = self.widget();
         if widget.key() != old_widget.key() {
             return Err((self, widget));
         }
         match try_convert_if_same_type(&old_widget, widget) {
-            Ok(widget) => Ok(ReconcileItem::new_rebuild(self, widget)),
+            Ok(widget) => Ok(ElementReconcileItem::new_update(self, widget)),
             Err(widget) => Err((self, widget)),
         }
     }

@@ -18,7 +18,7 @@ use crate::{
         BuildContext, ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementContextNode,
         ElementNode, ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext,
         Hooks, Mainline, MainlineState, RenderElementFunctionTable, RenderObject,
-        RenderObjectReconcileItem, RenderOrUnit, RerenderAction, SuspenseElementFunctionTable,
+        RenderObjectReconcileItem, RenderOrUnit, RerenderAction, SuspenseElementFunctionTable, RenderChildrenOf,
     },
 };
 
@@ -183,6 +183,7 @@ where
                         children,
                         suspended_hooks,
                         waker,
+                        render_children,
                     } => {
                         waker.abort();
                         // If a new job occurred on this previously suspended node
@@ -368,7 +369,7 @@ where
         element: E,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         mut hook_context: HookContext,
-        old_render_object: Option<ArcRenderObjectOf<E>>,
+        old_render_object: Result<ArcRenderObjectOf<E>, RenderChildrenOf<E>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> SubtreeRenderObjectCommitResult<E::ParentProtocol> {
@@ -404,6 +405,7 @@ where
                     element,
                     children,
                     waker: err.waker,
+                    render_children: todo!(),
                 });
 
                 return SubtreeRenderObjectCommitResult::Suspended;
@@ -447,9 +449,10 @@ where
                         child_render_action,
                         subtree_has_action,
                     } => todo!(),
-                    NewRenderObject => {
-                        access_node(AccessArcRenderObject(old_render_object), UpdateRenderAccessor)
-                    },
+                    NewRenderObject => access_node(
+                        AccessArcRenderObject(old_render_object),
+                        UpdateRenderAccessor,
+                    ),
                 };
                 let (render_object, subtree_update) = if is_non_suspense_render_element::<E>() {
                     if let Some(old_render_object) = old_render_object {
@@ -555,183 +558,6 @@ where
                 });
 
                 return subtree_update;
-            }
-        }
-    }
-
-    fn commit_update_render_object(
-        old_render_object: ArcRenderObjectOf<E>,
-        widget: &E::ArcWidget,
-        callback: Option<ChildRenderObjectsUpdateCallback<E>>,
-        subtree_updates: ContainerOf<E, SubtreeRenderObjectCommitResult<E::ChildProtocol>>,
-    ) -> (
-        Option<ArcRenderObjectOf<E>>,
-        SubtreeRenderObjectCommitResult<E::ParentProtocol>,
-    ) {
-        let RenderElementFunctionTable::RenderObject {
-            into_arc_child_render_object,
-            update_render,
-            suspense: None,
-            ..
-        } = render_element_function_table_of::<E>()
-        else {
-            panic!("Invoked method from non-suspense render element on other element types")
-        };
-
-        let subtree_suspended = subtree_updates.any(SubtreeRenderObjectCommitResult::is_suspended);
-        let subtree_no_update =
-            subtree_updates.all(SubtreeRenderObjectCommitResult::is_keep_render_object);
-
-        if subtree_suspended {
-            Self::commit_suspend_render_object(old_render_object);
-            return (None, SubtreeRenderObjectCommitResult::Suspended);
-        }
-        if !subtree_no_update || update_render.is_some() || callback.is_some() {
-            E::RenderOrUnit::with_inner(&old_render_object, move |render, children, context| {
-                if let Some(update_render) = update_render {
-                    let update_results = (update_render)(render, widget);
-                    match update_results {
-                        RerenderAction::None => {}
-                        RerenderAction::Repaint => context.mark_needs_paint(),
-                        RerenderAction::Relayout => context.mark_needs_layout(),
-                    }
-                }
-                if let Some(callback) = callback {
-                    replace_with::replace_with_or_abort(children, move |children| {
-                        let items = (callback)(children);
-                        items.zip_collect(subtree_updates, |item, update| {
-                            use RenderObjectReconcileItem::*;
-                            use SubtreeRenderObjectCommitResult::*;
-                            match (item, update) {
-                                (New, NewRenderObject(render_object)) => render_object,
-                                (Keep(render_object), KeepRenderObject) => render_object,
-                                (Keep(_), NewRenderObject(render_object)) => render_object,
-                                (New, KeepRenderObject) => panic!("Render object update callback bug: Requested for new render object while the corresponding slot is not producing one"),
-                                (_, Suspended) => panic!("Fatal logic bug in epgi-core reconcile logic. Please file issue report.")
-                            }
-                        })
-                    })
-                } else if !subtree_no_update {
-                    replace_with::replace_with_or_abort(children, move |children| {
-                        children.zip_collect(subtree_updates, |child, update| {
-                            use SubtreeRenderObjectCommitResult::*;
-                            match update {
-                                KeepRenderObject => child,
-                                NewRenderObject(render_object) => render_object,
-                                Suspended => panic!("Fatal logic bug in epgi-core reconcile logic. Please file issue report."),
-                            }
-                        })
-                    })
-                }
-            });
-        }
-        return (
-            Some(old_render_object),
-            SubtreeRenderObjectCommitResult::KeepRenderObject,
-        );
-    }
-
-    fn commit_suspend_render_object(old_render_object: ArcRenderObjectOf<E>) {
-        let RenderElementFunctionTable::RenderObject {
-            detach_render,
-            suspense: None,
-            ..
-        } = render_element_function_table_of::<E>()
-        else {
-            panic!("Invoked method from non-suspense render element on other element types")
-        };
-
-        if let Some(detach_render) = detach_render {
-            E::RenderOrUnit::with_inner(&old_render_object, detach_render)
-        }
-    }
-
-    fn commit_create_render_object(
-        element: &E,
-        widget: &E::ArcWidget,
-        element_children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        updates: ContainerOf<E, SubtreeRenderObjectCommitResult<E::ChildProtocol>>,
-        element_context: &ArcElementContextNode,
-    ) -> (
-        Option<ArcRenderObjectOf<E>>,
-        SubtreeRenderObjectCommitResult<E::ParentProtocol>,
-    ) {
-        let RenderElementFunctionTable::RenderObject {
-            create_render,
-            create_render_object,
-            suspense: None,
-            into_arc_child_render_object,
-            ..
-        } = render_element_function_table_of::<E>()
-        else {
-            panic!("Invoked method from non-suspense render element on other element types")
-        };
-
-        let suspended = updates.any(SubtreeRenderObjectCommitResult::is_suspended);
-        if suspended {
-            return (None, SubtreeRenderObjectCommitResult::Suspended);
-        }
-        let render = create_render(element, widget);
-        let children = element_children.zip_ref_collect(updates, |element_child, update| {
-            use SubtreeRenderObjectCommitResult::*;
-            match update {
-                KeepRenderObject => element_child.get_current_subtree_render_object(),
-                NewRenderObject(render_object) => Some(render_object),
-                Suspended => panic!(
-                    "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
-                ),
-            }
-        });
-
-        let render_object = create_render_object(render, children, element_context.clone());
-
-        (
-            Some(render_object),
-            SubtreeRenderObjectCommitResult::NewRenderObject(into_arc_child_render_object(
-                render_object.clone(),
-            )),
-        )
-    }
-
-    fn commit_suspend_suspense<'a, 'batch>(
-        old_render_object: ArcRenderObjectOf<E>,
-        mut element: E,
-        element_context: &ArcElementContextNode,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
-    ) {
-        match render_element_function_table_of::<E>() {
-            RenderElementFunctionTable::RenderObject {
-                detach_render: detach_render_object,
-                suspense:
-                    Some(SuspenseElementFunctionTable {
-                        get_suspense_element_mut,
-                        get_suspense_widget_ref,
-                        get_suspense_render_object,
-                        into_arc_render_object,
-                    }),
-                ..
-            } => {
-                let suspense_element = get_suspense_element_mut(&mut element);
-                if suspense_element.suspended {
-                    return;
-                }
-                let old_render_object = old_render_object
-                    .expect("Suspense should always have a non-suspended render object");
-                let (node, subtree_results) = rayon::scope(|scope| {
-                    suspense_element
-                        .fallback_widget
-                        .clone()
-                        .inflate_sync(element_context.clone(), reconcile_context)
-                });
-                let SubtreeRenderObjectCommitResult::NewRenderObject(render_object) =
-                    subtree_results
-                else {
-                    panic!("Fallback widget must not suspend and its subtree must always provide an attached renderobject")
-                };
-                todo!()
-            }
-            _ => {
-                todo!()
             }
         }
     }
@@ -924,7 +750,7 @@ where
 struct UpdateRenderChildrenAccessor<E: Element> {
     shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
     child_commits: ContainerOf<E, SubtreeRenderObjectCommitResult<E::ChildProtocol>>,
-    child_commit_summary: SubtreeRenderObjectCommitResultSummary
+    child_commit_summary: SubtreeRenderObjectCommitResultSummary,
 }
 
 impl<E> UpdateRenderChildrenAccessor<E>
@@ -934,16 +760,12 @@ where
     pub(crate) fn new(
         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
         child_commits: ContainerOf<E, SubtreeRenderObjectCommitResult<E::ChildProtocol>>,
-        child_commit_summary: SubtreeRenderObjectCommitResultSummary
+        child_commit_summary: SubtreeRenderObjectCommitResultSummary,
     ) -> Self {
-        let res = Self {
+        Self {
             shuffle,
             child_commits,
-        };
-        if !subtree_suspended {
-            Ok(res)
-        } else {
-            Err((res, DetachRenderObjectAccessor))
+            child_commit_summary,
         }
     }
 }

@@ -104,8 +104,7 @@ where
             FoundBackqueue(_) => Err(state
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work.")
-                .element_ref()
-                .map(Element::children)),
+                .children_cloned()),
             NotFound => Err(None),
         }
     }
@@ -314,8 +313,7 @@ where
             FoundBackqueue(_) => Err(state
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work.")
-                .element_ref()
-                .map(Element::children)),
+                .children_cloned()),
             NotFound => Err(None),
         }
     }

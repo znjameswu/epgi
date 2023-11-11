@@ -1,12 +1,14 @@
-use std::any::TypeId;
+use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, Protocol, Provide,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, Protocol,
+        Provide,
     },
     tree::{
-        ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, Element,
-        ReconcileItem, Reconciler, SingleChildElement, Widget, WidgetExt,
+        ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, ReconcileItem, Reconciler,
+        Widget, WidgetExt,
     },
 };
 
@@ -15,7 +17,7 @@ use crate::{
 pub trait ComponentWidget<P: Protocol>:
     Widget<Element = ComponentElement<P>, ParentProtocol = P, ChildProtocol = P> + WidgetExt
 {
-    fn build_with(&self, ctx: BuildContext) -> ArcChildWidget<P>;
+    fn build(&self, ctx: BuildContext) -> ArcChildWidget<P>;
 }
 
 impl<P> ArcWidget for Asc<dyn ComponentWidget<P>>
@@ -41,10 +43,8 @@ where
     }
 }
 
-#[derive(Clone)]
-pub struct ComponentElement<P: Protocol> {
-    child: ArcChildElementNode<P>,
-}
+#[derive(Default, Clone)]
+pub struct ComponentElement<P: Protocol>(PhantomData<P>);
 
 impl<P> Element for ComponentElement<P>
 where
@@ -56,26 +56,34 @@ where
 
     type ChildProtocol = P;
 
+    type ChildContainer = ArrayContainer<1>;
+
     type Provided = Never;
 
     #[inline(always)]
     fn perform_rebuild_element(
-        self,
+        &mut self,
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        mut reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)> {
-        let child_widget = widget.build_with(reconciler.build_context());
-        match self.child.can_rebuild_with(child_widget) {
-            Ok(item) => {
-                let child = reconciler.into_reconcile_single(item);
-                Ok(Self { child })
-            }
+        children: [ArcChildElementNode<Self::ChildProtocol>; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            [ElementReconcileItem<Self::ChildProtocol>; 1],
+            Option<ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        (
+            [ArcChildElementNode<Self::ChildProtocol>; 1],
+            BuildSuspendedError,
+        ),
+    > {
+        let child_widget = widget.build(ctx);
+        match children[0].can_rebuild_with(child_widget) {
+            Ok(item) => Ok(([item], None)),
             Err((child, child_widget)) => {
-                reconciler.nodes_needing_unmount_mut().push(child);
-                let child =
-                    reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
-                Ok(Self { child })
+                nodes_needing_unmount.push(child);
+                Ok(([ElementReconcileItem::new_inflate(child_widget)], None))
             }
         }
     }
@@ -83,24 +91,14 @@ where
     #[inline(always)]
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        mut reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-    ) -> Result<Self, BuildSuspendedError> {
-        let child_widget = widget.build_with(reconciler.build_context());
-        let child = reconciler.into_reconcile_single(ReconcileItem::new_inflate(child_widget));
-        Ok(Self { child })
+    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
+        let child_widget = widget.build(ctx);
+        Ok((Self(PhantomData), [child_widget]))
     }
 
-
-
     type RenderOrUnit = ();
-}
-
-impl<P> SingleChildElement for ComponentElement<P>
-where
-    P: Protocol,
-{
-
 }
 
 pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol>(
@@ -138,7 +136,7 @@ where
     P: Protocol,
     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
 {
-    fn build_with(&self, ctx: BuildContext) -> ArcChildWidget<P> {
+    fn build(&self, ctx: BuildContext) -> ArcChildWidget<P> {
         (self.0)(ctx)
     }
 }

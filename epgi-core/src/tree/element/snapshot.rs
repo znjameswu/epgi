@@ -3,14 +3,14 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec},
+    foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec, Parallel},
     scheduler::{BatchId, LanePos},
     tree::{AsyncInflating, Hook, HookContext},
 };
 
 use super::{
     ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, ContainerOf,
-    Element,
+    Element, RenderChildrenOf,
 };
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
@@ -60,7 +60,7 @@ pub(crate) enum MainlineState<E: Element> {
         element: E,
         hooks: Hooks,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: Option<ArcRenderObjectOf<E>>,
+        render_object: Result<ArcRenderObjectOf<E>, RenderChildrenOf<E>>,
     },
     InflateSuspended {
         suspended_hooks: Hooks,
@@ -68,8 +68,9 @@ pub(crate) enum MainlineState<E: Element> {
     }, // The hooks may be partially initialized
     RebuildSuspended {
         element: E,
-        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         suspended_hooks: Hooks,
+        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        render_children: RenderChildrenOf<E>,
         waker: SuspendWaker,
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }
@@ -110,6 +111,18 @@ impl<E: Element> MainlineState<E> {
             MainlineState::InflateSuspended { .. } => None,
             MainlineState::Ready { children, .. }
             | MainlineState::RebuildSuspended { children, .. } => Some(children),
+        }
+    }
+
+    pub(crate) fn children_cloned(
+        &self,
+    ) -> Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>> {
+        match self {
+            MainlineState::InflateSuspended { .. } => None,
+            MainlineState::Ready { children, .. }
+            | MainlineState::RebuildSuspended { children, .. } => {
+                Some(children.map_ref_collect(Clone::clone))
+            }
         }
     }
 

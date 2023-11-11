@@ -1,6 +1,7 @@
 mod r#async;
 mod commit_barrier;
 mod reconcile;
+mod reconcile_new;
 mod reconciler;
 mod subtree_results;
 mod tree_scheduler;

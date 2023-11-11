@@ -5,7 +5,7 @@ use epgi_core::{
     foundation::{BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide},
     tree::{
         ArcChildElementNode, ArcChildRenderObject, DryLayout, Element, Reconciler, Render,
-        RenderElement, RenderObjectUpdateResult, Widget,
+        RenderElement, RerenderAction, Widget,
     },
 };
 
@@ -67,15 +67,15 @@ impl Element for PhantomBoxElement {
 }
 
 impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
-    fn try_create_render_object(&self, _widget: &Arc<PhantomBox>) -> Option<RenderPhantomBox> {
+    fn create_render(&self, _widget: &Arc<PhantomBox>) -> Option<RenderPhantomBox> {
         Some(RenderPhantomBox {})
     }
 
     fn update_render(
         _render_object: &mut RenderPhantomBox,
         _widget: &Arc<PhantomBox>,
-    ) -> RenderObjectUpdateResult {
-        RenderObjectUpdateResult::None
+    ) -> RerenderAction {
+        RerenderAction::None
     }
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = true;

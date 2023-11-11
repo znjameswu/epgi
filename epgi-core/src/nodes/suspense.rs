@@ -1,11 +1,11 @@
 use crate::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key, Never,
-        PaintContext, Protocol, Provide,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key,
+        Never, PaintContext, Protocol, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, Reconciler, Render,
-        RenderElement, RenderObjectUpdateResult, SuspenseElementFunctionTable, Widget,
+        RenderElement, RerenderAction, SuspenseElementFunctionTable, Widget,
     },
 };
 
@@ -44,58 +44,59 @@ impl<P: Protocol> Element for SuspenseElement<P> {
 
     type ChildProtocol = P;
 
+    type ChildContainer = ArrayContainer<1>;
+
     type Provided = Never;
 
     // type ReturnResults = BoxFuture<'static, BuildResults<Self>>;
 
     fn perform_rebuild_element(
-        self,
+        &mut self,
         widget: &Self::ArcWidget,
+        ctx: crate::tree::BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)> {
-        // Suspense needs to reconcile fallback if it is available. To avoid missing propagation rebuilds.
+        children: crate::tree::ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            crate::tree::ContainerOf<Self, crate::tree::ElementReconcileItem<Self::ChildProtocol>>,
+            Option<crate::tree::ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        (
+            crate::tree::ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+            BuildSuspendedError,
+        ),
+    > {
         todo!()
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
+        ctx: crate::tree::BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, BuildSuspendedError> {
+    ) -> Result<
+        (
+            Self,
+            crate::tree::ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>,
+        ),
+        BuildSuspendedError,
+    > {
         todo!()
     }
-
-
 
     type RenderOrUnit = RenderSuspense<P>;
 }
 
 impl<P: Protocol> RenderElement<RenderSuspense<P>> for SuspenseElement<P> {
-    fn try_create_render_object(&self, widget: &Self::ArcWidget) -> Option<RenderSuspense<P>> {
+    fn create_render(&self, widget: &Self::ArcWidget) -> RenderSuspense<P> {
         todo!()
     }
 
     fn update_render(
         render_object: &mut RenderSuspense<P>,
         widget: &Self::ArcWidget,
-    ) -> RenderObjectUpdateResult {
+    ) -> RerenderAction {
         todo!()
-    }
-
-    fn try_update_render_object_children(&self, render: &mut RenderSuspense<P>) -> Result<(), ()> {
-        let child_render_object = self
-            .fallback
-            .as_ref()
-            .unwrap_or(&self.child)
-            .get_current_subtree_render_object()
-            .expect(if self.fallback.is_some() {
-                "Fallback must never suspend"
-            } else {
-                "Child subtree must not suspend if fallback path is not inflated"
-            });
-        render.child = child_render_object;
-        Ok(())
     }
 
     const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> =
@@ -105,10 +106,16 @@ impl<P: Protocol> RenderElement<RenderSuspense<P>> for SuspenseElement<P> {
             get_suspense_render_object: |x| x,
             into_arc_render_object: |x| x,
         });
+
+    fn element_render_children_mapping<T: Send + Sync>(
+        &self,
+        element_children: <Self::ChildContainer as crate::foundation::HktContainer>::Container<T>,
+    ) -> <<RenderSuspense<P> as Render>::ChildContainer as crate::foundation::HktContainer>::Container<T>{
+        element_children
+    }
 }
 
 pub struct RenderSuspense<P: Protocol> {
-    pub(crate) child: ArcChildRenderObject<P>,
     fallback: ArcChildWidget<P>,
     is_suspended: bool,
 }
@@ -118,11 +125,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
 
     type ChildProtocol = P;
 
-    type ChildIter = [ArcChildRenderObject<P>; 1];
-
-    fn children(&self) -> Self::ChildIter {
-        todo!()
-    }
+    type ChildContainer = ArrayContainer<1>;
 
     const NOOP_DETACH: bool = true;
 
