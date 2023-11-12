@@ -79,7 +79,8 @@ where
         ),
     > {
         let child_widget = widget.build(ctx);
-        match children[0].can_rebuild_with(child_widget) {
+        let [child] = children;
+        match child.can_rebuild_with(child_widget) {
             Ok(item) => Ok(([item], None)),
             Err((child, child_widget)) => {
                 nodes_needing_unmount.push(child);

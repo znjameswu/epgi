@@ -1,6 +1,6 @@
 use crate::{
     foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, EitherParallel, InlinableDwsizeVec, Key,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Key,
         Never, PaintContext, Protocol, Provide,
     },
     tree::{

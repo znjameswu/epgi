@@ -1,8 +1,7 @@
 use crate::foundation::{PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildWidget, ChildRenderObject, DryLayoutFunctionTable, LayerOrUnit,
-    RerenderAction, Widget,
+    ArcChildWidget, ChildRenderObject, DryLayoutFunctionTable, LayerOrUnit, RerenderAction, Widget,
 };
 
 use super::{
@@ -23,8 +22,7 @@ pub trait ProxyWidget:
 
     fn create_render_state(&self) -> Self::RenderState;
 
-    fn update_render_state(&self, render_state: &mut Self::RenderState)
-        -> RerenderAction;
+    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RerenderAction;
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
@@ -83,10 +81,7 @@ where
     }
 
     #[inline(always)]
-    fn update_render_state(
-        &self,
-        render_state: &mut Self::RenderState,
-    ) -> RerenderAction {
+    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RerenderAction {
         T::update_render_state(self, render_state)
     }
     const NOOP_UPDATE_RENDER_OBJECT: bool = T::NOOP_UPDATE_RENDER_OBJECT;

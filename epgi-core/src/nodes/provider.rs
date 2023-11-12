@@ -113,7 +113,8 @@ where
             BuildSuspendedError,
         ),
     > {
-        match children[0].can_rebuild_with(widget.child.clone()) {
+        let [child] = children;
+        match child.can_rebuild_with(widget.child.clone()) {
             Ok(item) => Ok(([item], None)),
             Err((child, child_widget)) => {
                 nodes_needing_unmount.push(child);

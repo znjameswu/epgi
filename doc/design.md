@@ -731,12 +731,13 @@ For a multi-child render object, when its subtree commit result indicate only pa
         2. During the rebuild that finally unsuspended the node, it is very likely that their subtree commit result would be KeepRenderObject, which force us then to walk down anyway.
             1. Needless to say that during the rebuild that suspended the node, it is even more impossible to know anything about its child.
         3. One solution: Forbid render elements from using suspendable hookds, or even hooks at all. (No it will not work)
-        4. This effectively creates three state to cache
+        4. This effectively creates three state to cache (cache in render object)
             1. The child is not suspended
             2. The child render object is present, but an intermediate non-render element suspended
             3. The child render object is suspended due to somewhere suspended in its subtree.
-        5. Two solutions: 
+        5. Or we have another two solutions (cache in suspender): 
             1. Walk down on un-suspend. Igore child render object update.
             2. Walk down on suspend and then cache the render object. Pop-up the cache when un-suspended
+        6. "Cache in suspender" messes up the entire which-state-stores-where picture
 
-
+Decision: Cache. Store the three state in render object

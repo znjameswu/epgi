@@ -282,7 +282,11 @@ where
             RenderElementFunctionTable::RenderObject {
                 into_arc_child_render_object,
                 ..
-            } => render_object.map(into_arc_child_render_object).ok(),
+            } => render_object
+                .as_ref()
+                .ok()
+                .cloned()
+                .map(into_arc_child_render_object),
             RenderElementFunctionTable::None { as_child, .. } => {
                 as_child(children).get_current_subtree_render_object()
             }

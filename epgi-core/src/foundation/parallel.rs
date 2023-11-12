@@ -395,9 +395,11 @@ where
     type Item = &'a <EitherParallel<A, B> as IntoIterator>::Item;
 
     fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
-        self.0
-            .as_ref()
-            .map_either(AsIterator::as_iter, AsIterator::as_iter)
+        match &self.0 {
+            either::Either::Left(x) => either::Either::Left(x.as_iter()),
+            either::Either::Right(x) => either::Either::Right(x.as_iter()),
+        }
+        // either::Either bug here. WE CAN'T USE MAP_EITHER
     }
 }
 

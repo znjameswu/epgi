@@ -1,6 +1,6 @@
 use crate::{
-    foundation::{Arc, ArrayContainer, HktContainer, Never},
-    sync::SubtreeRenderObjectCommitResult,
+    foundation::{Arc, ArrayContainer, HktContainer, Never, Protocol},
+    sync::SubtreeRenderObjectChange,
     tree::{
         render_has_layer, ArcChildRenderObject, Render, RenderContextNode, RenderObject,
         RerenderAction,
@@ -46,8 +46,8 @@ pub enum RenderElementFunctionTable<E: Element> {
             &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         ) -> &ArcChildElementNode<E::ParentProtocol>,
         into_subtree_update: fn(
-            ContainerOf<E, SubtreeRenderObjectCommitResult<E::ChildProtocol>>,
-        ) -> SubtreeRenderObjectCommitResult<E::ParentProtocol>,
+            ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        ) -> SubtreeRenderObjectChange<E::ParentProtocol>,
     },
 }
 
@@ -67,6 +67,12 @@ where
     }
 }
 
+pub enum MaybeSuspendChildRenderObject<P: Protocol> {
+    Ready(ArcChildRenderObject<P>),
+    ElementSuspended(ArcChildRenderObject<P>),
+    Detached,
+}
+
 impl<E, R> RenderOrUnit<E> for R
 where
     E: RenderElement<Self>,
@@ -78,7 +84,7 @@ where
 {
     type ArcRenderObject = Arc<RenderObject<R>>;
     // We assume suspend is relatively rare. Suspended state should not bloat the node size
-    type RenderChildren = Box<ContainerOf<E, Option<ArcChildRenderObject<E::ChildProtocol>>>>;
+    type RenderChildren = Box<ContainerOf<E, MaybeSuspendChildRenderObject<E::ChildProtocol>>>;
 
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::RenderObject {
@@ -118,6 +124,7 @@ where
         ) -> T,
     ) -> T {
         let mut inner = render_object.inner.lock();
+        let inner = &mut *inner;
         op(
             &mut inner.render,
             &mut inner.children,
@@ -141,7 +148,10 @@ where
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::None {
             as_child: |children| &children[0],
-            into_subtree_update: |x| x[0],
+            into_subtree_update: |x| {
+                let [x] = x;
+                x
+            },
         };
 
     fn with_inner<T>(

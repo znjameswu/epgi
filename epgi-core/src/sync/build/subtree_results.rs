@@ -3,48 +3,62 @@ use crate::{
     tree::{ArcChildRenderObject, RerenderAction},
 };
 
-#[derive(Clone)]
-pub enum SubtreeRenderObjectCommitResult<P: Protocol> {
-    KeepRenderObject {
+// #[derive(Clone)]
+pub enum SubtreeRenderObjectChange<P: Protocol> {
+    Keep {
         // You have to ensure child >= subtree
         child_render_action: RerenderAction,
         subtree_has_action: RerenderAction,
     },
-    NewRenderObject(ArcChildRenderObject<P>),
-    Suspended,
+    New(ArcChildRenderObject<P>),
+    /// An element is suspended. However, the element that hold the immediate child render object
+    /// is below the suspended element and undetached, and it reports an unchanged render object.
+    SuspendedKeep,
+    /// An element is suspended. However, the element that hold the immediate child render object
+    /// is below the suspended element and undetached, and it created a new render object.
+    SuspendedNew(ArcChildRenderObject<P>),
+    /// The immediate child render object is detached
+    Detached,
 }
 
-impl<P> SubtreeRenderObjectCommitResult<P>
+impl<P> SubtreeRenderObjectChange<P>
 where
     P: Protocol,
 {
     pub fn is_suspended(&self) -> bool {
-        match self {
-            SubtreeRenderObjectCommitResult::Suspended => true,
-            _ => false,
-        }
+        todo!()
+        // match self {
+        //     SubtreeRenderObjectChange::Suspended => true,
+        //     _ => false,
+        // }
     }
 
     pub fn is_keep_render_object(&self) -> bool {
         match self {
-            SubtreeRenderObjectCommitResult::KeepRenderObject { .. } => true,
+            SubtreeRenderObjectChange::Keep { .. } => true,
             _ => false,
         }
     }
 
     pub(crate) fn as_summary(&self) -> SubtreeRenderObjectCommitResultSummary {
         match self {
-            SubtreeRenderObjectCommitResult::KeepRenderObject {
+            SubtreeRenderObjectChange::Keep {
                 child_render_action,
                 subtree_has_action,
             } => SubtreeRenderObjectCommitResultSummary::KeepRenderObject {
                 child_render_action: child_render_action.clone(),
                 subtree_has_action: subtree_has_action.clone(),
             },
-            SubtreeRenderObjectCommitResult::NewRenderObject(_) => {
+            SubtreeRenderObjectChange::New(_) => {
                 SubtreeRenderObjectCommitResultSummary::NewRenderObject
             }
-            SubtreeRenderObjectCommitResult::Suspended => {
+            SubtreeRenderObjectChange::SuspendedKeep => {
+                SubtreeRenderObjectCommitResultSummary::Suspended
+            }
+            SubtreeRenderObjectChange::SuspendedNew(_) => {
+                SubtreeRenderObjectCommitResultSummary::Suspended
+            }
+            SubtreeRenderObjectChange::Detached => {
                 SubtreeRenderObjectCommitResultSummary::Suspended
             }
         }
@@ -94,7 +108,6 @@ pub(crate) enum SubtreeRenderObjectCommitResultSummary {
     NewRenderObject,
     Suspended,
 }
-
 
 impl SubtreeRenderObjectCommitResultSummary {
     pub(crate) fn is_suspended(&self) -> bool {

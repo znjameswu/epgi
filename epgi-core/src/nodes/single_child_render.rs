@@ -8,8 +8,7 @@ use crate::foundation::{
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    LayerOrUnit, ReconcileItem, Reconciler, Render, RenderElement, RerenderAction,
-    Widget,
+    LayerOrUnit, ReconcileItem, Reconciler, Render, RenderElement, RerenderAction, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -21,8 +20,7 @@ pub trait SingleChildRenderObjectWidget:
 
     fn create_render_state(&self) -> Self::RenderState;
 
-    fn update_render_state(&self, render_state: &mut Self::RenderState)
-        -> RerenderAction;
+    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RerenderAction;
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
@@ -97,7 +95,8 @@ where
             BuildSuspendedError,
         ),
     > {
-        match children[0].can_rebuild_with(widget.child().clone()) {
+        let [child] = children;
+        match child.can_rebuild_with(widget.child().clone()) {
             Ok(item) => Ok(([item], None)),
             Err((child, child_widget)) => {
                 nodes_needing_unmount.push(child);

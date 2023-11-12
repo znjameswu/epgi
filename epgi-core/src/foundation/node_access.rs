@@ -12,7 +12,7 @@ pub(crate) trait NodeAccessor<Node: AccessNode> {
 
     fn can_bypass(self, node: &Node) -> Result<Self::Return, Self::Probe>;
 
-    fn access(inner: Node::Inner<'_>, probe: Self::Probe) -> Self::Return;
+    fn access(inner: &mut Node::Inner<'_>, probe: Self::Probe) -> Self::Return;
 }
 
 pub(crate) trait AccessNode {
@@ -24,7 +24,8 @@ pub(crate) trait AccessNode {
 pub(crate) fn access_node<N: AccessNode, A: NodeAccessor<N>>(node: N, accessor: A) -> A::Return {
     let can_bypass = accessor.can_bypass(&node);
 
-    can_bypass.unwrap_or_else(|probe| node.with_inner(move |inner| A::access(inner, probe)))
+    can_bypass
+        .unwrap_or_else(|probe| node.with_inner(move |mut inner| A::access(&mut inner, probe)))
 }
 
 pub(crate) fn access_node2<N: AccessNode, A1: NodeAccessor<N>, A2: NodeAccessor<N>>(
@@ -36,9 +37,9 @@ pub(crate) fn access_node2<N: AccessNode, A1: NodeAccessor<N>, A2: NodeAccessor<
     let can_bypass2 = accessor2.can_bypass(&node);
     match (can_bypass1, can_bypass2) {
         (Ok(res1), Ok(res2)) => (res1, res2),
-        (can_bypass1, can_bypass2) => node.with_inner(move |inner| {
-            let res1 = can_bypass1.unwrap_or_else(|probe1| A1::access(inner, probe1));
-            let res2 = can_bypass2.unwrap_or_else(|probe2| A2::access(inner, probe2));
+        (can_bypass1, can_bypass2) => node.with_inner(move |mut inner| {
+            let res1 = can_bypass1.unwrap_or_else(|probe1| A1::access(&mut inner, probe1));
+            let res2 = can_bypass2.unwrap_or_else(|probe2| A2::access(&mut inner, probe2));
             (res1, res2)
         }),
     }
@@ -60,10 +61,10 @@ pub(crate) fn access_node3<
     let can_bypass3 = accessor3.can_bypass(&node);
     match (can_bypass1, can_bypass2, can_bypass3) {
         (Ok(res1), Ok(res2), Ok(res3)) => (res1, res2, res3),
-        (can_bypass1, can_bypass2, can_bypass3) => node.with_inner(move |inner| {
-            let res1 = can_bypass1.unwrap_or_else(|probe1| A1::access(inner, probe1));
-            let res2 = can_bypass2.unwrap_or_else(|probe2| A2::access(inner, probe2));
-            let res3 = can_bypass3.unwrap_or_else(|probe3| A3::access(inner, probe3));
+        (can_bypass1, can_bypass2, can_bypass3) => node.with_inner(move |mut inner| {
+            let res1 = can_bypass1.unwrap_or_else(|probe1| A1::access(&mut inner, probe1));
+            let res2 = can_bypass2.unwrap_or_else(|probe2| A2::access(&mut inner, probe2));
+            let res3 = can_bypass3.unwrap_or_else(|probe3| A3::access(&mut inner, probe3));
             (res1, res2, res3)
         }),
     }
