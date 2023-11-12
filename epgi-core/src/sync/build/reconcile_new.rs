@@ -11,17 +11,17 @@ use crate::{
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectCommitResultSummary, TreeScheduler},
     tree::{
-        is_non_suspense_render_element, is_suspense_element, render_element_function_table_of,
-        ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf, AsyncWorkQueue,
-        BuildContext, ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementContextNode,
-        ElementNode, ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext,
-        Hooks, Mainline, MainlineState, MaybeSuspendChildRenderObject, RenderChildrenOf,
-        RenderElementFunctionTable, RenderObject, RenderObjectReconcileItem, RenderOrUnit,
-        RerenderAction, SuspenseElementFunctionTable,
+        is_non_render_element, is_non_suspense_render_element, is_suspense_element,
+        render_element_function_table_of, ArcChildElementNode, ArcElementContextNode,
+        ArcRenderObjectOf, AsyncWorkQueue, BuildContext, ChildRenderObjectsUpdateCallback,
+        ContainerOf, Element, ElementContextNode, ElementNode, ElementReconcileItem,
+        ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, MainlineState,
+        MaybeSuspendChildRenderObject, RenderChildrenOf, RenderElementFunctionTable, RenderObject,
+        RenderObjectReconcileItem, RenderOrUnit, RerenderAction, SuspenseElementFunctionTable,
     },
 };
 
-use super::CancelAsync;
+use super::{CancelAsync, SyncReconcileContext};
 
 enum VisitAction<E: Element> {
     Rebuild {
@@ -97,20 +97,13 @@ where
                     render_object: render_object.as_ref().ok().cloned(),
                 },
                 RebuildSuspended {
-                    element,
-                    suspended_hooks,
-                    children,
-                    render_children,
-                    waker,
+                    element, children, ..
                 } => VisitAction::Visit {
                     element: element.clone(),
                     children: children.map_ref_collect(Clone::clone),
                     render_object: None,
                 },
-                InflateSuspended {
-                    suspended_hooks,
-                    waker,
-                } => {
+                InflateSuspended { .. } => {
                     debug_assert!(
                         false,
                         "Serious logic bug. \
@@ -163,6 +156,53 @@ where
         };
     }
 
+    fn rebuild<'a, 'batch>(
+        self: &Arc<Self>,
+        widget: Option<E::ArcWidget>,
+        reconcile_context: SyncReconcileContext<'a, 'batch>,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        let visit_action = self.visit_inspect(widget, reconcile_context);
+        match visit_action {
+            VisitAction::Rebuild {
+                is_poll,
+                old_widget,
+                new_widget,
+                state,
+                cancel_async,
+            } => todo!(),
+            VisitAction::Visit {
+                element,
+                children,
+                render_object,
+            } => {
+                let results = children
+                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
+                        child.visit_and_work_sync(reconcile_context)
+                    });
+                let (children, render_object_changes) = results.unzip_collect(|x| x);
+                let render_object_change_summary =
+                    SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+
+                if is_non_render_element::<E>() {
+                    let RenderElementFunctionTable::None {
+                        as_child,
+                        into_subtree_render_object_change,
+                    } = render_element_function_table_of::<E>()
+                    else {
+                        panic!(
+                            "Invoked method from non-render render element on other element types"
+                        )
+                    };
+                    return into_subtree_render_object_change(render_object_changes);
+                } else if is_non_suspense_render_element::<E>() {
+                    
+                }
+                todo!()
+            }
+            VisitAction::EndOfVisit => SubtreeRenderObjectChange::new_no_update(),
+        }
+    }
+
     fn apply_updates_sync_new<'a, 'batch>(
         element_context: &ElementContextNode,
         job_ids: &'a Inlinable64Vec<JobId>,
@@ -191,7 +231,7 @@ where
         updates: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let RenderElementFunctionTable::None {
-            into_subtree_update,
+            into_subtree_render_object_change: into_subtree_update,
             ..
         } = render_element_function_table_of::<E>()
         else {
@@ -413,9 +453,9 @@ where
 //     }
 // }
 
-#[derive(Clone, Copy)]
-pub(crate) struct SyncReconcileContext<'a, 'batch> {
-    job_ids: &'a Inlinable64Vec<JobId>,
-    scope: &'a rayon::Scope<'batch>,
-    tree_scheduler: &'batch TreeScheduler,
-}
+// #[derive(Clone, Copy)]
+// pub(crate) struct SyncReconcileContext<'a, 'batch> {
+//     job_ids: &'a Inlinable64Vec<JobId>,
+//     scope: &'a rayon::Scope<'batch>,
+//     tree_scheduler: &'batch TreeScheduler,
+// }

@@ -5,6 +5,7 @@ use crate::{
 
 // #[derive(Clone)]
 pub enum SubtreeRenderObjectChange<P: Protocol> {
+    /// Nothing has changed since the last commit.
     Keep {
         // You have to ensure child >= subtree
         child_render_action: RerenderAction,
@@ -13,18 +14,24 @@ pub enum SubtreeRenderObjectChange<P: Protocol> {
     New(ArcChildRenderObject<P>),
     /// An element is suspended. However, the element that hold the immediate child render object
     /// is below the suspended element and undetached, and it reports an unchanged render object.
-    SuspendedKeep,
+    Suspend,
     /// An element is suspended. However, the element that hold the immediate child render object
     /// is below the suspended element and undetached, and it created a new render object.
-    SuspendedNew(ArcChildRenderObject<P>),
+    SuspendAboveNew(ArcChildRenderObject<P>),
     /// The immediate child render object is detached
-    Detached,
+    Detach,
 }
 
 impl<P> SubtreeRenderObjectChange<P>
 where
     P: Protocol,
 {
+    pub fn new_no_update() -> Self {
+        Self::Keep {
+            child_render_action: RerenderAction::None,
+            subtree_has_action: RerenderAction::None,
+        }
+    }
     pub fn is_suspended(&self) -> bool {
         todo!()
         // match self {
@@ -52,15 +59,11 @@ where
             SubtreeRenderObjectChange::New(_) => {
                 SubtreeRenderObjectCommitResultSummary::NewRenderObject
             }
-            SubtreeRenderObjectChange::SuspendedKeep => {
+            SubtreeRenderObjectChange::Suspend => SubtreeRenderObjectCommitResultSummary::Suspended,
+            SubtreeRenderObjectChange::SuspendAboveNew(_) => {
                 SubtreeRenderObjectCommitResultSummary::Suspended
             }
-            SubtreeRenderObjectChange::SuspendedNew(_) => {
-                SubtreeRenderObjectCommitResultSummary::Suspended
-            }
-            SubtreeRenderObjectChange::Detached => {
-                SubtreeRenderObjectCommitResultSummary::Suspended
-            }
+            SubtreeRenderObjectChange::Detach => SubtreeRenderObjectCommitResultSummary::Suspended,
         }
     }
 

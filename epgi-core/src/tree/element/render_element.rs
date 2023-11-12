@@ -45,7 +45,7 @@ pub enum RenderElementFunctionTable<E: Element> {
         as_child: fn(
             &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         ) -> &ArcChildElementNode<E::ParentProtocol>,
-        into_subtree_update: fn(
+        into_subtree_render_object_change: fn(
             ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         ) -> SubtreeRenderObjectChange<E::ParentProtocol>,
     },
@@ -148,7 +148,7 @@ where
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::None {
             as_child: |children| &children[0],
-            into_subtree_update: |x| {
+            into_subtree_render_object_change: |x| {
                 let [x] = x;
                 x
             },
@@ -188,6 +188,13 @@ pub(crate) const fn is_suspense_element<E: Element>() -> bool {
         RenderElementFunctionTable::RenderObject {
             suspense: Some(_), ..
         } => true,
+        _ => false,
+    }
+}
+
+pub(crate) const fn is_non_render_element<E: Element>() -> bool {
+    match render_element_function_table_of::<E>() {
+        RenderElementFunctionTable::None { .. } => true,
         _ => false,
     }
 }
