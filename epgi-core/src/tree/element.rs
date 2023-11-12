@@ -341,7 +341,12 @@ pub fn create_root_element<E, R, L>(
 ) -> Arc<ElementNode<E>>
 where
     E: RenderElement<R>,
-    R: LayerRender<L, ParentProtocol = E::ParentProtocol, ChildProtocol = E::ChildProtocol>,
+    R: LayerRender<
+        L,
+        ChildContainer = E::ChildContainer,
+        ParentProtocol = E::ParentProtocol,
+        ChildProtocol = E::ChildProtocol,
+    >,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
     L: Layer<

@@ -1,13 +1,14 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext, Protocol,
-        Provide,
+        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, OptionContainer,
+        PaintContext, Protocol, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
-        CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator, DryLayout,
-        Element, Layer, LayerCompositionConfig, LayerRender, PaintResults, ReconcileItem,
-        Reconciler, Render, RenderElement, RerenderAction, Widget,
+        CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
+        ChildRenderObjectsUpdateCallback, DryLayout, Element, ElementReconcileItem, Layer,
+        LayerCompositionConfig, LayerRender, PaintResults, Render, RenderElement, RerenderAction,
+        Widget,
     },
 };
 
@@ -38,9 +39,7 @@ impl Widget for RootView {
 }
 
 #[derive(Clone)]
-pub struct RootElement {
-    pub child: Option<ArcChildElementNode<BoxProtocol>>,
-}
+pub struct RootElement {}
 
 impl Element for RootElement {
     type ArcWidget = Asc<RootView>;
@@ -49,82 +48,76 @@ impl Element for RootElement {
 
     type ChildProtocol = BoxProtocol;
 
+    type ChildContainer = OptionContainer;
+
     type Provided = Never;
 
     fn perform_rebuild_element(
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
-        self,
+        &mut self,
         widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        mut reconciler: impl Reconciler<Self::ChildProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)> {
-        let child_widget = (widget.build)(reconciler.build_context());
-        match (child_widget, self.child) {
-            (None, None) => Ok(Self { child: None }),
+        children: Option<ArcChildElementNode<Self::ChildProtocol>>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            Option<ElementReconcileItem<Self::ChildProtocol>>,
+            Option<ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        (
+            Option<ArcChildElementNode<Self::ChildProtocol>>,
+            BuildSuspendedError,
+        ),
+    > {
+        let child_widget = (widget.build)(ctx);
+        let item = match (child_widget, children) {
+            (None, None) => None,
             (None, Some(child)) => {
-                reconciler.nodes_needing_unmount_mut().push(child.clone());
-                Ok(Self { child: None })
+                nodes_needing_unmount.push(child.clone());
+                None
             }
-            (Some(child_widget), None) => {
-                let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
-                Ok(Self { child: Some(child) })
-            }
+            (Some(child_widget), None) => Some(ElementReconcileItem::new_inflate(child_widget)),
             (Some(child_widget), Some(child)) => match child.can_rebuild_with(child_widget) {
-                Ok(item) => {
-                    let [child] = reconciler.into_reconcile([item]);
-                    Ok(Self { child: Some(child) })
-                }
+                Ok(item) => Some(item),
                 Err((child, child_widget)) => {
-                    reconciler.nodes_needing_unmount_mut().push(child);
-                    let [child] =
-                        reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
-                    Ok(Self { child: Some(child) })
+                    nodes_needing_unmount.push(child);
+                    Some(ElementReconcileItem::new_inflate(child_widget))
                 }
             },
-        }
+        };
+        Ok((item, None))
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        mut reconciler: impl Reconciler<Self::ChildProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-    ) -> Result<Self, BuildSuspendedError> {
-        let child_widget = (widget.build)(reconciler.build_context());
-        if let Some(child_widget) = child_widget {
-            let [child] = reconciler.into_reconcile([ReconcileItem::new_inflate(child_widget)]);
-            Ok(Self { child: Some(child) })
-        } else {
-            Ok(Self { child: None })
-        }
-    }
-
-    type ChildIter = Option<ArcChildElementNode<BoxProtocol>>;
-
-    fn children(&self) -> Self::ChildIter {
-        self.child.clone()
+        ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<(Self, Option<ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError> {
+        let child_widget = (widget.build)(ctx);
+        Ok((RootElement {}, child_widget))
     }
 
     type RenderOrUnit = RenderRoot;
 }
 
 impl RenderElement<RenderRoot> for RootElement {
-    fn create_render(&self, widget: &Self::ArcWidget) -> Option<RenderRoot> {
+    fn create_render(&self, widget: &Self::ArcWidget) -> RenderRoot {
         todo!()
     }
 
     fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RerenderAction {
-        RerenderAction::None
+        todo!()
     }
 
-    const NOOP_UPDATE_RENDER_OBJECT: bool = true;
-
-    fn try_update_render_object_children(&self, render: &mut RenderRoot) -> Result<(), ()> {
-        render.child = self.child.as_ref().map(|child| {
-            child
-                .get_current_subtree_render_object()
-                .expect("Root ElementNode should never receive suspense event")
-        });
-        Ok(())
+    fn element_render_children_mapping<T: Send + Sync>(
+        &self,
+        element_children: <Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<
+            T,
+        >,
+    ) -> <<RenderRoot as Render>::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>
+    {
+        todo!()
     }
 }
 
@@ -137,11 +130,7 @@ impl Render for RenderRoot {
 
     type ChildProtocol = BoxProtocol;
 
-    type ChildIter = Option<ArcChildRenderObject<BoxProtocol>>;
-
-    fn children(&self) -> Self::ChildIter {
-        self.child.clone()
-    }
+    type ChildContainer = OptionContainer;
 
     type LayoutMemo = ();
 

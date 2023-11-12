@@ -1,17 +1,16 @@
 use crate::{
     foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Key,
-        Never, PaintContext, Protocol, Provide,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never,
+        PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, Element, Reconciler, Render,
-        RenderElement, RerenderAction, SuspenseElementFunctionTable, Widget,
+        ArcChildElementNode, ArcChildWidget, Element, Render, RenderElement, RerenderAction,
+        SuspenseElementFunctionTable, Widget,
     },
 };
 
 #[derive(Clone)]
 pub struct SuspenseElement<P: Protocol> {
-    pub(crate) child: ArcChildElementNode<P>,
     pub(crate) fallback_widget: ArcChildWidget<P>,
     pub(crate) fallback: Option<ArcChildElementNode<P>>,
 }

@@ -330,10 +330,11 @@ impl MainState {
                 child
             }),
         });
-        let element = RootElement { child: None };
+        let element = RootElement {};
         let element_node = create_root_element::<RootElement, RenderRoot, RootLayer>(
             root_widget,
             element,
+            None,
             RenderRoot { child: None },
             RootLayer::new(None),
             Hooks {

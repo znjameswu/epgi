@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize};
 use epgi_core::{
-    foundation::{BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide},
+    foundation::{
+        ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
+    },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, DryLayout, Element, Reconciler, Render,
-        RenderElement, RerenderAction, Widget,
+        ArcChildElementNode, ArcChildWidget, DryLayout, Element, Render, RenderElement,
+        RerenderAction, Widget,
     },
 };
 
@@ -38,37 +40,44 @@ impl Element for PhantomBoxElement {
 
     type ChildProtocol = BoxProtocol;
 
+    type ChildContainer = ArrayContainer<0>;
+
     type Provided = Never;
 
     fn perform_rebuild_element(
-        self,
-        _widget: &Arc<PhantomBox>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        _reconciler: impl Reconciler<BoxProtocol>,
-    ) -> Result<Self, (Self, BuildSuspendedError)> {
-        Ok(self)
+        &mut self,
+        _widget: &Self::ArcWidget,
+        _ctx: epgi_core::tree::BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<epgi_core::foundation::Arc<dyn Provide>>,
+        _children: [ArcChildElementNode<Self::ChildProtocol>; 0],
+        _nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            [epgi_core::tree::ElementReconcileItem<Self::ChildProtocol>; 0],
+            Option<epgi_core::tree::ChildRenderObjectsUpdateCallback<Self>>,
+        ),
+        (
+            [ArcChildElementNode<Self::ChildProtocol>; 0],
+            BuildSuspendedError,
+        ),
+    > {
+        Ok(([], None))
     }
 
     fn perform_inflate_element(
-        _widget: &Arc<PhantomBox>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        _reconciler: impl Reconciler<BoxProtocol>, // TODO: A specialized reconciler for inflate, to save passing &JobIds
-    ) -> Result<Self, BuildSuspendedError> {
-        Ok(Self {})
-    }
-
-    type ChildIter = [ArcChildElementNode<BoxProtocol>; 0];
-
-    fn children(&self) -> Self::ChildIter {
-        []
+        _widget: &Self::ArcWidget,
+        _ctx: epgi_core::tree::BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<epgi_core::foundation::Arc<dyn Provide>>,
+    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 0]), BuildSuspendedError> {
+        Ok((PhantomBoxElement {}, []))
     }
 
     type RenderOrUnit = RenderPhantomBox;
 }
 
 impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
-    fn create_render(&self, _widget: &Arc<PhantomBox>) -> Option<RenderPhantomBox> {
-        Some(RenderPhantomBox {})
+    fn create_render(&self, _widget: &Arc<PhantomBox>) -> RenderPhantomBox {
+        RenderPhantomBox {}
     }
 
     fn update_render(
@@ -80,14 +89,12 @@ impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = true;
 
-    fn try_update_render_object_children(
+    fn element_render_children_mapping<T: Send + Sync>(
         &self,
-        _render_object: &mut RenderPhantomBox,
-    ) -> Result<(), ()> {
-        Ok(())
+        _element_children: <Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>,
+    ) -> <<RenderPhantomBox as Render>::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>{
+        todo!()
     }
-
-    const NOOP_UPDATE_RENDER_OBJECT_CHILDREN: bool = true;
 }
 
 pub struct RenderPhantomBox {}
@@ -97,11 +104,7 @@ impl Render for RenderPhantomBox {
 
     type ChildProtocol = BoxProtocol;
 
-    type ChildIter = [ArcChildRenderObject<BoxProtocol>; 0];
-
-    fn children(&self) -> Self::ChildIter {
-        []
-    }
+    type ChildContainer = ArrayContainer<0>;
 
     const NOOP_DETACH: bool = true;
 
