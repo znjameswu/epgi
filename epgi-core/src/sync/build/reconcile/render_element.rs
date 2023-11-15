@@ -467,7 +467,7 @@ where
     /// Returns the render action that should be passed to the parent.
     /// The render action is less or equal to the child_render_action,
     /// because some of the action may be absorbed by the corresponding boundaries.
-    fn mark_render_action(
+    pub(crate) fn mark_render_action(
         &self,
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
@@ -481,7 +481,7 @@ where
     R: Render,
 {
     #[inline(always)]
-    fn update_children(
+    pub(crate) fn update_children(
         &mut self,
         shuffle: Option<
             Box<

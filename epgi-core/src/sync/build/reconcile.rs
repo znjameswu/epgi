@@ -1,4 +1,6 @@
+mod component_element;
 mod render_element;
+mod suspense_element;
 
 use linear_map::LinearMap;
 

@@ -382,10 +382,24 @@ where
     }
 }
 
-pub struct EitherParallel<Left, Right>(pub either::Either<Left, Right>)
+pub struct EitherParallel<A, B>(pub either::Either<A, B>)
 where
-    Left: Parallel,
-    Right: Parallel<Item = <Left as Parallel>::Item>;
+    A: Parallel,
+    B: Parallel<Item = <A as Parallel>::Item>;
+
+impl<A, B> EitherParallel<A, B>
+where
+    A: Parallel,
+    B: Parallel<Item = <A as Parallel>::Item>,
+{
+    pub fn new_left(value: A) -> Self {
+        Self(either::Either::Left(value))
+    }
+
+    pub fn new_right(value: B) -> Self {
+        Self(either::Either::Right(value))
+    }
+}
 
 impl<A, B> IntoIterator for EitherParallel<A, B>
 where

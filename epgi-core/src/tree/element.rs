@@ -2,14 +2,14 @@ mod async_queue;
 mod context;
 mod node;
 mod provider;
-mod render_element;
+mod render_or_unit;
 mod snapshot;
 
 pub use async_queue::*;
 pub use context::*;
 pub use node::*;
 pub use provider::*;
-pub use render_element::*;
+pub use render_or_unit::*;
 pub use snapshot::*;
 
 use crate::{

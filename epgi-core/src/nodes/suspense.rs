@@ -1,25 +1,23 @@
+use std::marker::PhantomData;
+
+use either::Either;
+
 use crate::{
     foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never,
-        PaintContext, Protocol, Provide,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, EitherContainer, EitherParallel,
+        InlinableDwsizeVec, Key, Never, PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, Element, Render, RenderAction, RenderElement,
-        SuspenseElementFunctionTable, Widget,
+        ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObjectsUpdateCallback,
+        Element, ElementReconcileItem, Render, Widget,
     },
 };
 
-#[derive(Clone)]
-pub struct SuspenseElement<P: Protocol> {
-    pub(crate) fallback_widget: ArcChildWidget<P>,
-    pub(crate) fallback: Option<ArcChildElementNode<P>>,
-}
-
 #[derive(Debug)]
 pub struct Suspense<P: Protocol> {
-    child: ArcChildWidget<P>,
-    fallback: ArcChildWidget<P>,
-    key: Option<Box<dyn Key>>,
+    pub child: ArcChildWidget<P>,
+    pub fallback: ArcChildWidget<P>,
+    pub key: Option<Box<dyn Key>>,
 }
 
 impl<P: Protocol> Widget for Suspense<P> {
@@ -36,6 +34,12 @@ impl<P: Protocol> Widget for Suspense<P> {
     }
 }
 
+#[derive(Clone)]
+pub struct SuspenseElement<P: Protocol> {
+    _phantom: PhantomData<P>, // pub(crate) fallback_widget: ArcChildWidget<P>,
+                              // pub(crate) fallback: Option<ArcChildElementNode<P>>,
+}
+
 impl<P: Protocol> Element for SuspenseElement<P> {
     type ArcWidget = Asc<Suspense<P>>;
 
@@ -43,82 +47,96 @@ impl<P: Protocol> Element for SuspenseElement<P> {
 
     type ChildProtocol = P;
 
-    type ChildContainer = ArrayContainer<1>;
+    type ChildContainer = EitherContainer<ArrayContainer<1>, ArrayContainer<2>>;
 
     type Provided = Never;
-
-    // type ReturnResults = BoxFuture<'static, BuildResults<Self>>;
 
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        ctx: crate::tree::BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: crate::tree::ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        _ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        children: EitherParallel<
+            [ArcChildElementNode<Self::ChildProtocol>; 1],
+            [ArcChildElementNode<Self::ChildProtocol>; 2],
+        >,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
     ) -> Result<
         (
-            crate::tree::ContainerOf<Self, crate::tree::ElementReconcileItem<Self::ChildProtocol>>,
-            Option<crate::tree::ChildRenderObjectsUpdateCallback<Self>>,
+            EitherParallel<
+                [ElementReconcileItem<Self::ChildProtocol>; 1],
+                [ElementReconcileItem<Self::ChildProtocol>; 2],
+            >,
+            Option<ChildRenderObjectsUpdateCallback<Self>>,
         ),
         (
-            crate::tree::ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+            EitherParallel<
+                [ArcChildElementNode<Self::ChildProtocol>; 1],
+                [ArcChildElementNode<Self::ChildProtocol>; 2],
+            >,
             BuildSuspendedError,
         ),
     > {
-        todo!()
+        use Either::*;
+        match children.0 {
+            Left([child]) => {
+                let item = match child.can_rebuild_with(widget.child.clone()) {
+                    Ok(pair) => pair,
+                    Err((child, child_widget)) => {
+                        nodes_needing_unmount.push(child);
+                        ElementReconcileItem::Inflate(child_widget)
+                    }
+                };
+                return Ok((EitherParallel::new_left([item]), None));
+            }
+            Right([child, fallback]) => {
+                let child_item = match child.can_rebuild_with(widget.child.clone()) {
+                    Ok(pair) => pair,
+                    Err((child, child_widget)) => {
+                        nodes_needing_unmount.push(child);
+                        ElementReconcileItem::Inflate(child_widget)
+                    }
+                };
+                let fallback_item = match fallback.can_rebuild_with(widget.fallback.clone()) {
+                    Ok(pair) => pair,
+                    Err((fallback, fallback_widget)) => {
+                        nodes_needing_unmount.push(fallback);
+                        ElementReconcileItem::Inflate(fallback_widget)
+                    }
+                };
+                return Ok((EitherParallel::new_right([child_item, fallback_item]), None));
+            }
+        }
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: crate::tree::BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        _ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<
         (
             Self,
-            crate::tree::ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>,
+            EitherParallel<
+                [ArcChildWidget<Self::ChildProtocol>; 1],
+                [ArcChildWidget<Self::ChildProtocol>; 2],
+            >,
         ),
         BuildSuspendedError,
     > {
-        todo!()
+        Ok((
+            Self {
+                _phantom: PhantomData,
+            },
+            EitherParallel::new_left([widget.child.clone()]),
+        ))
     }
 
     type RenderOrUnit = RenderSuspense<P>;
 }
 
-impl<P: Protocol> RenderElement for SuspenseElement<P> {
-    type Render = RenderSuspense<P>;
-
-    fn create_render(&self, widget: &Self::ArcWidget) -> RenderSuspense<P> {
-        todo!()
-    }
-
-    fn update_render(
-        render_object: &mut RenderSuspense<P>,
-        widget: &Self::ArcWidget,
-    ) -> RenderAction {
-        todo!()
-    }
-
-    const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> =
-        Some(SuspenseElementFunctionTable {
-            get_suspense_element_mut: |x| x,
-            get_suspense_widget_ref: |x| x,
-            get_suspense_render_object: |x| x,
-            into_arc_render_object: |x| x,
-        });
-
-    fn element_render_children_mapping<T: Send + Sync>(
-        &self,
-        element_children: <Self::ChildContainer as crate::foundation::HktContainer>::Container<T>,
-    ) -> <<RenderSuspense<P> as Render>::ChildContainer as crate::foundation::HktContainer>::Container<T>{
-        element_children
-    }
-}
-
 pub struct RenderSuspense<P: Protocol> {
-    fallback: ArcChildWidget<P>,
     is_suspended: bool,
+    phantom_data: PhantomData<P>,
 }
 
 impl<P: Protocol> Render for RenderSuspense<P> {

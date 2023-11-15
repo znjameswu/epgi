@@ -309,6 +309,7 @@ pub trait ChildRenderObject<PP: Protocol>:
     + 'static
 {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
+    fn detach(&self);
 }
 
 impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
@@ -317,6 +318,10 @@ where
 {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
         self
+    }
+
+    fn detach(&self) {
+        todo!()
     }
 }
 
@@ -329,6 +334,7 @@ pub trait AnyRenderObject:
 {
     fn element_context(&self) -> &ElementContextNode;
     fn layer(&self) -> Option<ArcAnyLayerNode>;
+    fn detach(&self);
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -349,6 +355,10 @@ where
         } else {
             None
         }
+    }
+
+    fn detach(&self) {
+        todo!()
     }
 }
 
