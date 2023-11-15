@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 pub use context::*;
 pub use layer_paint::*;
 
-use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Parallel, Protocol, SyncMutex};
+use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Protocol, SyncMutex};
 
 use super::{ArcAnyLayerNode, ArcElementContextNode, ElementContextNode, Layer};
 

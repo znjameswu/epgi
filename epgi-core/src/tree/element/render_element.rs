@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, ArrayContainer, HktContainer, Never, Protocol},
+    foundation::{Arc, ArrayContainer, Never},
     sync::SubtreeRenderObjectChange,
     tree::{
         render_has_layer, ArcChildRenderObject, Render, RenderAction, RenderContextNode,
@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf,
-    Element, ElementContextNode, ElementNode, RenderElement, SuspenseElementFunctionTable,
+    Element, ElementNode, RenderElement, SuspenseElementFunctionTable,
 };
 
 pub trait RenderOrUnit<E: Element> {
@@ -204,6 +204,7 @@ where
         todo!()
     }
 
+    #[inline(always)]
     fn rebuild_success_commit(
         element: &E,
         widget: &<E as Element>::ArcWidget,
@@ -223,6 +224,7 @@ where
         todo!()
     }
 
+    #[inline(always)]
     fn inflate_success_commit(
         element: &E,
         widget: &<E as Element>::ArcWidget,
@@ -271,49 +273,42 @@ where
 
     #[inline(always)]
     fn visit_commit(
-        element_node: &ElementNode<E>,
-        render_object: Option<Self::ArcRenderObject>,
-        render_object_changes: ContainerOf<
-            E,
-            SubtreeRenderObjectChange<<E as Element>::ChildProtocol>,
-        >,
-        self_rebuild_suspended: bool,
+        _element_node: &ElementNode<E>,
+        _render_object: Option<Never>,
+        [change]: [SubtreeRenderObjectChange<<E as Element>::ChildProtocol>; 1],
+        _self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
-        todo!()
+        return change;
     }
 
+    #[inline(always)]
     fn rebuild_success_commit(
-        element: &E,
-        widget: &<E as Element>::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        children: &ContainerOf<E, ArcChildElementNode<<E as Element>::ChildProtocol>>,
-        render_object: Option<Self::ArcRenderObject>,
-        render_object_changes: ContainerOf<
-            E,
-            SubtreeRenderObjectChange<<E as Element>::ChildProtocol>,
-        >,
-        element_context: &ArcElementContextNode,
-        is_new_widget: bool,
+        _element: &E,
+        _widget: &<E as Element>::ArcWidget,
+        _shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
+        _children: &[ArcChildElementNode<<E as Element>::ChildProtocol>; 1],
+        _render_object: Option<Never>,
+        [change]: [SubtreeRenderObjectChange<<E as Element>::ChildProtocol>; 1],
+        _element_context: &ArcElementContextNode,
+        _is_new_widget: bool,
     ) -> (
         Option<Self::ArcRenderObject>,
         SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
     ) {
-        todo!()
+        (None, change)
     }
 
+    #[inline(always)]
     fn inflate_success_commit(
-        element: &E,
-        widget: &<E as Element>::ArcWidget,
-        element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<
-            E,
-            SubtreeRenderObjectChange<<E as Element>::ChildProtocol>,
-        >,
+        _element: &E,
+        _widget: &<E as Element>::ArcWidget,
+        _element_context: &ArcElementContextNode,
+        [change]: [SubtreeRenderObjectChange<<E as Element>::ChildProtocol>; 1],
     ) -> (
         Option<Self::ArcRenderObject>,
         SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
     ) {
-        todo!()
+        (None, change)
     }
 }
 

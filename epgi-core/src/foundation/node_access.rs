@@ -3,8 +3,6 @@ use crate::tree::{
     RenderOrUnit,
 };
 
-use super::HktContainer;
-
 pub(crate) trait NodeAccessor<Node: AccessNode> {
     type Probe;
 
