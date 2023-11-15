@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, ContainerOf,
-    Element, RenderChildrenOf,
+    Element,
 };
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
@@ -60,7 +60,7 @@ pub(crate) enum MainlineState<E: Element> {
         element: E,
         hooks: Hooks,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: Result<ArcRenderObjectOf<E>, RenderChildrenOf<E>>,
+        render_object: Option<ArcRenderObjectOf<E>>,
     },
     InflateSuspended {
         suspended_hooks: Hooks,
@@ -70,7 +70,6 @@ pub(crate) enum MainlineState<E: Element> {
         element: E,
         suspended_hooks: Hooks,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_children: RenderChildrenOf<E>,
         waker: SuspendWaker,
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }

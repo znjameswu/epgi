@@ -21,7 +21,7 @@ pub(crate) trait AccessNode {
     fn with_inner<R>(&self, op: impl FnOnce(Self::Inner<'_>) -> R) -> R;
 }
 
-pub(crate) fn access_node<N: AccessNode, A: NodeAccessor<N>>(node: N, accessor: A) -> A::Return {
+pub(crate) fn access_node<N: AccessNode, A: NodeAccessor<N>>(node: &N, accessor: A) -> A::Return {
     let can_bypass = accessor.can_bypass(&node);
 
     can_bypass
@@ -29,7 +29,7 @@ pub(crate) fn access_node<N: AccessNode, A: NodeAccessor<N>>(node: N, accessor: 
 }
 
 pub(crate) fn access_node2<N: AccessNode, A1: NodeAccessor<N>, A2: NodeAccessor<N>>(
-    node: N,
+    node: &N,
     accessor1: A1,
     accessor2: A2,
 ) -> (A1::Return, A2::Return) {
@@ -51,7 +51,7 @@ pub(crate) fn access_node3<
     A2: NodeAccessor<N>,
     A3: NodeAccessor<N>,
 >(
-    node: N,
+    node: &N,
     accessor1: A1,
     accessor2: A2,
     accessor3: A3,

@@ -7,7 +7,7 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, DryLayout, Element, ElementReconcileItem, Layer,
-        LayerCompositionConfig, LayerRender, PaintResults, Render, RenderElement, RerenderAction,
+        LayerCompositionConfig, LayerRender, PaintResults, Render, RenderAction, RenderElement,
         Widget,
     },
 };
@@ -101,12 +101,14 @@ impl Element for RootElement {
     type RenderOrUnit = RenderRoot;
 }
 
-impl RenderElement<RenderRoot> for RootElement {
+impl RenderElement for RootElement {
+    type Render = RenderRoot;
+
     fn create_render(&self, widget: &Self::ArcWidget) -> RenderRoot {
         todo!()
     }
 
-    fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RerenderAction {
+    fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RenderAction {
         todo!()
     }
 

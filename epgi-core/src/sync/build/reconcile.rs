@@ -9,14 +9,14 @@ use crate::{
         Parallel, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{SubtreeRenderObjectChange, SubtreeRenderObjectCommitResultSummary, TreeScheduler},
+    sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary, TreeScheduler},
     tree::{
         is_non_suspense_render_element, is_suspense_element, render_element_function_table_of,
         ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf, AsyncWorkQueue,
         BuildContext, ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementContextNode,
         ElementNode, ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext,
-        Hooks, Mainline, MainlineState, RenderElementFunctionTable, RenderObject,
-        RenderObjectReconcileItem, RenderOrUnit, RerenderAction, SuspenseElementFunctionTable,
+        Hooks, Mainline, MainlineState, RenderAction, RenderElementFunctionTable, RenderObject,
+        RenderObjectSlots, RenderOrUnit, SuspenseElementFunctionTable,
     },
 };
 
@@ -892,127 +892,10 @@ where
 //     }
 // }
 
-// struct UpdateRenderAccessor<'a, E: Element> {
-//     update_render: Option<fn(&mut E::RenderOrUnit, &E::ArcWidget) -> RerenderAction>,
-//     widget: &'a E::ArcWidget,
-// }
-
-// impl<'a, E> NodeAccessor<AccessArcRenderObject<E>> for UpdateRenderAccessor<'a, E>
-// where
-//     E: Element,
-// {
-//     type Probe = (
-//         fn(&mut E::RenderOrUnit, &E::ArcWidget) -> RerenderAction,
-//         &'a E::ArcWidget,
-//     );
-
-//     type Return = RerenderAction;
-
-//     fn can_bypass(self, node: &AccessArcRenderObject<E>) -> Result<Self::Return, Self::Probe> {
-//         if let Some(update_render) = self.update_render {
-//             Err((update_render, self.widget))
-//         } else {
-//             Ok(RerenderAction::None)
-//         }
-//     }
-
-//     fn access(
-//         (render, children, render_context): <AccessArcRenderObject<E> as AccessNode>::Inner<'_>,
-//         (update_render, widget): Self::Probe,
-//     ) -> Self::Return {
-//         let update_result = (update_render)(render, widget);
-//         update_result
-//     }
-// }
-
 // struct UpdateRenderChildrenAccessor<E: Element> {
 //     shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
 //     child_commits: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
 //     child_commit_summary: SubtreeRenderObjectCommitResultSummary
-// }
-
-// impl<E> UpdateRenderChildrenAccessor<E>
-// where
-//     E: Element,
-// {
-//     pub(crate) fn new(
-//         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-//         child_commits: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-//         child_commit_summary: SubtreeRenderObjectCommitResultSummary
-//     ) -> Self {
-//         let res = Self {
-//             shuffle,
-//             child_commits,
-//         };
-//         if !subtree_suspended {
-//             Ok(res)
-//         } else {
-//             Err((res, DetachRenderObjectAccessor))
-//         }
-//     }
-// }
-
-// impl<E> NodeAccessor<AccessArcRenderObject<E>> for UpdateRenderChildrenAccessor<E>
-// where
-//     E: Element,
-// {
-//     type Probe = (Self, bool);
-
-//     type Return = ();
-
-//     fn can_bypass(self, node: &AccessArcRenderObject<E>) -> Result<Self::Return, Self::Probe> {
-//         if self.subtree_suspended {
-//             // We are done here, the detach operation is done by the companion detach accessor.
-//             return Ok(());
-//         }
-//         let subtree_no_update = self
-//             .child_commits
-//             .all(SubtreeRenderObjectChange::is_keep_render_object);
-//         if subtree_no_update && self.shuffle.is_none() {
-//             return Ok(());
-//         }
-//         return Err((self, subtree_no_update));
-//     }
-
-//     fn access(
-//         (render, children, context): <AccessArcRenderObject<E> as AccessNode>::Inner<'_>,
-//         (
-//             Self {
-//                 shuffle,
-//                 child_commits,
-//                 subtree_suspended,
-//             },
-//             subtree_no_update,
-//         ): Self::Probe,
-//     ) -> Self::Return {
-//         if let Some(callback) = shuffle {
-//             replace_with::replace_with_or_abort(children, move |children| {
-//                 let items = (callback)(children);
-//                 items.zip_collect(child_commits, |shuffled_item, child_commit| {
-//                     use RenderObjectReconcileItem::*;
-//                     use SubtreeRenderObjectChange::*;
-//                     match (shuffled_item, child_commit) {
-//                         (New, New(render_object)) => render_object,
-//                         (Keep(render_object), Keep) => render_object,
-//                         (Keep(_), New(render_object)) => render_object,
-//                         (New, Keep{..}) => panic!("Render object update callback bug: Requested for new render object while the corresponding slot is not producing one"),
-//                         (_, Suspended) => panic!("Fatal logic bug in epgi-core reconcile logic. Please file issue report.")
-//                     }
-//                 })
-//             })
-//         } else if !subtree_no_update {
-//             replace_with::replace_with_or_abort(children, move |children| {
-//                 children.zip_collect(child_commits, |child, child_commit| {
-//                     use SubtreeRenderObjectChange::*;
-//                     match child_commit {
-//                         Keep => child,
-//                         New(render_object) => render_object,
-//                         Suspended => panic!("Fatal logic bug in epgi-core reconcile logic. Please file issue report."),
-//                     }
-//                 })
-//             })
-//         }
-//     }
 // }
 
 // struct DetachRenderObjectAccessor;

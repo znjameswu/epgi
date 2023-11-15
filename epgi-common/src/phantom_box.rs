@@ -6,8 +6,8 @@ use epgi_core::{
         ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, DryLayout, Element, Render, RenderElement,
-        RerenderAction, Widget,
+        ArcChildElementNode, ArcChildWidget, DryLayout, Element, Render, RenderAction,
+        RenderElement, Widget,
     },
 };
 
@@ -75,7 +75,9 @@ impl Element for PhantomBoxElement {
     type RenderOrUnit = RenderPhantomBox;
 }
 
-impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
+impl RenderElement for PhantomBoxElement {
+    type Render = RenderPhantomBox;
+
     fn create_render(&self, _widget: &Arc<PhantomBox>) -> RenderPhantomBox {
         RenderPhantomBox {}
     }
@@ -83,8 +85,8 @@ impl RenderElement<RenderPhantomBox> for PhantomBoxElement {
     fn update_render(
         _render_object: &mut RenderPhantomBox,
         _widget: &Arc<PhantomBox>,
-    ) -> RerenderAction {
-        RerenderAction::None
+    ) -> RenderAction {
+        RenderAction::None
     }
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = true;

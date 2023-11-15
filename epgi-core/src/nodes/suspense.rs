@@ -4,7 +4,7 @@ use crate::{
         PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, Element, Render, RenderElement, RerenderAction,
+        ArcChildElementNode, ArcChildWidget, Element, Render, RenderAction, RenderElement,
         SuspenseElementFunctionTable, Widget,
     },
 };
@@ -86,7 +86,9 @@ impl<P: Protocol> Element for SuspenseElement<P> {
     type RenderOrUnit = RenderSuspense<P>;
 }
 
-impl<P: Protocol> RenderElement<RenderSuspense<P>> for SuspenseElement<P> {
+impl<P: Protocol> RenderElement for SuspenseElement<P> {
+    type Render = RenderSuspense<P>;
+
     fn create_render(&self, widget: &Self::ArcWidget) -> RenderSuspense<P> {
         todo!()
     }
@@ -94,7 +96,7 @@ impl<P: Protocol> RenderElement<RenderSuspense<P>> for SuspenseElement<P> {
     fn update_render(
         render_object: &mut RenderSuspense<P>,
         widget: &Self::ArcWidget,
-    ) -> RerenderAction {
+    ) -> RenderAction {
         todo!()
     }
 

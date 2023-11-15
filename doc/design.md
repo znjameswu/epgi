@@ -740,4 +740,10 @@ For a multi-child render object, when its subtree commit result indicate only pa
             2. Walk down on suspend and then cache the render object. Pop-up the cache when un-suspended
         6. "Cache in suspender" messes up the entire which-state-stores-where picture
 
-Decision: Cache. Store the three state in render object
+~~Decision: Cache. Store the three state in render object~~
+
+Revert previous decision: DO NOT cache children for detached render objects!!!!
+
+Reason: There does not exist an ergonomical way to shuffle the cached render objects. If we cache those half-finished render objects (along with suspend state in their path), we also need to force users to express how to shuffle them during a rebuild. Shuffling full render objects is already a difficult thing to implement! This is a deal-breaker.
+
+We would rather walk down to collect render objects everytime (which is an acceptable cost with the same time complexity and only degrades performance when suspended nodes are encounterred), than making our rebuild method completely unreadable.

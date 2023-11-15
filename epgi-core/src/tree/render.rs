@@ -16,16 +16,16 @@ pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
-pub enum RerenderAction {
+pub enum RenderAction {
     None,
     Recomposite,
     Repaint,
     Relayout,
 }
 
-impl Default for RerenderAction {
+impl Default for RenderAction {
     fn default() -> Self {
-        RerenderAction::None
+        RenderAction::None
     }
 }
 
@@ -119,6 +119,7 @@ pub trait LayerRender<
 pub(crate) struct RenderNodeMark {
     pub(crate) needs_layout: AtomicBool,
     pub(crate) subtree_has_relayout: AtomicBool,
+    pub(crate) layout_boundary: AtomicBool,
 }
 
 impl RenderNodeMark {
@@ -126,6 +127,7 @@ impl RenderNodeMark {
         Self {
             needs_layout: false.into(),
             subtree_has_relayout: false.into(),
+            layout_boundary: false.into(),
         }
     }
 }

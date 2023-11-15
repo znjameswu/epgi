@@ -19,7 +19,7 @@ use crate::{
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    tree::RerenderAction,
+    tree::RenderAction,
 };
 
 use super::{
@@ -40,7 +40,7 @@ pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
 pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
     dyn FnOnce(
         ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
-    ) -> ContainerOf<E, RenderObjectReconcileItem<E::ChildProtocol>>,
+    ) -> ContainerOf<E, RenderObjectSlots<E::ChildProtocol>>,
 >;
 
 pub enum ElementReconcileItem<P: Protocol> {
@@ -69,9 +69,9 @@ where
     }
 }
 
-pub enum RenderObjectReconcileItem<P: Protocol> {
-    New,
-    Keep(ArcChildRenderObject<P>),
+pub enum RenderObjectSlots<P: Protocol> {
+    Inflate,
+    Reuse(ArcChildRenderObject<P>),
 }
 
 pub type ContainerOf<E: Element, T> = <E::ChildContainer as HktContainer>::Container<T>;
@@ -127,17 +127,15 @@ pub trait Element: Send + Sync + Clone + 'static {
     type RenderOrUnit: RenderOrUnit<Self>;
 }
 
-pub trait RenderElement<
-    R: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>,
->: Element<RenderOrUnit = R>
-{
-    fn create_render(&self, widget: &Self::ArcWidget) -> R;
+pub trait RenderElement: Element<RenderOrUnit = <Self as RenderElement>::Render> {
+    type Render: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>;
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
     /// Update necessary properties of render object given by the widget
     ///
     /// Called during the commit phase, when the widget is updated.
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(render_object: &mut R, widget: &Self::ArcWidget) -> RerenderAction;
+    fn update_render(render_object: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
 
     /// Whether [Render::update_render_object] is a no-op and always returns None
     ///
@@ -151,7 +149,7 @@ pub trait RenderElement<
     fn element_render_children_mapping<T: Send + Sync>(
         &self,
         element_children: <Self::ChildContainer as HktContainer>::Container<T>,
-    ) -> <R::ChildContainer as HktContainer>::Container<T>;
+    ) -> <<Self::Render as Render>::ChildContainer as HktContainer>::Container<T>;
 
     const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> = None;
 }
@@ -275,18 +273,12 @@ where
         else {
             return None;
         };
-        let render_object = render_object.clone();
 
-        // todo!();
         match render_element_function_table_of::<E>() {
             RenderElementFunctionTable::RenderObject {
                 into_arc_child_render_object,
                 ..
-            } => render_object
-                .as_ref()
-                .ok()
-                .cloned()
-                .map(into_arc_child_render_object),
+            } => render_object.clone().map(into_arc_child_render_object),
             RenderElementFunctionTable::None { as_child, .. } => {
                 as_child(children).get_current_subtree_render_object()
             }
@@ -318,7 +310,7 @@ where
         let Some(Mainline {
             state:
                 Some(MainlineState::Ready {
-                    render_object: Ok(render_object),
+                    render_object: Some(render_object),
                     ..
                 }),
             ..
@@ -340,7 +332,7 @@ pub fn create_root_element<E, R, L>(
     constraints: <E::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<E>>
 where
-    E: RenderElement<R>,
+    E: RenderElement<Render = R>,
     R: LayerRender<
         L,
         ChildContainer = E::ChildContainer,

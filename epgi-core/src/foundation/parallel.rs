@@ -52,6 +52,12 @@ pub trait HktContainer {
     type Container<T>: Parallel<Item = T, HktContainer = Self> + Send + Sync
     where
         T: Send + Sync;
+
+    const IS_ALWAYS_EMPTY: bool = false;
+    #[inline(always)]
+    fn try_create_empty<T: Send + Sync>() -> Self::Container<T> {
+        panic!("The container is not always empty. Therefore, an empty container cannot be created out of thin air")
+    }
 }
 
 pub trait Parallel:
@@ -96,12 +102,12 @@ pub trait Parallel:
     fn zip_collect<T: Send + Sync, R: Send + Sync>(
         self,
         other: <Self::HktContainer as HktContainer>::Container<T>,
-        op: impl Fn(<Self as Parallel>::Item, T) -> R,
+        op: impl FnMut(<Self as Parallel>::Item, T) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
     fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
         self,
-        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+        op: impl FnMut(<Self as Parallel>::Item) -> (R1, R2),
     ) -> (
         <Self::HktContainer as HktContainer>::Container<R1>,
         <Self::HktContainer as HktContainer>::Container<R2>,
@@ -110,7 +116,7 @@ pub trait Parallel:
     fn zip_ref_collect<T: Send + Sync, R: Send + Sync>(
         &self,
         other: <Self::HktContainer as HktContainer>::Container<T>,
-        op: impl Fn(&<Self as Parallel>::Item, T) -> R,
+        op: impl FnMut(&<Self as Parallel>::Item, T) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
     fn any(&self, op: impl Fn(&<Self as Parallel>::Item) -> bool) -> bool;
@@ -169,14 +175,14 @@ where
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
         self,
         other: <Self::HktContainer as HktContainer>::Container<T1>,
-        op: impl Fn(<Self as Parallel>::Item, T1) -> R,
+        op: impl FnMut(<Self as Parallel>::Item, T1) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
 
     fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
         self,
-        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+        op: impl FnMut(<Self as Parallel>::Item) -> (R1, R2),
     ) -> (
         <Self::HktContainer as HktContainer>::Container<R1>,
         <Self::HktContainer as HktContainer>::Container<R2>,
@@ -187,7 +193,7 @@ where
     fn zip_ref_collect<T1: Send + Sync, R: Send + Sync>(
         &self,
         other: <Self::HktContainer as HktContainer>::Container<T1>,
-        op: impl Fn(&<Self as Parallel>::Item, T1) -> R,
+        op: impl FnMut(&<Self as Parallel>::Item, T1) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
@@ -205,6 +211,15 @@ pub struct ArrayContainer<const N: usize>;
 
 impl<const N: usize> HktContainer for ArrayContainer<N> {
     type Container<T> = [T;N] where T:Send + Sync;
+
+    const IS_ALWAYS_EMPTY: bool = N == 0;
+    fn try_create_empty<T: Send + Sync>() -> [T; N] {
+        if N == 0 {
+            std::array::from_fn(|_| unsafe { std::mem::MaybeUninit::uninit().assume_init() })
+        } else {
+            panic!("The container is not always empty. Therefore, an empty container cannot be created out of thin air")
+        }
+    }
 }
 
 impl<T, const N: usize> Parallel for [T; N]
@@ -252,14 +267,14 @@ where
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
         self,
         other: <Self::HktContainer as HktContainer>::Container<T1>,
-        op: impl Fn(<Self as Parallel>::Item, T1) -> R,
+        op: impl FnMut(<Self as Parallel>::Item, T1) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
 
     fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
         self,
-        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+        op: impl FnMut(<Self as Parallel>::Item) -> (R1, R2),
     ) -> (
         <Self::HktContainer as HktContainer>::Container<R1>,
         <Self::HktContainer as HktContainer>::Container<R2>,
@@ -270,7 +285,7 @@ where
     fn zip_ref_collect<T1: Send + Sync, R: Send + Sync>(
         &self,
         other: <Self::HktContainer as HktContainer>::Container<T1>,
-        op: impl Fn(&<Self as Parallel>::Item, T1) -> R,
+        op: impl FnMut(&<Self as Parallel>::Item, T1) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
@@ -335,14 +350,14 @@ where
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
         self,
         other: <Self::HktContainer as HktContainer>::Container<T1>,
-        op: impl Fn(<Self as Parallel>::Item, T1) -> R,
+        op: impl FnMut(<Self as Parallel>::Item, T1) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
 
     fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
         self,
-        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+        op: impl FnMut(<Self as Parallel>::Item) -> (R1, R2),
     ) -> (
         <Self::HktContainer as HktContainer>::Container<R1>,
         <Self::HktContainer as HktContainer>::Container<R2>,
@@ -353,7 +368,7 @@ where
     fn zip_ref_collect<T1: Send + Sync, R: Send + Sync>(
         &self,
         other: <Self::HktContainer as HktContainer>::Container<T1>,
-        op: impl Fn(&<Self as Parallel>::Item, T1) -> R,
+        op: impl FnMut(&<Self as Parallel>::Item, T1) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
@@ -465,14 +480,14 @@ where
     fn zip_collect<T: Send + Sync, R: Send + Sync>(
         self,
         other: <Self::HktContainer as HktContainer>::Container<T>,
-        op: impl Fn(<Self as Parallel>::Item, T) -> R,
+        op: impl FnMut(<Self as Parallel>::Item, T) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }
 
     fn unzip_collect<R1: Send + Sync, R2: Send + Sync>(
         self,
-        op: impl Fn(<Self as Parallel>::Item) -> (R1, R2),
+        op: impl FnMut(<Self as Parallel>::Item) -> (R1, R2),
     ) -> (
         <Self::HktContainer as HktContainer>::Container<R1>,
         <Self::HktContainer as HktContainer>::Container<R2>,
@@ -483,7 +498,7 @@ where
     fn zip_ref_collect<T: Send + Sync, R: Send + Sync>(
         &self,
         other: <Self::HktContainer as HktContainer>::Container<T>,
-        op: impl Fn(&<Self as Parallel>::Item, T) -> R,
+        op: impl FnMut(&<Self as Parallel>::Item, T) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R> {
         todo!()
     }

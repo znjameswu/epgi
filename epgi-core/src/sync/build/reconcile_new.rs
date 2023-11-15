@@ -1,23 +1,19 @@
-use std::marker::PhantomData;
+mod render_element;
 
 use linear_map::LinearMap;
 
 use crate::{
     foundation::{
-        access_node, AccessArcRenderObject, AccessNode, Arc, AsIterator, Asc, BuildSuspendedError,
-        HktContainer, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, NodeAccessor,
-        Parallel, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, AsIterator, Asc, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, Parallel,
+        Provide, TypeKey,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{SubtreeRenderObjectChange, SubtreeRenderObjectCommitResultSummary, TreeScheduler},
+    sync::{SubtreeRenderObjectChange, TreeScheduler},
     tree::{
-        is_non_render_element, is_non_suspense_render_element, is_suspense_element,
         render_element_function_table_of, ArcChildElementNode, ArcElementContextNode,
-        ArcRenderObjectOf, AsyncWorkQueue, BuildContext, ChildRenderObjectsUpdateCallback,
-        ContainerOf, Element, ElementContextNode, ElementNode, ElementReconcileItem,
-        ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, MainlineState,
-        MaybeSuspendChildRenderObject, RenderChildrenOf, RenderElementFunctionTable, RenderObject,
-        RenderObjectReconcileItem, RenderOrUnit, RerenderAction, SuspenseElementFunctionTable,
+        ArcRenderObjectOf, BuildContext, ContainerOf, Element, ElementContextNode, ElementNode,
+        ElementReconcileItem, HookContext, Hooks, MainlineState, RenderElementFunctionTable,
+        RenderOrUnit,
     },
 };
 
@@ -38,7 +34,6 @@ enum VisitAction<E: Element> {
     /// Therefore, this variant won't occupy the element node. As a result, exisiting async work won't be interrupted
     /// However, the visit variant WILL have other commit effects, such as createing/updating/detaching render object.
     Visit {
-        element: E,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         // This has two variant in case the render object is detached
         // We do not store MaybeSuspendeChildRenderObject, because everytime we need to access it, (update children suspend state)
@@ -49,6 +44,7 @@ enum VisitAction<E: Element> {
             // This field is needed in case a new descendant render object pops up.
             ArcRenderObjectOf<E>,
         >,
+        self_rebuild_suspended: bool,
     },
     /// End-of-visit is triggered when both the node and its descendants (i.e. entire subtree) does not need reconcile
     EndOfVisit,
@@ -91,17 +87,17 @@ where
                     children,
                     render_object,
                     ..
-                } => VisitAction::Visit {
-                    element: element.clone(),
+                } => VisitAction::Visit::<E> {
                     children: children.map_ref_collect(Clone::clone),
-                    render_object: render_object.as_ref().ok().cloned(),
+                    render_object: render_object.clone(),
+                    self_rebuild_suspended: false,
                 },
                 RebuildSuspended {
                     element, children, ..
                 } => VisitAction::Visit {
-                    element: element.clone(),
                     children: children.map_ref_collect(Clone::clone),
                     render_object: None,
+                    self_rebuild_suspended: true,
                 },
                 InflateSuspended { .. } => {
                     debug_assert!(
@@ -162,45 +158,276 @@ where
         reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let visit_action = self.visit_inspect(widget, reconcile_context);
+
         match visit_action {
+            VisitAction::Visit {
+                children,
+                render_object,
+                self_rebuild_suspended,
+            } => {
+                let results = children
+                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
+                        child.visit_and_work_sync(reconcile_context)
+                    });
+                let (_children, render_object_changes) = results.unzip_collect(|x| x);
+
+                return <E::RenderOrUnit as RenderOrUnit<E>>::visit_commit(
+                    &self,
+                    render_object,
+                    render_object_changes,
+                    self_rebuild_suspended,
+                );
+            }
             VisitAction::Rebuild {
                 is_poll,
                 old_widget,
                 new_widget,
                 state,
                 cancel_async,
-            } => todo!(),
-            VisitAction::Visit {
-                element,
-                children,
-                render_object,
             } => {
-                let results = children
-                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
-                        child.visit_and_work_sync(reconcile_context)
-                    });
-                let (children, render_object_changes) = results.unzip_collect(|x| x);
-                let render_object_change_summary =
-                    SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
-
-                if is_non_render_element::<E>() {
-                    let RenderElementFunctionTable::None {
-                        as_child,
-                        into_subtree_render_object_change,
-                    } = render_element_function_table_of::<E>()
-                    else {
-                        panic!(
-                            "Invoked method from non-render render element on other element types"
-                        )
-                    };
-                    return into_subtree_render_object_change(render_object_changes);
-                } else if is_non_suspense_render_element::<E>() {
-                    
+                if let Some(cancel_async) = cancel_async {
+                    self.perform_cancel_async_work(cancel_async)
                 }
+                let new_widget_ref = new_widget.as_ref().unwrap_or(&old_widget);
+                let consumed_values = Self::read_and_update_subscriptions_sync(
+                    E::get_consumed_types(new_widget_ref),
+                    E::get_consumed_types(&old_widget),
+                    &self.context,
+                    reconcile_context.tree_scheduler,
+                );
+                if let Some(widget) = new_widget.as_ref() {
+                    Self::update_provided_value(
+                        &old_widget,
+                        widget,
+                        &self.context,
+                        reconcile_context.tree_scheduler,
+                    )
+                }
+                let is_new_widget = new_widget.is_some();
+                let new_widget = &new_widget.unwrap_or(old_widget);
+                match state {
+                    MainlineState::Ready {
+                        element,
+                        children,
+                        mut hooks,
+                        render_object,
+                    } => {
+                        assert!(!is_poll, "A non-suspended node should not be polled");
+                        Self::apply_updates_sync_new(
+                            &self.context,
+                            reconcile_context.job_ids,
+                            &mut hooks,
+                        );
+                        self.perform_rebuild_node_sync_new(
+                            new_widget,
+                            element,
+                            children,
+                            HookContext::new_rebuild(hooks),
+                            todo!(),
+                            // render_object,
+                            consumed_values,
+                            reconcile_context,
+                            is_new_widget,
+                        )
+                    }
+                    MainlineState::RebuildSuspended {
+                        element,
+                        children,
+                        mut suspended_hooks,
+                        waker,
+                    } => {
+                        waker.abort();
+                        // If it is not poll, then it means a new job occurred on this previously suspended node
+                        if !is_poll {
+                            Self::apply_updates_sync_new(
+                                &self.context,
+                                reconcile_context.job_ids,
+                                &mut suspended_hooks,
+                            );
+                        }
+                        self.perform_rebuild_node_sync_new(
+                            new_widget,
+                            element,
+                            children,
+                            HookContext::new_rebuild(suspended_hooks),
+                            None,
+                            consumed_values,
+                            reconcile_context,
+                            is_new_widget,
+                        )
+                    }
+                    MainlineState::InflateSuspended {
+                        suspended_hooks,
+                        waker,
+                    } => {
+                        waker.abort();
+                        self.perform_inflate_node_sync_new(
+                            new_widget,
+                            if !is_poll {
+                                HookContext::new_inflate()
+                            } else {
+                                HookContext::new_poll_inflate(suspended_hooks)
+                            },
+                            consumed_values,
+                            reconcile_context,
+                        )
+                    }
+                };
                 todo!()
             }
             VisitAction::EndOfVisit => SubtreeRenderObjectChange::new_no_update(),
         }
+    }
+
+    fn perform_rebuild_node_sync_new<'a, 'batch>(
+        self: &'a Arc<Self>,
+        widget: &'a E::ArcWidget,
+        mut element: E,
+        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        mut hook_context: HookContext,
+        old_render_object: Option<ArcRenderObjectOf<E>>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        reconcile_context: SyncReconcileContext<'a, 'batch>,
+        is_new_widget: bool,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        let mut nodes_needing_unmount = Default::default();
+        let results = element.perform_rebuild_element(
+            &widget,
+            BuildContext {
+                hooks: &mut hook_context,
+                element_context: &self.context,
+            },
+            provider_values,
+            children,
+            &mut nodes_needing_unmount,
+        );
+        let (items, shuffle) = match results {
+            Ok((items, shuffle)) => (items, shuffle),
+            Err((children, err)) => {
+                debug_assert!(
+                    nodes_needing_unmount.is_empty(),
+                    "An element that suspends itself should not request unmounting any child nodes"
+                );
+                self.commit_write_rebuild_element_sync(MainlineState::RebuildSuspended {
+                    suspended_hooks: hook_context.hooks,
+                    element,
+                    children,
+                    waker: err.waker,
+                });
+
+                todo!()
+            }
+        };
+
+        // Starting the unmounting as early as possible.
+        // Unmount before updating render object can cause render object to hold reference to detached children,
+        // Therfore, we need to ensure we do not read into render objects before the batch commit is done
+        for node_needing_unmount in nodes_needing_unmount {
+            reconcile_context.scope.spawn(|scope| {
+                // node_needing_unmount.unmount()
+                todo!()
+            })
+        }
+
+        let results = items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
+            use ElementReconcileItem::*;
+            match item {
+                Keep(node) => node.visit_and_work_sync(reconcile_context),
+                Update(pair) => pair.rebuild_sync_box(reconcile_context),
+                Inflate(widget) => widget.inflate_sync(self.context.clone(), reconcile_context),
+            }
+        });
+        let (children, changes) = results.unzip_collect(|x| x);
+
+        let child_commit_summary = SubtreeRenderObjectChange::summarize(changes.as_iter());
+
+        let (render_object, change) = <E::RenderOrUnit as RenderOrUnit<E>>::rebuild_success_commit(
+            &element,
+            widget,
+            shuffle,
+            &children,
+            old_render_object,
+            changes,
+            &self.context,
+            is_new_widget,
+        );
+
+        self.commit_write_rebuild_element_sync(MainlineState::Ready {
+            element,
+            hooks: hook_context.hooks,
+            children,
+            render_object,
+        });
+        return change;
+    }
+
+    fn perform_inflate_node_sync_new<'a, 'batch>(
+        self: &'a Arc<Self>,
+        widget: &'a E::ArcWidget,
+        mut hook_context: HookContext,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        reconcile_context: SyncReconcileContext<'a, 'batch>,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        let result = E::perform_inflate_element(
+            &widget,
+            BuildContext {
+                hooks: &mut hook_context,
+                element_context: &self.context,
+            },
+            provider_values,
+        );
+
+        match result {
+            Ok((element, child_widgets)) => {
+                let results = child_widgets.par_map_collect(
+                    &get_current_scheduler().sync_threadpool,
+                    |child_widget| {
+                        child_widget.inflate_sync(self.context.clone(), reconcile_context)
+                    },
+                );
+                let (children, changes) = results.unzip_collect(|x| x);
+
+                debug_assert!(
+                    !changes.any(SubtreeRenderObjectChange::is_keep_render_object),
+                    "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
+                );
+
+                let (render_object, change) =
+                    <E::RenderOrUnit as RenderOrUnit<E>>::inflate_success_commit(
+                        &element,
+                        widget,
+                        &self.context,
+                        changes,
+                    );
+                self.inflate_commit_write_element_first_inflate(MainlineState::Ready {
+                    element,
+                    hooks: hook_context.hooks,
+                    children,
+                    render_object,
+                });
+                return change;
+            }
+            Err(err) => {
+                self.inflate_commit_write_element_first_inflate(MainlineState::InflateSuspended {
+                    suspended_hooks: hook_context.hooks,
+                    waker: err.waker,
+                });
+                return SubtreeRenderObjectChange::Suspend;
+            }
+        }
+    }
+
+    fn non_render_element_visit_commit(
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        let RenderElementFunctionTable::None {
+            into_subtree_render_object_change,
+            ..
+        } = render_element_function_table_of::<E>()
+        else {
+            panic!("Invoked method from non-render render element on other element types")
+        };
+        return into_subtree_render_object_change(render_object_changes);
     }
 
     fn apply_updates_sync_new<'a, 'batch>(
@@ -241,7 +468,9 @@ where
         into_subtree_update(updates)
     }
 
-    fn commit_write_element_sync(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_rebuild_element_sync(self: &Arc<Self>, state: MainlineState<E>) {
+        // Collecting async work is necessary, even if we are inflating!
+        // Since it could be an InflateSuspended node and an async batch spawned a secondary root on this node.
         let async_work_needing_start = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
@@ -263,8 +492,18 @@ where
         }
     }
 
-    fn commit_write_inflate_element_sync(self: &Arc<Self>, state: MainlineState<E>) {
-        todo!()
+    fn inflate_commit_write_element_first_inflate(self: &Arc<Self>, state: MainlineState<E>) {
+        let mut snapshot = self.snapshot.lock();
+        let snapshot_reborrow = &mut *snapshot;
+        let mainline = snapshot_reborrow
+            .inner
+            .mainline_mut()
+            .expect("An unmounted element node should not be reachable by a rebuild!");
+        debug_assert!(
+            mainline.async_queue.is_empty(),
+            "The first-time inflate should not see have any other async work"
+        );
+        mainline.state = Some(state);
     }
 
     fn update_provided_value<'a, 'batch>(
@@ -376,28 +615,6 @@ where
             },
         );
         return consumed_values;
-    }
-}
-
-struct DetachRenderObjectAccessor;
-
-impl<E> NodeAccessor<AccessArcRenderObject<E>> for DetachRenderObjectAccessor
-where
-    E: Element,
-{
-    type Probe = ();
-
-    type Return = ();
-
-    fn can_bypass(self, node: &AccessArcRenderObject<E>) -> Result<Self::Return, Self::Probe> {
-        Err(())
-    }
-
-    fn access(
-        inner: &mut <AccessArcRenderObject<E> as AccessNode>::Inner<'_>,
-        probe: Self::Probe,
-    ) -> Self::Return {
-        todo!()
     }
 }
 

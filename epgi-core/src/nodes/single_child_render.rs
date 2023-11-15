@@ -8,7 +8,7 @@ use crate::foundation::{
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    LayerOrUnit, ReconcileItem, Reconciler, Render, RenderElement, RerenderAction, Widget,
+    LayerOrUnit, ReconcileItem, Reconciler, Render, RenderAction, RenderElement, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -20,7 +20,7 @@ pub trait SingleChildRenderObjectWidget:
 
     fn create_render_state(&self) -> Self::RenderState;
 
-    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RerenderAction;
+    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction;
 
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 
@@ -117,10 +117,12 @@ where
     type RenderOrUnit = SingleChildRenderObject<W>;
 }
 
-impl<W> RenderElement<SingleChildRenderObject<W>> for SingleChildRenderObjectElement<W>
+impl<W> RenderElement for SingleChildRenderObjectElement<W>
 where
     W: SingleChildRenderObjectWidget<Element = Self>,
 {
+    type Render = SingleChildRenderObject<W>;
+
     #[inline(always)]
     fn create_render(&self, widget: &Self::ArcWidget) -> SingleChildRenderObject<W> {
         SingleChildRenderObject {
@@ -132,7 +134,7 @@ where
     fn update_render(
         render: &mut SingleChildRenderObject<W>,
         widget: &Self::ArcWidget,
-    ) -> RerenderAction {
+    ) -> RenderAction {
         W::update_render_state(widget, &mut render.state)
     }
     const NOOP_UPDATE_RENDER_OBJECT: bool = W::NOOP_UPDATE_RENDER_OBJECT;

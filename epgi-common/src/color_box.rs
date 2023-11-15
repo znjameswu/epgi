@@ -5,7 +5,7 @@ use epgi_2d::{
 use epgi_core::{
     foundation::PaintContext,
     nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{ArcChildWidget, ChildRenderObject, Element, RerenderAction, Widget},
+    tree::{ArcChildWidget, ChildRenderObject, Element, RenderAction, Widget},
 };
 
 #[derive(Debug)]
@@ -39,12 +39,12 @@ impl ProxyWidget for ColorBox {
         self.color.clone()
     }
 
-    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RerenderAction {
+    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction {
         if &self.color != render_state {
             *render_state = self.color;
-            RerenderAction::Repaint
+            RenderAction::Repaint
         } else {
-            RerenderAction::None
+            RenderAction::None
         }
     }
 
