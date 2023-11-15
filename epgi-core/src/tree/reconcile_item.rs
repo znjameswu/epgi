@@ -1,28 +1,12 @@
 use crate::{
-    foundation::{Arc, Asc, HktContainer, InlinableDwsizeVec, Parallel, Protocol},
+    foundation::{Arc, Asc, Protocol},
     sync::CommitBarrier,
 };
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, BuildContext, Element, ElementNode, ElementReconcileItem, WorkContext, WorkHandle,
+    ArcWidget, Element, ElementNode, ElementReconcileItem, WorkContext, WorkHandle,
 };
-
-pub trait Reconciler<CP: Protocol>: Sized {
-    fn build_context(&mut self) -> BuildContext<'_>;
-
-    fn nodes_needing_unmount_mut(&mut self) -> &mut InlinableDwsizeVec<ArcChildElementNode<CP>>;
-
-    fn into_reconcile<I: Parallel<Item = ReconcileItem<CP>>>(
-        self,
-        items: I,
-    ) -> <I::HktContainer as HktContainer>::Container<ArcChildElementNode<CP>>;
-
-    fn into_reconcile_single(self, item: ReconcileItem<CP>) -> ArcChildElementNode<CP> {
-        let [child] = self.into_reconcile([item]);
-        child
-    }
-}
 
 pub enum ReconcileItem<CP: Protocol> {
     Rebuild(Box<dyn ChildElementWidgetPair<CP>>),
@@ -137,8 +121,8 @@ where
 }
 
 pub trait ChildElementWidgetPair<P: Protocol>:
-    crate::sync::reconciler_private::ChildElementWidgetPairSyncBuildExt<P>
-    + crate::r#async::reconciler_private::ChildElementWidgetPairAsyncBuildExt<P>
+    crate::sync::reconcile_item::ChildElementWidgetPairSyncBuildExt<P>
+    + crate::r#async::reconcile_item::ChildElementWidgetPairAsyncBuildExt<P>
     + Send
     + Sync
     + 'static

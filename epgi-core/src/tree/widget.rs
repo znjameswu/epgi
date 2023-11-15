@@ -61,8 +61,8 @@ where
 }
 
 pub trait ChildWidget<PP: Protocol>:
-    crate::sync::reconciler_private::ChildWidgetSyncInflateExt<PP>
-    + crate::r#async::reconciler_private::ChildWidgetAsyncInflateExt<PP>
+    crate::sync::reconcile_item::ChildWidgetSyncInflateExt<PP>
+    + crate::r#async::reconcile_item::ChildWidgetAsyncInflateExt<PP>
     + AnyWidget
     + 'static
     + Debug
