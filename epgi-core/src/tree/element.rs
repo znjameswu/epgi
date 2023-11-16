@@ -201,6 +201,7 @@ pub trait AnyElementNode:
     + crate::sync::sync_build_private::AnyElementSyncReconcileExt
     + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
     + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
+    + crate::sync::unmount::AnyElementNodeUnmountExt
     + Send
     + Sync
     + 'static
@@ -212,14 +213,12 @@ pub trait AnyElementNode:
 }
 
 pub trait ChildElementNode<PP: Protocol>:
-    crate::sync::sync_build_private::ChildElementSyncReconcileExt<PP>
-//
-// super::build::tree_walk_private::ElementTreeWalkExt
-+ crate::sync::commit_private::ChildElementNodeCommitWalkExt
-+ crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
-+ Send + Sync + 'static
+    AnyElementNode
+    + crate::sync::sync_build_private::ChildElementSyncReconcileExt<PP>
+    + Send
+    + Sync
+    + 'static
 {
-
     fn context(&self) -> &ElementContextNode;
 
     fn as_arc_any(self: Arc<Self>) -> ArcAnyElementNode;
@@ -231,8 +230,7 @@ pub trait ChildElementNode<PP: Protocol>:
         widget: ArcChildWidget<PP>,
     ) -> Result<ElementReconcileItem<PP>, (ArcChildElementNode<PP>, ArcChildWidget<PP>)>;
 
-    fn get_current_subtree_render_object(&self)
-        -> Option<ArcChildRenderObject<PP>>;
+    fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
 }
 
 impl<E> ChildElementNode<E::ParentProtocol> for ElementNode<E>

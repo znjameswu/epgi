@@ -119,7 +119,7 @@ pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
 
             reconcile_context
                 .scope
-                .spawn(|scope| todo!("Unmount old child"));
+                .spawn(|scope| old_child.unmount(scope));
 
             return SubtreeRenderObjectChange::Keep {
                 child_render_action: render_action,

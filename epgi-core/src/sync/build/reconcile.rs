@@ -348,10 +348,9 @@ where
         // Unmount before updating render object can cause render object to hold reference to detached children,
         // Therfore, we need to ensure we do not read into render objects before the batch commit is done
         for node_needing_unmount in nodes_needing_unmount {
-            reconcile_context.scope.spawn(|scope| {
-                // node_needing_unmount.unmount()
-                todo!()
-            })
+            reconcile_context
+                .scope
+                .spawn(|scope| node_needing_unmount.unmount(scope))
         }
 
         let results = items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
@@ -622,7 +621,7 @@ pub(crate) mod sync_build_private {
     use super::*;
 
     pub trait AnyElementSyncReconcileExt {
-        fn visit_and_work_sync<'a, 'batch>(
+        fn visit_and_work_sync_any<'a, 'batch>(
             self: Arc<Self>,
             reconcile_context: SyncReconcileContext<'a, 'batch>,
         ) -> ArcAnyElementNode;
@@ -632,7 +631,7 @@ pub(crate) mod sync_build_private {
     where
         E: Element,
     {
-        fn visit_and_work_sync<'a, 'batch>(
+        fn visit_and_work_sync_any<'a, 'batch>(
             self: Arc<Self>,
             reconcile_context: SyncReconcileContext<'a, 'batch>,
         ) -> ArcAnyElementNode {
@@ -667,7 +666,7 @@ pub(crate) mod sync_build_private {
 
 #[derive(Clone, Copy)]
 pub struct SyncReconcileContext<'a, 'batch> {
-    pub job_ids: &'a Inlinable64Vec<JobId>,
+    pub job_ids: &'batch Inlinable64Vec<JobId>,
     pub scope: &'a rayon::Scope<'batch>,
     pub tree_scheduler: &'batch TreeScheduler,
 }

@@ -57,7 +57,7 @@ impl TreeScheduler {
             rayon::scope(|scope| {
                 self.root_element
                     .clone()
-                    .visit_and_work_sync(SyncReconcileContext {
+                    .visit_and_work_sync_any(SyncReconcileContext {
                         job_ids: sync_job_ids,
                         scope,
                         tree_scheduler: self,

@@ -4,11 +4,10 @@ mod reconcile;
 pub(crate) mod reconcile_item;
 mod subtree_results;
 mod tree_scheduler;
-mod unmount;
+pub(crate) mod unmount;
 
 pub use commit_barrier::*;
 pub use r#async::*;
 pub use reconcile::*;
 pub use subtree_results::*;
 pub use tree_scheduler::*;
-pub use unmount::*;

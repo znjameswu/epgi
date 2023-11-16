@@ -1,18 +1,19 @@
 use crate::{
-    foundation::{Arc, Parallel},
-    scheduler::get_current_scheduler,
+    foundation::Arc,
     tree::{Element, ElementNode, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 
 impl<E: Element> ElementNode<E> {
-    fn unmount(self: Arc<Self>) {
+    // We could require a TreeScheduler in parameter to ensure the global lock
+    // However, doing so on a virtual function incurs additional overhead.
+    fn unmount(self: &Arc<Self>, scope: &rayon::Scope<'_>) {
         self.context.unmounted.store(true, Relaxed);
         let (children, widget, purge) = {
             // How do we ensure no one else will occupy/lane-mark this node after we unmount it?
-            // 1. Ways to occupy this node
-            //      1. Async visiting from the parent, which is occupied by the caller of this method
-            //      2. Batch root spawning from the TreeScheduler
+            // 1. Ways of async batch to occupy this node
+            //      1. Async reconciling down from the parent, which is occupied by the caller of this method
+            //      2. Spawned batch root and visit down from the TreeScheduler
             //      3. Wake-up from suspend
             // 2. Ways to lane-mark this node
             //      1. primary root lane mark from TreeScheduler.
@@ -67,26 +68,29 @@ impl<E: Element> ElementNode<E> {
         // todo!("Prevent stale scheduler calls");
 
         if let Some(children) = children {
-            children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                child.unmount()
-            })
+            let mut it = children.into_iter();
+            if it.len() == 1 {
+                let child = it.next().unwrap();
+                child.unmount(scope)
+            } else {
+                it.for_each(|child| scope.spawn(|s| child.unmount(s)))
+            }
+            // children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+            //     child.unmount()
+            // })
         }
     }
 }
 
-pub(crate) mod commit_private {
-    use super::*;
+pub trait AnyElementNodeUnmountExt {
+    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
+}
 
-    pub trait ChildElementNodeCommitWalkExt {
-        fn unmount(self: Arc<Self>);
-    }
-
-    impl<E> ChildElementNodeCommitWalkExt for ElementNode<E>
-    where
-        E: Element,
-    {
-        fn unmount(self: Arc<Self>) {
-            ElementNode::unmount(self)
-        }
+impl<E> AnyElementNodeUnmountExt for ElementNode<E>
+where
+    E: Element,
+{
+    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>) {
+        ElementNode::unmount(&self, scope)
     }
 }
