@@ -5,7 +5,7 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::TreeScheduler,
     tree::{
-        AweakAnyRenderObject, DryLayoutFunctionTable, Render, RenderCache, RenderContextNode,
+        AweakAnyRenderObject, DryLayoutFunctionTable, Render, RenderCache, RenderMark,
         RenderObject, RenderObjectInner,
     },
 };
@@ -87,9 +87,9 @@ where
     }
 
     fn visit_and_layout(&self) {
-        let is_relayout_boundary = self.context.is_relayout_boundary();
-        let needs_layout = self.context.needs_layout();
-        let subtree_has_layout = self.context.subtree_has_layout();
+        let is_relayout_boundary = self.mark.is_relayout_boundary();
+        let needs_layout = self.mark.needs_layout();
+        let subtree_has_layout = self.mark.subtree_has_layout();
         debug_assert!(
             is_relayout_boundary || !needs_layout,
             "A layout walk should not encounter a dirty non-boundary node.
@@ -99,19 +99,19 @@ where
             subtree_has_layout || !needs_layout,
             "A dirty node should always mark its subtree as dirty"
         );
-        if self.context.subtree_has_layout() {
+        if self.mark.subtree_has_layout() {
             let children = {
                 let mut inner = self.inner.lock();
                 if is_relayout_boundary && needs_layout {
-                    inner.layout_without_resize_inner(&self.context);
-                    self.context.clear_self_needs_layout();
+                    inner.layout_without_resize_inner(&self.mark);
+                    self.mark.clear_self_needs_layout();
                 }
                 inner.children.map_ref_collect(Clone::clone)
             };
             children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.visit_and_layout()
             });
-            self.context.clear_subtree_has_layout();
+            self.mark.clear_subtree_has_layout();
         }
     }
 }
@@ -140,18 +140,18 @@ where
     }
 
     #[inline(always)]
-    fn layout_without_resize_inner(&mut self, context: &RenderContextNode) {
+    fn layout_without_resize_inner(&mut self, mark: &RenderMark) {
         debug_assert!(self.is_relayout_boundary());
         let Some(cache) = self.cache.as_mut() else {
             panic!("Relayout should only be called on relayout boundaries which must retain their layout caches")
         };
-        if cache.layout_results(context).is_some() {
+        if cache.layout_results(mark).is_some() {
             return;
         }
         let constraints = cache.constraints.clone();
         let parent_use_size = cache.parent_use_size;
         self.perform_wet_layout(constraints, parent_use_size);
-        context.clear_self_needs_layout();
+        mark.clear_self_needs_layout();
     }
 }
 

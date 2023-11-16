@@ -1,7 +1,6 @@
 use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
-    sync::SubtreeRenderObjectChange,
-    tree::{ArcAnyLayerNode, ArcChildLayerNode, AscLayerContextNode, Layer, LayerNode},
+    tree::{ArcAnyLayerNode, ArcChildLayerNode, Layer, LayerNode},
 };
 
 use super::{LayerRender, Render, RenderAction};
@@ -32,7 +31,7 @@ where
         LayerRenderFunctionTable::LayerNode {
             as_arc_any_layer_node: |x| x,
             as_arc_child_layer_node: |x| x,
-            create_arc_layer_node: |render, layer_context| todo!(),
+            create_arc_layer_node: |render| todo!(),
             get_canvas_transform_ref: |x| x,
             get_canvas_transform: |x| x,
         };
@@ -67,7 +66,7 @@ pub enum LayerRenderFunctionTable<R: Render> {
         as_arc_any_layer_node: fn(ArcLayerNodeOf<R>) -> ArcAnyLayerNode,
         as_arc_child_layer_node:
             fn(ArcLayerNodeOf<R>) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
-        create_arc_layer_node: fn(&R, &AscLayerContextNode) -> ArcLayerNodeOf<R>,
+        create_arc_layer_node: fn(&R) -> ArcLayerNodeOf<R>,
         get_canvas_transform_ref:
             fn(
                 &<R::ParentProtocol as Protocol>::Transform,

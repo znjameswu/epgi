@@ -6,13 +6,10 @@ use crate::{
     foundation::{Arc, Asc, Aweak, InlinableUsizeVec, SyncMutex, TypeKey},
     scheduler::JobId,
     sync::ElementMark,
-    tree::{AscRenderContextNode, RenderContextNode, Update},
+    tree::Update,
 };
 
-use super::{
-    render_element_function_table_of, AweakAnyElementNode, Element, ProviderObject,
-    RenderElementFunctionTable,
-};
+use super::{AweakAnyElementNode, Element, ProviderObject};
 
 pub type ArcElementContextNode = Arc<ElementContextNode>;
 pub type AweakElementContextNode = Aweak<ElementContextNode>;
@@ -35,9 +32,7 @@ pub struct ElementContextNode {
     // // Abandon this optimization. Provider widget usually has only one child anyway
     // pub provider_map_for_child: Asc<ProviderElementMap>,
     pub(crate) provider: Option<Box<ProviderObject>>,
-
-    pub(crate) nearest_render_context: AscRenderContextNode,
-    pub(crate) has_render: bool,
+    // pub(crate) has_render: bool,
 }
 
 impl ElementContextNode {
@@ -61,24 +56,16 @@ impl ElementContextNode {
     // }
 
     pub(crate) fn new_root(node: AweakAnyElementNode) -> Self {
-        let render_context = Asc::new(RenderContextNode::new_root());
-        Self::new(node, None, Some(render_context), None)
+        Self::new(node, None, None)
     }
 
     #[inline(always)]
     fn new(
         node: AweakAnyElementNode,
         parent_context: Option<ArcElementContextNode>,
-        render_context: Option<AscRenderContextNode>,
         provider: Option<Box<ProviderObject>>,
     ) -> Self {
         if let Some(parent_context) = parent_context {
-            let (nearest_render_context, has_render) = if let Some(render_context) = render_context
-            {
-                (render_context, true)
-            } else {
-                (parent_context.nearest_render_context.clone(), false)
-            };
             Self {
                 element_node: node,
                 unmounted: false.into(),
@@ -87,8 +74,6 @@ impl ElementContextNode {
                 mailbox: Default::default(),
                 provider_map: parent_context.get_provider_map_for_child(),
                 provider,
-                nearest_render_context,
-                has_render,
                 parent: Some(parent_context),
             }
         } else {
@@ -100,9 +85,6 @@ impl ElementContextNode {
                 mailbox: Default::default(),
                 provider_map: Default::default(),
                 provider,
-                nearest_render_context: render_context
-                    .expect("A root node must have a render context"),
-                has_render: true,
                 parent: None,
             }
         }
@@ -113,25 +95,13 @@ impl ElementContextNode {
         parent_context: ArcElementContextNode,
         widget: &E::ArcWidget,
     ) -> Self {
-        let render_context = if let RenderElementFunctionTable::RenderObject { has_layer, .. } =
-            render_element_function_table_of::<E>()
-        {
-            let parent_render_context = parent_context.nearest_render_context.clone();
-            Some(Asc::new(if has_layer {
-                RenderContextNode::new_repaint_boundary(parent_render_context)
-            } else {
-                RenderContextNode::new_render(parent_render_context)
-            }))
-        } else {
-            None
-        };
         let provider = if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
             let provided = get_provided_value(&widget);
             Some(Box::new(ProviderObject::new(provided)))
         } else {
             None
         };
-        Self::new(node, Some(parent_context), render_context, provider)
+        Self::new(node, Some(parent_context), provider)
     }
 
     #[inline(always)]

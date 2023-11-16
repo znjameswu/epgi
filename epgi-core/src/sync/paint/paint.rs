@@ -1,7 +1,7 @@
 use crate::{
     foundation::{PaintContext, Protocol},
     sync::TreeScheduler,
-    tree::{AscRenderContextNode, Render, RenderObject},
+    tree::{Render, RenderObject},
 };
 
 impl TreeScheduler {
@@ -14,12 +14,14 @@ where
 {
     fn paint(
         &self,
-        context: &AscRenderContextNode,
         transform: &<R::ParentProtocol as Protocol>::Transform,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
         let mut inner = self.inner.lock();
-        let Some(layout_results) = inner.cache.as_ref().and_then(|x| x.layout_results(context))
+        let Some(layout_results) = inner
+            .cache
+            .as_ref()
+            .and_then(|x| x.layout_results(&self.mark))
         else {
             panic!("Paint should only be called after layout has finished")
         };
@@ -95,7 +97,7 @@ pub(crate) mod paint_private {
             transform: &<R::ParentProtocol as Protocol>::Transform,
             paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
-            self.paint(&self.context, transform, paint_ctx);
+            self.paint(transform, paint_ctx);
         }
 
         fn paint_scan(
@@ -103,7 +105,7 @@ pub(crate) mod paint_private {
             transform: &<R::ParentProtocol as Protocol>::Transform,
             paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
-            self.paint(&self.context, transform, paint_ctx);
+            self.paint(transform, paint_ctx);
         }
 
         // fn visit_and_paint(&self) {

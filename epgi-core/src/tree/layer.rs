@@ -1,12 +1,10 @@
-mod context;
 mod fragment;
 mod mark;
 
-pub use context::*;
 pub use fragment::*;
 pub use mark::*;
 
-use std::{any::Any, ops::Mul, sync::atomic::AtomicBool};
+use std::{any::Any, ops::Mul};
 
 use crate::foundation::{Arc, Canvas, Key, SyncMutex};
 
@@ -291,7 +289,6 @@ where
 }
 
 pub struct LayerNode<L: Layer> {
-    pub(crate) context: AscLayerContextNode,
     pub(crate) mark: LayerMark,
     pub(crate) inner: SyncMutex<LayerNodeInner<L>>,
 }
@@ -317,9 +314,8 @@ impl<L> LayerNode<L>
 where
     L: Layer,
 {
-    pub(crate) fn new(context: AscLayerContextNode, layer: L) -> Self {
+    pub(crate) fn new(layer: L) -> Self {
         Self {
-            context,
             mark: LayerMark::new(),
             inner: SyncMutex::new(LayerNodeInner { layer, cache: None }),
         }
@@ -357,7 +353,7 @@ where
         }) = L::CACHED_COMPOSITION_FUNCTION_TABLE
         {
             let composition_cache = 'composition_cache: {
-                if !self.context.needs_composite() {
+                if !self.mark.needs_composite() {
                     if let Some(composition_cache) = cache.composition_cache.as_ref() {
                         composite_from_cache_to(
                             &inner_reborrow.layer,

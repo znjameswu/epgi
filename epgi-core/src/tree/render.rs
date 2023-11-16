@@ -1,12 +1,8 @@
-mod context;
 mod layer_or_unit;
 mod mark;
 
-pub use context::*;
 pub use layer_or_unit::*;
 pub use mark::*;
-
-use std::sync::atomic::AtomicBool;
 
 use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Protocol, SyncMutex};
 
@@ -121,7 +117,6 @@ pub trait LayerRender<
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
-    pub(crate) context: AscRenderContextNode,
     pub(crate) layer_node: ArcLayerNodeOf<R>,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
@@ -137,28 +132,19 @@ where
         >,
         element_context: ArcElementContextNode,
     ) -> Self {
-        debug_assert!(
-            element_context.has_render,
-            "A render object node must have a render context node in its element context node"
-        );
+        // debug_assert!(
+        //     element_context.has_render,
+        //     "A render object node must have a render context node in its element context node"
+        // );
         let layer = match layer_render_function_table_of::<R>() {
             LayerRenderFunctionTable::LayerNode {
                 as_arc_child_layer_node,
                 create_arc_layer_node: create_layer_node,
                 ..
-            } => {
-                let render_context = &element_context.nearest_render_context;
-                debug_assert!(
-                    render_context.is_repaint_boundary,
-                    "A render object node with layer must have a layer context node \
-                     in its render context node"
-                );
-                create_layer_node(&render, &render_context.nearest_repaint_boundary)
-            }
+            } => create_layer_node(&render),
             LayerRenderFunctionTable::None { create } => create(),
         };
         Self {
-            context: element_context.nearest_render_context.clone(),
             element_context,
             mark: RenderMark::new(),
             layer_node: layer,
@@ -206,11 +192,8 @@ where
             layout_results,
         }
     }
-    pub(crate) fn layout_results(
-        &self,
-        context: &RenderContextNode,
-    ) -> Option<&LayoutResults<P, M>> {
-        if context.needs_layout() {
+    pub(crate) fn layout_results(&self, mark: &RenderMark) -> Option<&LayoutResults<P, M>> {
+        if mark.needs_layout() {
             return None;
         }
         self.layout_results.as_ref()
