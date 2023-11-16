@@ -457,22 +457,6 @@ where
     }
 }
 
-impl<R> RenderObject<R>
-where
-    R: Render,
-{
-    /// Returns the render action that should be passed to the parent.
-    /// The render action is less or equal to the child_render_action,
-    /// because some of the action may be absorbed by the corresponding boundaries.
-    pub(crate) fn mark_render_action(
-        &self,
-        child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction {
-        todo!()
-    }
-}
-
 impl<R> RenderObjectInner<R>
 where
     R: Render,

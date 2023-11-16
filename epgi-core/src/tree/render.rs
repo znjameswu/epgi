@@ -13,20 +13,6 @@ pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
-pub enum RenderAction {
-    None,
-    Recomposite,
-    Repaint,
-    Relayout,
-}
-
-impl Default for RenderAction {
-    fn default() -> Self {
-        RenderAction::None
-    }
-}
-
 pub trait Render: Sized + Send + Sync + 'static {
     // type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
 
@@ -114,6 +100,56 @@ pub trait LayerRender<
     fn create_layer(&self) -> L;
 }
 
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
+pub enum RenderAction {
+    None,
+    Recomposite,
+    Repaint,
+    Relayout,
+}
+
+impl Default for RenderAction {
+    fn default() -> Self {
+        RenderAction::None
+    }
+}
+
+impl RenderAction {
+    pub fn downgrade(self) -> Self {
+        use RenderAction::*;
+        match self {
+            None => None,
+            Recomposite => None,
+            Repaint => Recomposite,
+            Relayout => Repaint,
+        }
+    }
+
+    pub fn absorb_relayout(self) -> Self {
+        use RenderAction::*;
+        match self {
+            Relayout => Repaint,
+            other => other,
+        }
+    }
+
+    pub fn absorb_repaint(self) -> Self {
+        use RenderAction::*;
+        match self {
+            Repaint => Recomposite,
+            other => other,
+        }
+    }
+
+    pub fn absorb_recomposite(self) -> Self {
+        use RenderAction::*;
+        match self {
+            Recomposite => None,
+            other => other,
+        }
+    }
+}
+
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
@@ -164,11 +200,6 @@ pub(crate) struct RenderObjectInner<R: Render> {
     pub(crate) render: R,
     pub(crate) children:
         <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
-}
-
-struct RenderObjectBoundaries {
-    repaint_boundary: AweakAnyRenderObject,
-    relayout_boundary: AweakAnyRenderObject,
 }
 
 pub(crate) struct RenderCache<P: Protocol, M> {
@@ -268,10 +299,9 @@ where
     }
 }
 
-impl<R> RenderObject<R> where R: Render {}
-
 pub trait ChildRenderObject<PP: Protocol>:
-    crate::sync::layout_private::ChildRenderObjectLayoutExt<PP>
+    AnyRenderObject
+    + crate::sync::layout_private::ChildRenderObjectLayoutExt<PP>
     + crate::sync::paint_private::ChildRenderObjectPaintExt<PP>
     + Send
     + Sync
@@ -295,11 +325,7 @@ where
 }
 
 pub trait AnyRenderObject:
-    crate::sync::layout_private::AnyRenderObjectRelayoutExt
-    // + crate::sync::paint_private::AnyRenderObjectRepaintExt
-    + Send
-    + Sync
-    + 'static
+    crate::sync::layout_private::AnyRenderObjectLayoutExt + Send + Sync + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
     fn layer(&self) -> Option<ArcAnyLayerNode>;

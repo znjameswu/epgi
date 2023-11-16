@@ -75,10 +75,10 @@ impl Scheduler {
                     tree_scheduler.dispatch_async_batches();
                     tree_scheduler.dispatch_sync_batch();
                     tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
-                    let boundaries_needing_relayout =
-                        { std::mem::take(&mut *handle.boundaries_needing_relayout.lock()) };
+                    // let boundaries_needing_relayout =
+                    //     { std::mem::take(&mut *handle.boundaries_needing_relayout.lock()) };
                     // TODO: Skip layout if empty
-                    tree_scheduler.perform_layout(boundaries_needing_relayout);
+                    tree_scheduler.perform_layout();
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.
                     // TODO: Parking_lot owned downgradable guard
                     drop(tree_scheduler);

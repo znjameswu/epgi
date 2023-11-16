@@ -53,7 +53,7 @@ pub struct SchedulerHandle {
     nodes_needing_layout: MpscQueue<AweakAnyRenderObject>,
 
     pub(super) accumulated_jobs: SyncMutex<Vec<JobBuilder>>,
-    pub(super) boundaries_needing_relayout: SyncMutex<HashSet<PtrEq<AweakAnyRenderObject>>>,
+    // pub(super) boundaries_needing_relayout: SyncMutex<HashSet<PtrEq<AweakAnyRenderObject>>>,
 }
 
 impl SchedulerHandle {
@@ -68,7 +68,7 @@ impl SchedulerHandle {
             nodes_needing_paint: Default::default(),
             nodes_needing_layout: Default::default(),
             accumulated_jobs: Default::default(),
-            boundaries_needing_relayout: Default::default(),
+            // boundaries_needing_relayout: Default::default(),
         }
     }
 
@@ -143,11 +143,11 @@ impl SchedulerHandle {
             })
     }
 
-    pub(crate) fn mark_boundary_needs_layout(&self, object: AweakAnyRenderObject) {
-        self.boundaries_needing_relayout
-            .lock()
-            .insert(PtrEq(object));
-    }
+    // pub(crate) fn mark_boundary_needs_layout(&self, object: AweakAnyRenderObject) {
+    //     self.boundaries_needing_relayout
+    //         .lock()
+    //         .insert(PtrEq(object));
+    // }
 
     // pub fn schedule_idle_callback
 }

@@ -10,6 +10,7 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
 
     fn mark_render_action(
+        layer_node: &Self::ArcLayerNode,
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction;
@@ -37,10 +38,11 @@ where
         };
 
     fn mark_render_action(
+        layer_node: &Arc<LayerNode<L>>,
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction {
-        todo!()
+        layer_node.mark_render_action(child_render_action, subtree_has_action)
     }
 }
 
@@ -54,6 +56,7 @@ where
         LayerRenderFunctionTable::None { create: || () };
 
     fn mark_render_action(
+        _layer_node: &(),
         child_render_action: RenderAction,
         _subtree_has_action: RenderAction,
     ) -> RenderAction {
