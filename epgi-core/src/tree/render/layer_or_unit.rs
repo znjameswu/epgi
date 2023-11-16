@@ -1,13 +1,19 @@
 use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
+    sync::SubtreeRenderObjectChange,
     tree::{ArcAnyLayerNode, ArcChildLayerNode, AscLayerContextNode, Layer, LayerNode},
 };
 
-use super::{LayerRender, Render};
+use super::{LayerRender, Render, RenderAction};
 
 pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     type ArcLayerNode: Clone + Send + Sync + 'static;
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
+
+    fn mark_render_action(
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction;
 }
 
 impl<R, L> LayerOrUnit<R> for L
@@ -30,6 +36,13 @@ where
             get_canvas_transform_ref: |x| x,
             get_canvas_transform: |x| x,
         };
+
+    fn mark_render_action(
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction {
+        todo!()
+    }
 }
 
 impl<R> LayerOrUnit<R> for ()
@@ -40,6 +53,13 @@ where
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::None { create: || () };
+
+    fn mark_render_action(
+        child_render_action: RenderAction,
+        _subtree_has_action: RenderAction,
+    ) -> RenderAction {
+        child_render_action
+    }
 }
 
 pub enum LayerRenderFunctionTable<R: Render> {

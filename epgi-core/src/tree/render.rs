@@ -1,10 +1,12 @@
 mod context;
-mod layer_paint;
-
-use std::sync::atomic::AtomicBool;
+mod layer_or_unit;
+mod mark;
 
 pub use context::*;
-pub use layer_paint::*;
+pub use layer_or_unit::*;
+pub use mark::*;
+
+use std::sync::atomic::AtomicBool;
 
 use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Protocol, SyncMutex};
 
@@ -116,25 +118,9 @@ pub trait LayerRender<
     fn create_layer(&self) -> L;
 }
 
-pub(crate) struct RenderNodeMark {
-    pub(crate) needs_layout: AtomicBool,
-    pub(crate) subtree_has_relayout: AtomicBool,
-    pub(crate) layout_boundary: AtomicBool,
-}
-
-impl RenderNodeMark {
-    pub(crate) fn new() -> Self {
-        Self {
-            needs_layout: true.into(),
-            subtree_has_relayout: true.into(),
-            layout_boundary: false.into(),
-        }
-    }
-}
-
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
-    pub(crate) mark: RenderNodeMark,
+    pub(crate) mark: RenderMark,
     pub(crate) context: AscRenderContextNode,
     pub(crate) layer_node: ArcLayerNodeOf<R>,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
@@ -174,7 +160,7 @@ where
         Self {
             context: element_context.nearest_render_context.clone(),
             element_context,
-            mark: RenderNodeMark::new(),
+            mark: RenderMark::new(),
             layer_node: layer,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,

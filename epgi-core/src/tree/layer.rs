@@ -1,8 +1,10 @@
 mod context;
 mod fragment;
+mod mark;
 
 pub use context::*;
 pub use fragment::*;
+pub use mark::*;
 
 use std::{any::Any, ops::Mul, sync::atomic::AtomicBool};
 
@@ -290,8 +292,7 @@ where
 
 pub struct LayerNode<L: Layer> {
     pub(crate) context: AscLayerContextNode,
-    pub(crate) needs_paint: AtomicBool,
-    pub(crate) needs_composite: AtomicBool,
+    pub(crate) mark: LayerMark,
     pub(crate) inner: SyncMutex<LayerNodeInner<L>>,
 }
 
@@ -319,8 +320,7 @@ where
     pub(crate) fn new(context: AscLayerContextNode, layer: L) -> Self {
         Self {
             context,
-            needs_paint: false.into(),
-            needs_composite: false.into(),
+            mark: LayerMark::new(),
             inner: SyncMutex::new(LayerNodeInner { layer, cache: None }),
         }
     }

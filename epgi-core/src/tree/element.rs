@@ -19,7 +19,7 @@ use crate::{
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    tree::{LayerNode, RenderAction, RenderCache, RenderNodeMark, RenderObjectInner},
+    tree::{LayerNode, RenderAction, RenderCache, RenderMark, RenderObjectInner},
 };
 
 use super::{
@@ -362,7 +362,7 @@ where
                 render,
                 children: render_children,
             }),
-            mark: RenderNodeMark::new(),
+            mark: RenderMark::new(),
         });
         ElementNode {
             context: element_context,
