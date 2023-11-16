@@ -123,10 +123,10 @@ pub(crate) struct RenderNodeMark {
 }
 
 impl RenderNodeMark {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            needs_layout: false.into(),
-            subtree_has_relayout: false.into(),
+            needs_layout: true.into(),
+            subtree_has_relayout: true.into(),
             layout_boundary: false.into(),
         }
     }

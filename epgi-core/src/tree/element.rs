@@ -14,12 +14,12 @@ pub use snapshot::*;
 
 use crate::{
     foundation::{
-        Arc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec, LayerProtocol, Protocol,
-        Provide, SyncMutex, TypeKey,
+        Arc, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec, LayerProtocol,
+        Protocol, Provide, SyncMutex, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    tree::RenderAction,
+    tree::{LayerNode, RenderAction, RenderCache, RenderNodeMark, RenderObjectInner},
 };
 
 use super::{
@@ -324,6 +324,9 @@ pub fn create_root_element<E, R, L>(
     element: E,
     element_children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
     render: R,
+    render_children: <R::ChildContainer as HktContainer>::Container<
+        ArcChildRenderObject<E::ChildProtocol>,
+    >,
     layer: L,
     hooks: Hooks,
     constraints: <E::ParentProtocol as Protocol>::Constraints,
@@ -343,38 +346,39 @@ where
         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
     >,
 {
-    // let element_node = Arc::new_cyclic(move |node| {
-    //     let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
-    //     let render_context = element_context.nearest_render_context.clone();
-    //     let layer_context = render_context.nearest_repaint_boundary.clone();
-    //     // let render = R::try_create_render_object_from_element(&element, &widget)
-    //     //     .expect("Root render object creation should always be successfully");
-    //     let layer_node = Asc::new(LayerNode::new(layer_context, layer));
-    //     let render_object = Arc::new(RenderObject {
-    //         element_context: element_context.clone(),
-    //         context: render_context,
-    //         layer_node,
-    //         inner: SyncMutex::new(RenderObjectInner {
-    //             cache: Some(RenderCache::new(constraints, false, None)),
-    //             render,
-    //         }),
-    //     });
-    //     ElementNode {
-    //         context: element_context,
-    //         snapshot: SyncMutex::new(ElementSnapshot {
-    //             widget,
-    //             inner: ElementSnapshotInner::Mainline(Mainline {
-    //                 state: Some(MainlineState::Ready {
-    //                     element,
-    //                     children: element_children,
-    //                     hooks,
-    //                     render_object: Some(render_object),
-    //                 }),
-    //                 async_queue: AsyncWorkQueue::new_empty(),
-    //             }),
-    //         }),
-    //     }
-    // });
-    // element_node
-    todo!()
+    let element_node = Arc::new_cyclic(move |node| {
+        let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
+        let render_context = element_context.nearest_render_context.clone();
+        let layer_context = render_context.nearest_repaint_boundary.clone();
+        // let render = R::try_create_render_object_from_element(&element, &widget)
+        //     .expect("Root render object creation should always be successfully");
+        let layer_node = Asc::new(LayerNode::new(layer_context, layer));
+        let render_object = Arc::new(RenderObject {
+            element_context: element_context.clone(),
+            context: render_context,
+            layer_node,
+            inner: SyncMutex::new(RenderObjectInner {
+                cache: Some(RenderCache::new(constraints, false, None)),
+                render,
+                children: render_children,
+            }),
+            mark: RenderNodeMark::new(),
+        });
+        ElementNode {
+            context: element_context,
+            snapshot: SyncMutex::new(ElementSnapshot {
+                widget,
+                inner: ElementSnapshotInner::Mainline(Mainline {
+                    state: Some(MainlineState::Ready {
+                        element,
+                        children: element_children,
+                        hooks,
+                        render_object: Some(render_object),
+                    }),
+                    async_queue: AsyncWorkQueue::new_empty(),
+                }),
+            }),
+        }
+    });
+    element_node
 }

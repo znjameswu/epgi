@@ -336,6 +336,7 @@ impl MainState {
             element,
             None,
             RenderRoot { child: None },
+            None,
             RootLayer::new(None),
             Hooks {
                 array_hooks: [Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> {
