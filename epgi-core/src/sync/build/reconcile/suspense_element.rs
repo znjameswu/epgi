@@ -3,6 +3,7 @@ use either::Either;
 use crate::{
     foundation::{Arc, Asc, EitherParallel, Protocol},
     nodes::{RenderSuspense, Suspense, SuspenseElement},
+    scheduler::TreeScheduler,
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ElementNode,
@@ -18,6 +19,7 @@ pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
         [SubtreeRenderObjectChange<P>; 2],
     >,
     scope: &rayon::Scope<'_>,
+    tree_scheduler: &TreeScheduler,
 ) -> SubtreeRenderObjectChange<P> {
     let render_object = render_object.expect("Suspense can never suspend");
     use Either::*;
@@ -65,7 +67,7 @@ pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
                 snapshot.widget.fallback.clone()
             };
 
-            let (fallback, change) = fallback.inflate_sync(node.context.clone());
+            let (fallback, change) = fallback.inflate_sync(node.context.clone(), tree_scheduler);
 
             let SubtreeRenderObjectChange::New(fallback_render_object) = change else {
                 panic!(

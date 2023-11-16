@@ -6,15 +6,16 @@ use linear_map::LinearMap;
 
 use crate::{
     foundation::{
-        Arc, AsIterator, Asc, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, Parallel,
-        Provide, TypeKey,
+        Arc, Asc, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, Parallel, Provide,
+        SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeRenderObjectChange, TreeScheduler},
     tree::{
-        ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf, BuildContext, ContainerOf,
-        Element, ElementContextNode, ElementNode, ElementReconcileItem, HookContext, Hooks,
-        MainlineState, RenderOrUnit,
+        ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf, AsyncWorkQueue,
+        BuildContext, ContainerOf, Element, ElementContextNode, ElementNode, ElementReconcileItem,
+        ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, MainlineState,
+        RenderOrUnit,
     },
 };
 
@@ -24,22 +25,55 @@ impl<E> ElementNode<E>
 where
     E: Element,
 {
-    pub(in super::super) fn rebuild_node_sync<'a, 'batch>(
+    pub(in super::super) fn rebuild_node_sync(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
+        job_ids: &Inlinable64Vec<JobId>,
+        scope: &rayon::Scope<'_>,
+        tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        todo!()
+        let visit_action = self.visit_inspect(widget, tree_scheduler);
+        self.execute_visit(visit_action, job_ids, scope, tree_scheduler)
     }
 
-    pub(in super::super) fn inflate_node_sync<'a, 'batch>(
+    pub(in super::super) fn inflate_node_sync(
         widget: &E::ArcWidget,
         parent_context: ArcElementContextNode,
+        tree_scheduler: &TreeScheduler,
     ) -> (
         Arc<ElementNode<E>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        todo!()
+        let node = Arc::new_cyclic(|weak| ElementNode {
+            context: Arc::new(ElementContextNode::new_for::<E>(
+                weak.clone() as _,
+                parent_context,
+                widget,
+            )),
+            snapshot: SyncMutex::new(ElementSnapshot {
+                widget: widget.clone(),
+                inner: ElementSnapshotInner::Mainline(Mainline {
+                    state: None,
+                    async_queue: AsyncWorkQueue::new_empty(),
+                }),
+            }),
+        });
+
+        let consumed_values = Self::read_and_update_subscriptions_sync(
+            E::get_consumed_types(widget),
+            EMPTY_CONSUMED_TYPES,
+            &node.context,
+            tree_scheduler,
+        );
+
+        let subtree_results = Self::perform_inflate_node_sync::<true>(
+            &node,
+            widget,
+            HookContext::new_inflate(),
+            consumed_values,
+            tree_scheduler,
+        );
+        return (node, subtree_results);
     }
 }
 
@@ -78,10 +112,10 @@ impl<E> ElementNode<E>
 where
     E: Element,
 {
-    fn visit_inspect<'a, 'batch>(
+    fn visit_inspect(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
+        tree_scheduler: &TreeScheduler,
     ) -> VisitAction<E> {
         // Subtree has no work, end of visit
         if !self.context.subtree_lanes().contains(LanePos::Sync) {
@@ -107,7 +141,6 @@ where
             use MainlineState::*;
             match state {
                 Ready {
-                    element,
                     children,
                     render_object,
                     ..
@@ -116,9 +149,7 @@ where
                     render_object: render_object.clone(),
                     self_rebuild_suspended: false,
                 },
-                RebuildSuspended {
-                    element, children, ..
-                } => VisitAction::Visit {
+                RebuildSuspended { children, .. } => VisitAction::Visit {
                     children: children.map_ref_collect(Clone::clone),
                     render_object: None,
                     self_rebuild_suspended: true,
@@ -143,7 +174,7 @@ where
             let cancel = Self::prepare_cancel_async_work(
                 mainline,
                 entry.work.context.lane_pos,
-                reconcile_context.tree_scheduler,
+                tree_scheduler,
             )
             .ok()
             .expect("Impossible to fail");
@@ -176,13 +207,14 @@ where
         };
     }
 
-    fn rebuild<'a, 'batch>(
+    #[inline(always)]
+    fn execute_visit(
         self: &Arc<Self>,
-        widget: Option<E::ArcWidget>,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
+        visit_action: VisitAction<E>,
+        job_ids: &Inlinable64Vec<JobId>,
+        scope: &rayon::Scope<'_>,
+        tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        let visit_action = self.visit_inspect(widget, reconcile_context);
-
         match visit_action {
             VisitAction::Visit {
                 children,
@@ -191,7 +223,7 @@ where
             } => {
                 let results = children
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
-                        child.visit_and_work_sync(reconcile_context)
+                        child.visit_and_work_sync(job_ids, scope, tree_scheduler)
                     });
                 let (_children, render_object_changes) = results.unzip_collect(|x| x);
 
@@ -200,7 +232,8 @@ where
                     render_object,
                     render_object_changes,
                     self_rebuild_suspended,
-                    reconcile_context.scope,
+                    scope,
+                    tree_scheduler,
                 );
             }
             VisitAction::Rebuild {
@@ -218,15 +251,10 @@ where
                     E::get_consumed_types(new_widget_ref),
                     E::get_consumed_types(&old_widget),
                     &self.context,
-                    reconcile_context.tree_scheduler,
+                    tree_scheduler,
                 );
                 if let Some(widget) = new_widget.as_ref() {
-                    Self::update_provided_value(
-                        &old_widget,
-                        widget,
-                        &self.context,
-                        reconcile_context.tree_scheduler,
-                    )
+                    Self::update_provided_value(&old_widget, widget, &self.context, tree_scheduler)
                 }
                 let is_new_widget = new_widget.is_some();
                 let new_widget = &new_widget.unwrap_or(old_widget);
@@ -238,11 +266,7 @@ where
                         render_object,
                     } => {
                         assert!(!is_poll, "A non-suspended node should not be polled");
-                        Self::apply_updates_sync_new(
-                            &self.context,
-                            reconcile_context.job_ids,
-                            &mut hooks,
-                        );
+                        Self::apply_updates_sync_new(&self.context, job_ids, &mut hooks);
                         self.perform_rebuild_node_sync_new(
                             new_widget,
                             element,
@@ -250,7 +274,9 @@ where
                             HookContext::new_rebuild(hooks),
                             render_object,
                             consumed_values,
-                            reconcile_context,
+                            job_ids,
+                            scope,
+                            tree_scheduler,
                             is_new_widget,
                         )
                     }
@@ -265,7 +291,7 @@ where
                         if !is_poll {
                             Self::apply_updates_sync_new(
                                 &self.context,
-                                reconcile_context.job_ids,
+                                job_ids,
                                 &mut suspended_hooks,
                             );
                         }
@@ -276,7 +302,9 @@ where
                             HookContext::new_rebuild(suspended_hooks),
                             None,
                             consumed_values,
-                            reconcile_context,
+                            job_ids,
+                            scope,
+                            tree_scheduler,
                             is_new_widget,
                         )
                     }
@@ -285,7 +313,7 @@ where
                         waker,
                     } => {
                         waker.abort();
-                        self.perform_inflate_node_sync_new(
+                        self.perform_inflate_node_sync::<false>(
                             new_widget,
                             if !is_poll {
                                 HookContext::new_inflate()
@@ -293,6 +321,7 @@ where
                                 HookContext::new_poll_inflate(suspended_hooks)
                             },
                             consumed_values,
+                            tree_scheduler,
                         )
                     }
                 };
@@ -302,15 +331,17 @@ where
         }
     }
 
-    fn perform_rebuild_node_sync_new<'a, 'batch>(
-        self: &'a Arc<Self>,
-        widget: &'a E::ArcWidget,
+    fn perform_rebuild_node_sync_new(
+        self: &Arc<Self>,
+        widget: &E::ArcWidget,
         mut element: E,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         mut hook_context: HookContext,
         old_render_object: Option<ArcRenderObjectOf<E>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
+        job_ids: &Inlinable64Vec<JobId>,
+        scope: &rayon::Scope<'_>,
+        tree_scheduler: &TreeScheduler,
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let mut nodes_needing_unmount = Default::default();
@@ -324,70 +355,77 @@ where
             children,
             &mut nodes_needing_unmount,
         );
-        let (items, shuffle) = match results {
-            Ok((items, shuffle)) => (items, shuffle),
+
+        let (state, change) = match results {
+            Ok((items, shuffle)) => {
+                // Starting the unmounting as early as possible.
+                // Unmount before updating render object can cause render object to hold reference to detached children,
+                // Therfore, we need to ensure we do not read into render objects before the batch commit is done
+                for node_needing_unmount in nodes_needing_unmount {
+                    scope.spawn(|scope| node_needing_unmount.unmount(scope))
+                }
+
+                let results =
+                    items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
+                        use ElementReconcileItem::*;
+                        match item {
+                            Keep(node) => node.visit_and_work_sync(job_ids, scope, tree_scheduler),
+                            Update(pair) => pair.rebuild_sync_box(job_ids, scope, tree_scheduler),
+                            Inflate(widget) => {
+                                widget.inflate_sync(self.context.clone(), tree_scheduler)
+                            }
+                        }
+                    });
+                let (children, changes) = results.unzip_collect(|x| x);
+
+                let (render_object, change) =
+                    <E::RenderOrUnit as RenderOrUnit<E>>::rebuild_success_commit(
+                        &element,
+                        widget,
+                        shuffle,
+                        &children,
+                        old_render_object,
+                        changes,
+                        &self.context,
+                        is_new_widget,
+                    );
+                (
+                    MainlineState::Ready {
+                        element,
+                        hooks: hook_context.hooks,
+                        children,
+                        render_object,
+                    },
+                    change,
+                )
+            }
             Err((children, err)) => {
                 debug_assert!(
                     nodes_needing_unmount.is_empty(),
                     "An element that suspends itself should not request unmounting any child nodes"
                 );
-                self.commit_write_rebuild_element_sync(MainlineState::RebuildSuspended {
-                    suspended_hooks: hook_context.hooks,
-                    element,
-                    children,
-                    waker: err.waker,
-                });
 
-                todo!()
+                (
+                    MainlineState::RebuildSuspended {
+                        suspended_hooks: hook_context.hooks,
+                        element,
+                        children,
+                        waker: err.waker,
+                    },
+                    <E::RenderOrUnit as RenderOrUnit<E>>::rebuild_suspend_commit(old_render_object),
+                )
             }
         };
-
-        // Starting the unmounting as early as possible.
-        // Unmount before updating render object can cause render object to hold reference to detached children,
-        // Therfore, we need to ensure we do not read into render objects before the batch commit is done
-        for node_needing_unmount in nodes_needing_unmount {
-            reconcile_context
-                .scope
-                .spawn(|scope| node_needing_unmount.unmount(scope))
-        }
-
-        let results = items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
-            use ElementReconcileItem::*;
-            match item {
-                Keep(node) => node.visit_and_work_sync(reconcile_context),
-                Update(pair) => pair.rebuild_sync_box(reconcile_context),
-                Inflate(widget) => widget.inflate_sync(self.context.clone()),
-            }
-        });
-        let (children, changes) = results.unzip_collect(|x| x);
-
-        let child_commit_summary = SubtreeRenderObjectChange::summarize(changes.as_iter());
-
-        let (render_object, change) = <E::RenderOrUnit as RenderOrUnit<E>>::rebuild_success_commit(
-            &element,
-            widget,
-            shuffle,
-            &children,
-            old_render_object,
-            changes,
-            &self.context,
-            is_new_widget,
-        );
-
-        self.commit_write_rebuild_element_sync(MainlineState::Ready {
-            element,
-            hooks: hook_context.hooks,
-            children,
-            render_object,
-        });
+        self.commit_write_element(state);
         return change;
     }
 
-    fn perform_inflate_node_sync_new<'a, 'batch>(
-        self: &'a Arc<Self>,
-        widget: &'a E::ArcWidget,
+    fn perform_inflate_node_sync<const FIRST_INFLATE: bool>(
+        self: &Arc<Self>,
+        widget: &E::ArcWidget,
         mut hook_context: HookContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let result = E::perform_inflate_element(
             &widget,
@@ -398,11 +436,11 @@ where
             provider_values,
         );
 
-        match result {
+        let (state, change) = match result {
             Ok((element, child_widgets)) => {
                 let results = child_widgets
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child_widget| {
-                        child_widget.inflate_sync(self.context.clone())
+                        child_widget.inflate_sync(self.context.clone(), tree_scheduler)
                     });
                 let (children, changes) = results.unzip_collect(|x| x);
 
@@ -418,27 +456,36 @@ where
                         &self.context,
                         changes,
                     );
-                self.inflate_commit_write_element_first_inflate(MainlineState::Ready {
-                    element,
-                    hooks: hook_context.hooks,
-                    children,
-                    render_object,
-                });
-                return change;
+
+                (
+                    MainlineState::Ready {
+                        element,
+                        hooks: hook_context.hooks,
+                        children,
+                        render_object,
+                    },
+                    change,
+                )
             }
-            Err(err) => {
-                self.inflate_commit_write_element_first_inflate(MainlineState::InflateSuspended {
+            Err(err) => (
+                MainlineState::InflateSuspended {
                     suspended_hooks: hook_context.hooks,
                     waker: err.waker,
-                });
-                return SubtreeRenderObjectChange::Suspend;
-            }
+                },
+                SubtreeRenderObjectChange::Suspend,
+            ),
+        };
+        if FIRST_INFLATE {
+            self.commit_write_element_first_inflate(state);
+        } else {
+            self.commit_write_element(state)
         }
+        return change;
     }
 
-    fn apply_updates_sync_new<'a, 'batch>(
+    fn apply_updates_sync_new(
         element_context: &ElementContextNode,
-        job_ids: &'a Inlinable64Vec<JobId>,
+        job_ids: &Inlinable64Vec<JobId>,
         hooks: &mut Hooks,
     ) {
         let mut jobs = {
@@ -460,7 +507,7 @@ where
         }
     }
 
-    fn commit_write_rebuild_element_sync(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_element(self: &Arc<Self>, state: MainlineState<E>) {
         // Collecting async work is necessary, even if we are inflating!
         // Since it could be an InflateSuspended node and an async batch spawned a secondary root on this node.
         let async_work_needing_start = {
@@ -484,7 +531,7 @@ where
         }
     }
 
-    fn inflate_commit_write_element_first_inflate(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_element_first_inflate(self: &Arc<Self>, state: MainlineState<E>) {
         let mut snapshot = self.snapshot.lock();
         let snapshot_reborrow = &mut *snapshot;
         let mainline = snapshot_reborrow
@@ -498,11 +545,11 @@ where
         mainline.state = Some(state);
     }
 
-    fn update_provided_value<'a, 'batch>(
-        old_widget: &'a E::ArcWidget,
-        new_widget: &'a E::ArcWidget,
-        element_context: &'a ElementContextNode,
-        tree_scheduler: &'batch TreeScheduler,
+    fn update_provided_value(
+        old_widget: &E::ArcWidget,
+        new_widget: &E::ArcWidget,
+        element_context: &ElementContextNode,
+        tree_scheduler: &TreeScheduler,
     ) {
         if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
             let old_provided_value = get_provided_value(&old_widget);
@@ -616,9 +663,11 @@ pub(crate) mod sync_build_private {
     use super::*;
 
     pub trait AnyElementSyncReconcileExt {
-        fn visit_and_work_sync_any<'a, 'batch>(
+        fn visit_and_work_sync_any(
             self: Arc<Self>,
-            reconcile_context: SyncReconcileContext<'a, 'batch>,
+            job_ids: &Inlinable64Vec<JobId>,
+            scope: &rayon::Scope<'_>,
+            tree_scheduler: &TreeScheduler,
         ) -> ArcAnyElementNode;
     }
 
@@ -626,19 +675,23 @@ pub(crate) mod sync_build_private {
     where
         E: Element,
     {
-        fn visit_and_work_sync_any<'a, 'batch>(
+        fn visit_and_work_sync_any(
             self: Arc<Self>,
-            reconcile_context: SyncReconcileContext<'a, 'batch>,
+            job_ids: &Inlinable64Vec<JobId>,
+            scope: &rayon::Scope<'_>,
+            tree_scheduler: &TreeScheduler,
         ) -> ArcAnyElementNode {
-            self.rebuild_node_sync(None, reconcile_context);
+            self.rebuild_node_sync(None, job_ids, scope, tree_scheduler);
             self
         }
     }
 
     pub trait ChildElementSyncReconcileExt<PP: Protocol> {
-        fn visit_and_work_sync<'a, 'batch>(
+        fn visit_and_work_sync(
             self: Arc<Self>,
-            reconcile_context: SyncReconcileContext<'a, 'batch>,
+            job_ids: &Inlinable64Vec<JobId>,
+            scope: &rayon::Scope<'_>,
+            tree_scheduler: &TreeScheduler,
         ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
     }
 
@@ -646,22 +699,17 @@ pub(crate) mod sync_build_private {
     where
         E: Element,
     {
-        fn visit_and_work_sync<'a, 'batch>(
+        fn visit_and_work_sync(
             self: Arc<Self>,
-            reconcile_context: SyncReconcileContext<'a, 'batch>,
+            job_ids: &Inlinable64Vec<JobId>,
+            scope: &rayon::Scope<'_>,
+            tree_scheduler: &TreeScheduler,
         ) -> (
             ArcChildElementNode<E::ParentProtocol>,
             SubtreeRenderObjectChange<E::ParentProtocol>,
         ) {
-            let result = self.rebuild_node_sync(None, reconcile_context);
+            let result = self.rebuild_node_sync(None, job_ids, scope, tree_scheduler);
             (self, result)
         }
     }
-}
-
-#[derive(Clone, Copy)]
-pub struct SyncReconcileContext<'a, 'batch> {
-    pub job_ids: &'batch Inlinable64Vec<JobId>,
-    pub scope: &'a rayon::Scope<'batch>,
-    pub tree_scheduler: &'batch TreeScheduler,
 }

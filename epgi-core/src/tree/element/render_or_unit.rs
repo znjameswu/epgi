@@ -1,6 +1,7 @@
 use crate::{
     foundation::{Arc, ArrayContainer, Never, Protocol},
     nodes::{RenderSuspense, SuspenseElement},
+    scheduler::TreeScheduler,
     sync::SubtreeRenderObjectChange,
     tree::{ArcChildRenderObject, LayerOrUnit, Render, RenderObject},
 };
@@ -20,6 +21,7 @@ pub trait RenderOrUnit<E: Element> {
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
+        tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
 
     fn rebuild_success_commit(
@@ -108,6 +110,7 @@ where
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
         _scope: &rayon::Scope<'_>,
+        _tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         element_node.visit_commit(render_object, render_object_changes, self_rebuild_suspended)
     }
@@ -189,6 +192,7 @@ where
         [change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
         _self_rebuild_suspended: bool,
         _scope: &rayon::Scope<'_>,
+        _tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         return change;
     }
@@ -249,6 +253,7 @@ where
         render_object_changes: ContainerOf<SuspenseElement<P>, SubtreeRenderObjectChange<P>>,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
+        tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<P> {
         debug_assert!(!self_rebuild_suspended, "Suspense can not suspend itself");
         crate::sync::suspense_element::suspense_visit_commit(
@@ -256,6 +261,7 @@ where
             render_object,
             render_object_changes,
             scope,
+            tree_scheduler,
         )
     }
 
