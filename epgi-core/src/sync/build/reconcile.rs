@@ -1,6 +1,6 @@
-mod component_element;
-mod render_element;
-mod suspense_element;
+pub(crate) mod component_element;
+pub(crate) mod render_element;
+pub(crate) mod suspense_element;
 
 use linear_map::LinearMap;
 
@@ -35,7 +35,6 @@ where
     pub(in super::super) fn inflate_node_sync<'a, 'batch>(
         widget: &E::ArcWidget,
         parent_context: ArcElementContextNode,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> (
         Arc<ElementNode<E>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
@@ -201,6 +200,7 @@ where
                     render_object,
                     render_object_changes,
                     self_rebuild_suspended,
+                    reconcile_context.scope,
                 );
             }
             VisitAction::Rebuild {
@@ -248,8 +248,7 @@ where
                             element,
                             children,
                             HookContext::new_rebuild(hooks),
-                            todo!(),
-                            // render_object,
+                            render_object,
                             consumed_values,
                             reconcile_context,
                             is_new_widget,
@@ -294,7 +293,6 @@ where
                                 HookContext::new_poll_inflate(suspended_hooks)
                             },
                             consumed_values,
-                            reconcile_context,
                         )
                     }
                 };
@@ -358,7 +356,7 @@ where
             match item {
                 Keep(node) => node.visit_and_work_sync(reconcile_context),
                 Update(pair) => pair.rebuild_sync_box(reconcile_context),
-                Inflate(widget) => widget.inflate_sync(self.context.clone(), reconcile_context),
+                Inflate(widget) => widget.inflate_sync(self.context.clone()),
             }
         });
         let (children, changes) = results.unzip_collect(|x| x);
@@ -390,7 +388,6 @@ where
         widget: &'a E::ArcWidget,
         mut hook_context: HookContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let result = E::perform_inflate_element(
             &widget,
@@ -403,12 +400,10 @@ where
 
         match result {
             Ok((element, child_widgets)) => {
-                let results = child_widgets.par_map_collect(
-                    &get_current_scheduler().sync_threadpool,
-                    |child_widget| {
-                        child_widget.inflate_sync(self.context.clone(), reconcile_context)
-                    },
-                );
+                let results = child_widgets
+                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child_widget| {
+                        child_widget.inflate_sync(self.context.clone())
+                    });
                 let (children, changes) = results.unzip_collect(|x| x);
 
                 debug_assert!(

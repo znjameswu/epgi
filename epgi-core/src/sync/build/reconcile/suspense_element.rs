@@ -10,8 +10,6 @@ use crate::{
     },
 };
 
-use super::SyncReconcileContext;
-
 pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
     node: &ElementNode<SuspenseElement<P>>,
     render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
@@ -19,7 +17,7 @@ pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
         [SubtreeRenderObjectChange<P>; 1],
         [SubtreeRenderObjectChange<P>; 2],
     >,
-    reconcile_context: SyncReconcileContext<'a, 'batch>,
+    scope: &rayon::Scope<'_>,
 ) -> SubtreeRenderObjectChange<P> {
     let render_object = render_object.expect("Suspense can never suspend");
     use Either::*;
@@ -67,7 +65,7 @@ pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
                 snapshot.widget.fallback.clone()
             };
 
-            let (fallback, change) = fallback.inflate_sync(node.context.clone(), reconcile_context);
+            let (fallback, change) = fallback.inflate_sync(node.context.clone());
 
             let SubtreeRenderObjectChange::New(fallback_render_object) = change else {
                 panic!(
@@ -117,9 +115,7 @@ pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
                 old_children.0.left().expect("Impossible to fail")
             };
 
-            reconcile_context
-                .scope
-                .spawn(|scope| old_child.unmount(scope));
+            scope.spawn(|scope| old_child.unmount(scope));
 
             return SubtreeRenderObjectChange::Keep {
                 child_render_action: render_action,

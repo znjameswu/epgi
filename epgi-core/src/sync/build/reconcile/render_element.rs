@@ -350,18 +350,15 @@ where
         (render_object, change)
     }
 
-    pub(crate) fn rebuild_suspend_commit_attached(
-        render_object: Arc<RenderObject<E::Render>>,
+    pub(crate) fn rebuild_suspend_commit(
+        render_object: Option<Arc<RenderObject<E::Render>>>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        if !<E::Render as Render>::NOOP_DETACH {
-            let mut inner = render_object.inner.lock();
-            inner.render.detach();
+        if let Some(render_object) = render_object {
+            if !<E::Render as Render>::NOOP_DETACH {
+                let mut inner = render_object.inner.lock();
+                inner.render.detach();
+            }
         }
-        SubtreeRenderObjectChange::Suspend
-    }
-
-    pub(crate) fn rebuild_suspend_commit_detached() -> SubtreeRenderObjectChange<E::ParentProtocol>
-    {
         SubtreeRenderObjectChange::Suspend
     }
 }

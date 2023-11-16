@@ -34,11 +34,11 @@ pub trait Intrinsics: Debug + Send + Sync {
 }
 
 impl Intrinsics for () {
-    fn eq_tag(&self, other: &Self) -> bool {
+    fn eq_tag(&self, _other: &Self) -> bool {
         true
     }
 
-    fn eq_param(&self, other: &Self) -> bool {
+    fn eq_param(&self, _other: &Self) -> bool {
         true
     }
 }

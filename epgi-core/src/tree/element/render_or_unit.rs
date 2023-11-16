@@ -2,34 +2,24 @@ use crate::{
     foundation::{Arc, ArrayContainer, Never, Protocol},
     nodes::{RenderSuspense, SuspenseElement},
     sync::SubtreeRenderObjectChange,
-    tree::{
-        render_has_layer, ArcChildRenderObject, Render, RenderAction, RenderContextNode,
-        RenderObject,
-    },
+    tree::{ArcChildRenderObject, LayerOrUnit, Render, RenderObject},
 };
 
 use super::{
     ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf,
-    Element, ElementNode, RenderElement, SuspenseElementFunctionTable,
+    Element, ElementNode, RenderElement,
 };
 
 pub trait RenderOrUnit<E: Element> {
     type ArcRenderObject: Clone + Send + Sync + 'static;
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E>;
-    fn with_inner<T>(
-        render_object: &Self::ArcRenderObject,
-        op: impl FnOnce(
-            &mut E::RenderOrUnit,
-            &mut ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
-            &RenderContextNode,
-        ) -> T,
-    ) -> T;
 
     fn visit_commit(
         element_node: &ElementNode<E>,
         render_object: Option<Self::ArcRenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
+        scope: &rayon::Scope<'_>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
 
     fn rebuild_success_commit(
@@ -46,6 +36,10 @@ pub trait RenderOrUnit<E: Element> {
         SubtreeRenderObjectChange<E::ParentProtocol>,
     );
 
+    fn rebuild_suspend_commit(
+        render_object: Option<Self::ArcRenderObject>,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
+
     fn inflate_success_commit(
         element: &E,
         widget: &E::ArcWidget,
@@ -53,7 +47,7 @@ pub trait RenderOrUnit<E: Element> {
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
         Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     );
 }
 
@@ -61,22 +55,7 @@ pub enum RenderElementFunctionTable<E: Element> {
     RenderObject {
         into_arc_child_render_object:
             fn(ArcRenderObjectOf<E>) -> ArcChildRenderObject<E::ParentProtocol>,
-        create_render: fn(&E, &E::ArcWidget) -> E::RenderOrUnit,
-        update_render: Option<fn(&mut E::RenderOrUnit, &E::ArcWidget) -> RenderAction>,
-        detach_render: Option<fn(&mut E::RenderOrUnit)>,
-        suspense: Option<SuspenseElementFunctionTable<E>>,
         has_layer: bool,
-        create_render_object: fn(
-            E::RenderOrUnit,
-            ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
-            ArcElementContextNode,
-        ) -> ArcRenderObjectOf<E>,
-        mark_render_action: fn(
-            &ArcRenderObjectOf<E>,
-            self_render_action: RenderAction,
-            subtree_render_action: RenderAction,
-        ),
-        boundary_type: fn(&ArcRenderObjectOf<E>) -> RenderAction,
     },
     None {
         as_child: fn(
@@ -105,35 +84,6 @@ where
     }
 }
 
-// pub enum MaybeSuspendChildRenderObject<P: Protocol> {
-//     Ready(ArcChildRenderObject<P>),
-//     ElementSuspended(ArcChildRenderObject<P>),
-//     Detached,
-// }
-
-// impl<P> MaybeSuspendChildRenderObject<P>
-// where
-//     P: Protocol,
-// {
-//     pub fn is_ready(&self) -> bool {
-//         matches!(self, MaybeSuspendChildRenderObject::Ready(_))
-//     }
-
-//     #[inline(always)]
-//     pub(crate) fn merge_with(self, change: SubtreeRenderObjectChange<P>) -> Self {
-//         use MaybeSuspendChildRenderObject::*;
-//         use SubtreeRenderObjectChange::*;
-//         match (self, change) {
-//             (child, Keep { .. }) => child,
-//             (_, New(child)) => Ready(child),
-//             (_, SuspendNew(child)) => ElementSuspended(child),
-//             (_, Detach) => Detached,
-//             (Ready(child) | ElementSuspended(child), SuspendKeep) => ElementSuspended(child),
-//             (Detached, SuspendKeep) => Detached,
-//         }
-//     }
-// }
-
 impl<E, R> RenderOrUnit<E> for R
 where
     E: RenderElement<Render = R>,
@@ -148,97 +98,68 @@ where
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::RenderObject {
             into_arc_child_render_object: |x| x,
-            create_render: E::create_render,
-            create_render_object: |render, children, element_context| {
-                assert!(
-                    element_context.has_render,
-                    concat!(
-                        "ElementNodes with RenderObject must be registered in its ElementContextNode. \n",
-                        "If this assertion failed, you have encountered a framework bug."
-                    )
-                );
-                Arc::new(RenderObject::new(render, children, element_context.clone()))
-            },
-            update_render: if E::NOOP_UPDATE_RENDER_OBJECT {
-                None
-            } else {
-                Some(E::update_render)
-            },
-            detach_render: if R::NOOP_DETACH {
-                None
-            } else {
-                Some(R::detach)
-            },
-            suspense: E::SUSPENSE_ELEMENT_FUNCTION_TABLE,
-            has_layer: render_has_layer::<R>(),
-            mark_render_action: |render_object, self_render_action, child_render_action| todo!(),
-            boundary_type: |render_object| todo!(),
+            has_layer: <R::LayerOrUnit as LayerOrUnit<R>>::LAYER_RENDER_FUNCTION_TABLE.is_some(),
         };
-
-    fn with_inner<T>(
-        render_object: &Self::ArcRenderObject,
-        op: impl FnOnce(
-            &mut E::RenderOrUnit,
-            &mut ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
-            &RenderContextNode,
-        ) -> T,
-    ) -> T {
-        let mut inner = render_object.inner.lock();
-        let inner = &mut *inner;
-        op(
-            &mut inner.render,
-            &mut inner.children,
-            &render_object.context,
-        )
-    }
 
     #[inline(always)]
     fn visit_commit(
         element_node: &ElementNode<E>,
         render_object: Option<Self::ArcRenderObject>,
-        render_object_changes: ContainerOf<
-            E,
-            SubtreeRenderObjectChange<<E as Element>::ChildProtocol>,
-        >,
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
-        todo!()
+        _scope: &rayon::Scope<'_>,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        element_node.visit_commit(render_object, render_object_changes, self_rebuild_suspended)
     }
 
     #[inline(always)]
     fn rebuild_success_commit(
         element: &E,
-        widget: &<E as Element>::ArcWidget,
+        widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        children: &ContainerOf<E, ArcChildElementNode<<E as Element>::ChildProtocol>>,
+        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object: Option<Self::ArcRenderObject>,
-        render_object_changes: ContainerOf<
-            E,
-            SubtreeRenderObjectChange<<E as Element>::ChildProtocol>,
-        >,
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         element_context: &ArcElementContextNode,
         is_new_widget: bool,
     ) -> (
         Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        todo!()
+        ElementNode::<E>::rebuild_success_commit(
+            element,
+            widget,
+            shuffle,
+            children,
+            render_object,
+            render_object_changes,
+            element_context,
+            is_new_widget,
+        )
+    }
+
+    fn rebuild_suspend_commit(
+        render_object: Option<Self::ArcRenderObject>,
+    ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
+        ElementNode::<E>::rebuild_suspend_commit(render_object)
     }
 
     #[inline(always)]
     fn inflate_success_commit(
         element: &E,
-        widget: &<E as Element>::ArcWidget,
+        widget: &E::ArcWidget,
         element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<
-            E,
-            SubtreeRenderObjectChange<<E as Element>::ChildProtocol>,
-        >,
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
         Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        todo!()
+        ElementNode::<E>::inflate_success_commit(
+            element,
+            widget,
+            element_context,
+            render_object_changes,
+        )
     }
 }
 
@@ -261,53 +182,50 @@ where
             },
         };
 
-    fn with_inner<T>(
-        render_object: &Self::ArcRenderObject,
-        op: impl FnOnce(
-            &mut E::RenderOrUnit,
-            &mut ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
-            &RenderContextNode,
-        ) -> T,
-    ) -> T {
-        panic!("You should never unwrap non-RenderElement's render object")
-    }
-
     #[inline(always)]
     fn visit_commit(
         _element_node: &ElementNode<E>,
         _render_object: Option<Never>,
-        [change]: [SubtreeRenderObjectChange<<E as Element>::ChildProtocol>; 1],
+        [change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
         _self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
+        _scope: &rayon::Scope<'_>,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         return change;
     }
 
     #[inline(always)]
     fn rebuild_success_commit(
         _element: &E,
-        _widget: &<E as Element>::ArcWidget,
+        _widget: &E::ArcWidget,
         _shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        _children: &[ArcChildElementNode<<E as Element>::ChildProtocol>; 1],
+        _children: &[ArcChildElementNode<E::ChildProtocol>; 1],
         _render_object: Option<Never>,
-        [change]: [SubtreeRenderObjectChange<<E as Element>::ChildProtocol>; 1],
+        [change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
         _element_context: &ArcElementContextNode,
         _is_new_widget: bool,
     ) -> (
         Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         (None, change)
     }
 
     #[inline(always)]
+    fn rebuild_suspend_commit(
+        render_object: Option<Self::ArcRenderObject>,
+    ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
+        SubtreeRenderObjectChange::Suspend
+    }
+
+    #[inline(always)]
     fn inflate_success_commit(
         _element: &E,
-        _widget: &<E as Element>::ArcWidget,
+        _widget: &E::ArcWidget,
         _element_context: &ArcElementContextNode,
-        [change]: [SubtreeRenderObjectChange<<E as Element>::ChildProtocol>; 1],
+        [change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
     ) -> (
         Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<E as Element>::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         (None, change)
     }
@@ -321,77 +239,51 @@ where
 
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<SuspenseElement<P>> =
         RenderElementFunctionTable::RenderObject {
-            into_arc_child_render_object: todo!(),
-            create_render: todo!(),
-            update_render: todo!(),
-            detach_render: todo!(),
-            suspense: todo!(),
-            has_layer: todo!(),
-            create_render_object: todo!(),
-            mark_render_action: todo!(),
-            boundary_type: todo!(),
+            into_arc_child_render_object: |x| x,
+            has_layer: false,
         };
-
-    fn with_inner<T>(
-        render_object: &Self::ArcRenderObject,
-        op: impl FnOnce(
-            &mut <SuspenseElement<P> as Element>::RenderOrUnit,
-            &mut ContainerOf<
-                SuspenseElement<P>,
-                ArcChildRenderObject<<SuspenseElement<P> as Element>::ChildProtocol>,
-            >,
-            &RenderContextNode,
-        ) -> T,
-    ) -> T {
-        todo!()
-    }
 
     fn visit_commit(
         element_node: &ElementNode<SuspenseElement<P>>,
         render_object: Option<Self::ArcRenderObject>,
-        render_object_changes: ContainerOf<
-            SuspenseElement<P>,
-            SubtreeRenderObjectChange<<SuspenseElement<P> as Element>::ChildProtocol>,
-        >,
+        render_object_changes: ContainerOf<SuspenseElement<P>, SubtreeRenderObjectChange<P>>,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<<SuspenseElement<P> as Element>::ParentProtocol> {
-        todo!()
+        scope: &rayon::Scope<'_>,
+    ) -> SubtreeRenderObjectChange<P> {
+        debug_assert!(!self_rebuild_suspended, "Suspense can not suspend itself");
+        crate::sync::suspense_element::suspense_visit_commit(
+            element_node,
+            render_object,
+            render_object_changes,
+            scope,
+        )
     }
 
     fn rebuild_success_commit(
         element: &SuspenseElement<P>,
         widget: &<SuspenseElement<P> as Element>::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<SuspenseElement<P>>>,
-        children: &ContainerOf<
-            SuspenseElement<P>,
-            ArcChildElementNode<<SuspenseElement<P> as Element>::ChildProtocol>,
-        >,
+        children: &ContainerOf<SuspenseElement<P>, ArcChildElementNode<P>>,
         render_object: Option<Self::ArcRenderObject>,
-        render_object_changes: ContainerOf<
-            SuspenseElement<P>,
-            SubtreeRenderObjectChange<<SuspenseElement<P> as Element>::ChildProtocol>,
-        >,
+        render_object_changes: ContainerOf<SuspenseElement<P>, SubtreeRenderObjectChange<P>>,
         element_context: &ArcElementContextNode,
         is_new_widget: bool,
-    ) -> (
-        Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<SuspenseElement<P> as Element>::ParentProtocol>,
-    ) {
+    ) -> (Option<Self::ArcRenderObject>, SubtreeRenderObjectChange<P>) {
         todo!()
+    }
+
+    fn rebuild_suspend_commit(
+        _render_object: Option<Self::ArcRenderObject>,
+    ) -> SubtreeRenderObjectChange<P> {
+        panic!("Suspense can not suspend on itself")
     }
 
     fn inflate_success_commit(
         element: &SuspenseElement<P>,
         widget: &<SuspenseElement<P> as Element>::ArcWidget,
         element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<
-            SuspenseElement<P>,
-            SubtreeRenderObjectChange<<SuspenseElement<P> as Element>::ChildProtocol>,
-        >,
-    ) -> (
-        Option<Self::ArcRenderObject>,
-        SubtreeRenderObjectChange<<SuspenseElement<P> as Element>::ParentProtocol>,
-    ) {
+        render_object_changes: ContainerOf<SuspenseElement<P>, SubtreeRenderObjectChange<P>>,
+    ) -> (Option<Self::ArcRenderObject>, SubtreeRenderObjectChange<P>) {
         todo!()
     }
 }
@@ -402,27 +294,4 @@ pub(crate) type ArcRenderObjectOf<E: Element> =
 pub(crate) const fn render_element_function_table_of<E: Element>() -> RenderElementFunctionTable<E>
 {
     <E::RenderOrUnit as RenderOrUnit<E>>::RENDER_ELEMENT_FUNCTION_TABLE
-}
-
-pub(crate) const fn is_non_suspense_render_element<E: Element>() -> bool {
-    match render_element_function_table_of::<E>() {
-        RenderElementFunctionTable::RenderObject { suspense: None, .. } => true,
-        _ => false,
-    }
-}
-
-pub(crate) const fn is_suspense_element<E: Element>() -> bool {
-    match render_element_function_table_of::<E>() {
-        RenderElementFunctionTable::RenderObject {
-            suspense: Some(_), ..
-        } => true,
-        _ => false,
-    }
-}
-
-pub(crate) const fn is_non_render_element<E: Element>() -> bool {
-    match render_element_function_table_of::<E>() {
-        RenderElementFunctionTable::None { .. } => true,
-        _ => false,
-    }
 }

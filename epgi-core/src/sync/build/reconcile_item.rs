@@ -52,7 +52,6 @@ pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
     fn inflate_sync<'a, 'batch>(
         self: Arc<Self>,
         parent_context: ArcElementContextNode,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
 }
 
@@ -63,7 +62,6 @@ where
     fn inflate_sync<'a, 'batch>(
         self: Arc<Self>,
         parent_context: ArcElementContextNode,
-        reconcile_context: SyncReconcileContext<'a, 'batch>,
     ) -> (
         ArcChildElementNode<<<T as Widget>::Element as Element>::ParentProtocol>,
         SubtreeRenderObjectChange<<<T as Widget>::Element as Element>::ParentProtocol>,
@@ -71,7 +69,6 @@ where
         let (node, results) = ElementNode::<<T as Widget>::Element>::inflate_node_sync(
             &self.into_arc_widget(),
             parent_context,
-            reconcile_context,
         );
         (node as _, results)
     }
