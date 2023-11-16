@@ -5,7 +5,7 @@ use crate::{foundation::Arc, scheduler::get_current_scheduler, tree::RenderActio
 use super::{Layer, LayerNode};
 
 pub struct LayerMark {
-    pub(crate) needs_paint: AtomicBool,
+    // pub(crate) needs_paint: AtomicBool,
     pub(crate) needs_composite: AtomicBool,
     pub(crate) subtree_has_composite: AtomicBool,
     pub(crate) detached: AtomicBool,
@@ -14,7 +14,7 @@ pub struct LayerMark {
 impl LayerMark {
     pub(crate) fn new() -> Self {
         Self {
-            needs_paint: true.into(),
+            // needs_paint: true.into(),
             needs_composite: true.into(),
             subtree_has_composite: true.into(),
             detached: false.into(),
@@ -29,9 +29,9 @@ impl LayerMark {
         self.detached.store(true, Relaxed)
     }
 
-    pub(crate) fn needs_paint(&self) -> bool {
-        self.needs_paint.load(Relaxed)
-    }
+    // pub(crate) fn needs_paint(&self) -> bool {
+    //     self.needs_paint.load(Relaxed)
+    // }
 
     pub(crate) fn needs_composite(&self) -> bool {
         self.needs_composite.load(Relaxed)
@@ -41,9 +41,9 @@ impl LayerMark {
         self.subtree_has_composite.load(Relaxed)
     }
 
-    pub(crate) fn clear_needs_paint(&self) {
-        self.needs_paint.store(false, Relaxed)
-    }
+    // pub(crate) fn clear_needs_paint(&self) {
+    //     self.needs_paint.store(false, Relaxed)
+    // }
 
     pub(crate) fn clear_needs_composite(&self) {
         self.needs_composite.store(false, Relaxed)
@@ -53,9 +53,9 @@ impl LayerMark {
         self.subtree_has_composite.store(false, Relaxed)
     }
 
-    pub(crate) fn set_needs_paint(&self) {
-        self.needs_paint.store(true, Relaxed)
-    }
+    // pub(crate) fn set_needs_paint(&self) {
+    //     self.needs_paint.store(true, Relaxed)
+    // }
 
     pub(crate) fn set_needs_composite(&self) {
         self.needs_composite.store(true, Relaxed)
@@ -77,7 +77,7 @@ where
     ) -> RenderAction {
         // The following implementation neglect recomposite altogether!
         if child_render_action == RenderAction::Repaint {
-            self.mark.set_needs_paint();
+            // self.mark.set_needs_paint();
             get_current_scheduler().push_layer_needs_paint(Arc::downgrade(self) as _);
             child_render_action = RenderAction::Recomposite;
         }

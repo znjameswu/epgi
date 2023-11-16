@@ -4,7 +4,7 @@ impl<L> LayerNode<L>
 where
     L: Layer,
 {
-    fn composite(&self) {
+    fn recomposite(&self) {
         let mut inner = self.inner.lock();
         if let Some(CachedCompositionFunctionTable {
             composite_to,
@@ -15,5 +15,21 @@ where
         } else {
         }
         todo!()
+    }
+}
+
+mod composite_private {
+    use super::*;
+    pub trait AnyLayerCompositeExt {
+        fn recomposite(&self);
+    }
+
+    impl<L> AnyLayerCompositeExt for LayerNode<L>
+    where
+        L: Layer,
+    {
+        fn recomposite(&self) {
+            todo!()
+        }
     }
 }

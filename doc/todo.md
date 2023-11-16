@@ -10,7 +10,7 @@
 10. NOW: Make sure lane marking and dispatching checks unmountednedss
 11. NOW: async overdue blocking
 
-
+12: NOW: Use "descendant + self" mark combination instead of "subtree + self" combination. The former provides an unmarking oppurtuny during the return phase of tree walk.
 
 
 
