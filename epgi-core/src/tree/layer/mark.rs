@@ -1,13 +1,14 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-use crate::tree::RenderAction;
+use crate::{foundation::Arc, scheduler::get_current_scheduler, tree::RenderAction};
 
 use super::{Layer, LayerNode};
 
-pub(crate) struct LayerMark {
+pub struct LayerMark {
     pub(crate) needs_paint: AtomicBool,
     pub(crate) needs_composite: AtomicBool,
     pub(crate) subtree_has_composite: AtomicBool,
+    pub(crate) detached: AtomicBool,
 }
 
 impl LayerMark {
@@ -16,7 +17,16 @@ impl LayerMark {
             needs_paint: true.into(),
             needs_composite: true.into(),
             subtree_has_composite: true.into(),
+            detached: false.into(),
         }
+    }
+
+    pub(crate) fn detached(&self) -> bool {
+        self.detached.load(Relaxed)
+    }
+
+    pub(crate) fn set_detached(&self) {
+        self.detached.store(true, Relaxed)
     }
 
     pub(crate) fn needs_paint(&self) -> bool {
@@ -61,13 +71,14 @@ where
     L: Layer,
 {
     pub(crate) fn mark_render_action(
-        &self,
+        self: &Arc<Self>,
         mut child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction {
         // The following implementation neglect recomposite altogether!
         if child_render_action == RenderAction::Repaint {
             self.mark.set_needs_paint();
+            get_current_scheduler().push_layer_needs_paint(Arc::downgrade(self) as _);
             child_render_action = RenderAction::Recomposite;
         }
         if child_render_action == RenderAction::Recomposite {

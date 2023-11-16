@@ -1,10 +1,12 @@
 use crate::{
     foundation::{Arc, AsIterator, HktContainer, Parallel},
+    scheduler::get_current_scheduler,
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, ContainerOf, ElementNode, MainlineState, Render,
-        RenderAction, RenderElement, RenderObject, RenderObjectInner, RenderObjectSlots,
+        layer_render_function_table_of, ArcChildElementNode, ArcChildRenderObject,
+        ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf, ElementNode,
+        LayerOrUnit, LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement,
+        RenderObject, RenderObjectInner, RenderObjectSlots,
     },
 };
 
@@ -84,6 +86,9 @@ where
                     let mut inner = render_object.inner.lock();
                     inner.render.detach();
                 }
+                <<E::Render as Render>::LayerOrUnit as LayerOrUnit<E::Render>>::mark_detached(
+                    &render_object.layer_node,
+                );
                 let mut snapshot = self.snapshot.lock();
                 let state = snapshot
                     .inner
@@ -214,6 +219,15 @@ where
         drop(snapshot);
 
         if let Some(new_attached_render_object) = new_attached_render_object {
+            if let LayerRenderFunctionTable::LayerNode {
+                as_aweak_any_layer_node,
+                ..
+            } = layer_render_function_table_of::<E::Render>()
+            {
+                get_current_scheduler().push_layer_needs_paint(as_aweak_any_layer_node(
+                    &new_attached_render_object.layer_node,
+                ))
+            }
             return SubtreeRenderObjectChange::New(new_attached_render_object);
         } else {
             return SubtreeRenderObjectChange::Suspend;
@@ -278,6 +292,9 @@ where
                 let mut inner = render_object.inner.lock();
                 inner.render.detach();
             }
+            <<E::Render as Render>::LayerOrUnit as LayerOrUnit<E::Render>>::mark_detached(
+                &render_object.layer_node,
+            );
             return (None, SubtreeRenderObjectChange::Suspend);
         }
 
@@ -342,12 +359,20 @@ where
             render_object_changes,
         );
 
-        let change = render_object.as_ref().map_or_else(
-            || SubtreeRenderObjectChange::Suspend,
-            |render_object| SubtreeRenderObjectChange::New(render_object.clone()),
-        );
-
-        (render_object, change)
+        if let Some(render_object) = render_object {
+            if let LayerRenderFunctionTable::LayerNode {
+                as_aweak_any_layer_node,
+                ..
+            } = layer_render_function_table_of::<E::Render>()
+            {
+                get_current_scheduler()
+                    .push_layer_needs_paint(as_aweak_any_layer_node(&render_object.layer_node))
+            }
+            let change = SubtreeRenderObjectChange::New(render_object.clone());
+            (Some(render_object), change)
+        } else {
+            return (None, SubtreeRenderObjectChange::Suspend);
+        }
     }
 
     pub(crate) fn rebuild_suspend_commit(
@@ -402,6 +427,15 @@ where
             child_render_objects,
             element_context.clone(),
         ));
+
+        if let LayerRenderFunctionTable::LayerNode {
+            as_aweak_any_layer_node,
+            ..
+        } = layer_render_function_table_of::<E::Render>()
+        {
+            get_current_scheduler()
+                .push_layer_needs_paint(as_aweak_any_layer_node(&new_render_object.layer_node))
+        }
 
         let change = SubtreeRenderObjectChange::New(new_render_object.clone());
 

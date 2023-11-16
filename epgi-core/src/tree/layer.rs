@@ -6,7 +6,7 @@ pub use mark::*;
 
 use std::{any::Any, ops::Mul};
 
-use crate::foundation::{Arc, Canvas, Key, SyncMutex};
+use crate::foundation::{Arc, Aweak, Canvas, Key, SyncMutex};
 
 // pub type ArcChildLayer<C> = Arc<dyn ChildLayer<ParentCanvas = C>>;
 // pub type ArcParentLayer<C> = Arc<dyn ParentLayer<ChildCanvas = C>>;
@@ -17,6 +17,7 @@ pub type ArcChildLayerNode<C> = Arc<dyn ChildLayerNode<C>>;
 // pub type ArcParentLayerNode<C> = Arc<dyn ParentLayerNode<C>>;
 pub type ArcAdoptedLayerNode<C> = Arc<dyn AdoptedLayerNode<C>>;
 pub type ArcAnyLayerNode = Arc<dyn AnyLayerNode>;
+pub type AweakAnyLayerNode = Aweak<dyn AnyLayerNode>;
 // #[allow(type_alias_bounds)]
 // pub type ArcLayerNodeOf<R: Render> = Arc<
 //     dyn Layer<
@@ -447,7 +448,9 @@ where
     }
 }
 
-pub trait AnyLayerNode: Send + Sync {
+pub trait AnyLayerNode: crate::sync::paint_private::AnyLayerPaintExt + Send + Sync {
+    fn mark(&self) -> &LayerMark;
+
     fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any>;
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>>;
@@ -457,6 +460,10 @@ impl<L> AnyLayerNode for LayerNode<L>
 where
     L: Layer,
 {
+    fn mark(&self) -> &LayerMark {
+        &self.mark
+    }
+
     fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any> {
         todo!()
     }

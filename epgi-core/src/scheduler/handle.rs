@@ -15,7 +15,8 @@ use crate::{
     },
     sync::CommitBarrier,
     tree::{
-        AweakAnyElementNode, AweakAnyRenderObject, AweakElementContextNode, WorkContext, WorkHandle,
+        AweakAnyElementNode, AweakAnyLayerNode, AweakAnyRenderObject, AweakElementContextNode,
+        WorkContext, WorkHandle,
     },
 };
 
@@ -54,6 +55,7 @@ pub struct SchedulerHandle {
 
     pub(super) accumulated_jobs: SyncMutex<Vec<JobBuilder>>,
     // pub(super) boundaries_needing_relayout: SyncMutex<HashSet<PtrEq<AweakAnyRenderObject>>>,
+    pub(super) layer_needing_repaint: SyncMutex<HashSet<PtrEq<AweakAnyLayerNode>>>,
 }
 
 impl SchedulerHandle {
@@ -69,6 +71,7 @@ impl SchedulerHandle {
             nodes_needing_layout: Default::default(),
             accumulated_jobs: Default::default(),
             // boundaries_needing_relayout: Default::default(),
+            layer_needing_repaint: Default::default(),
         }
     }
 
@@ -148,6 +151,10 @@ impl SchedulerHandle {
     //         .lock()
     //         .insert(PtrEq(object));
     // }
+
+    pub(crate) fn push_layer_needs_paint(&self, layer_node: AweakAnyLayerNode) {
+        self.layer_needing_repaint.lock().insert(PtrEq(layer_node));
+    }
 
     // pub fn schedule_idle_callback
 }

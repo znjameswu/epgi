@@ -1,6 +1,6 @@
 use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
-    tree::{ArcAnyLayerNode, ArcChildLayerNode, Layer, LayerNode},
+    tree::{ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerNode},
 };
 
 use super::{LayerRender, Render, RenderAction};
@@ -14,6 +14,8 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction;
+
+    fn mark_detached(layer_node: &Self::ArcLayerNode);
 }
 
 impl<R, L> LayerOrUnit<R> for L
@@ -30,8 +32,9 @@ where
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::LayerNode {
-            as_arc_any_layer_node: |x| x,
-            as_arc_child_layer_node: |x| x,
+            into_arc_any_layer_node: |x| x,
+            as_aweak_any_layer_node: |x| Arc::downgrade(x) as _,
+            into_arc_child_layer_node: |x| x,
             create_arc_layer_node: |render| todo!(),
             get_canvas_transform_ref: |x| x,
             get_canvas_transform: |x| x,
@@ -43,6 +46,10 @@ where
         subtree_has_action: RenderAction,
     ) -> RenderAction {
         layer_node.mark_render_action(child_render_action, subtree_has_action)
+    }
+
+    fn mark_detached(layer_node: &Self::ArcLayerNode) {
+        layer_node.mark.set_detached()
     }
 }
 
@@ -62,12 +69,15 @@ where
     ) -> RenderAction {
         child_render_action
     }
+
+    fn mark_detached(layer_node: &Self::ArcLayerNode) {}
 }
 
 pub enum LayerRenderFunctionTable<R: Render> {
     LayerNode {
-        as_arc_any_layer_node: fn(ArcLayerNodeOf<R>) -> ArcAnyLayerNode,
-        as_arc_child_layer_node:
+        into_arc_any_layer_node: fn(ArcLayerNodeOf<R>) -> ArcAnyLayerNode,
+        as_aweak_any_layer_node: fn(&ArcLayerNodeOf<R>) -> AweakAnyLayerNode,
+        into_arc_child_layer_node:
             fn(ArcLayerNodeOf<R>) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
         create_arc_layer_node: fn(&R) -> ArcLayerNodeOf<R>,
         get_canvas_transform_ref:

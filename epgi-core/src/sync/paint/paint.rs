@@ -1,11 +1,50 @@
+use hashbrown::HashSet;
+
 use crate::{
-    foundation::{PaintContext, Protocol},
+    foundation::{PaintContext, Protocol, PtrEq},
     sync::TreeScheduler,
-    tree::{Render, RenderObject},
+    tree::{
+        layer_render_function_table_of, AweakAnyLayerNode, ComposableChildLayer, Layer, LayerCache,
+        LayerCompositionConfig, LayerNode, LayerRenderFunctionTable, Render, RenderObject,
+    },
 };
 
 impl TreeScheduler {
-    pub(crate) fn perform_paint(&self) {}
+    pub(crate) fn perform_paint(&self, layer_nodes: HashSet<PtrEq<AweakAnyLayerNode>>) {
+        rayon::scope(|scope| {
+            layer_nodes
+                .into_iter()
+                .filter_map(|PtrEq(layer_node)| {
+                    layer_node
+                        .upgrade()
+                        .filter(|layer_node| !layer_node.mark().detached())
+                })
+                .for_each(|layer_node| {
+                    scope.spawn(move |_| {
+                        layer_node.repaint();
+                    })
+                })
+        })
+    }
+}
+
+impl<L> LayerNode<L>
+where
+    L: Layer,
+{
+    fn repaint(&self) {
+        let mut inner = self.inner.lock();
+        let old_results = inner.cache.as_ref().map(|cache| &cache.paint_results);
+        let results = inner.layer.repaint(old_results);
+        if let Some(cache) = inner.cache.as_mut() {
+            cache.paint_results = results;
+        } else {
+            inner.cache = Some(LayerCache {
+                paint_results: results,
+                composition_cache: None,
+            });
+        }
+    }
 }
 
 impl<R> RenderObject<R>
@@ -17,7 +56,7 @@ where
         transform: &<R::ParentProtocol as Protocol>::Transform,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         let Some(layout_results) = inner
             .cache
             .as_ref()
@@ -26,31 +65,34 @@ where
             panic!("Paint should only be called after layout has finished")
         };
 
-        // if let Some(PerformLayerPaint {
-        //     get_layer,
-        //     get_canvas_transform_ref,
-        //     ..
-        // }) = R::PERFORM_LAYER_PAINT
-        // {
-        //     paint_ctx.add_layer(|| ComposableChildLayer {
-        //         config: LayerCompositionConfig {
-        //             transform: get_canvas_transform_ref(transform).clone(),
-        //         },
-        //         layer: get_layer(&mut inner.render).as_arc_child_layer(),
-        //     })
-        // } else {
-        //     inner.render.perform_paint(
-        //         &layout_results.size,
-        //         transform,
-        //         &layout_results.memo,
-        //         paint_ctx,
-        //     );
-        // }
+        if let LayerRenderFunctionTable::LayerNode {
+            into_arc_child_layer_node,
+            get_canvas_transform_ref,
+            ..
+        } = layer_render_function_table_of::<R>()
+        {
+            paint_ctx.add_layer(|| ComposableChildLayer {
+                config: LayerCompositionConfig {
+                    transform: get_canvas_transform_ref(transform).clone(),
+                },
+                layer: into_arc_child_layer_node(self.layer_node.clone()),
+            })
+        } else {
+            inner.render.perform_paint(
+                &layout_results.size,
+                transform,
+                &layout_results.memo,
+                paint_ctx,
+            );
+        }
     }
 }
 
 pub(crate) mod paint_private {
-    use crate::foundation::Canvas;
+    use crate::{
+        foundation::Canvas,
+        tree::{Layer, LayerNode},
+    };
 
     use super::*;
     pub trait ChildRenderObjectPaintExt<PP: Protocol> {
@@ -114,17 +156,15 @@ pub(crate) mod paint_private {
     }
 
     pub trait AnyLayerPaintExt {
-        // fn repaint(&self) -> ArcAnyLayer;
+        fn repaint(&self);
     }
 
-    impl<R> AnyLayerPaintExt for RenderObject<R>
+    impl<L> AnyLayerPaintExt for LayerNode<L>
     where
-        R: Render,
+        L: Layer,
     {
-        // fn repaint(&self) -> ArcAnyLayer {
-        //     let mut inner = self.inner.lock();
-        //     inner.repaint_inner();
-        //     todo!()
-        // }
+        fn repaint(&self) {
+            self.repaint()
+        }
     }
 }

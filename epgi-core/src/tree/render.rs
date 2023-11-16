@@ -174,7 +174,7 @@ where
         // );
         let layer = match layer_render_function_table_of::<R>() {
             LayerRenderFunctionTable::LayerNode {
-                as_arc_child_layer_node,
+                into_arc_child_layer_node: as_arc_child_layer_node,
                 create_arc_layer_node: create_layer_node,
                 ..
             } => create_layer_node(&render),
@@ -342,7 +342,7 @@ where
 
     fn layer(&self) -> Option<ArcAnyLayerNode> {
         if let LayerRenderFunctionTable::LayerNode {
-            as_arc_any_layer_node,
+            into_arc_any_layer_node: as_arc_any_layer_node,
             ..
         } = layer_render_function_table_of::<R>()
         {
