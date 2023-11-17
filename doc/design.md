@@ -753,3 +753,24 @@ We would rather walk down to collect render objects everytime (which is an accep
 Out-of-order unmount each *subtree*. In-order detach each *nodes* within an unmounted subtree.
 
 Unmounted *subtrees* thrown during rebuild are siblings at best. They have no dependency between each other.
+
+
+
+# Recomposite meaning
+There currently does not exist a retained layer such to absorb recomposite request. The recomposite marking is mainly to invalidate cached composition results along the way
+
+# Arguments for merging render object tree and layer node tree
+Because layer node tree requires an render object tree binding, in order to start painting. And this binding is locally isomorphic with the render object tree.
+
+Because layer node's lifecycle is tied to the render object tree. It would be wasteful to sync these two tree to prevent de-sync, since we can just merge them into one tree.
+
+Because paint and layout are both sync tree operations, and they won't contend. ~~No, layout can be interleaved with build.~~ Even if layout is interleaved with build, since only sync layout can trigger build, that does not change layout's nature of being an sync operation.
+
+Decision: Implement the initial version with an independent layer node tree. See if we can merge those trees later.
+
+# Arguments against merging render object tree and element node tree
+Because render object's lifecycle is not tied with element node tree. Even element is mounted, render object could still be detached. Therefore, walking down render object tree requires constant detach checks and is prone to panic under library bug. (To be fair, under the same library bug, an independent render object tree would also visit an detached render state. Though most render would have a no-op detach therefore nothing will break with a detached render state, it is still a bug. Less panicking at the cost of potentially concealing trivial bugs.)
+
+Because async build would contend with anything that occupies element node. Merging the two trees means that layout and paint has to contend with async build.
+
+Decision: Do not merge.

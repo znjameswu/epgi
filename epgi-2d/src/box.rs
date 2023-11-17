@@ -45,6 +45,13 @@ impl BoxConstraints {
         }
     }
 
+    pub fn biggest(&self) -> BoxSize {
+        self.constrains(BoxSize {
+            width: f32::INFINITY,
+            height: f32::INFINITY,
+        })
+    }
+
     pub fn smallest(&self) -> BoxSize {
         self.constrains(BoxSize::ZERO)
     }

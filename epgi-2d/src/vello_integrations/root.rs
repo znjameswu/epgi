@@ -12,7 +12,7 @@ use epgi_core::{
     },
 };
 
-use crate::{Affine2dCanvas, BoxProtocol, VelloEncoding};
+use crate::{Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize, VelloEncoding};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -160,19 +160,16 @@ impl Render for RenderRoot {
 }
 
 impl DryLayout for RenderRoot {
-    fn compute_dry_layout(
-        &self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-    ) -> <Self::ParentProtocol as Protocol>::Size {
-        todo!()
+    fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize {
+        constraints.biggest()
     }
 
     fn compute_layout_memo(
         &self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &<Self::ParentProtocol as Protocol>::Size,
+        constraints: &BoxConstraints,
+        size: &BoxSize,
     ) -> Self::LayoutMemo {
-        // self.render_ctx.resize_surface(&mut self.surface, size.width, size.height)
+        ()
     }
 }
 
@@ -241,11 +238,9 @@ impl Layer for RootLayer {
 }
 
 impl CachedLayer for RootLayer {
-    fn composite_to(
+    fn composite_to_cache(
         &self,
-        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
         child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
-        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
     ) -> Self::CachedComposition {
         todo!()
     }

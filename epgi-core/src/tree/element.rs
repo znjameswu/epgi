@@ -361,6 +361,7 @@ where
             }),
             mark: RenderMark::new(),
         });
+        render_object.mark.set_is_relayout_boundary();
         ElementNode {
             context: element_context,
             snapshot: SyncMutex::new(ElementSnapshot {
