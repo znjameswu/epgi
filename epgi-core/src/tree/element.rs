@@ -19,7 +19,7 @@ use crate::{
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    tree::{LayerNode, RenderAction, RenderCache, RenderMark, RenderObjectInner},
+    tree::{LayerNode, RenderAction, RenderMark, RenderObjectInner},
 };
 
 use super::{
@@ -350,17 +350,16 @@ where
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
         // let render = R::try_create_render_object_from_element(&element, &widget)
         //     .expect("Root render object creation should always be successfully");
-        let layer_node = Asc::new(LayerNode::new(layer));
-        let render_object = Arc::new(RenderObject {
-            element_context: element_context.clone(),
-            layer_node,
-            inner: SyncMutex::new(RenderObjectInner {
-                cache: Some(RenderCache::new(constraints, false, None)),
-                render,
-                children: render_children,
-            }),
-            mark: RenderMark::new(),
-        });
+        let render_object = Arc::new(RenderObject::new(
+            render,
+            render_children,
+            element_context.clone(),
+        ));
+        // {
+        //     render_object.inner.lock().layout_results =
+        //         Some(RenderCache::new(constraints, false, None));
+        // }
+        // TODO
         render_object.mark.set_is_relayout_boundary();
         ElementNode {
             context: element_context,

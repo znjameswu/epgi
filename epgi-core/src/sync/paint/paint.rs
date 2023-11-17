@@ -1,7 +1,7 @@
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{PaintContext, Protocol, PtrEq},
+    foundation::{LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::TreeScheduler,
     tree::{
         layer_render_function_table_of, AweakAnyLayerNode, ComposableChildLayer, Layer, LayerCache,
@@ -50,6 +50,21 @@ where
 impl<R> RenderObject<R>
 where
     R: Render,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+    R::LayerOrUnit: Layer<
+        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
+        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
+    >,
+{
+    fn repaint(&self) {
+        let mut inner = self.inner.lock();
+    }
+}
+
+impl<R> RenderObject<R>
+where
+    R: Render,
 {
     fn paint(
         &self,
@@ -57,11 +72,8 @@ where
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
         let inner = self.inner.lock();
-        let Some(layout_results) = inner
-            .cache
-            .as_ref()
-            .and_then(|x| x.layout_results(&self.mark))
-        else {
+        let token = self.mark.assume_not_needing_layout();
+        let Some(layout_results) = inner.layout_results_ref(&token) else {
             panic!("Paint should only be called after layout has finished")
         };
 

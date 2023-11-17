@@ -1,6 +1,9 @@
 use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
-    tree::{ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerNode},
+    tree::{
+        ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerCache, LayerMark,
+        LayerNode,
+    },
 };
 
 use super::{LayerRender, Render, RenderAction};
@@ -9,6 +12,10 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     type ArcLayerNode: Clone + Send + Sync + 'static;
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
 
+    type LayerMark: Send + Sync + 'static;
+
+    type LayerCache: Send + Sync + 'static;
+
     fn mark_render_action(
         layer_node: &Self::ArcLayerNode,
         child_render_action: RenderAction,
@@ -16,6 +23,8 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     ) -> RenderAction;
 
     fn mark_detached(layer_node: &Self::ArcLayerNode);
+
+    fn create_layer_mark() -> Self::LayerMark;
 }
 
 impl<R, L> LayerOrUnit<R> for L
@@ -29,6 +38,10 @@ where
     >,
 {
     type ArcLayerNode = Arc<LayerNode<L>>;
+
+    type LayerMark = LayerMark;
+
+    type LayerCache = LayerCache<L::ChildCanvas, L::CachedComposition>;
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::LayerNode {
@@ -51,6 +64,10 @@ where
     fn mark_detached(layer_node: &Self::ArcLayerNode) {
         layer_node.mark.set_detached()
     }
+
+    fn create_layer_mark() -> LayerMark {
+        LayerMark::new()
+    }
 }
 
 impl<R> LayerOrUnit<R> for ()
@@ -58,6 +75,10 @@ where
     R: Render<LayerOrUnit = Self>,
 {
     type ArcLayerNode = ();
+
+    type LayerMark = ();
+
+    type LayerCache = ();
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::None { create: || () };
@@ -71,6 +92,10 @@ where
     }
 
     fn mark_detached(layer_node: &Self::ArcLayerNode) {}
+
+    fn create_layer_mark() -> () {
+        ()
+    }
 }
 
 pub enum LayerRenderFunctionTable<R: Render> {

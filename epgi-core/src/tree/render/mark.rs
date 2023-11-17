@@ -5,10 +5,13 @@ use crate::tree::LayerOrUnit;
 use super::{Render, RenderAction, RenderObject};
 
 pub(crate) struct RenderMark {
-    pub(crate) needs_layout: AtomicBool,
-    pub(crate) subtree_has_layout: AtomicBool,
-    pub(crate) is_relayout_boundary: AtomicBool,
+    needs_layout: AtomicBool,
+    subtree_has_layout: AtomicBool,
+    is_relayout_boundary: AtomicBool,
 }
+
+// Nonconstructible ZST
+pub(crate) struct NoRelayoutToken(());
 
 impl RenderMark {
     pub(crate) fn new() -> Self {
@@ -31,8 +34,20 @@ impl RenderMark {
         self.is_relayout_boundary.store(true, Relaxed)
     }
 
-    pub(crate) fn needs_layout(&self) -> bool {
-        self.needs_layout.load(Relaxed)
+    pub(crate) fn needs_layout(&self) -> Result<(), NoRelayoutToken> {
+        if self.needs_layout.load(Relaxed) {
+            Ok(())
+        } else {
+            Err(NoRelayoutToken(()))
+        }
+    }
+
+    pub(crate) fn assume_not_needing_layout(&self) -> NoRelayoutToken {
+        debug_assert!(
+            !self.needs_layout.load(Relaxed),
+            "We assumed this render object to be not needing relayout"
+        );
+        NoRelayoutToken(())
     }
 
     pub(crate) fn subtree_has_layout(&self) -> bool {
