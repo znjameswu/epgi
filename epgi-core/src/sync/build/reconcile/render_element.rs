@@ -221,9 +221,9 @@ where
                 ..
             } = layer_render_function_table_of::<E::Render>()
             {
-                get_current_scheduler().push_layer_needs_paint(as_aweak_any_layer_node(
-                    &new_attached_render_object.layer_node,
-                ))
+                get_current_scheduler().push_layer_render_objects_needing_paint(
+                    as_aweak_any_layer_node(&new_attached_render_object),
+                )
             }
             return SubtreeRenderObjectChange::New(new_attached_render_object);
         } else {
@@ -359,8 +359,9 @@ where
                 ..
             } = layer_render_function_table_of::<E::Render>()
             {
-                get_current_scheduler()
-                    .push_layer_needs_paint(as_aweak_any_layer_node(&render_object.layer_node))
+                get_current_scheduler().push_layer_render_objects_needing_paint(
+                    as_aweak_any_layer_node(&render_object),
+                )
             }
             let change = SubtreeRenderObjectChange::New(render_object.clone());
             (Some(render_object), change)
@@ -427,8 +428,9 @@ where
             ..
         } = layer_render_function_table_of::<E::Render>()
         {
-            get_current_scheduler()
-                .push_layer_needs_paint(as_aweak_any_layer_node(&new_render_object.layer_node))
+            get_current_scheduler().push_layer_render_objects_needing_paint(
+                as_aweak_any_layer_node(&new_render_object),
+            )
         }
 
         let change = SubtreeRenderObjectChange::New(new_render_object.clone());

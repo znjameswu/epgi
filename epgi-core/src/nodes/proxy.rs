@@ -1,7 +1,7 @@
 use crate::foundation::{PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildWidget, ChildRenderObject, DryLayoutFunctionTable, LayerOrUnit, RenderAction, Widget,
+    ArcChildWidget, ChildRenderObject, DryLayoutFunctionTable, LayerOrUnit, RenderAction, Widget, ArcChildRenderObject,
 };
 
 use super::{
@@ -52,7 +52,7 @@ pub trait ProxyWidget:
     #[allow(unused_variables)]
     fn perform_paint(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::Protocol>,
+        child: ArcChildRenderObject<Self::Protocol>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
@@ -109,7 +109,7 @@ where
     #[inline(always)]
     fn perform_paint(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::ChildProtocol>,
+        child: ArcChildRenderObject<Self::ChildProtocol>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,

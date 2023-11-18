@@ -19,14 +19,14 @@ impl TreeScheduler {
         let root_render_object = root_element.render_object().expect(
             "The render object of the root element should be initilialized and attached manually",
         );
-        let root_layer = root_render_object.layer().expect(
-            "The layer of the root render object should be initilialized and attached manually",
-        );
+        // let root_layer = root_render_object.layer().expect(
+        //     "The layer of the root render object should be initilialized and attached manually",
+        // );
         Self {
             lane_scheduler: LaneScheduler::new(),
             root_element,
             root_render_object,
-            root_layer,
+            root_layer: todo!(),
         }
     }
 

@@ -181,7 +181,6 @@ pub trait AnyRenderObject:
     crate::sync::layout_private::AnyRenderObjectLayoutExt + Send + Sync + 'static
 {
     fn element_context(&self) -> &ElementContextNode;
-    fn layer(&self) -> Option<ArcAnyLayerNode>;
     fn detach(&self);
 }
 
@@ -191,18 +190,6 @@ where
 {
     fn element_context(&self) -> &ElementContextNode {
         &self.element_context
-    }
-
-    fn layer(&self) -> Option<ArcAnyLayerNode> {
-        if let LayerRenderFunctionTable::LayerNode {
-            into_arc_any_layer_node: as_arc_any_layer_node,
-            ..
-        } = layer_render_function_table_of::<R>()
-        {
-            Some(as_arc_any_layer_node(self.layer_node.clone()))
-        } else {
-            None
-        }
     }
 
     fn detach(&self) {

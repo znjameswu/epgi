@@ -5,7 +5,9 @@ use epgi_2d::{
 use epgi_core::{
     foundation::PaintContext,
     nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{ArcChildWidget, ChildRenderObject, Element, RenderAction, Widget},
+    tree::{
+        ArcChildRenderObject, ArcChildWidget, ChildRenderObject, Element, RenderAction, Widget,
+    },
 };
 
 #[derive(Debug)]
@@ -56,7 +58,7 @@ impl ProxyWidget for ColorBox {
 
     fn perform_paint(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::Protocol>,
+        child: ArcChildRenderObject<Self::Protocol>,
         size: &BoxSize,
         transform: &Affine2d,
         _memo: &Self::LayoutMemo,

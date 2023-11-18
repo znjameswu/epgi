@@ -73,7 +73,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: &dyn ChildRenderObject<P>,
+        child: ArcChildRenderObject<P>,
         transform: &P::Transform,
     ) {
         child.paint(transform, self)
@@ -85,7 +85,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
     ) {
         child_transform_pairs
             .into_iter()
-            .for_each(|(child, transform)| self.paint(child.as_ref(), transform))
+            .for_each(|(child, transform)| self.paint(child, transform))
     }
 
     fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {
@@ -108,7 +108,7 @@ impl PaintContext for VelloPaintScanner {
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: &dyn ChildRenderObject<P>,
+        child: ArcChildRenderObject<P>,
         transform: &P::Transform,
     ) {
     }

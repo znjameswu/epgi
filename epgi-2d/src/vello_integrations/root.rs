@@ -198,7 +198,6 @@ impl Layer for RootLayer {
     type ChildCanvas = Affine2dCanvas;
 
     fn composite_to(
-        &self,
         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
         child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
         composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
@@ -225,14 +224,12 @@ impl Layer for RootLayer {
 
 impl CachedLayer for RootLayer {
     fn composite_to_cache(
-        &self,
         child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
     ) -> Self::CachedComposition {
         todo!()
     }
 
     fn composite_from_cache_to(
-        &self,
         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
         cache: &Self::CachedComposition,
         composition_config: &LayerCompositionConfig<Self::ParentCanvas>,

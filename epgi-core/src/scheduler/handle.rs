@@ -152,7 +152,7 @@ impl SchedulerHandle {
     //         .insert(PtrEq(object));
     // }
 
-    pub(crate) fn push_layer_needs_paint(&self, layer_node: AweakAnyLayerNode) {
+    pub(crate) fn push_layer_render_objects_needing_paint(&self, layer_node: AweakAnyLayerNode) {
         self.layer_needing_repaint.lock().insert(PtrEq(layer_node));
     }
 

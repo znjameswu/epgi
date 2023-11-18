@@ -39,7 +39,6 @@ pub trait Layer: Send + Sync + Sized + 'static {
     type ChildCanvas: Canvas;
 
     fn composite_to(
-        &self,
         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
         child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
         composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
@@ -94,12 +93,10 @@ pub trait OrphanLayer: Layer {
 
 pub struct CachedCompositionFunctionTable<L: Layer> {
     pub composite_to_cache: fn(
-        &L,
         child_iterator: &mut CachingChildLayerProducingIterator<'_, L::ChildCanvas>,
     ) -> L::CachedComposition,
 
     pub composite_from_cache_to: fn(
-        &L,
         encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
         cache: &L::CachedComposition,
         composition_config: &LayerCompositionConfig<L::ParentCanvas>,
@@ -109,18 +106,16 @@ pub struct CachedCompositionFunctionTable<L: Layer> {
 pub trait CachedLayer: Layer {
     const PERFORM_CACHED_COMPOSITION: Option<CachedCompositionFunctionTable<Self>> =
         Some(CachedCompositionFunctionTable {
-            composite_to_cache: |layer, child_iterator| {
-                <Self as CachedLayer>::composite_to_cache(layer, child_iterator)
+            composite_to_cache: |child_iterator| {
+                <Self as CachedLayer>::composite_to_cache(child_iterator)
             },
             composite_from_cache_to: Self::composite_from_cache_to,
         });
     fn composite_to_cache(
-        &self,
         child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
     ) -> Self::CachedComposition;
 
     fn composite_from_cache_to(
-        &self,
         encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
         cache: &Self::CachedComposition,
         composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
@@ -140,118 +135,10 @@ pub enum ChildLayerOrFragmentRef<'a, C: Canvas> {
     AdoptedChild(&'a ComposableAdoptedLayer<C>),
 }
 
-pub struct LayerNode<L: Layer> {
-    pub(crate) mark: LayerMark,
-    pub(crate) inner: SyncMutex<LayerNodeInner<L>>,
-}
-
-pub struct LayerNodeInner<L: Layer> {
-    pub(crate) layer: L,
-    pub(crate) cache: Option<PaintCache<L::ChildCanvas, L::CachedComposition>>,
-}
-
-impl<L> LayerNode<L>
-where
-    L: Layer,
+pub trait ChildLayerNode<PC: Canvas>:
+    crate::sync::composite_private::ChildLayerCompositeExt<PC> + Send + Sync
 {
-    pub(crate) fn new(layer: L) -> Self {
-        Self {
-            mark: LayerMark::new(),
-            inner: SyncMutex::new(LayerNodeInner { layer, cache: None }),
-        }
-    }
-}
-
-pub trait ChildLayerNode<PC: Canvas>: Send + Sync {
-    fn composite_to(
-        &self,
-        encoding: &mut PC::Encoding,
-        composition_config: &LayerCompositionConfig<PC>,
-    ) -> Vec<ComposableUnadoptedLayer<PC>>;
-
     fn as_arc_any_layer_node(self: Arc<Self>) -> ArcAnyLayerNode;
-}
-
-impl<L> ChildLayerNode<L::ParentCanvas> for LayerNode<L>
-where
-    L: Layer,
-{
-    fn composite_to(
-        &self,
-        encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
-        composition_config: &LayerCompositionConfig<L::ParentCanvas>,
-    ) -> Vec<ComposableUnadoptedLayer<L::ParentCanvas>> {
-        // let mut inner = self.inner.lock();
-        // let inner_reborrow = &mut *inner;
-        // let cache = inner_reborrow
-        //     .cache
-        //     .as_mut()
-        //     .expect("Layer should only be composited after they are painted");
-        // if let Some(CachedCompositionFunctionTable {
-        //     composite_to_cache,
-        //     composite_from_cache_to,
-        // }) = L::CACHED_COMPOSITION_FUNCTION_TABLE
-        // {
-        //     let composition_cache = 'composition_cache: {
-        //         if !self.mark.needs_composite() {
-        //             if let Some(composition_cache) = cache.composite_results.as_ref() {
-        //                 composite_from_cache_to(
-        //                     &inner_reborrow.layer,
-        //                     encoding,
-        //                     &composition_cache.cached_composition,
-        //                     composition_config,
-        //                 );
-        //                 break 'composition_cache composition_cache;
-        //             }
-        //         }
-        //         let mut iter = CachingChildLayerProducingIterator {
-        //             painting_results: &cache.paint_results,
-        //             key: inner_reborrow.layer.key().map(Arc::as_ref),
-        //             unadopted_layers: Vec::new(),
-        //         };
-        //         let results = composite_to_cache(&inner_reborrow.layer, &mut iter);
-        //         composite_from_cache_to(
-        //             &inner_reborrow.layer,
-        //             encoding,
-        //             &results,
-        //             composition_config,
-        //         );
-        //         cache.composite_results.insert(CompositionResults {
-        //             unadopted_layers: iter.unadopted_layers,
-        //             cached_composition: results,
-        //         })
-        //     };
-        //     return composition_cache
-        //         .unadopted_layers
-        //         .iter()
-        //         .map(|unadopted_layer| ComposableUnadoptedLayer {
-        //             config: L::transform_config(composition_config, &unadopted_layer.config),
-        //             adopter_key: unadopted_layer.adopter_key.clone(),
-        //             layer: unadopted_layer.layer.clone(),
-        //         })
-        //         .collect();
-        // } else {
-        //     let mut iter = NonCachingChildLayerProducingIterator {
-        //         painting_results: &cache.paint_results,
-        //         key: inner_reborrow.layer.key().map(Arc::as_ref),
-        //         unadopted_layers: Vec::new(),
-        //         composition_config,
-        //         transform_config: L::transform_config,
-        //     };
-        //     <L as Layer>::composite_to(
-        //         &inner_reborrow.layer,
-        //         encoding,
-        //         &mut iter,
-        //         composition_config,
-        //     );
-        //     return iter.unadopted_layers;
-        // }
-        todo!()
-    }
-
-    fn as_arc_any_layer_node(self: Arc<Self>) -> ArcAnyLayerNode {
-        todo!()
-    }
 }
 
 // pub trait ParentLayerNode<CC: Canvas>: Send + Sync {}
@@ -264,31 +151,31 @@ pub trait AdoptedLayerNode<PC: Canvas>: Send + Sync {
     ) -> Vec<ComposableUnadoptedLayer<PC>>;
 }
 
-impl<L> AdoptedLayerNode<L::ChildCanvas> for LayerNode<L>
-where
-    L: OrphanLayer,
-{
-    fn composite_to(
-        &self,
-        encoding: &mut <L::ChildCanvas as Canvas>::Encoding,
-        composition_config: &LayerCompositionConfig<L::ChildCanvas>,
-    ) -> Vec<ComposableUnadoptedLayer<L::ChildCanvas>> {
-        // let inner = self.inner.lock();
-        // let cache = inner
-        //     .cache
-        //     .as_ref()
-        //     .expect("Layer should only be composited after they are painted");
-        // let mut iter = NonCachingOrphanChildLayerProducingIterator::<'_, L> {
-        //     painting_results: &cache.paint_results,
-        //     key: inner.layer.key().map(Arc::as_ref),
-        //     unadopted_layers: Vec::new(),
-        //     composition_config,
-        // };
-        // <L as OrphanLayer>::composite_orphan_to(encoding, &mut iter, composition_config);
-        // return iter.unadopted_layers;
-        todo!()
-    }
-}
+// impl<L> AdoptedLayerNode<L::ChildCanvas> for LayerNode<L>
+// where
+//     L: OrphanLayer,
+// {
+//     fn composite_to(
+//         &self,
+//         encoding: &mut <L::ChildCanvas as Canvas>::Encoding,
+//         composition_config: &LayerCompositionConfig<L::ChildCanvas>,
+//     ) -> Vec<ComposableUnadoptedLayer<L::ChildCanvas>> {
+//         // let inner = self.inner.lock();
+//         // let cache = inner
+//         //     .cache
+//         //     .as_ref()
+//         //     .expect("Layer should only be composited after they are painted");
+//         // let mut iter = NonCachingOrphanChildLayerProducingIterator::<'_, L> {
+//         //     painting_results: &cache.paint_results,
+//         //     key: inner.layer.key().map(Arc::as_ref),
+//         //     unadopted_layers: Vec::new(),
+//         //     composition_config,
+//         // };
+//         // <L as OrphanLayer>::composite_orphan_to(encoding, &mut iter, composition_config);
+//         // return iter.unadopted_layers;
+//         todo!()
+//     }
+// }
 
 pub trait AnyLayerNode: crate::sync::paint_private::AnyLayerPaintExt + Send + Sync {
     fn mark(&self) -> &LayerMark;
@@ -296,33 +183,6 @@ pub trait AnyLayerNode: crate::sync::paint_private::AnyLayerPaintExt + Send + Sy
     fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any>;
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>>;
-}
-
-impl<L> AnyLayerNode for LayerNode<L>
-where
-    L: Layer,
-{
-    fn mark(&self) -> &LayerMark {
-        &self.mark
-    }
-
-    fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any> {
-        todo!()
-    }
-
-    fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>> {
-        if let Some(CachedCompositionFunctionTable { .. }) = L::CACHED_COMPOSITION_FUNCTION_TABLE {
-            // self.inner
-            //     .lock()
-            //     .cache
-            //     .as_ref()
-            //     .and_then(|cache| cache.composite_results.as_ref())
-            //     .map(|cache| Box::new(cache.cached_composition.clone()) as _)
-            todo!()
-        } else {
-            None
-        }
-    }
 }
 
 trait ArcAnyLayerNodeExt {

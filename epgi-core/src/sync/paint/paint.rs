@@ -7,8 +7,8 @@ use crate::{
     sync::TreeScheduler,
     tree::{
         layer_render_function_table_of, AweakAnyLayerNode, ComposableChildLayer, Layer,
-        LayerCompositionConfig, LayerNode, LayerRenderFunctionTable, NotDetachedToken, PaintCache,
-        Render, RenderObject,
+        LayerCompositionConfig, LayerRenderFunctionTable, NotDetachedToken, PaintCache, Render,
+        RenderObject,
     },
 };
 
@@ -38,23 +38,6 @@ impl TreeScheduler {
     }
 }
 
-impl<L> LayerNode<L>
-where
-    L: Layer,
-{
-    fn repaint(&self) {
-        // let mut inner = self.inner.lock();
-        // let old_results = inner.cache.as_ref().map(|cache| &cache.paint_results);
-        // let results = inner.layer.repaint(old_results);
-        // if let Some(cache) = inner.cache.as_mut() {
-        //     cache.paint_results = results;
-        // } else {
-        //     inner.cache = Some(results);
-        // }
-        todo!()
-    }
-}
-
 impl<R, L> RenderObject<R>
 where
     R: Render<LayerOrUnit = L>,
@@ -68,9 +51,8 @@ where
     fn repaint(&self, _not_detached_token: NotDetachedToken) {
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
-        let paint_results = <L::ChildCanvas as Canvas>::paint_render_objects(
-            inner.children.as_iter().map(Arc::as_ref),
-        );
+        let paint_results =
+            <L::ChildCanvas as Canvas>::paint_render_objects(inner.children.as_iter().cloned());
         let layout_cache = inner
             .layout_cache_mut(no_relayout_token)
             .expect("Repaint can only be performed after layout has finished");
@@ -82,8 +64,8 @@ impl<R> RenderObject<R>
 where
     R: Render,
 {
-    fn paint(
-        &self,
+    fn _paint(
+        self: &Arc<Self>,
         transform: &<R::ParentProtocol as Protocol>::Transform,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
@@ -103,7 +85,7 @@ where
                 config: LayerCompositionConfig {
                     transform: get_canvas_transform_ref(transform).clone(),
                 },
-                layer: into_arc_child_layer_node(self.layer_node.clone()),
+                layer: into_arc_child_layer_node(self.clone()),
             })
         } else {
             inner.render.perform_paint(
@@ -117,10 +99,7 @@ where
 }
 
 pub(crate) mod paint_private {
-    use crate::{
-        foundation::Canvas,
-        tree::{Layer, LayerNode},
-    };
+    use crate::{foundation::Canvas, tree::Layer};
 
     use super::*;
     pub trait ChildRenderObjectPaintExt<PP: Protocol> {
@@ -130,7 +109,7 @@ pub(crate) mod paint_private {
         ///
         /// This operation will unmark any needs_paint and subtree_has_paint flag.
         fn paint(
-            &self,
+            self: Arc<Self>,
             transform: &PP::Transform,
             paint_ctx: &mut <PP::Canvas as Canvas>::PaintContext<'_>,
         );
@@ -141,7 +120,7 @@ pub(crate) mod paint_private {
         ///
         /// This operation will NOT unmark any needs_paint and subtree_has_paint flag.
         fn paint_scan(
-            &self,
+            self: Arc<Self>,
             transform: &PP::Transform,
             paint_ctx: &mut <PP::Canvas as Canvas>::PaintScanner<'_>,
         );
@@ -163,19 +142,19 @@ pub(crate) mod paint_private {
         R: Render,
     {
         fn paint(
-            &self,
+            self: Arc<Self>,
             transform: &<R::ParentProtocol as Protocol>::Transform,
             paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
         ) {
-            self.paint(transform, paint_ctx);
+            self._paint(transform, paint_ctx);
         }
 
         fn paint_scan(
-            &self,
+            self: Arc<Self>,
             transform: &<R::ParentProtocol as Protocol>::Transform,
             paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
         ) {
-            self.paint(transform, paint_ctx);
+            self._paint(transform, paint_ctx);
         }
 
         // fn visit_and_paint(&self) {
@@ -185,15 +164,6 @@ pub(crate) mod paint_private {
 
     pub trait AnyLayerPaintExt {
         fn repaint_if_attached(&self);
-    }
-
-    impl<L> AnyLayerPaintExt for LayerNode<L>
-    where
-        L: Layer,
-    {
-        fn repaint_if_attached(&self) {
-            self.repaint()
-        }
     }
 
     impl<R, L> AnyLayerPaintExt for RenderObject<R>

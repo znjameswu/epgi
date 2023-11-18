@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 
 use crate::{foundation::Arc, scheduler::get_current_scheduler, tree::RenderAction};
 
-use super::{Layer, LayerNode};
+use super::{Layer};
 
 pub(crate) struct NoRecompositeToken(());
 
@@ -33,8 +33,12 @@ impl LayerMark {
     //     self.needs_paint.load(Relaxed)
     // }
 
-    pub(crate) fn needs_composite(&self) -> bool {
-        self.needs_composite.load(Relaxed)
+    pub(crate) fn needs_composite(&self) -> Result<(), NoRecompositeToken> {
+        if self.needs_composite.load(Relaxed) {
+            Ok(())
+        } else {
+            Err(NoRecompositeToken(()))
+        }
     }
 
     pub(crate) fn subtree_has_composite(&self) -> bool {
@@ -66,27 +70,27 @@ impl LayerMark {
     }
 }
 
-impl<L> LayerNode<L>
-where
-    L: Layer,
-{
-    pub(crate) fn mark_render_action(
-        self: &Arc<Self>,
-        mut child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction {
-        // The following implementation neglect recomposite altogether!
-        if child_render_action == RenderAction::Repaint {
-            // self.mark.set_needs_paint();
-            get_current_scheduler().push_layer_needs_paint(Arc::downgrade(self) as _);
-            child_render_action = RenderAction::Recomposite;
-        }
-        if child_render_action == RenderAction::Recomposite {
-            self.mark.set_needs_composite();
-        }
-        if subtree_has_action == RenderAction::Recomposite {
-            self.mark.set_subtree_has_composite();
-        }
-        return child_render_action;
-    }
-}
+// impl<L> LayerNode<L>
+// where
+//     L: Layer,
+// {
+//     pub(crate) fn mark_render_action(
+//         self: &Arc<Self>,
+//         mut child_render_action: RenderAction,
+//         subtree_has_action: RenderAction,
+//     ) -> RenderAction {
+//         // The following implementation neglect recomposite altogether!
+//         if child_render_action == RenderAction::Repaint {
+//             // self.mark.set_needs_paint();
+//             get_current_scheduler().push_layer_needs_paint(Arc::downgrade(self) as _);
+//             child_render_action = RenderAction::Recomposite;
+//         }
+//         if child_render_action == RenderAction::Recomposite {
+//             self.mark.set_needs_composite();
+//         }
+//         if subtree_has_action == RenderAction::Recomposite {
+//             self.mark.set_subtree_has_composite();
+//         }
+//         return child_render_action;
+//     }
+// }

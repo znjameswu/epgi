@@ -57,7 +57,6 @@ pub enum RenderElementFunctionTable<E: Element> {
     RenderObject {
         into_arc_child_render_object:
             fn(ArcRenderObjectOf<E>) -> ArcChildRenderObject<E::ParentProtocol>,
-        has_layer: bool,
     },
     None {
         as_child: fn(
@@ -100,7 +99,6 @@ where
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::RenderObject {
             into_arc_child_render_object: |x| x,
-            has_layer: <R::LayerOrUnit as LayerOrUnit<R>>::LAYER_RENDER_FUNCTION_TABLE.is_some(),
         };
 
     #[inline(always)]
@@ -244,7 +242,6 @@ where
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<SuspenseElement<P>> =
         RenderElementFunctionTable::RenderObject {
             into_arc_child_render_object: |x| x,
-            has_layer: false,
         };
 
     fn visit_commit(

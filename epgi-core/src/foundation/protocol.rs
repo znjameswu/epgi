@@ -88,8 +88,8 @@ pub trait Canvas: Sized + 'static {
     //     paint: impl FnOnce(&mut Self::PaintContext<'_>),
     // );
 
-    fn paint_render_objects<'a, P: Protocol<Canvas = Self>>(
-        render_objects: impl IntoIterator<Item = &'a dyn ChildRenderObject<P>>,
+    fn paint_render_objects<P: Protocol<Canvas = Self>>(
+        render_objects: impl IntoIterator<Item = ArcChildRenderObject<P>>,
     ) -> PaintResults<Self>;
 
     // fn paint_render_objects<P: Protocol<Canvas = Self>>(
@@ -126,7 +126,7 @@ pub trait PaintContext {
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: &dyn ChildRenderObject<P>,
+        child: ArcChildRenderObject<P>,
         transform: &P::Transform,
     );
 

@@ -1,6 +1,6 @@
 use epgi_core::{
     foundation::{Canvas, Identity, Protocol},
-    tree::{ChildRenderObject, PaintResults},
+    tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
 };
 
 use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner};
@@ -43,8 +43,8 @@ impl Canvas for Affine2dCanvas {
         this.reset(true)
     }
 
-    fn paint_render_objects<'a, P: Protocol<Canvas = Self>>(
-        render_objects: impl IntoIterator<Item = &'a dyn ChildRenderObject<P>>,
+    fn paint_render_objects<P: Protocol<Canvas = Self>>(
+        render_objects: impl IntoIterator<Item = ArcChildRenderObject<P>>,
     ) -> PaintResults<Self> {
         let mut paint_results = PaintResults {
             structured_children: Default::default(),

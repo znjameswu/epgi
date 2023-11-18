@@ -1,15 +1,13 @@
 use crate::foundation::{HktContainer, Protocol, SyncMutex};
 
 use super::{
-    layer_render_function_table_of, ArcChildRenderObject, ArcElementContextNode, ArcLayerNodeOf,
-    LayerOrUnit, LayerRenderFunctionTable, NoRelayoutToken, Render, RenderMark,
+    ArcChildRenderObject, ArcElementContextNode, LayerOrUnit, NoRelayoutToken, Render, RenderMark,
 };
 
 pub struct RenderObject<R: Render> {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
     pub(crate) layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::LayerMark,
-    pub(crate) layer_node: ArcLayerNodeOf<R>,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
@@ -28,18 +26,10 @@ where
         //     element_context.has_render,
         //     "A render object node must have a render context node in its element context node"
         // );
-        let layer = match layer_render_function_table_of::<R>() {
-            LayerRenderFunctionTable::LayerNode {
-                create_arc_layer_node,
-                ..
-            } => create_arc_layer_node(&render),
-            LayerRenderFunctionTable::None { create } => create(),
-        };
         Self {
             element_context,
             mark: RenderMark::new(),
             layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::create_layer_mark(),
-            layer_node: layer,
             inner: SyncMutex::new(RenderObjectInner {
                 cache: None,
                 render,

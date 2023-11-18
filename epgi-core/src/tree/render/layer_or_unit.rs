@@ -1,26 +1,16 @@
 use crate::{
     foundation::{Arc, ArrayContainer, Canvas, LayerProtocol, Protocol},
-    tree::{
-        ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerMark, LayerNode,
-        PaintCache,
-    },
+    tree::{ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerMark, PaintCache},
 };
 
-use super::{Render, RenderAction};
+use super::{Render, RenderAction, RenderObject};
 
 pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
-    type ArcLayerNode: Clone + Send + Sync + 'static;
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
 
     type LayerMark: Send + Sync + 'static;
 
     type PaintResults: Send + Sync + 'static;
-
-    fn mark_render_action(
-        layer_node: &Self::ArcLayerNode,
-        child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction;
 
     fn create_layer_mark() -> Self::LayerMark;
 }
@@ -35,8 +25,6 @@ where
         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
     >,
 {
-    type ArcLayerNode = Arc<LayerNode<L>>;
-
     type LayerMark = LayerMark;
 
     type PaintResults = PaintCache<L::ChildCanvas, L::CachedComposition>;
@@ -51,14 +39,6 @@ where
             get_canvas_transform: |x| x,
         };
 
-    fn mark_render_action(
-        layer_node: &Arc<LayerNode<L>>,
-        child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction {
-        layer_node.mark_render_action(child_render_action, subtree_has_action)
-    }
-
     fn create_layer_mark() -> LayerMark {
         LayerMark::new()
     }
@@ -68,22 +48,12 @@ impl<R> LayerOrUnit<R> for ()
 where
     R: Render<LayerOrUnit = Self>,
 {
-    type ArcLayerNode = ();
-
     type LayerMark = ();
 
     type PaintResults = ();
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
-        LayerRenderFunctionTable::None { create: || () };
-
-    fn mark_render_action(
-        _layer_node: &(),
-        child_render_action: RenderAction,
-        _subtree_has_action: RenderAction,
-    ) -> RenderAction {
-        child_render_action
-    }
+        LayerRenderFunctionTable::None {};
 
     fn create_layer_mark() -> () {
         ()
@@ -92,11 +62,11 @@ where
 
 pub enum LayerRenderFunctionTable<R: Render> {
     LayerNode {
-        into_arc_any_layer_node: fn(ArcLayerNodeOf<R>) -> ArcAnyLayerNode,
-        as_aweak_any_layer_node: fn(&ArcLayerNodeOf<R>) -> AweakAnyLayerNode,
+        into_arc_any_layer_node: fn(Arc<RenderObject<R>>) -> ArcAnyLayerNode,
+        as_aweak_any_layer_node: fn(&Arc<RenderObject<R>>) -> AweakAnyLayerNode,
         into_arc_child_layer_node:
-            fn(ArcLayerNodeOf<R>) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
-        create_arc_layer_node: fn(&R) -> ArcLayerNodeOf<R>,
+            fn(Arc<RenderObject<R>>) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
+        create_arc_layer_node: fn(&R) -> Arc<RenderObject<R>>,
         get_canvas_transform_ref:
             fn(
                 &<R::ParentProtocol as Protocol>::Transform,
@@ -107,9 +77,7 @@ pub enum LayerRenderFunctionTable<R: Render> {
             -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     },
     // // pub update_layer_node: fn(&R, &R::ArcLayerNode) -> LayerNodeUpdateResult,
-    None {
-        create: fn() -> ArcLayerNodeOf<R>,
-    },
+    None {},
 }
 
 impl<R> LayerRenderFunctionTable<R>
@@ -121,8 +89,8 @@ where
     }
 }
 
-#[allow(type_alias_bounds)]
-pub(crate) type ArcLayerNodeOf<R: Render> = <R::LayerOrUnit as LayerOrUnit<R>>::ArcLayerNode;
+// #[allow(type_alias_bounds)]
+// pub(crate) type ArcLayerNodeOf<R: Render> = <R::LayerOrUnit as LayerOrUnit<R>>::ArcLayerNode;
 
 pub(crate) const fn layer_render_function_table_of<R: Render>() -> LayerRenderFunctionTable<R> {
     <R::LayerOrUnit as LayerOrUnit<R>>::LAYER_RENDER_FUNCTION_TABLE

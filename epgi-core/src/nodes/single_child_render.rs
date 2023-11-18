@@ -6,7 +6,7 @@ use crate::foundation::{
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObject,
+    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
     LayerOrUnit, Render, RenderAction, RenderElement, Widget,
 };
@@ -43,7 +43,7 @@ pub trait SingleChildRenderObjectWidget:
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
     fn perform_paint(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::ChildProtocol>,
+        child: ArcChildRenderObject<Self::ChildProtocol>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
