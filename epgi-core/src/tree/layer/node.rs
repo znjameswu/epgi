@@ -1,11 +1,12 @@
 use crate::{
     foundation::{Arc, Canvas, Key, LayerProtocol, Protocol},
-    tree::{Render, RenderObject},
+    tree::RenderObject,
 };
 
 use super::{
-    AnyLayerNode, ArcAdoptedLayerNode, ArcAnyLayerNode, ArcChildLayerNode, ChildLayerNode,
-    ChildLayerOrFragmentRef, Layer, LayerCompositionConfig, NoRecompositeToken,
+    AnyLayerRenderObject, ArcAdoptedLayerRenderObject, ArcAnyLayerRenderObject,
+    ArcChildLayerRenderObject, ChildLayerOrFragmentRef, ChildLayerRenderObject,
+    LayerCompositionConfig, LayerRender, NoRecompositeToken,
 };
 
 pub struct PaintCache<C: Canvas, T> {
@@ -75,7 +76,7 @@ where
 
 pub struct ComposableChildLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
-    pub layer: ArcChildLayerNode<C>,
+    pub layer: ArcChildLayerRenderObject<C>,
 }
 
 #[derive(derivative::Derivative)]
@@ -83,23 +84,19 @@ pub struct ComposableChildLayer<C: Canvas> {
 pub struct ComposableUnadoptedLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
     pub adopter_key: Option<Arc<dyn Key>>,
-    pub layer: ArcAnyLayerNode,
+    pub layer: ArcAnyLayerRenderObject,
 }
 
 pub struct ComposableAdoptedLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
-    pub layer: ArcAdoptedLayerNode<C>,
+    pub layer: ArcAdoptedLayerRenderObject<C>,
 }
 
-impl<R, L> AnyLayerNode for RenderObject<R>
+impl<R> AnyLayerRenderObject for RenderObject<R>
 where
-    R: Render<LayerOrUnit = L>,
+    R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-    >,
 {
     fn mark(&self) -> &super::LayerMark {
         todo!()
@@ -114,17 +111,13 @@ where
     }
 }
 
-impl<R, L> ChildLayerNode<L::ParentCanvas> for RenderObject<R>
+impl<R> ChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R>
 where
-    R: Render<LayerOrUnit = L>,
+    R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-    >,
 {
-    fn as_arc_any_layer_node(self: Arc<Self>) -> ArcAnyLayerNode {
+    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject {
         todo!()
     }
 }

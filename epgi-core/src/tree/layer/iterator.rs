@@ -1,9 +1,9 @@
-use crate::foundation::{Canvas, Key};
+use crate::foundation::{Canvas, Key, LayerProtocol, Protocol};
 
 use super::{
-    ArcAnyLayerNodeExt, ChildLayerOrFragmentRef, ChildLayerProducingIterator,
-    ComposableAdoptedLayer, ComposableUnadoptedLayer, Layer, LayerCompositionConfig, OrphanLayer,
-    PaintResults,
+    ArcAnyLayerRenderObjectExt, ChildLayerOrFragmentRef, ChildLayerProducingIterator,
+    ComposableAdoptedLayer, ComposableUnadoptedLayer, LayerCompositionConfig, LayerRender,
+    OrphanLayerRender, PaintResults,
 };
 
 pub struct NonCachingChildLayerProducingIterator<'a, PC, CC, F>
@@ -71,33 +71,40 @@ where
 /// cannot be named as monomorphized function pointer in associated function tables.
 /// This helper struct names the transform function by [OrphanLayer] type and
 /// keeps the anonymous type as a local variable in the [ChildLayerProducingIterator::for_each] method
-pub struct NonCachingOrphanChildLayerProducingIterator<'a, L>
+pub struct NonCachingOrphanChildLayerProducingIterator<'a, R>
 where
-    L: Layer,
+    R: LayerRender,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
 {
-    pub(crate) paint_results: &'a PaintResults<L::ChildCanvas>,
+    pub(crate) paint_results: &'a PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
     pub(crate) key: Option<&'a dyn Key>,
-    pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<L::ChildCanvas>>,
-    pub(crate) composition_config: &'a LayerCompositionConfig<L::ChildCanvas>,
+    pub(crate) unadopted_layers:
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    pub(crate) composition_config:
+        &'a LayerCompositionConfig<<R::ChildProtocol as Protocol>::Canvas>,
 }
 
-impl<'a, L> ChildLayerProducingIterator<L::ChildCanvas>
-    for NonCachingOrphanChildLayerProducingIterator<'a, L>
+impl<'a, R> ChildLayerProducingIterator<<R::ChildProtocol as Protocol>::Canvas>
+    for NonCachingOrphanChildLayerProducingIterator<'a, R>
 where
-    L: OrphanLayer,
+    R: OrphanLayerRender,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
 {
     fn for_each(
         &mut self,
         composite: impl FnMut(
-            ChildLayerOrFragmentRef<'_, L::ChildCanvas>,
-        ) -> Vec<ComposableUnadoptedLayer<L::ChildCanvas>>,
+            ChildLayerOrFragmentRef<'_, <R::ChildProtocol as Protocol>::Canvas>,
+        )
+            -> Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
     ) {
         let mut iter = NonCachingChildLayerProducingIterator {
             paint_results: self.paint_results,
             key: self.key,
             unadopted_layers: Vec::new(),
             composition_config: self.composition_config,
-            transform_config: L::transform_orphan_config,
+            transform_config: R::transform_orphan_config,
         };
         iter.for_each(composite);
         self.unadopted_layers = iter.unadopted_layers;

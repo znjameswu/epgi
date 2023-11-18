@@ -21,6 +21,7 @@ where
     fn is_relayout_boundary(&self) -> bool {
         R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
             || self
+                .cache
                 .last_layout_config_ref()
                 .is_some_and(|(_, parent_use_size)| !*parent_use_size)
     }
@@ -35,6 +36,7 @@ where
             || self
                 .inner
                 .lock()
+                .cache
                 .last_layout_config_mut()
                 .is_some_and(|(_, parent_use_size)| !*parent_use_size)
     }
@@ -47,7 +49,7 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
-            if let Some(cache) = inner.layout_cache_mut(token) {
+            if let Some(cache) = inner.cache.layout_cache_mut(token) {
                 if constraints == &cache.layout_results.constraints {
                     cache.layout_results.parent_use_size = false;
                     return;
@@ -64,7 +66,7 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
-            if let Some(cache) = inner.layout_cache_mut(token) {
+            if let Some(cache) = inner.cache.layout_cache_mut(token) {
                 if constraints == &cache.layout_results.constraints {
                     let size = cache.layout_results.size.clone();
                     cache.layout_results.parent_use_size = true;
@@ -129,7 +131,7 @@ where
         } else {
             self.render.perform_layout(&constraints)
         };
-        let cache = self.insert_layout_cache(LayoutCache::new(
+        let cache = self.cache.insert_layout_cache(LayoutCache::new(
             LayoutResults::new(constraints, parent_use_size, size, memo),
             None,
         ));
@@ -140,7 +142,7 @@ where
 
     #[inline(always)]
     fn really_layout_without_resize_inner(&mut self, mark: &RenderMark) {
-        let (constraints, parent_use_size) = self.last_layout_config_mut().expect(
+        let (constraints, parent_use_size) = self.cache.last_layout_config_mut().expect(
             "Relayout should only be called on relayout boundaries \
             that has been laid out at least once",
         );

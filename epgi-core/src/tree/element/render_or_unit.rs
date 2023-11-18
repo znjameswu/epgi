@@ -3,7 +3,7 @@ use crate::{
     nodes::{RenderSuspense, SuspenseElement},
     scheduler::TreeScheduler,
     sync::SubtreeRenderObjectChange,
-    tree::{ArcChildRenderObject, LayerOrUnit, Render, RenderObject},
+    tree::{ArcChildRenderObject, Render, RenderObject},
 };
 
 use super::{

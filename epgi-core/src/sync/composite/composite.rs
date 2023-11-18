@@ -1,31 +1,28 @@
 use crate::{
-    foundation::{Canvas, LayerProtocol, Protocol},
+    foundation::{Arc, Canvas, LayerProtocol, Protocol},
     tree::{
         CachedCompositionFunctionTable, CachingChildLayerProducingIterator,
-        ComposableUnadoptedLayer, CompositeResults, Layer, LayerCompositionConfig,
-        NonCachingChildLayerProducingIterator, Render, RenderObject,
+        ComposableUnadoptedLayer, CompositeResults, LayerCompositionConfig, LayerRender,
+        NonCachingChildLayerProducingIterator, RenderObject,
     },
 };
 
-impl<R, L> RenderObject<R>
+impl<R> RenderObject<R>
 where
-    R: Render<LayerOrUnit = L>,
+    R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-    >,
 {
     fn composite_to(
         &self,
-        encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
-        composition_config: &LayerCompositionConfig<L::ParentCanvas>,
-    ) -> Vec<ComposableUnadoptedLayer<L::ParentCanvas>> {
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
+    ) -> Vec<ComposableUnadoptedLayer<<R::ParentProtocol as Protocol>::Canvas>> {
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
         let paint_cache = inner_reborrow
+            .cache
             .layout_cache_mut(no_relayout_token)
             .expect("Layer should only be composited after they are laid out")
             .paint_cache
@@ -34,7 +31,7 @@ where
         if let Some(CachedCompositionFunctionTable {
             composite_to_cache,
             composite_from_cache_to,
-        }) = L::CACHED_COMPOSITION_FUNCTION_TABLE
+        }) = R::CACHED_COMPOSITION_FUNCTION_TABLE
         {
             if let Err(no_recomposite_token) = self.layer_mark.needs_composite() {
                 paint_cache.composite_results_ref(no_recomposite_token)
@@ -58,7 +55,7 @@ where
             } else {
                 let mut iter = CachingChildLayerProducingIterator {
                     paint_results: &paint_cache.paint_results,
-                    key: todo!(),
+                    key: inner_reborrow.render.key().map(Arc::as_ref),
                     // key: inner_reborrow.layer.key().map(Arc::as_ref),
                     unadopted_layers: Vec::new(),
                 };
@@ -74,7 +71,7 @@ where
                 .unadopted_layers
                 .iter()
                 .map(|unadopted_layer| ComposableUnadoptedLayer {
-                    config: L::transform_config(composition_config, &unadopted_layer.config),
+                    config: R::transform_config(composition_config, &unadopted_layer.config),
                     adopter_key: unadopted_layer.adopter_key.clone(),
                     layer: unadopted_layer.layer.clone(),
                 })
@@ -82,12 +79,12 @@ where
         } else {
             let mut iter = NonCachingChildLayerProducingIterator {
                 paint_results: &paint_cache.paint_results,
-                key: todo!(), //inner_reborrow.layer.key().map(Arc::as_ref),
+                key: inner_reborrow.render.key().map(Arc::as_ref),
                 unadopted_layers: Vec::new(),
                 composition_config,
-                transform_config: L::transform_config,
+                transform_config: R::transform_config,
             };
-            <L as Layer>::composite_to(encoding, &mut iter, composition_config);
+            <R as LayerRender>::composite_to(encoding, &mut iter, composition_config);
             return iter.unadopted_layers;
         }
     }
@@ -105,21 +102,17 @@ pub(crate) mod composite_private {
         ) -> Vec<ComposableUnadoptedLayer<PC>>;
     }
 
-    impl<R, L> ChildLayerCompositeExt<L::ParentCanvas> for RenderObject<R>
+    impl<R> ChildLayerCompositeExt<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R>
     where
-        R: Render<LayerOrUnit = L>,
+        R: LayerRender,
         R::ChildProtocol: LayerProtocol,
         R::ParentProtocol: LayerProtocol,
-        L: Layer<
-            ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-            ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-        >,
     {
         fn composite_to(
             &self,
-            encoding: &mut <L::ParentCanvas as Canvas>::Encoding,
-            composition_config: &LayerCompositionConfig<L::ParentCanvas>,
-        ) -> Vec<ComposableUnadoptedLayer<L::ParentCanvas>> {
+            encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+            composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
+        ) -> Vec<ComposableUnadoptedLayer<<R::ParentProtocol as Protocol>::Canvas>> {
             self.composite_to(encoding, composition_config)
         }
     }

@@ -1,9 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-use crate::{foundation::Arc, scheduler::get_current_scheduler, tree::RenderAction};
-
-use super::{Layer};
-
 pub(crate) struct NoRecompositeToken(());
 
 pub struct LayerMark {

@@ -31,7 +31,7 @@ where
             mark: RenderMark::new(),
             layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::create_layer_mark(),
             inner: SyncMutex::new(RenderObjectInner {
-                cache: None,
+                cache: RenderCache(None),
                 render,
                 children,
             }),
@@ -42,17 +42,22 @@ where
 pub(crate) struct RenderObjectInner<R: Render> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
-    cache: Option<
+    pub(crate) cache: RenderCache<R>,
+    pub(crate) render: R,
+    pub(crate) children:
+        <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
+}
+
+// This helper type helps us to split borrow RenderObjectInner
+pub(crate) struct RenderCache<R: Render>(
+    Option<
         LayoutCache<
             R::ParentProtocol,
             R::LayoutMemo,
             <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
         >,
     >,
-    pub(crate) render: R,
-    pub(crate) children:
-        <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
-}
+);
 
 pub(crate) struct LayoutCache<P: Protocol, M, PR> {
     pub(crate) layout_results: LayoutResults<P, M>,
@@ -97,7 +102,7 @@ where
     }
 }
 
-impl<R> RenderObjectInner<R>
+impl<R> RenderCache<R>
 where
     R: Render,
 {
@@ -113,7 +118,7 @@ where
             <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
         >,
     > {
-        self.cache.as_ref()
+        self.0.as_ref()
     }
 
     // The ZST token guards against accidentally accessing staled layout results
@@ -128,7 +133,7 @@ where
             <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
         >,
     > {
-        self.cache.as_mut()
+        self.0.as_mut()
     }
 
     pub(crate) fn insert_layout_cache(
@@ -143,14 +148,14 @@ where
         R::LayoutMemo,
         <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
     > {
-        self.cache.insert(cache)
+        self.0.insert(cache)
     }
 
     #[inline(always)]
     pub(crate) fn last_layout_config_ref(
         &self,
     ) -> Option<(&<R::ParentProtocol as Protocol>::Constraints, &bool)> {
-        self.cache.as_ref().map(|cache| {
+        self.0.as_ref().map(|cache| {
             (
                 &cache.layout_results.constraints,
                 &cache.layout_results.parent_use_size,
@@ -162,7 +167,7 @@ where
     pub(crate) fn last_layout_config_mut(
         &mut self,
     ) -> Option<(&mut <R::ParentProtocol as Protocol>::Constraints, &mut bool)> {
-        self.cache.as_mut().map(|cache| {
+        self.0.as_mut().map(|cache| {
             (
                 &mut cache.layout_results.constraints,
                 &mut cache.layout_results.parent_use_size,

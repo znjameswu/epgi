@@ -5,8 +5,8 @@ use crate::{
     tree::{
         layer_render_function_table_of, ArcChildElementNode, ArcChildRenderObject,
         ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf, ElementNode,
-        LayerOrUnit, LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement,
-        RenderObject, RenderObjectInner, RenderObjectSlots,
+        LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement, RenderObject,
+        RenderObjectInner, RenderObjectSlots,
     },
 };
 
@@ -216,13 +216,13 @@ where
         drop(snapshot);
 
         if let Some(new_attached_render_object) = new_attached_render_object {
-            if let LayerRenderFunctionTable::LayerNode {
-                as_aweak_any_layer_node,
+            if let LayerRenderFunctionTable::LayerRender {
+                as_aweak_any_layer_render_object: as_aweak_any_layer_render_object,
                 ..
             } = layer_render_function_table_of::<E::Render>()
             {
                 get_current_scheduler().push_layer_render_objects_needing_paint(
-                    as_aweak_any_layer_node(&new_attached_render_object),
+                    as_aweak_any_layer_render_object(&new_attached_render_object),
                 )
             }
             return SubtreeRenderObjectChange::New(new_attached_render_object);
@@ -354,13 +354,13 @@ where
         );
 
         if let Some(render_object) = render_object {
-            if let LayerRenderFunctionTable::LayerNode {
-                as_aweak_any_layer_node,
+            if let LayerRenderFunctionTable::LayerRender {
+                as_aweak_any_layer_render_object,
                 ..
             } = layer_render_function_table_of::<E::Render>()
             {
                 get_current_scheduler().push_layer_render_objects_needing_paint(
-                    as_aweak_any_layer_node(&render_object),
+                    as_aweak_any_layer_render_object(&render_object),
                 )
             }
             let change = SubtreeRenderObjectChange::New(render_object.clone());
@@ -423,13 +423,13 @@ where
             element_context.clone(),
         ));
 
-        if let LayerRenderFunctionTable::LayerNode {
-            as_aweak_any_layer_node,
+        if let LayerRenderFunctionTable::LayerRender {
+            as_aweak_any_layer_render_object,
             ..
         } = layer_render_function_table_of::<E::Render>()
         {
             get_current_scheduler().push_layer_render_objects_needing_paint(
-                as_aweak_any_layer_node(&new_render_object),
+                as_aweak_any_layer_render_object(&new_render_object),
             )
         }
 

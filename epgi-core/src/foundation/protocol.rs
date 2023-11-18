@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Mul};
 
-use crate::tree::{ArcChildRenderObject, ChildRenderObject, ComposableChildLayer, PaintResults};
+use crate::tree::{ArcChildRenderObject, ComposableChildLayer, PaintResults};
 
 use super::Parallel;
 

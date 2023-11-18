@@ -24,7 +24,7 @@ use crate::{
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, Layer, Render, RenderObject,
+    ChildElementWidgetPair, ElementWidgetPair, LayerRender, Render, RenderObject,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -319,7 +319,7 @@ where
     }
 }
 
-pub fn create_root_element<E, R, L>(
+pub fn create_root_element<E, R>(
     widget: E::ArcWidget,
     element: E,
     element_children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
@@ -327,24 +327,19 @@ pub fn create_root_element<E, R, L>(
     render_children: <R::ChildContainer as HktContainer>::Container<
         ArcChildRenderObject<E::ChildProtocol>,
     >,
-    layer: L,
     hooks: Hooks,
-    constraints: <E::ParentProtocol as Protocol>::Constraints,
+    _constraints: <E::ParentProtocol as Protocol>::Constraints,
 ) -> Arc<ElementNode<E>>
 where
     E: RenderElement<Render = R>,
     R: Render<
-        LayerOrUnit = L,
         ChildContainer = E::ChildContainer,
         ParentProtocol = E::ParentProtocol,
         ChildProtocol = E::ChildProtocol,
     >,
+    R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-    >,
 {
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));

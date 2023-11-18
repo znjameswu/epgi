@@ -1,7 +1,7 @@
 use crate::{
     scheduler::{BatchResult, JobBatcher, LanePos},
     tree::{
-        ArcAnyElementNode, ArcAnyLayerNode, ArcAnyRenderObject, AweakAnyElementNode,
+        ArcAnyElementNode, ArcAnyLayerRenderObject, ArcAnyRenderObject, AweakAnyElementNode,
         AweakElementContextNode,
     },
 };
@@ -11,7 +11,7 @@ pub struct TreeScheduler {
     lane_scheduler: LaneScheduler,
     pub(super) root_element: ArcAnyElementNode,
     pub(super) root_render_object: ArcAnyRenderObject,
-    pub(crate) root_layer: ArcAnyLayerNode,
+    pub(crate) root_layer: ArcAnyLayerRenderObject,
 }
 
 impl TreeScheduler {

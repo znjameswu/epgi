@@ -1,26 +1,27 @@
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{
-        Arc, ArrayContainer, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq,
-    },
+    foundation::{Arc, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::TreeScheduler,
     tree::{
-        layer_render_function_table_of, AweakAnyLayerNode, ComposableChildLayer, Layer,
-        LayerCompositionConfig, LayerRenderFunctionTable, NotDetachedToken, PaintCache, Render,
-        RenderObject,
+        layer_render_function_table_of, AweakAnyLayerRenderObject, ComposableChildLayer,
+        LayerCompositionConfig, LayerRender, LayerRenderFunctionTable, NotDetachedToken,
+        PaintCache, Render, RenderObject,
     },
 };
 
 impl TreeScheduler {
-    pub(crate) fn perform_paint(&self, layer_nodes: HashSet<PtrEq<AweakAnyLayerNode>>) {
+    pub(crate) fn perform_paint(
+        &self,
+        layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,
+    ) {
         rayon::scope(|scope| {
-            // for PtrEq(layer_node) in layer_nodes {
-            //     let Some(layer_node) = layer_node.upgrade() else {
-            //         continue;
-            //     };
-            //     // layer_node.ma
-            // }
+            for PtrEq(layer_render_object) in layer_render_objects {
+                let Some(layer_render_objects) = layer_render_object.upgrade() else {
+                    continue;
+                };
+                layer_render_objects.repaint_if_attached();
+            }
             // layer_nodes
             //     .into_iter()
             //     .filter_map(|PtrEq(layer_node)| {
@@ -38,22 +39,21 @@ impl TreeScheduler {
     }
 }
 
-impl<R, L> RenderObject<R>
+impl<R> RenderObject<R>
 where
-    R: Render<LayerOrUnit = L>,
+    R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-    >,
 {
     fn repaint(&self, _not_detached_token: NotDetachedToken) {
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
         let paint_results =
-            <L::ChildCanvas as Canvas>::paint_render_objects(inner.children.as_iter().cloned());
+            <<R::ChildProtocol as Protocol>::Canvas as Canvas>::paint_render_objects(
+                inner.children.as_iter().cloned(),
+            );
         let layout_cache = inner
+            .cache
             .layout_cache_mut(no_relayout_token)
             .expect("Repaint can only be performed after layout has finished");
         layout_cache.paint_cache = Some(PaintCache::new(paint_results, None));
@@ -71,12 +71,12 @@ where
     ) {
         let inner = self.inner.lock();
         let token = self.mark.assume_not_needing_layout();
-        let Some(cache) = inner.layout_cache_ref(token) else {
+        let Some(cache) = inner.cache.layout_cache_ref(token) else {
             panic!("Paint should only be called after layout has finished")
         };
 
-        if let LayerRenderFunctionTable::LayerNode {
-            into_arc_child_layer_node,
+        if let LayerRenderFunctionTable::LayerRender {
+            into_arc_child_layer_render_object,
             get_canvas_transform_ref,
             ..
         } = layer_render_function_table_of::<R>()
@@ -85,7 +85,7 @@ where
                 config: LayerCompositionConfig {
                     transform: get_canvas_transform_ref(transform).clone(),
                 },
-                layer: into_arc_child_layer_node(self.clone()),
+                layer: into_arc_child_layer_render_object(self.clone()),
             })
         } else {
             inner.render.perform_paint(
@@ -99,7 +99,7 @@ where
 }
 
 pub(crate) mod paint_private {
-    use crate::{foundation::Canvas, tree::Layer};
+    use crate::{foundation::Canvas, tree::LayerRender};
 
     use super::*;
     pub trait ChildRenderObjectPaintExt<PP: Protocol> {
@@ -166,15 +166,11 @@ pub(crate) mod paint_private {
         fn repaint_if_attached(&self);
     }
 
-    impl<R, L> AnyLayerPaintExt for RenderObject<R>
+    impl<R> AnyLayerPaintExt for RenderObject<R>
     where
-        R: Render<LayerOrUnit = L>,
+        R: LayerRender,
         R::ChildProtocol: LayerProtocol,
         R::ParentProtocol: LayerProtocol,
-        L: Layer<
-            ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-            ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-        >,
     {
         fn repaint_if_attached(&self) {
             if let Err(token) = self.mark.is_detached() {

@@ -1,1 +1,1 @@
-pub type VelloEncoding = vello_encoding::Encoding;
+pub type Affine2dEncoding = vello_encoding::Encoding;

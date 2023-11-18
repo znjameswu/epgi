@@ -8,7 +8,7 @@ pub use node::*;
 
 use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Protocol};
 
-use super::{ArcAnyLayerNode, ArcElementContextNode, ElementContextNode, Layer};
+use super::{ArcElementContextNode, ElementContextNode};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;

@@ -1,7 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-use crate::tree::LayerOrUnit;
-
 use super::{Render, RenderAction, RenderObject};
 
 pub(crate) struct RenderMark {

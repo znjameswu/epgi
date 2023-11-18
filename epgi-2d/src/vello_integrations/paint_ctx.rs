@@ -1,15 +1,14 @@
 use epgi_core::{
     foundation::{Canvas, PaintContext, Parallel, Protocol},
     tree::{
-        ArcChildRenderObject, ChildRenderObject, ComposableChildLayer, PaintResults,
-        StructuredChildLayerOrFragment,
+        ArcChildRenderObject, ComposableChildLayer, PaintResults, StructuredChildLayerOrFragment,
     },
 };
 use peniko::{BrushRef, Stroke};
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dPaintCommand, BlendMode, Fill,
-    IntoKurbo, Painter, VelloEncoding,
+    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
+    BlendMode, Fill, IntoKurbo, Painter,
 };
 
 /// This is the serial version of paint context
@@ -18,7 +17,7 @@ pub struct VelloPaintContext<'a> {
     /// However, our canvas design requires a transform stack. Hence we store it here.
     pub(crate) curr_transform: Affine2d,
     // scene: &'a mut vello_encoding::Encoding,
-    pub(crate) curr_fragment_encoding: VelloEncoding,
+    pub(crate) curr_fragment_encoding: Affine2dEncoding,
     pub(crate) results: &'a mut PaintResults<Affine2dCanvas>,
 }
 

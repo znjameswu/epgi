@@ -1,6 +1,5 @@
 use epgi_2d::{
-    BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootLayer, RootView,
-    VelloEncoding,
+    Affine2dEncoding, BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootView,
 };
 use epgi_common::ConstrainedBox;
 use epgi_core::{
@@ -247,7 +246,7 @@ impl MainState {
         let frame_results = scheduler.request_new_frame().recv_blocking().unwrap();
         let encoding = frame_results
             .composited
-            .downcast::<Arc<VelloEncoding>>()
+            .downcast::<Arc<Affine2dEncoding>>()
             .unwrap();
 
         let scale = handle.get_scale().unwrap_or_default();
@@ -331,13 +330,12 @@ impl MainState {
             }),
         });
         let element = RootElement {};
-        let element_node = create_root_element::<RootElement, RenderRoot, RootLayer>(
+        let element_node = create_root_element::<RootElement, RenderRoot>(
             root_widget,
             element,
             None,
             RenderRoot { child: None },
             None,
-            RootLayer::new(None),
             Hooks {
                 array_hooks: [Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> {
                     val: None,

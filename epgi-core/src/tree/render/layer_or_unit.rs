@@ -1,9 +1,11 @@
 use crate::{
-    foundation::{Arc, ArrayContainer, Canvas, LayerProtocol, Protocol},
-    tree::{ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerMark, PaintCache},
+    foundation::{Arc, Canvas, LayerProtocol, Protocol},
+    tree::{
+        ArcChildLayerRenderObject, AweakAnyLayerRenderObject, LayerMark, LayerRender, PaintCache,
+    },
 };
 
-use super::{Render, RenderAction, RenderObject};
+use super::{Render, RenderObject};
 
 pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
@@ -15,26 +17,20 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     fn create_layer_mark() -> Self::LayerMark;
 }
 
-impl<R, L> LayerOrUnit<R> for L
+impl<R> LayerOrUnit<R> for R
 where
-    R: Render<LayerOrUnit = L>,
+    R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    L: Layer<
-        ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
-    >,
 {
     type LayerMark = LayerMark;
 
-    type PaintResults = PaintCache<L::ChildCanvas, L::CachedComposition>;
+    type PaintResults = PaintCache<<R::ChildProtocol as Protocol>::Canvas, R::CachedComposition>;
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
-        LayerRenderFunctionTable::LayerNode {
-            into_arc_any_layer_node: |x| x,
-            as_aweak_any_layer_node: |x| Arc::downgrade(x) as _,
-            into_arc_child_layer_node: |x| x,
-            create_arc_layer_node: |render| todo!(),
+        LayerRenderFunctionTable::LayerRender {
+            as_aweak_any_layer_render_object: |x| Arc::downgrade(x) as _,
+            into_arc_child_layer_render_object: |x| x,
             get_canvas_transform_ref: |x| x,
             get_canvas_transform: |x| x,
         };
@@ -61,12 +57,12 @@ where
 }
 
 pub enum LayerRenderFunctionTable<R: Render> {
-    LayerNode {
-        into_arc_any_layer_node: fn(Arc<RenderObject<R>>) -> ArcAnyLayerNode,
-        as_aweak_any_layer_node: fn(&Arc<RenderObject<R>>) -> AweakAnyLayerNode,
-        into_arc_child_layer_node:
-            fn(Arc<RenderObject<R>>) -> ArcChildLayerNode<<R::ParentProtocol as Protocol>::Canvas>,
-        create_arc_layer_node: fn(&R) -> Arc<RenderObject<R>>,
+    LayerRender {
+        as_aweak_any_layer_render_object: fn(&Arc<RenderObject<R>>) -> AweakAnyLayerRenderObject,
+        into_arc_child_layer_render_object:
+            fn(
+                Arc<RenderObject<R>>,
+            ) -> ArcChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas>,
         get_canvas_transform_ref:
             fn(
                 &<R::ParentProtocol as Protocol>::Transform,
@@ -85,7 +81,7 @@ where
     R: Render,
 {
     pub const fn is_some(&self) -> bool {
-        matches!(self, LayerRenderFunctionTable::LayerNode { .. })
+        matches!(self, LayerRenderFunctionTable::LayerRender { .. })
     }
 }
 

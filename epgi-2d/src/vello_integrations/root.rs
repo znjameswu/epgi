@@ -1,17 +1,17 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Key, LayerProtocol, Never,
-        OptionContainer, PaintContext, Parallel, Protocol, Provide,
+        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, OptionContainer,
+        PaintContext, Protocol, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
-        ChildRenderObjectsUpdateCallback, DryLayout, Element, ElementReconcileItem, Layer,
-        LayerCompositionConfig, PaintResults, Render, RenderAction, RenderElement, Widget,
+        ChildRenderObjectsUpdateCallback, DryLayout, Element, ElementReconcileItem,
+        LayerCompositionConfig, LayerRender, Render, RenderAction, RenderElement, Widget,
     },
 };
 
-use crate::{Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize, VelloEncoding};
+use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -155,7 +155,7 @@ impl Render for RenderRoot {
         unreachable!()
     }
 
-    type LayerOrUnit = RootLayer;
+    type LayerOrUnit = RenderRoot;
 }
 
 impl DryLayout for RenderRoot {
@@ -172,43 +172,19 @@ impl DryLayout for RenderRoot {
     }
 }
 
-pub struct RootLayer {
-    /// This field is nullable because we temporarily share implementation with RootLayer
-    child_render_object: Option<ArcChildRenderObject<BoxProtocol>>,
-}
-
-impl RootLayer {
-    pub fn new(child_render_object: Option<ArcChildRenderObject<BoxProtocol>>) -> Self {
-        Self {
-            child_render_object,
-        }
-    }
-
-    pub fn update_child_render_object(
-        &mut self,
-        child_render_object: ArcChildRenderObject<BoxProtocol>,
-    ) {
-        self.child_render_object = Some(child_render_object);
-    }
-}
-
-impl Layer for RootLayer {
-    type ParentCanvas = Affine2dCanvas;
-
-    type ChildCanvas = Affine2dCanvas;
-
+impl LayerRender for RenderRoot {
     fn composite_to(
-        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
-        child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
-        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+        encoding: &mut Affine2dEncoding,
+        child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
         todo!()
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<Self::ParentCanvas>,
-        child_config: &LayerCompositionConfig<Self::ChildCanvas>,
-    ) -> LayerCompositionConfig<Self::ParentCanvas> {
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
         todo!()
     }
 
@@ -216,23 +192,23 @@ impl Layer for RootLayer {
         todo!()
     }
 
-    type CachedComposition = Arc<VelloEncoding>;
+    type CachedComposition = Arc<Affine2dEncoding>;
 
     const CACHED_COMPOSITION_FUNCTION_TABLE: Option<CachedCompositionFunctionTable<Self>> =
         <Self as CachedLayer>::PERFORM_CACHED_COMPOSITION;
 }
 
-impl CachedLayer for RootLayer {
+impl CachedLayer for RenderRoot {
     fn composite_to_cache(
-        child_iterator: &mut impl ChildLayerProducingIterator<Self::ChildCanvas>,
+        child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> Self::CachedComposition {
         todo!()
     }
 
     fn composite_from_cache_to(
-        encoding: &mut <Self::ParentCanvas as Canvas>::Encoding,
+        encoding: &mut Affine2dEncoding,
         cache: &Self::CachedComposition,
-        composition_config: &LayerCompositionConfig<Self::ParentCanvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
         todo!()
     }

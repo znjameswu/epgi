@@ -5,9 +5,7 @@ use epgi_2d::{
 use epgi_core::{
     foundation::PaintContext,
     nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{
-        ArcChildRenderObject, ArcChildWidget, ChildRenderObject, Element, RenderAction, Widget,
-    },
+    tree::{ArcChildRenderObject, ArcChildWidget, Element, RenderAction, Widget},
 };
 
 #[derive(Debug)]

@@ -1,9 +1,11 @@
 use epgi_core::{
     foundation::{Canvas, Identity, Protocol},
-    tree::{ArcChildRenderObject, ChildRenderObject, PaintResults},
+    tree::{ArcChildRenderObject, PaintResults},
 };
 
-use crate::{Affine2dPaintCommand, BoxOffset, VelloEncoding, VelloPaintContext, VelloPaintScanner};
+use crate::{
+    Affine2dEncoding, Affine2dPaintCommand, BoxOffset, VelloPaintContext, VelloPaintScanner,
+};
 
 pub type Affine2d = vello_encoding::Transform;
 
@@ -20,7 +22,7 @@ impl Canvas for Affine2dCanvas {
 
     type PaintScanner<'a> = VelloPaintScanner;
 
-    type Encoding = VelloEncoding;
+    type Encoding = Affine2dEncoding;
 
     fn composite_encoding(
         dst: &mut Self::Encoding,
@@ -52,7 +54,7 @@ impl Canvas for Affine2dCanvas {
         };
         let mut paint_ctx = VelloPaintContext {
             curr_transform: Affine2d::IDENTITY,
-            curr_fragment_encoding: VelloEncoding::new(),
+            curr_fragment_encoding: Affine2dEncoding::new(),
             results: &mut paint_results,
         };
         for render_object in render_objects {
@@ -62,6 +64,6 @@ impl Canvas for Affine2dCanvas {
     }
 
     fn new_encoding() -> Self::Encoding {
-        VelloEncoding::new()
+        Affine2dEncoding::new()
     }
 }
