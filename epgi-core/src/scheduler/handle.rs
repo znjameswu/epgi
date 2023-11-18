@@ -11,7 +11,7 @@ use hashbrown::HashSet;
 use crate::{
     foundation::{
         bounded_channel, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
-        SyncRwLock,
+        SyncRwLock, Arc,
     },
     sync::CommitBarrier,
     tree::{
@@ -175,7 +175,7 @@ struct RequestFrame {
 }
 
 pub struct FrameResults {
-    pub composited: Box<dyn Any + Send + Sync>,
+    pub composited: Asc<dyn Any + Send + Sync>,
     pub id: u64,
 }
 

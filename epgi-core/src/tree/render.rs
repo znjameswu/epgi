@@ -8,7 +8,7 @@ pub use node::*;
 
 use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Protocol};
 
-use super::{ArcElementContextNode, ElementContextNode};
+use super::{ArcAnyLayerRenderObject, ArcElementContextNode, ElementContextNode};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
@@ -182,6 +182,7 @@ pub trait AnyRenderObject:
 {
     fn element_context(&self) -> &ElementContextNode;
     fn detach(&self);
+    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -194,6 +195,10 @@ where
 
     fn detach(&self) {
         todo!()
+    }
+
+    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
+        <R::LayerOrUnit as LayerOrUnit<R>>::downcast_arc_any_layer_render_object(self)
     }
 }
 

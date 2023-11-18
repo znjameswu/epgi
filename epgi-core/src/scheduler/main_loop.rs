@@ -82,10 +82,11 @@ impl Scheduler {
                         let scheduler = tree_scheduler.read();
                         paint_started_event.notify(usize::MAX);
                         scheduler.perform_paint(layer_needing_repaint);
+                        let result = scheduler.perform_composite();
                         // TODO: Composition
                         for requester in requesters {
                             let _ = requester.try_send(FrameResults {
-                                composited: scheduler.root_layer.get_composited_cache_box().expect("Root layer should have cached composition results after composition phase"),
+                                composited: result.clone(),
                                 id: frame_id,
                             }); // TODO: log failure
                         }

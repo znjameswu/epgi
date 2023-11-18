@@ -217,7 +217,7 @@ where
 
         if let Some(new_attached_render_object) = new_attached_render_object {
             if let LayerRenderFunctionTable::LayerRender {
-                as_aweak_any_layer_render_object: as_aweak_any_layer_render_object,
+                as_aweak_any_layer_render_object,
                 ..
             } = layer_render_function_table_of::<E::Render>()
             {

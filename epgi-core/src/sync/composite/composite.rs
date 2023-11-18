@@ -1,11 +1,15 @@
+use std::any::Any;
+
 use crate::{
-    foundation::{Arc, Canvas, LayerProtocol, Protocol},
+    foundation::{Arc, Asc, Canvas, LayerProtocol, Protocol},
     tree::{
         CachedCompositionFunctionTable, CachingChildLayerProducingIterator,
         ComposableUnadoptedLayer, CompositeResults, LayerCompositionConfig, LayerRender,
         NonCachingChildLayerProducingIterator, RenderObject,
     },
 };
+
+use self::composite_private::AnyLayerCompositeExt;
 
 impl<R> RenderObject<R>
 where
@@ -29,7 +33,7 @@ where
             .as_mut()
             .expect("Layer should only be composited after they are painted");
         if let Some(CachedCompositionFunctionTable {
-            composite_to_cache,
+            composite_into_cache,
             composite_from_cache_to,
         }) = R::CACHED_COMPOSITION_FUNCTION_TABLE
         {
@@ -59,7 +63,7 @@ where
                     // key: inner_reborrow.layer.key().map(Arc::as_ref),
                     unadopted_layers: Vec::new(),
                 };
-                let results = composite_to_cache(&mut iter);
+                let results = composite_into_cache(&mut iter);
                 composite_from_cache_to(encoding, &results, composition_config);
                 paint_cache.insert_composite_results(CompositeResults {
                     unadopted_layers: iter.unadopted_layers,
@@ -118,6 +122,67 @@ pub(crate) mod composite_private {
     }
 
     pub trait AnyLayerCompositeExt {
-        fn recomposite(&self);
+        fn recomposite_into_cache(&self) -> Asc<dyn Any + Send + Sync>;
+    }
+}
+
+impl<R> AnyLayerCompositeExt for RenderObject<R>
+where
+    R: LayerRender,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+{
+    fn recomposite_into_cache(&self) -> Asc<dyn Any + Send + Sync> {
+        let Some(CachedCompositionFunctionTable {
+            composite_into_cache,
+            ..
+        }) = R::CACHED_COMPOSITION_FUNCTION_TABLE
+        else {
+            panic!("Recomposite can only be called on layer render object with composition caches")
+        };
+        let no_relayout_token = self.mark.assume_not_needing_layout();
+        let _no_detach_token = self.mark.assume_not_detached();
+        let needs_composite = self.layer_mark.needs_composite();
+        if let Err(no_recomposite_token) = needs_composite {
+            let cached_composition = self
+                .inner
+                .lock()
+                .cache
+                .layout_cache_mut(no_relayout_token)
+                .expect("Layer should only be composited after they are laid out")
+                .paint_cache
+                .as_mut()
+                .expect("Layer should only be composited after they are painted")
+                .composite_results_ref(no_recomposite_token)
+                .expect(
+                    "Caching layers that are not marked as dirty should have a compositiong cache",
+                )
+                .cached_composition
+                .clone();
+            return Asc::new(cached_composition);
+        }
+
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        let paint_cache = inner_reborrow
+            .cache
+            .layout_cache_mut(no_relayout_token)
+            .expect("Layer should only be composited after they are laid out")
+            .paint_cache
+            .as_mut()
+            .expect("Layer should only be composited after they are painted");
+        let mut iter = CachingChildLayerProducingIterator {
+            paint_results: &paint_cache.paint_results,
+            key: inner_reborrow.render.key().map(Arc::as_ref),
+            // key: inner_reborrow.layer.key().map(Arc::as_ref),
+            unadopted_layers: Vec::new(),
+        };
+        let cached_composition = composite_into_cache(&mut iter);
+        let result = Asc::new(cached_composition.clone());
+        paint_cache.insert_composite_results(CompositeResults {
+            unadopted_layers: iter.unadopted_layers,
+            cached_composition,
+        });
+        return result;
     }
 }

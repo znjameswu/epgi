@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
     tree::{
-        ArcChildLayerRenderObject, AweakAnyLayerRenderObject, LayerMark, LayerRender, PaintCache,
+        ArcChildLayerRenderObject, AweakAnyLayerRenderObject, LayerMark, LayerRender, PaintCache, ArcAnyLayerRenderObject,
     },
 };
 
@@ -15,6 +15,8 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     type PaintResults: Send + Sync + 'static;
 
     fn create_layer_mark() -> Self::LayerMark;
+
+    fn downcast_arc_any_layer_render_object(render_object: Arc<RenderObject<R>>) -> Option<ArcAnyLayerRenderObject>;
 }
 
 impl<R> LayerOrUnit<R> for R
@@ -38,6 +40,10 @@ where
     fn create_layer_mark() -> LayerMark {
         LayerMark::new()
     }
+
+    fn downcast_arc_any_layer_render_object(render_object: Arc<RenderObject<R>>) -> Option<ArcAnyLayerRenderObject> {
+        Some(render_object as _)
+    }
 }
 
 impl<R> LayerOrUnit<R> for ()
@@ -53,6 +59,10 @@ where
 
     fn create_layer_mark() -> () {
         ()
+    }
+
+    fn downcast_arc_any_layer_render_object(render_object: Arc<RenderObject<R>>) -> Option<ArcAnyLayerRenderObject> {
+        None
     }
 }
 

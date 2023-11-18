@@ -199,7 +199,7 @@ impl LayerRender for RenderRoot {
 }
 
 impl CachedLayer for RenderRoot {
-    fn composite_to_cache(
+    fn composite_into_cache(
         child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> Self::CachedComposition {
         todo!()

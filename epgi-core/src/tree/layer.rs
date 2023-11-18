@@ -12,7 +12,7 @@ use std::{any::Any, ops::Mul};
 
 use crate::foundation::{Arc, Aweak, Canvas, Identity, Key, LayerProtocol, Protocol};
 
-use super::Render;
+use super::{AnyRenderObject, ChildRenderObject, Render};
 
 // pub type ArcChildLayer<C> = Arc<dyn ChildLayer<ParentCanvas = C>>;
 // pub type ArcParentLayer<C> = Arc<dyn ParentLayer<ChildCanvas = C>>;
@@ -92,7 +92,7 @@ where
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
-    pub composite_to_cache: fn(
+    pub composite_into_cache: fn(
         child_iterator: &mut CachingChildLayerProducingIterator<
             '_,
             <R::ChildProtocol as Protocol>::Canvas,
@@ -113,12 +113,12 @@ where
 {
     const PERFORM_CACHED_COMPOSITION: Option<CachedCompositionFunctionTable<Self>> =
         Some(CachedCompositionFunctionTable {
-            composite_to_cache: |child_iterator| {
-                <Self as CachedLayer>::composite_to_cache(child_iterator)
+            composite_into_cache: |child_iterator| {
+                <Self as CachedLayer>::composite_into_cache(child_iterator)
             },
             composite_from_cache_to: Self::composite_from_cache_to,
         });
-    fn composite_to_cache(
+    fn composite_into_cache(
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
     ) -> Self::CachedComposition;
 
@@ -184,7 +184,13 @@ pub trait AdoptedLayerRenderObject<PC: Canvas>: Send + Sync {
 //     }
 // }
 
-pub trait AnyLayerRenderObject: crate::sync::paint_private::AnyLayerPaintExt + Send + Sync {
+pub trait AnyLayerRenderObject:
+    AnyRenderObject
+    + crate::sync::paint_private::AnyLayerPaintExt
+    + crate::sync::composite_private::AnyLayerCompositeExt
+    + Send
+    + Sync
+{
     fn mark(&self) -> &LayerMark;
 
     fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any>;

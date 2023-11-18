@@ -1,4 +1,7 @@
+use std::any::Any;
+
 use crate::{
+    foundation::Asc,
     scheduler::{BatchResult, JobBatcher, LanePos},
     tree::{
         ArcAnyElementNode, ArcAnyLayerRenderObject, ArcAnyRenderObject, AweakAnyElementNode,
@@ -10,15 +13,16 @@ use super::{CommitBarrier, LaneScheduler};
 pub struct TreeScheduler {
     lane_scheduler: LaneScheduler,
     pub(super) root_element: ArcAnyElementNode,
-    pub(super) root_render_object: ArcAnyRenderObject,
-    pub(crate) root_layer: ArcAnyLayerRenderObject,
+    pub(super) root_render_object: ArcAnyLayerRenderObject,
 }
 
 impl TreeScheduler {
     pub fn new(root_element: ArcAnyElementNode) -> Self {
-        let root_render_object = root_element.render_object().expect(
-            "The render object of the root element should be initilialized and attached manually",
-        );
+        let root_render_object = root_element
+            .render_object()
+            .expect("The root render object should be initilialized and attached manually")
+            .downcast_arc_any_layer_render_object()
+            .expect("Root render object should have a layer");
         // let root_layer = root_render_object.layer().expect(
         //     "The layer of the root render object should be initilialized and attached manually",
         // );
@@ -26,8 +30,11 @@ impl TreeScheduler {
             lane_scheduler: LaneScheduler::new(),
             root_element,
             root_render_object,
-            root_layer: todo!(),
         }
+    }
+
+    pub(crate) fn perform_composite(&self) -> Asc<dyn Any + Send + Sync> {
+        self.root_render_object.recomposite_into_cache()
     }
 
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
