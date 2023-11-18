@@ -776,3 +776,10 @@ Because render object's lifecycle is not tied with element node tree. Even eleme
 Because async build would contend with anything that occupies element node. Merging the two trees means that layout and paint has to contend with async build.
 
 Decision: Do not merge.
+
+
+# Unique marking system for painting visit
+
+Layout and composition have to maintain level-ordering, therefore we need a marking system to guide the visit.
+
+Painting is embarrassingly parallel. Therefore we collect dirty nodes to fully parallelize painting. However, the collected results requires a filtering of detached render objects before being dispatched. Therefore, we need to track the detached state for render objects, which should be very cheap.

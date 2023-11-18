@@ -1,14 +1,13 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, OptionContainer,
-        PaintContext, Protocol, Provide,
+        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Key, LayerProtocol, Never,
+        OptionContainer, PaintContext, Parallel, Protocol, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, DryLayout, Element, ElementReconcileItem, Layer,
-        LayerCompositionConfig, LayerRender, PaintResults, Render, RenderAction, RenderElement,
-        Widget,
+        LayerCompositionConfig, PaintResults, Render, RenderAction, RenderElement, Widget,
     },
 };
 
@@ -173,12 +172,6 @@ impl DryLayout for RenderRoot {
     }
 }
 
-impl LayerRender<RootLayer> for RenderRoot {
-    fn create_layer(&self) -> Self::LayerOrUnit {
-        todo!()
-    }
-}
-
 pub struct RootLayer {
     /// This field is nullable because we temporarily share implementation with RootLayer
     child_render_object: Option<ArcChildRenderObject<BoxProtocol>>,
@@ -220,14 +213,7 @@ impl Layer for RootLayer {
         todo!()
     }
 
-    fn repaint(
-        &self,
-        old_results: Option<&PaintResults<Self::ChildCanvas>>,
-    ) -> PaintResults<Self::ChildCanvas> {
-        todo!()
-    }
-
-    fn key(&self) -> Option<&Arc<dyn epgi_core::foundation::Key>> {
+    fn key(&self) -> Option<&Arc<dyn Key>> {
         todo!()
     }
 

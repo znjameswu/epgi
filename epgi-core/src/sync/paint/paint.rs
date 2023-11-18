@@ -1,29 +1,39 @@
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{LayerProtocol, PaintContext, Protocol, PtrEq},
+    foundation::{
+        Arc, ArrayContainer, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq,
+    },
     sync::TreeScheduler,
     tree::{
-        layer_render_function_table_of, AweakAnyLayerNode, ComposableChildLayer, Layer, LayerCache,
-        LayerCompositionConfig, LayerNode, LayerRenderFunctionTable, Render, RenderObject,
+        layer_render_function_table_of, AweakAnyLayerNode, ComposableChildLayer, Layer,
+        LayerCompositionConfig, LayerNode, LayerRenderFunctionTable, NotDetachedToken, PaintCache,
+        Render, RenderObject,
     },
 };
 
 impl TreeScheduler {
     pub(crate) fn perform_paint(&self, layer_nodes: HashSet<PtrEq<AweakAnyLayerNode>>) {
         rayon::scope(|scope| {
-            layer_nodes
-                .into_iter()
-                .filter_map(|PtrEq(layer_node)| {
-                    layer_node
-                        .upgrade()
-                        .filter(|layer_node| !layer_node.mark().detached())
-                })
-                .for_each(|layer_node| {
-                    scope.spawn(move |_| {
-                        layer_node.repaint();
-                    })
-                })
+            // for PtrEq(layer_node) in layer_nodes {
+            //     let Some(layer_node) = layer_node.upgrade() else {
+            //         continue;
+            //     };
+            //     // layer_node.ma
+            // }
+            // layer_nodes
+            //     .into_iter()
+            //     .filter_map(|PtrEq(layer_node)| {
+            //         layer_node
+            //             .upgrade()
+            //             .filter(|layer_node| !layer_node.mark().detached())
+            //     })
+            //     .for_each(|layer_node| {
+            //         scope.spawn(move |_| {
+            //             layer_node.repaint();
+            //         })
+            //     })
+            todo!()
         })
     }
 }
@@ -33,32 +43,38 @@ where
     L: Layer,
 {
     fn repaint(&self) {
-        let mut inner = self.inner.lock();
-        let old_results = inner.cache.as_ref().map(|cache| &cache.paint_results);
-        let results = inner.layer.repaint(old_results);
-        if let Some(cache) = inner.cache.as_mut() {
-            cache.paint_results = results;
-        } else {
-            inner.cache = Some(LayerCache {
-                paint_results: results,
-                composition_cache: None,
-            });
-        }
+        // let mut inner = self.inner.lock();
+        // let old_results = inner.cache.as_ref().map(|cache| &cache.paint_results);
+        // let results = inner.layer.repaint(old_results);
+        // if let Some(cache) = inner.cache.as_mut() {
+        //     cache.paint_results = results;
+        // } else {
+        //     inner.cache = Some(results);
+        // }
+        todo!()
     }
 }
 
-impl<R> RenderObject<R>
+impl<R, L> RenderObject<R>
 where
-    R: Render,
+    R: Render<LayerOrUnit = L>,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    R::LayerOrUnit: Layer<
+    L: Layer<
         ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
         ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
     >,
 {
-    fn repaint(&self) {
+    fn repaint(&self, _not_detached_token: NotDetachedToken) {
+        let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
+        let paint_results = <L::ChildCanvas as Canvas>::paint_render_objects(
+            inner.children.as_iter().map(Arc::as_ref),
+        );
+        let layout_cache = inner
+            .layout_cache_mut(no_relayout_token)
+            .expect("Repaint can only be performed after layout has finished");
+        layout_cache.paint_cache = Some(PaintCache::new(paint_results, None));
     }
 }
 
@@ -73,7 +89,7 @@ where
     ) {
         let inner = self.inner.lock();
         let token = self.mark.assume_not_needing_layout();
-        let Some(layout_results) = inner.layout_results_ref(&token) else {
+        let Some(cache) = inner.layout_cache_ref(token) else {
             panic!("Paint should only be called after layout has finished")
         };
 
@@ -91,9 +107,9 @@ where
             })
         } else {
             inner.render.perform_paint(
-                &layout_results.size,
+                &cache.layout_results.size,
                 transform,
-                &layout_results.memo,
+                &cache.layout_results.memo,
                 paint_ctx,
             );
         }
@@ -168,15 +184,32 @@ pub(crate) mod paint_private {
     }
 
     pub trait AnyLayerPaintExt {
-        fn repaint(&self);
+        fn repaint_if_attached(&self);
     }
 
     impl<L> AnyLayerPaintExt for LayerNode<L>
     where
         L: Layer,
     {
-        fn repaint(&self) {
+        fn repaint_if_attached(&self) {
             self.repaint()
+        }
+    }
+
+    impl<R, L> AnyLayerPaintExt for RenderObject<R>
+    where
+        R: Render<LayerOrUnit = L>,
+        R::ChildProtocol: LayerProtocol,
+        R::ParentProtocol: LayerProtocol,
+        L: Layer<
+            ParentCanvas = <R::ParentProtocol as Protocol>::Canvas,
+            ChildCanvas = <R::ChildProtocol as Protocol>::Canvas,
+        >,
+    {
+        fn repaint_if_attached(&self) {
+            if let Err(token) = self.mark.is_detached() {
+                self.repaint(token)
+            }
         }
     }
 }

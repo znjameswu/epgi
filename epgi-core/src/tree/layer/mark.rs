@@ -4,11 +4,12 @@ use crate::{foundation::Arc, scheduler::get_current_scheduler, tree::RenderActio
 
 use super::{Layer, LayerNode};
 
+pub(crate) struct NoRecompositeToken(());
+
 pub struct LayerMark {
     // pub(crate) needs_paint: AtomicBool,
     pub(crate) needs_composite: AtomicBool,
     pub(crate) subtree_has_composite: AtomicBool,
-    pub(crate) detached: AtomicBool,
 }
 
 impl LayerMark {
@@ -17,17 +18,16 @@ impl LayerMark {
             // needs_paint: true.into(),
             needs_composite: true.into(),
             subtree_has_composite: true.into(),
-            detached: false.into(),
         }
     }
 
-    pub(crate) fn detached(&self) -> bool {
-        self.detached.load(Relaxed)
-    }
+    // pub(crate) fn detached(&self) -> bool {
+    //     self.detached.load(Relaxed)
+    // }
 
-    pub(crate) fn set_detached(&self) {
-        self.detached.store(true, Relaxed)
-    }
+    // pub(crate) fn set_detached(&self) {
+    //     self.detached.store(true, Relaxed)
+    // }
 
     // pub(crate) fn needs_paint(&self) -> bool {
     //     self.needs_paint.load(Relaxed)

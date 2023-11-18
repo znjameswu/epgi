@@ -14,17 +14,17 @@ pub use snapshot::*;
 
 use crate::{
     foundation::{
-        Arc, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec, LayerProtocol,
-        Protocol, Provide, SyncMutex, TypeKey,
+        Arc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec, LayerProtocol, Protocol,
+        Provide, SyncMutex, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    tree::{LayerNode, RenderAction, RenderMark, RenderObjectInner},
+    tree::RenderAction,
 };
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, Layer, LayerRender, Render, RenderObject,
+    ChildElementWidgetPair, ElementWidgetPair, Layer, Render, RenderObject,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -333,8 +333,8 @@ pub fn create_root_element<E, R, L>(
 ) -> Arc<ElementNode<E>>
 where
     E: RenderElement<Render = R>,
-    R: LayerRender<
-        L,
+    R: Render<
+        LayerOrUnit = L,
         ChildContainer = E::ChildContainer,
         ParentProtocol = E::ParentProtocol,
         ChildProtocol = E::ChildProtocol,

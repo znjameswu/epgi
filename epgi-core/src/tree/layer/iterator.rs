@@ -12,7 +12,7 @@ where
     CC: Canvas,
     F: Fn(&LayerCompositionConfig<PC>, &LayerCompositionConfig<CC>) -> LayerCompositionConfig<PC>,
 {
-    pub(crate) painting_results: &'a PaintResults<CC>,
+    pub(crate) paint_results: &'a PaintResults<CC>,
     pub(crate) key: Option<&'a dyn Key>,
     pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<PC>>,
     pub(crate) composition_config: &'a LayerCompositionConfig<PC>,
@@ -31,11 +31,11 @@ where
         mut composite: impl FnMut(ChildLayerOrFragmentRef<'_, CC>) -> Vec<ComposableUnadoptedLayer<CC>>,
     ) {
         let mut subtree_unadopted_layers = Vec::new();
-        for child in &self.painting_results.structured_children {
+        for child in &self.paint_results.structured_children {
             let child_unadopted_layers = composite(child.into());
             subtree_unadopted_layers.extend(child_unadopted_layers);
         }
-        subtree_unadopted_layers.extend(self.painting_results.detached_children.iter().cloned());
+        subtree_unadopted_layers.extend(self.paint_results.detached_children.iter().cloned());
         // DFS traversal, working from end to front
         subtree_unadopted_layers.reverse();
         while let Some(child) = subtree_unadopted_layers.pop() {
@@ -75,7 +75,7 @@ pub struct NonCachingOrphanChildLayerProducingIterator<'a, L>
 where
     L: Layer,
 {
-    pub(crate) painting_results: &'a PaintResults<L::ChildCanvas>,
+    pub(crate) paint_results: &'a PaintResults<L::ChildCanvas>,
     pub(crate) key: Option<&'a dyn Key>,
     pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<L::ChildCanvas>>,
     pub(crate) composition_config: &'a LayerCompositionConfig<L::ChildCanvas>,
@@ -93,7 +93,7 @@ where
         ) -> Vec<ComposableUnadoptedLayer<L::ChildCanvas>>,
     ) {
         let mut iter = NonCachingChildLayerProducingIterator {
-            painting_results: self.painting_results,
+            paint_results: self.paint_results,
             key: self.key,
             unadopted_layers: Vec::new(),
             composition_config: self.composition_config,
@@ -105,7 +105,7 @@ where
 }
 
 pub struct CachingChildLayerProducingIterator<'a, CC: Canvas> {
-    pub(crate) painting_results: &'a PaintResults<CC>,
+    pub(crate) paint_results: &'a PaintResults<CC>,
     pub(crate) key: Option<&'a dyn Key>,
     pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<CC>>,
 }
@@ -119,11 +119,11 @@ where
         mut composite: impl FnMut(ChildLayerOrFragmentRef<'_, CC>) -> Vec<ComposableUnadoptedLayer<CC>>,
     ) {
         let mut subtree_unadopted_layers = Vec::new();
-        for child in &self.painting_results.structured_children {
+        for child in &self.paint_results.structured_children {
             let child_unadopted_layers = composite(child.into());
             subtree_unadopted_layers.extend(child_unadopted_layers);
         }
-        subtree_unadopted_layers.extend(self.painting_results.detached_children.iter().cloned());
+        subtree_unadopted_layers.extend(self.paint_results.detached_children.iter().cloned());
         // DFS traversal, working from end to front
         subtree_unadopted_layers.reverse();
         while let Some(child) = subtree_unadopted_layers.pop() {

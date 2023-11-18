@@ -102,16 +102,6 @@ pub struct DryLayoutFunctionTable<R: Render> {
     ) -> R::LayoutMemo,
 }
 
-pub trait LayerRender<
-    L: Layer<
-        ParentCanvas = <Self::ParentProtocol as Protocol>::Canvas,
-        ChildCanvas = <Self::ChildProtocol as Protocol>::Canvas,
-    >,
->: Render<LayerOrUnit = L>
-{
-    fn create_layer(&self) -> L;
-}
-
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum RenderAction {
     None,

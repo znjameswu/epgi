@@ -88,8 +88,8 @@ pub trait Canvas: Sized + 'static {
     //     paint: impl FnOnce(&mut Self::PaintContext<'_>),
     // );
 
-    fn paint_render_object<P: Protocol<Canvas = Self>>(
-        render_object: &dyn ChildRenderObject<P>,
+    fn paint_render_objects<'a, P: Protocol<Canvas = Self>>(
+        render_objects: impl IntoIterator<Item = &'a dyn ChildRenderObject<P>>,
     ) -> PaintResults<Self>;
 
     // fn paint_render_objects<P: Protocol<Canvas = Self>>(

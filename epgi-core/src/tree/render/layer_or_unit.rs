@@ -1,12 +1,12 @@
 use crate::{
-    foundation::{Arc, Canvas, LayerProtocol, Protocol},
+    foundation::{Arc, ArrayContainer, Canvas, LayerProtocol, Protocol},
     tree::{
-        ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerCache, LayerMark,
-        LayerNode,
+        ArcAnyLayerNode, ArcChildLayerNode, AweakAnyLayerNode, Layer, LayerMark, LayerNode,
+        PaintCache,
     },
 };
 
-use super::{LayerRender, Render, RenderAction};
+use super::{Render, RenderAction};
 
 pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     type ArcLayerNode: Clone + Send + Sync + 'static;
@@ -14,7 +14,7 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
 
     type LayerMark: Send + Sync + 'static;
 
-    type LayerCache: Send + Sync + 'static;
+    type PaintResults: Send + Sync + 'static;
 
     fn mark_render_action(
         layer_node: &Self::ArcLayerNode,
@@ -22,14 +22,12 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
         subtree_has_action: RenderAction,
     ) -> RenderAction;
 
-    fn mark_detached(layer_node: &Self::ArcLayerNode);
-
     fn create_layer_mark() -> Self::LayerMark;
 }
 
 impl<R, L> LayerOrUnit<R> for L
 where
-    R: LayerRender<L>,
+    R: Render<LayerOrUnit = L>,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
     L: Layer<
@@ -41,7 +39,7 @@ where
 
     type LayerMark = LayerMark;
 
-    type LayerCache = LayerCache<L::ChildCanvas, L::CachedComposition>;
+    type PaintResults = PaintCache<L::ChildCanvas, L::CachedComposition>;
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::LayerNode {
@@ -61,10 +59,6 @@ where
         layer_node.mark_render_action(child_render_action, subtree_has_action)
     }
 
-    fn mark_detached(layer_node: &Self::ArcLayerNode) {
-        layer_node.mark.set_detached()
-    }
-
     fn create_layer_mark() -> LayerMark {
         LayerMark::new()
     }
@@ -78,7 +72,7 @@ where
 
     type LayerMark = ();
 
-    type LayerCache = ();
+    type PaintResults = ();
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::None { create: || () };
@@ -90,8 +84,6 @@ where
     ) -> RenderAction {
         child_render_action
     }
-
-    fn mark_detached(layer_node: &Self::ArcLayerNode) {}
 
     fn create_layer_mark() -> () {
         ()

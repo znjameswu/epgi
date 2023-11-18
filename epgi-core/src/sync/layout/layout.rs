@@ -3,7 +3,8 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::TreeScheduler,
     tree::{
-        DryLayoutFunctionTable, LayoutResults, Render, RenderMark, RenderObject, RenderObjectInner,
+        DryLayoutFunctionTable, LayoutCache, LayoutResults, Render, RenderMark, RenderObject,
+        RenderObjectInner,
     },
 };
 
@@ -46,9 +47,9 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
-            if let Some(layout_results) = inner.layout_results_mut(&token) {
-                if constraints == &layout_results.constraints {
-                    layout_results.parent_use_size = false;
+            if let Some(cache) = inner.layout_cache_mut(token) {
+                if constraints == &cache.layout_results.constraints {
+                    cache.layout_results.parent_use_size = false;
                     return;
                 }
             }
@@ -63,10 +64,10 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
-            if let Some(layout_results) = inner.layout_results_mut(&token) {
-                if constraints == &layout_results.constraints {
-                    let size = layout_results.size.clone();
-                    layout_results.parent_use_size = true;
+            if let Some(cache) = inner.layout_cache_mut(token) {
+                if constraints == &cache.layout_results.constraints {
+                    let size = cache.layout_results.size.clone();
+                    cache.layout_results.parent_use_size = true;
                     return size;
                 }
             }
@@ -128,16 +129,13 @@ where
         } else {
             self.render.perform_layout(&constraints)
         };
-        let layout_results = self.insert_layout_results(LayoutResults::new(
-            constraints,
-            parent_use_size,
-            size,
-            memo,
+        let cache = self.insert_layout_cache(LayoutCache::new(
+            LayoutResults::new(constraints, parent_use_size, size, memo),
             None,
         ));
 
         mark.clear_self_needs_layout();
-        return &layout_results.size;
+        return &cache.layout_results.size;
     }
 
     #[inline(always)]

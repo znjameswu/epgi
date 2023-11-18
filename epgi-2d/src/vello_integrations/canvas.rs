@@ -43,8 +43,8 @@ impl Canvas for Affine2dCanvas {
         this.reset(true)
     }
 
-    fn paint_render_object<P: Protocol<Canvas = Self>>(
-        render_object: &dyn ChildRenderObject<P>,
+    fn paint_render_objects<'a, P: Protocol<Canvas = Self>>(
+        render_objects: impl IntoIterator<Item = &'a dyn ChildRenderObject<P>>,
     ) -> PaintResults<Self> {
         let mut paint_results = PaintResults {
             structured_children: Default::default(),
@@ -55,7 +55,9 @@ impl Canvas for Affine2dCanvas {
             curr_fragment_encoding: VelloEncoding::new(),
             results: &mut paint_results,
         };
-        render_object.paint(&<P::Transform as Identity>::IDENTITY, &mut paint_ctx);
+        for render_object in render_objects {
+            render_object.paint(&<P::Transform as Identity>::IDENTITY, &mut paint_ctx);
+        }
         paint_results
     }
 

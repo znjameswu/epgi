@@ -8,10 +8,15 @@ pub(crate) struct RenderMark {
     needs_layout: AtomicBool,
     subtree_has_layout: AtomicBool,
     is_relayout_boundary: AtomicBool,
+    is_detached: AtomicBool,
 }
 
 // Nonconstructible ZST
+#[derive(Clone, Copy)]
 pub(crate) struct NoRelayoutToken(());
+
+#[derive(Clone, Copy)]
+pub(crate) struct NotDetachedToken(());
 
 impl RenderMark {
     pub(crate) fn new() -> Self {
@@ -19,7 +24,28 @@ impl RenderMark {
             needs_layout: true.into(),
             subtree_has_layout: true.into(),
             is_relayout_boundary: false.into(),
+            is_detached: false.into(),
         }
+    }
+
+    pub(crate) fn is_detached(&self) -> Result<(), NotDetachedToken> {
+        if self.is_detached.load(Relaxed) {
+            Ok(())
+        } else {
+            Err(NotDetachedToken(()))
+        }
+    }
+
+    pub(crate) fn assume_not_detached(&self) -> NotDetachedToken {
+        debug_assert!(
+            !self.is_detached.load(Relaxed),
+            "We assumed this render object to be attached"
+        );
+        NotDetachedToken(())
+    }
+
+    pub(crate) fn set_is_detached(&self) {
+        self.is_detached.store(true, Relaxed)
     }
 
     pub(crate) fn is_relayout_boundary(&self) -> bool {

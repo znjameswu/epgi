@@ -86,9 +86,6 @@ where
                     let mut inner = render_object.inner.lock();
                     inner.render.detach();
                 }
-                <<E::Render as Render>::LayerOrUnit as LayerOrUnit<E::Render>>::mark_detached(
-                    &render_object.layer_node,
-                );
                 let mut snapshot = self.snapshot.lock();
                 let state = snapshot
                     .inner
@@ -292,9 +289,6 @@ where
                 let mut inner = render_object.inner.lock();
                 inner.render.detach();
             }
-            <<E::Render as Render>::LayerOrUnit as LayerOrUnit<E::Render>>::mark_detached(
-                &render_object.layer_node,
-            );
             return (None, SubtreeRenderObjectChange::Suspend);
         }
 
