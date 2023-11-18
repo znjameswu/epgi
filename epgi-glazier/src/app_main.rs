@@ -1,5 +1,6 @@
 use epgi_2d::{
-    Affine2dEncoding, BoxConstraints, BoxProtocol, BoxProvider, RenderRoot, RootElement, RootView,
+    Affine2dEncoding, BoxConstraints, BoxProtocol, BoxProvider, BoxSize, RenderRoot, RootElement,
+    RootView,
 };
 use epgi_common::ConstrainedBox;
 use epgi_core::{
@@ -343,6 +344,11 @@ impl MainState {
                 .into(),
             },
             BoxConstraints::default(),
+            BoxSize {
+                width: f32::INFINITY,
+                height: f32::INFINITY,
+            },
+            (),
         );
 
         // Construct the widget injection binding by hand for later use.

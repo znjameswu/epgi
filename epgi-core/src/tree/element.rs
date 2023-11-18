@@ -24,7 +24,8 @@ use crate::{
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, LayerRender, Render, RenderObject,
+    ChildElementWidgetPair, ElementWidgetPair, LayerRender, LayoutCache, LayoutResults, Render,
+    RenderObject,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -328,7 +329,9 @@ pub fn create_root_element<E, R>(
         ArcChildRenderObject<E::ChildProtocol>,
     >,
     hooks: Hooks,
-    _constraints: <E::ParentProtocol as Protocol>::Constraints,
+    constraints: <E::ParentProtocol as Protocol>::Constraints,
+    size: <E::ParentProtocol as Protocol>::Size,
+    layout_memo: R::LayoutMemo,
 ) -> Arc<ElementNode<E>>
 where
     E: RenderElement<Render = R>,
@@ -355,6 +358,21 @@ where
         //         Some(RenderCache::new(constraints, false, None));
         // }
         // TODO
+        {
+            render_object
+                .inner
+                .lock()
+                .cache
+                .insert_layout_cache(LayoutCache::new(
+                    LayoutResults {
+                        constraints,
+                        parent_use_size: false,
+                        size,
+                        memo: layout_memo,
+                    },
+                    None,
+                ));
+        }
         render_object.mark.set_is_relayout_boundary();
         ElementNode {
             context: element_context,
