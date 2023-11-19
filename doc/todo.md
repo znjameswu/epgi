@@ -12,6 +12,8 @@
 
 12: NOW: Use "descendant + self" mark combination instead of "subtree + self" combination. The former provides an unmarking oppurtuny during the return phase of tree walk.
 
+13. Zero size container reconcile optimization (skip updating children, etc.)
+
 
 
 TODOs for other crates:

@@ -6,8 +6,8 @@ use linear_map::LinearMap;
 
 use crate::{
     foundation::{
-        Arc, Asc, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, Parallel, Provide,
-        SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, AsIterator, Asc, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, Container,
+        Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeRenderObjectChange, TreeScheduler},
@@ -445,7 +445,9 @@ where
                 let (children, changes) = results.unzip_collect(|x| x);
 
                 debug_assert!(
-                    !changes.any(SubtreeRenderObjectChange::is_keep_render_object),
+                    !changes
+                        .as_iter()
+                        .any(SubtreeRenderObjectChange::is_keep_render_object),
                     "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
                 );
 

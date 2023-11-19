@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Canvas, PaintContext, Parallel, Protocol},
+    foundation::{Canvas, PaintContext, Container, Protocol},
     tree::{
         ArcChildRenderObject, ComposableChildLayer, PaintResults, StructuredChildLayerOrFragment,
     },
@@ -80,7 +80,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
 
     fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
         &'b mut self,
-        child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
+        child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
     ) {
         child_transform_pairs
             .into_iter()
@@ -114,7 +114,7 @@ impl PaintContext for VelloPaintScanner {
 
     fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
         &'b mut self,
-        child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
+        child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
     ) {
     }
 

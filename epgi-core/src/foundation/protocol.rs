@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Mul};
 
 use crate::tree::{ArcChildRenderObject, ComposableChildLayer, PaintResults};
 
-use super::Parallel;
+use super::Container;
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
@@ -132,7 +132,7 @@ pub trait PaintContext {
 
     fn paint_multiple<'a, P: Protocol<Canvas = Self::Canvas>>(
         &'a mut self,
-        child_transform_pairs: impl Parallel<Item = (ArcChildRenderObject<P>, &'a P::Transform)>,
+        child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'a P::Transform)>,
     );
 
     fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>);
