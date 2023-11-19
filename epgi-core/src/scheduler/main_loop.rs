@@ -43,6 +43,7 @@ impl Scheduler {
         }
     }
     pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
+        // handle.push_layer_render_objects_needing_paint(self.tree_scheduler.roo)
         let tasks = &handle.task_rx;
         loop {
             let task = tasks.recv();

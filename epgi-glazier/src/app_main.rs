@@ -142,7 +142,7 @@ impl WinHandler for MainState {
     }
 
     fn pointer_move(&mut self, event: &PointerEvent) {
-        todo!()
+        // todo!()
         // self.app.window_event(Event::MouseMove(event.into()));
         // self.handle.invalidate();
         // self.handle.set_cursor(&Cursor::Arrow);
@@ -247,7 +247,8 @@ impl MainState {
         let frame_results = scheduler.request_new_frame().recv_blocking().unwrap();
         let encoding = frame_results
             .composited
-            .downcast::<Arc<Affine2dEncoding>>()
+            .as_ref()
+            .downcast_ref::<Arc<Affine2dEncoding>>()
             .unwrap();
 
         let scale = handle.get_scale().unwrap_or_default();
@@ -274,8 +275,33 @@ impl MainState {
             } else {
                 None
             };
-            let mut builder = SceneBuilder::for_scene(&mut self.scene);
-            todo!(); // builder.append(&encoding, transform);
+            // let mut builder = SceneBuilder::for_scene(&mut self.scene);
+            // builder.append(&encoding, transform);
+            let mut scene = vello_encoding::Encoding::new();
+            scene.reset(false);
+            scene.append(
+                &encoding,
+                &transform.map(|transform| vello_encoding::Transform::from_kurbo(&transform)),
+            );
+            // SceneBuilder's API is crippled, we use an unsafe transmute to avoid invent a whole new set of APIs
+            self.scene = unsafe { std::mem::transmute(scene) };
+
+            // self.scene = {
+            //     let mut scene = Scene::new();
+            //     let mut builder = SceneBuilder::for_scene(&mut scene);
+            //     // builder.fill(
+            //     //     vello::peniko::Fill::EvenOdd,
+            //     //     Affine::IDENTITY,
+            //     //     Color::rgb(1.0, 0.0, 0.0),
+            //     //     None,
+            //     //     &vello::kurbo::Rect::new(10., 10., 50., 50.0),
+            //     // );
+            //     scene
+            //     // let mut scene = vello_encoding::Encoding::new();
+            //     // scene.reset(false);
+            //     // scene.
+            //     // unsafe { std::mem::transmute(scene) }
+            // };
             self.counter += 1;
             let surface_texture = surface
                 .surface
@@ -400,7 +426,6 @@ impl MainState {
             Arc::new(ConstrainedBox { constraints, child })
         }));
 
-        let tree_scheduler = TreeScheduler::new(element_node);
         let sync_threadpool = rayon::ThreadPoolBuilder::new()
             .num_threads(1)
             .build()
@@ -413,6 +438,8 @@ impl MainState {
         unsafe {
             setup_scheduler(scheduler_handle);
         }
+
+        let tree_scheduler = TreeScheduler::new(element_node, get_current_scheduler());
 
         let scheduler = Scheduler::new(tree_scheduler);
         let join_handle = std::thread::spawn(move || {

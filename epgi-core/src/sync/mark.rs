@@ -14,18 +14,7 @@ pub(crate) struct ElementMark {
     /// Lanes that are present in the mailbox
     pub(super) self_mailbox_lanes: AtomicLaneMask,
     /// Indicate whether this node requested for a sync poll
-    pub(super) is_poll_ready: AtomicBool,
-    // pub(super) needs_layout: AtomicBool,
-
-    // pub(super) subtree_has_layout: AtomicBool,
-
-    // pub(super) is_relayout_boundary: AtomicBool,
-
-    // pub(super) needs_paint: AtomicBool,
-
-    // pub(super) subtree_has_paint: AtomicBool,
-
-    // pub(super) is_repaint_boundary: bool,
+    pub(super) needs_poll: AtomicBool,
 }
 
 impl ElementMark {
@@ -34,13 +23,7 @@ impl ElementMark {
             subtree_lanes: AtomicLaneMask::new(LaneMask::new()),
             self_lanes: AtomicLaneMask::new(LaneMask::new()),
             self_mailbox_lanes: AtomicLaneMask::new(LaneMask::new()),
-            is_poll_ready: AtomicBool::new(false),
-            // needs_layout: (),
-            // subtree_has_layout: (),
-            // is_relayout_boundary: (),
-            // needs_paint: (),
-            // subtree_has_paint: (),
-            // is_repaint_boundary: (),
+            needs_poll: AtomicBool::new(false),
         }
     }
 }
@@ -55,7 +38,7 @@ impl ElementContextNode {
     }
 
     pub(crate) fn needs_poll(&self) -> bool {
-        self.mark.is_poll_ready.load(Relaxed)
+        self.mark.needs_poll.load(Relaxed)
     }
 
     // pub(crate) fn needs_layout(&self) -> bool {

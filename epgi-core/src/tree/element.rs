@@ -353,11 +353,6 @@ where
             render_children,
             element_context.clone(),
         ));
-        // {
-        //     render_object.inner.lock().layout_results =
-        //         Some(RenderCache::new(constraints, false, None));
-        // }
-        // TODO
         {
             render_object
                 .inner

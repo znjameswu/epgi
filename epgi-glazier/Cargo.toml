@@ -15,12 +15,13 @@ wayland = ["glazier/wayland"]
 accesskit = { workspace = true }
 epgi-core = { workspace = true }
 epgi-2d = { workspace = true }
-epgi-common = {workspace = true}
+epgi-common = { workspace = true }
 glazier = { workspace = true, features = ["accesskit"] }
 vello = { workspace = true }
+vello_encoding = { workspace = true }
 wgpu = { workspace = true }
 futures = "0.3.27"
-rayon ={ workspace = true }
+rayon = { workspace = true }
 
 [profile.dev]
 panic = 'abort'

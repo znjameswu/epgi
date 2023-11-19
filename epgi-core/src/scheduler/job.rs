@@ -111,10 +111,12 @@ impl JobBuilder {
 
     pub fn extend_sequenced_jobs_in(
         &mut self,
+        node: AweakElementContextNode,
         mailbox: &HashMap<JobId, Vec<Update>>,
         index: usize,
     ) {
         let id = self.id();
+        self.conf.roots_mut().insert(PtrEq(node));
         self.extend_sequenced_jobs(mailbox.iter().filter_map(|(job_id, updates)| {
             if *job_id == id {
                 return None;

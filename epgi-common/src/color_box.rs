@@ -54,6 +54,7 @@ impl ProxyWidget for ColorBox {
 
     type LayoutMemo = ();
 
+    #[inline(never)]
     fn perform_paint(
         state: &Self::RenderState,
         child: ArcChildRenderObject<Self::Protocol>,

@@ -1,17 +1,18 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, OptionContainer,
+        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Key, Never, OptionContainer,
         PaintContext, Protocol, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
-        ChildRenderObjectsUpdateCallback, DryLayout, Element, ElementReconcileItem,
-        LayerCompositionConfig, LayerRender, Render, RenderAction, RenderElement, Widget,
+        ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
+        Element, ElementReconcileItem, LayerCompositionConfig, LayerRender, Render, RenderAction,
+        RenderElement, Widget,
     },
 };
 
-use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize};
+use crate::{Affine2d, Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -189,7 +190,7 @@ impl LayerRender for RenderRoot {
     }
 
     fn key(&self) -> Option<&Arc<dyn Key>> {
-        todo!()
+        None
     }
 
     type CachedComposition = Arc<Affine2dEncoding>;
@@ -202,7 +203,21 @@ impl CachedLayer for RenderRoot {
     fn composite_into_cache(
         child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> Self::CachedComposition {
-        todo!()
+        let mut result = Affine2dEncoding::new();
+        use epgi_core::tree::ChildLayerOrFragmentRef::*;
+        child_iterator.for_each(|child| match child {
+            Fragment(encoding) => {
+                Affine2dCanvas::composite_encoding(&mut result, encoding, None);
+                Vec::new()
+            }
+            StructuredChild(ComposableChildLayer { config, layer }) => {
+                layer.composite_to(&mut result, config)
+            }
+            AdoptedChild(ComposableAdoptedLayer { config, layer }) => {
+                layer.composite_to(&mut result, config)
+            }
+        });
+        return Arc::new(result);
     }
 
     fn composite_from_cache_to(

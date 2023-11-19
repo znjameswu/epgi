@@ -34,7 +34,7 @@ where
         };
         {
             let mut mailbox = node.mailbox.lock();
-            job_builder.extend_sequenced_jobs_in(&mut *mailbox, self.self_index);
+            job_builder.extend_sequenced_jobs_in(self.node.clone(), &mut *mailbox, self.self_index);
             mailbox
                 .entry(job_builder.id())
                 .or_default()

@@ -20,21 +20,8 @@ impl TreeScheduler {
                 let Some(layer_render_objects) = layer_render_object.upgrade() else {
                     continue;
                 };
-                layer_render_objects.repaint_if_attached();
+                scope.spawn(move |_| layer_render_objects.repaint_if_attached());
             }
-            // layer_nodes
-            //     .into_iter()
-            //     .filter_map(|PtrEq(layer_node)| {
-            //         layer_node
-            //             .upgrade()
-            //             .filter(|layer_node| !layer_node.mark().detached())
-            //     })
-            //     .for_each(|layer_node| {
-            //         scope.spawn(move |_| {
-            //             layer_node.repaint();
-            //         })
-            //     })
-            todo!()
         })
     }
 }

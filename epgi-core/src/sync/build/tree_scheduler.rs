@@ -64,7 +64,7 @@ impl LaneScheduler {
     ) {
         debug_assert!(
             self.sync_lane.is_none(),
-            "Batcher should only be run after the previous sync batch finishes"
+            "Batcher should only run after the previous sync batch finishes"
         );
         let BatchResult {
             expired_batches,

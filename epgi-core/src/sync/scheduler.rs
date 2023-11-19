@@ -1,8 +1,8 @@
 use std::any::Any;
 
 use crate::{
-    foundation::Asc,
-    scheduler::{BatchResult, JobBatcher, LanePos},
+    foundation::{Asc, Arc},
+    scheduler::{BatchResult, JobBatcher, LanePos, SchedulerHandle},
     tree::{
         ArcAnyElementNode, ArcAnyLayerRenderObject, ArcAnyRenderObject, AweakAnyElementNode,
         AweakElementContextNode,
@@ -17,15 +17,14 @@ pub struct TreeScheduler {
 }
 
 impl TreeScheduler {
-    pub fn new(root_element: ArcAnyElementNode) -> Self {
+    pub fn new(root_element: ArcAnyElementNode, scheduler_handle: &SchedulerHandle) -> Self {
         let root_render_object = root_element
             .render_object()
             .expect("The root render object should be initilialized and attached manually")
             .downcast_arc_any_layer_render_object()
             .expect("Root render object should have a layer");
-        // let root_layer = root_render_object.layer().expect(
-        //     "The layer of the root render object should be initilialized and attached manually",
-        // );
+        scheduler_handle
+            .push_layer_render_objects_needing_paint(Arc::downgrade(&root_render_object));
         Self {
             lane_scheduler: LaneScheduler::new(),
             root_element,
