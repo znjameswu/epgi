@@ -6,16 +6,16 @@ use linear_map::LinearMap;
 
 use crate::{
     foundation::{
-        Arc, AsIterator, Asc, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt, Container,
+        Arc, AsIterator, Asc, Container, Inlinable64Vec, InlinableDwsizeVec, LinearMapEntryExt,
         Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{SubtreeRenderObjectChange, TreeScheduler},
     tree::{
-        ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf, AsyncWorkQueue,
-        BuildContext, ContainerOf, Element, ElementContextNode, ElementNode, ElementReconcileItem,
-        ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline, MainlineState,
-        RenderOrUnit,
+        no_widget_update, ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf,
+        AsyncWorkQueue, BuildContext, ContainerOf, Element, ElementContextNode, ElementNode,
+        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline,
+        MainlineState, RenderOrUnit,
     },
 };
 
@@ -117,8 +117,15 @@ where
         widget: Option<E::ArcWidget>,
         tree_scheduler: &TreeScheduler,
     ) -> VisitAction<E> {
+        let no_new_widget = widget.is_none();
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::Sync);
+        let no_consumer_root = !self.context.consumer_root_lanes().contains(LanePos::Sync);
+        let no_poll = !self.context.needs_poll();
+        let no_descendant_lanes = !self.context.descendant_lanes().contains(LanePos::Sync);
+
         // Subtree has no work, end of visit
-        if !self.context.subtree_lanes().contains(LanePos::Sync) {
+        if no_new_widget && no_mailbox_update && no_consumer_root && no_poll && no_descendant_lanes
+        {
             return VisitAction::EndOfVisit;
         }
 
@@ -136,8 +143,9 @@ where
             "A sync task should not encounter another sync task contending over the same node",
         );
 
+        let no_widget_update = no_widget_update::<E>(widget.as_ref(), old_widget);
         // Self has no work, but subtree has work. Visit
-        if Self::can_skip_work(&widget, old_widget, LanePos::Sync, &self.context) {
+        if no_widget_update && no_mailbox_update && no_poll {
             use MainlineState::*;
             match state {
                 Ready {
@@ -184,7 +192,7 @@ where
         };
 
         // Cannot skip work but can skip rebuild, meaning there is a polling work here.
-        if Self::can_skip_rebuild(&widget, old_widget, LanePos::Sync, &self.context) {
+        if no_widget_update && no_mailbox_update {
             return VisitAction::Rebuild {
                 is_poll: true,
                 old_widget: old_widget.clone(),
@@ -578,7 +586,7 @@ where
                     reader
                         .upgrade()
                         .expect("Readers should be alive")
-                        .mark_secondary_root(LanePos::Sync)
+                        .mark_consumer_root(LanePos::Sync);
                 }
             }
         }

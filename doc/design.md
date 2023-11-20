@@ -425,8 +425,9 @@ If async secondary root spawning and lane marking is performed within the async 
         2. Otherwise this provides no synchronization. The thread can suspend and the lane marking can happen a year later.
 
 ## Decision
-Relaxed lane marking with no unmarking
+~~Relaxed lane marking with no unmarking~~
 
+Please see schedule algorithm document
 
 # Layout tree walk implementation
 

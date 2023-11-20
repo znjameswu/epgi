@@ -137,9 +137,14 @@ where
     E: Element,
 {
     fn remove_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
-        if !self.context.subtree_lanes().contains(lane_pos) {
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
+        let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
+        let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
+
+        if no_mailbox_update && no_consumer_root && no_descendant_lanes {
             return;
         }
+
         let remove = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
@@ -200,9 +205,14 @@ where
     E: Element,
 {
     fn purge_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
-        if !self.context.subtree_lanes().contains(lane_pos) {
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
+        let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
+        let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
+
+        if no_mailbox_update && no_consumer_root && no_descendant_lanes {
             return;
         }
+
         let purge = {
             let mut snapshot = self.snapshot.lock();
             Self::prepare_purge_async_work(&mut *snapshot, lane_pos)
@@ -376,7 +386,11 @@ where
     E: Element,
 {
     pub fn remove_async_work_and_lane_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
-        if !self.context.subtree_lanes().contains(lane_pos) {
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
+        let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
+        let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
+
+        if no_mailbox_update && no_consumer_root && no_descendant_lanes {
             return;
         }
         let remove = {

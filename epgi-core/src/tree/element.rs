@@ -15,7 +15,7 @@ pub use snapshot::*;
 use crate::{
     foundation::{
         Arc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec, LayerProtocol, Protocol,
-        Provide, SyncMutex, TypeKey,
+        Provide, PtrEq, SyncMutex, TypeKey,
     },
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -318,6 +318,17 @@ where
         };
         Ok(into_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
     }
+}
+
+#[inline(always)]
+pub(crate) fn no_widget_update<E: Element>(
+    new_widget: Option<&E::ArcWidget>,
+    old_widget: &E::ArcWidget,
+) -> bool {
+    if let Some(new_widget) = new_widget {
+        return PtrEq(new_widget) == PtrEq(old_widget);
+    }
+    return true;
 }
 
 pub fn create_root_element<E, R>(

@@ -58,9 +58,31 @@ Some unit of work will spawn secondary root unit of work deep down their subtree
 
     Work-efficient for its purpose. Not very work-efficient compared to rest of the solutions, since it also needs to visit and clear an entire subtree.
 
-5. Use an auxilliary, scheduler-exclusive lane marking to mark to-be-unmarked roots. Use this auxilliary marking to achieve node bypassing during a top-down recursive mark computation.
+5. Use an auxilliary, scheduler-exclusive lane marking to mark to-be-unmarked roots. Use this auxilliary marking to achieve node bypassing during a top-down recursive mark computation. (With spawner reference count)
 
     Can work inside an inverted Roslyn Red-Green tree!
+
+The reference count can be replaced by storing the spawned root in the **first** spawner that actually spawns it.
+
+## (Update) Expansion on the auxilliary marking algorithm
+Non-intrusive node design gives us the ability to fold on children's lane marks during the return phase of a visit. That usually happens during commit or cancellation (what?).
+
+In short, it gives us the ability to sum over children's lane mark most of the time.
+
+### Self + subtree marking vs Self + descendant marking?
+Recurrence relation:
+
+Self + subtree marking: Parent subtree = Parent self + \sum child subtree
+
+Self + descendant marking: Parent descendant = \sum (child self + child descendant)
+
+At the unmarked secondary root:
+
+Self + subtree marking: New self = mailbox + poll. New subtree = self + \sum child subtree (Requires to visit children, while the children itself may be pending an update)
+
+Self + descendant marking: New self = mailbox + poll. No need to update descendant.
+
+Therefore, we choose self + descendant marking to unlock strict unlocking capabilities.
 
 
 

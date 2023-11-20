@@ -9,7 +9,7 @@ use crate::{
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
+        no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
         ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks, Mainline,
         ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle,
     },
@@ -141,12 +141,18 @@ where
             return Blocked(());
         };
 
-        if Self::can_skip_work(
-            &work.widget,
-            old_widget,
-            work.context.lane_pos,
-            &self.context,
-        ) {
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(work.context.lane_pos);
+        let no_consumer_root = !self
+            .context
+            .consumer_root_lanes()
+            .contains(work.context.lane_pos);
+        let no_descendant_lanes = !self
+            .context
+            .descendant_lanes()
+            .contains(work.context.lane_pos);
+        let no_widget_update = no_widget_update::<E>(work.widget.as_ref(), old_widget);
+
+        if no_mailbox_update && no_descendant_lanes && no_descendant_lanes && no_widget_update {
             // Skips rebuilding entirely by not occupying the node.
             // Safety of not occupying the node:
             // 1. If we reconciled with a widget (whether new or not, i.e. an Update), then we are confident that no other batch will update the widget while the parent work of this work is still alive.
@@ -199,7 +205,7 @@ where
                             mainline_reader
                                 .upgrade()
                                 .expect("Readers should be alive")
-                                .mark_secondary_root(work.context.lane_pos)
+                                .mark_consumer_root(work.context.lane_pos);
                         }
                     }
                     use crate::tree::MainlineState::*;
