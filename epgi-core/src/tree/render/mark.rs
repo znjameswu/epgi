@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-use super::{Render, RenderAction, RenderObject};
+use crate::foundation::Arc;
+
+use super::{LayerOrUnit, Render, RenderAction, RenderObject};
 
 pub(crate) struct RenderMark {
     needs_layout: AtomicBool,
@@ -46,16 +48,20 @@ impl RenderMark {
         self.is_detached.store(true, Relaxed)
     }
 
-    pub(crate) fn is_relayout_boundary(&self) -> bool {
-        self.is_relayout_boundary.load(Relaxed)
+    pub(crate) fn is_relayout_boundary<R: Render>(&self) -> bool {
+        R::DRY_LAYOUT_FUNCTION_TABLE.is_some() || self.is_relayout_boundary.load(Relaxed)
     }
 
-    pub(crate) fn clear_is_relayout_boundary(&self) {
-        self.is_relayout_boundary.store(false, Relaxed)
+    pub(crate) fn clear_is_relayout_boundary<R: Render>(&self) {
+        if R::DRY_LAYOUT_FUNCTION_TABLE.is_none() {
+            self.is_relayout_boundary.store(false, Relaxed)
+        }
     }
 
-    pub(crate) fn set_is_relayout_boundary(&self) {
-        self.is_relayout_boundary.store(true, Relaxed)
+    pub(crate) fn set_is_relayout_boundary<R: Render>(&self) {
+        if R::DRY_LAYOUT_FUNCTION_TABLE.is_none() {
+            self.is_relayout_boundary.store(true, Relaxed)
+        }
     }
 
     pub(crate) fn needs_layout(&self) -> Result<(), NoRelayoutToken> {
@@ -103,19 +109,23 @@ where
     /// The render action is less or equal to the child_render_action,
     /// because some of the action may be absorbed by the corresponding boundaries.
     pub(crate) fn mark_render_action(
-        &self,
+        self: &Arc<Self>,
         mut child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction {
         if child_render_action == RenderAction::Relayout {
             self.mark.set_self_needs_layout();
-            if self.mark.is_relayout_boundary() {
+            if self.mark.is_relayout_boundary::<R>() {
                 child_render_action = RenderAction::Repaint;
             }
         }
         if subtree_has_action == RenderAction::Relayout {
             self.mark.set_subtree_has_layout();
         }
-        todo!()
+        <R::LayerOrUnit as LayerOrUnit<R>>::layer_mark_render_action(
+            self,
+            child_render_action,
+            subtree_has_action,
+        )
     }
 }

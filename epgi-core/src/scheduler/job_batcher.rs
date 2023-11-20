@@ -117,7 +117,7 @@ impl JobBatcher {
             .batches
             .remove(commited_batch)
             .expect("You should not commit a dead batch");
-        for commited_job in commited_batch_confs.jobs.iter() {
+        for commited_job in commited_batch_confs.job_ids.iter() {
             let job_data = self.job_datas.remove(commited_job).unwrap();
             for sequenced_job in job_data.sequenced_jobs.into_iter() {
                 let other_sequenced_jobs = &mut self
@@ -147,7 +147,7 @@ impl JobBatcher {
         let mut expired_batches = Inlinable64Vec::default();
         let mut batched_job_count = 0;
         self.batches.retain(|&batch_id, batch_conf| {
-            let is_closed = batch_conf.jobs.iter().all(|job_id| {
+            let is_closed = batch_conf.job_ids.iter().all(|job_id| {
                 return self.job_datas[job_id]
                     .sequenced_jobs
                     .iter()
@@ -165,11 +165,11 @@ impl JobBatcher {
                 );
                 // Remove batch that becomes open
                 expired_batches.push(batch_id);
-                for job_id in batch_conf.jobs.iter() {
+                for job_id in batch_conf.job_ids.iter() {
                     self.job_datas.get_mut(job_id).unwrap().batch = None;
                 }
             }
-            batched_job_count += batch_conf.jobs.len();
+            batched_job_count += batch_conf.job_ids.len();
             is_closed
         });
 
@@ -220,7 +220,7 @@ impl JobBatcher {
             }
             let roots = merge_sets(root_sets);
             BatchConf {
-                jobs: batch_jobs,
+                job_ids: batch_jobs,
                 id: new_batch_id,
                 priority,
                 roots,
@@ -346,7 +346,7 @@ impl JobBatcher {
                     self.batches
                         .get(job_batch)
                         .expect("A job should not have its batch id pointing to a dead batch")
-                        .jobs
+                        .job_ids
                         .contains(job_id),
                     "A job should not have its batch id pointing to a batch that does not contain this job"
                 );
@@ -379,7 +379,7 @@ impl JobBatcher {
             // }
         }
         for (batch_id, batch_conf) in self.batches.iter() {
-            for job_id in batch_conf.jobs.iter() {
+            for job_id in batch_conf.job_ids.iter() {
                 let job_data = self
                     .job_datas
                     .get(job_id)

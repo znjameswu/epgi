@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, AsIterator, HktContainer, Container},
+    foundation::{Arc, AsIterator, Container, HktContainer},
     scheduler::get_current_scheduler,
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
@@ -401,7 +401,9 @@ where
             SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
 
         debug_assert!(
-            !render_object_changes.as_iter().any(SubtreeRenderObjectChange::is_keep_render_object),
+            !render_object_changes
+                .as_iter()
+                .any(SubtreeRenderObjectChange::is_keep_render_object),
             "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
         );
 

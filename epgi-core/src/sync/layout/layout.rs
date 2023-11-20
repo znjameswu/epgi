@@ -18,28 +18,28 @@ impl<R> RenderObjectInner<R>
 where
     R: Render,
 {
-    fn is_relayout_boundary(&self) -> bool {
-        R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
-            || self
-                .cache
-                .last_layout_config_ref()
-                .is_some_and(|(_, parent_use_size)| !*parent_use_size)
-    }
+    // fn is_relayout_boundary(&self) -> bool {
+    //     R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
+    //         || self
+    //             .cache
+    //             .last_layout_config_ref()
+    //             .is_some_and(|(_, parent_use_size)| !*parent_use_size)
+    // }
 }
 
 impl<R> RenderObject<R>
 where
     R: Render,
 {
-    fn is_relayout_boundary(&self) -> bool {
-        R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
-            || self
-                .inner
-                .lock()
-                .cache
-                .last_layout_config_mut()
-                .is_some_and(|(_, parent_use_size)| !*parent_use_size)
-    }
+    // fn is_relayout_boundary(&self) -> bool {
+    //     R::DRY_LAYOUT_FUNCTION_TABLE.is_some()
+    //         || self
+    //             .inner
+    //             .lock()
+    //             .cache
+    //             .last_layout_config_mut()
+    //             .is_some_and(|(_, parent_use_size)| !*parent_use_size)
+    // }
     // fn layout_without_resize(&self) {
     //     let mut inner = self.inner.lock();
     //     inner.perform_layout_without_resize(&self.context)
@@ -49,43 +49,43 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
-            if let Some(cache) = inner.cache.layout_cache_mut(token) {
+            if let Some(cache) = inner.cache.layout_cache_ref(token) {
                 if constraints == &cache.layout_results.constraints {
-                    cache.layout_results.parent_use_size = false;
                     return;
                 }
             }
         }
-        inner.perform_wet_layout(constraints.clone(), false, &self.mark);
+        inner.perform_wet_layout(constraints.clone(), &self.mark);
+        self.mark.set_is_relayout_boundary::<R>();
     }
 
     fn layout_use_size(
         &self,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
     ) -> <R::ParentProtocol as Protocol>::Size {
+        self.mark.clear_is_relayout_boundary::<R>();
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
-            if let Some(cache) = inner.cache.layout_cache_mut(token) {
+            if let Some(cache) = inner.cache.layout_cache_ref(token) {
                 if constraints == &cache.layout_results.constraints {
                     let size = cache.layout_results.size.clone();
-                    cache.layout_results.parent_use_size = true;
                     return size;
                 }
             }
         }
         inner
-            .perform_wet_layout(constraints.clone(), true, &self.mark)
+            .perform_wet_layout(constraints.clone(), &self.mark)
             .clone()
     }
 
     fn visit_and_layout(&self) {
-        let is_relayout_boundary = self.mark.is_relayout_boundary();
+        let is_relayout_boundary = self.mark.is_relayout_boundary::<R>();
         let needs_layout = self.mark.needs_layout();
         let subtree_has_layout = self.mark.subtree_has_layout();
         debug_assert!(
             is_relayout_boundary || needs_layout.is_err(),
-            "A layout walk should not encounter a dirty non-boundary node.
+            "A layout walk should not encounter a dirty non-boundary node. \
             Such node should be already laied-out by an ancester layout sometime earlier in this walk."
         );
         debug_assert!(
@@ -117,7 +117,6 @@ where
     fn perform_wet_layout(
         &mut self,
         constraints: <R::ParentProtocol as Protocol>::Constraints,
-        parent_use_size: bool,
         mark: &RenderMark,
     ) -> &<R::ParentProtocol as Protocol>::Size {
         let (size, memo) = if let Some(DryLayoutFunctionTable {
@@ -126,13 +125,13 @@ where
         }) = R::DRY_LAYOUT_FUNCTION_TABLE
         {
             let size = compute_dry_layout(&self.render, &constraints);
-            let memo = perform_layout(&self.render, &constraints, &size);
+            let memo = perform_layout(&self.render, &constraints, &size, &self.children);
             (size, memo)
         } else {
-            self.render.perform_layout(&constraints)
+            self.render.perform_layout(&constraints, &self.children)
         };
         let cache = self.cache.insert_layout_cache(LayoutCache::new(
-            LayoutResults::new(constraints, parent_use_size, size, memo),
+            LayoutResults::new(constraints, size, memo),
             None,
         ));
 
@@ -142,13 +141,12 @@ where
 
     #[inline(always)]
     fn really_layout_without_resize_inner(&mut self, mark: &RenderMark) {
-        let (constraints, parent_use_size) = self.cache.last_layout_config_mut().expect(
+        let constraints = self.cache.last_layout_config_mut().expect(
             "Relayout should only be called on relayout boundaries \
             that has been laid out at least once",
         );
         let constraints = constraints.clone();
-        let parent_use_size = *parent_use_size;
-        self.perform_wet_layout(constraints, parent_use_size, mark);
+        self.perform_wet_layout(constraints, mark);
     }
 }
 

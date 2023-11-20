@@ -1,5 +1,6 @@
 mod async_queue;
 mod context;
+mod mark;
 mod node;
 mod provider;
 mod render_or_unit;
@@ -7,6 +8,7 @@ mod snapshot;
 
 pub use async_queue::*;
 pub use context::*;
+pub use mark::*;
 pub use node::*;
 pub use provider::*;
 pub use render_or_unit::*;
@@ -372,14 +374,13 @@ where
                 .insert_layout_cache(LayoutCache::new(
                     LayoutResults {
                         constraints,
-                        parent_use_size: false,
                         size,
                         memo: layout_memo,
                     },
                     None,
                 ));
         }
-        render_object.mark.set_is_relayout_boundary();
+        render_object.mark.set_is_relayout_boundary::<R>();
         ElementNode {
             context: element_context,
             snapshot: SyncMutex::new(ElementSnapshot {

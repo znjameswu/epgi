@@ -79,6 +79,7 @@ where
                 &cache.layout_results.size,
                 transform,
                 &cache.layout_results.memo,
+                &inner.children,
                 paint_ctx,
             );
         }

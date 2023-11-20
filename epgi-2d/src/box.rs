@@ -55,6 +55,17 @@ impl BoxConstraints {
     pub fn smallest(&self) -> BoxSize {
         self.constrains(BoxSize::ZERO)
     }
+
+    pub fn is_tight(&self) -> Option<BoxSize> {
+        if self.min_width == self.max_width && self.min_height == self.max_height {
+            Some(BoxSize {
+                width: self.min_width,
+                height: self.min_height,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for BoxConstraints {

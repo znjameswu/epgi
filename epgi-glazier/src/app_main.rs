@@ -24,7 +24,7 @@ use std::{
 use vello::{
     peniko::Color,
     util::{RenderContext, RenderSurface},
-    RenderParams, Renderer, RendererOptions, Scene, SceneBuilder,
+    RenderParams, Renderer, RendererOptions, Scene,
 };
 
 pub struct AppLauncher {
@@ -123,20 +123,20 @@ impl WinHandler for MainState {
     }
 
     fn accesskit_action(&mut self, request: accesskit::ActionRequest) {
-        todo!()
+        // todo!()
         // self.app
         //     .window_event(Event::TargetedAccessibilityAction(request));
         // self.handle.invalidate();
     }
 
     fn pointer_down(&mut self, event: &PointerEvent) {
-        todo!()
+        // todo!()
         // self.app.window_event(Event::MouseDown(event.into()));
         // self.handle.invalidate();
     }
 
     fn pointer_up(&mut self, event: &PointerEvent) {
-        todo!()
+        // todo!()
         // self.app.window_event(Event::MouseUp(event.into()));
         // self.handle.invalidate();
     }
@@ -149,13 +149,13 @@ impl WinHandler for MainState {
     }
 
     fn wheel(&mut self, event: &PointerEvent) {
-        todo!()
+        // todo!()
         // self.app.window_event(Event::MouseWheel(event.into()));
         // self.handle.invalidate();
     }
 
     fn pointer_leave(&mut self) {
-        todo!()
+        // todo!()
         // self.app.window_event(Event::MouseLeft());
         // self.handle.invalidate();
     }
@@ -286,22 +286,6 @@ impl MainState {
             // SceneBuilder's API is crippled, we use an unsafe transmute to avoid invent a whole new set of APIs
             self.scene = unsafe { std::mem::transmute(scene) };
 
-            // self.scene = {
-            //     let mut scene = Scene::new();
-            //     let mut builder = SceneBuilder::for_scene(&mut scene);
-            //     // builder.fill(
-            //     //     vello::peniko::Fill::EvenOdd,
-            //     //     Affine::IDENTITY,
-            //     //     Color::rgb(1.0, 0.0, 0.0),
-            //     //     None,
-            //     //     &vello::kurbo::Rect::new(10., 10., 50., 50.0),
-            //     // );
-            //     scene
-            //     // let mut scene = vello_encoding::Encoding::new();
-            //     // scene.reset(false);
-            //     // scene.
-            //     // unsafe { std::mem::transmute(scene) }
-            // };
             self.counter += 1;
             let surface_texture = surface
                 .surface

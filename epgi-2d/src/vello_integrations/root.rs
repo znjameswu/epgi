@@ -8,11 +8,11 @@ use epgi_core::{
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
         Element, ElementReconcileItem, LayerCompositionConfig, LayerRender, Render, RenderAction,
-        RenderElement, Widget,
+        RenderElement, RenderObjectSlots, Widget,
     },
 };
 
-use crate::{Affine2d, Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize};
+use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -71,22 +71,28 @@ impl Element for RootElement {
         ),
     > {
         let child_widget = (widget.build)(ctx);
-        let item = match (child_widget, children) {
-            (None, None) => None,
+        let (item, shuffle) = match (child_widget, children) {
+            (None, None) => (None, None),
             (None, Some(child)) => {
                 nodes_needing_unmount.push(child.clone());
-                None
+                (None, Some(Box::new(|_| None) as _))
             }
-            (Some(child_widget), None) => Some(ElementReconcileItem::new_inflate(child_widget)),
-            (Some(child_widget), Some(child)) => match child.can_rebuild_with(child_widget) {
-                Ok(item) => Some(item),
-                Err((child, child_widget)) => {
-                    nodes_needing_unmount.push(child);
-                    Some(ElementReconcileItem::new_inflate(child_widget))
-                }
-            },
+            (Some(child_widget), None) => (
+                Some(ElementReconcileItem::new_inflate(child_widget)),
+                Some(Box::new(|_| Some(RenderObjectSlots::Inflate)) as _),
+            ),
+            (Some(child_widget), Some(child)) => {
+                let item = match child.can_rebuild_with(child_widget) {
+                    Ok(item) => Some(item),
+                    Err((child, child_widget)) => {
+                        nodes_needing_unmount.push(child);
+                        Some(ElementReconcileItem::new_inflate(child_widget))
+                    }
+                };
+                (item, None)
+            }
         };
-        Ok((item, None))
+        Ok((item, shuffle))
     }
 
     fn perform_inflate_element(
@@ -139,6 +145,7 @@ impl Render for RenderRoot {
     fn perform_layout<'a, 'layout>(
         &'a self,
         _constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+        _children: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         unreachable!()
     }
@@ -151,6 +158,7 @@ impl Render for RenderRoot {
         _size: &<Self::ParentProtocol as Protocol>::Size,
         _transform: &<Self::ParentProtocol as Protocol>::Transform,
         _memo: &Self::LayoutMemo,
+        _children: &Option<ArcChildRenderObject<BoxProtocol>>,
         _paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         unreachable!()
@@ -167,8 +175,12 @@ impl DryLayout for RenderRoot {
     fn compute_layout_memo(
         &self,
         constraints: &BoxConstraints,
-        size: &BoxSize,
+        _size: &BoxSize,
+        children: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> Self::LayoutMemo {
+        if let Some(child) = children {
+            child.layout(constraints)
+        }
         ()
     }
 }

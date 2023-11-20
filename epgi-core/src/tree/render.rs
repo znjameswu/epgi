@@ -42,6 +42,9 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_layout(
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        children: &<Self::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
@@ -54,6 +57,9 @@ pub trait Render: Sized + Send + Sync + 'static {
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
+        children: &<Self::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
@@ -86,6 +92,9 @@ pub trait DryLayout: Render {
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
         size: &<Self::ParentProtocol as Protocol>::Size,
+        children: &<Self::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
     ) -> Self::LayoutMemo;
 }
 
@@ -95,10 +104,11 @@ pub struct DryLayoutFunctionTable<R: Render> {
         &<R::ParentProtocol as Protocol>::Constraints,
     ) -> <R::ParentProtocol as Protocol>::Size,
 
-    pub compute_layout_memo: for<'a, 'layout> fn(
-        &'a R,
-        &'a <R::ParentProtocol as Protocol>::Constraints,
-        &'a <R::ParentProtocol as Protocol>::Size,
+    pub compute_layout_memo: fn(
+        &R,
+        &<R::ParentProtocol as Protocol>::Constraints,
+        &<R::ParentProtocol as Protocol>::Size,
+        &<R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
     ) -> R::LayoutMemo,
 }
 

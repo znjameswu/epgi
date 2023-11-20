@@ -62,8 +62,8 @@ where
 
     type Element = ProviderElement<T, P>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
-        todo!()
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
+        self
     }
 }
 
@@ -99,19 +99,16 @@ where
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: [ArcChildElementNode<Self::ChildProtocol>; 1],
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        children: [ArcChildElementNode<P>; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<P>>,
     ) -> Result<
         (
-            [ElementReconcileItem<Self::ChildProtocol>; 1],
+            [ElementReconcileItem<P>; 1],
             Option<ChildRenderObjectsUpdateCallback<Self>>,
         ),
-        (
-            [ArcChildElementNode<Self::ChildProtocol>; 1],
-            BuildSuspendedError,
-        ),
+        ([ArcChildElementNode<P>; 1], BuildSuspendedError),
     > {
         let [child] = children;
         match child.can_rebuild_with(widget.child.clone()) {
@@ -125,9 +122,9 @@ where
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
+        _ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<(Self, [ArcChildWidget<P>; 1]), BuildSuspendedError> {
         let child_widget = widget.child.clone();
         Ok((Self(PhantomData), [child_widget]))
     }

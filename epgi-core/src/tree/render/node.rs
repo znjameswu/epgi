@@ -78,7 +78,7 @@ where
 
 pub(crate) struct LayoutResults<P: Protocol, M> {
     pub(crate) constraints: P::Constraints,
-    pub(crate) parent_use_size: bool,
+    // pub(crate) parent_use_size: bool,
     pub(crate) size: P::Size,
     pub(crate) memo: M,
 }
@@ -89,13 +89,13 @@ where
 {
     pub(crate) fn new(
         constraints: P::Constraints,
-        parent_use_size: bool,
+        // parent_use_size: bool,
         size: P::Size,
         memo: M,
     ) -> Self {
         Self {
             constraints,
-            parent_use_size,
+            // parent_use_size,
             size,
             memo,
         }
@@ -154,25 +154,19 @@ where
     #[inline(always)]
     pub(crate) fn last_layout_config_ref(
         &self,
-    ) -> Option<(&<R::ParentProtocol as Protocol>::Constraints, &bool)> {
-        self.0.as_ref().map(|cache| {
-            (
-                &cache.layout_results.constraints,
-                &cache.layout_results.parent_use_size,
-            )
-        })
+    ) -> Option<&<R::ParentProtocol as Protocol>::Constraints> {
+        self.0
+            .as_ref()
+            .map(|cache| &cache.layout_results.constraints)
     }
 
     #[inline(always)]
     pub(crate) fn last_layout_config_mut(
         &mut self,
-    ) -> Option<(&mut <R::ParentProtocol as Protocol>::Constraints, &mut bool)> {
-        self.0.as_mut().map(|cache| {
-            (
-                &mut cache.layout_results.constraints,
-                &mut cache.layout_results.parent_use_size,
-            )
-        })
+    ) -> Option<&mut <R::ParentProtocol as Protocol>::Constraints> {
+        self.0
+            .as_mut()
+            .map(|cache| &mut cache.layout_results.constraints)
     }
 }
 

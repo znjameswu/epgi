@@ -71,6 +71,7 @@ where
                 })
             };
 
+            self.layer_mark.clear_needs_composite();
             return composite_results
                 .unadopted_layers
                 .iter()
@@ -89,6 +90,7 @@ where
                 transform_config: R::transform_config,
             };
             <R as LayerRender>::composite_to(encoding, &mut iter, composition_config);
+            self.layer_mark.clear_needs_composite();
             return iter.unadopted_layers;
         }
     }
@@ -183,6 +185,7 @@ where
             unadopted_layers: iter.unadopted_layers,
             cached_composition,
         });
+        self.layer_mark.clear_needs_composite();
         return result;
     }
 }

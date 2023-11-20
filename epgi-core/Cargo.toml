@@ -16,7 +16,7 @@ crossbeam = "0.8"
 either = "1.9"
 event-listener = "2.5"
 futures = "0.3.27"
-hashbrown = "0.14"
+hashbrown = { version = "0.14", features = ["rayon"] }
 linear-map = "1.2.0"
 portable-atomic = "1.0"
 rayon = { workspace = true }

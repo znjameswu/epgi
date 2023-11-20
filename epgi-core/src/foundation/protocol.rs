@@ -2,8 +2,6 @@ use std::{fmt::Debug, ops::Mul};
 
 use crate::tree::{ArcChildRenderObject, ComposableChildLayer, PaintResults};
 
-use super::Container;
-
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: Constraints<Self::Size>;
     type Size: Debug + Clone + Send + Sync + 'static;
@@ -126,14 +124,14 @@ pub trait PaintContext {
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: ArcChildRenderObject<P>,
+        child: &ArcChildRenderObject<P>,
         transform: &P::Transform,
     );
 
-    fn paint_multiple<'a, P: Protocol<Canvas = Self::Canvas>>(
-        &'a mut self,
-        child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'a P::Transform)>,
-    );
+    // fn paint_multiple<'a, P: Protocol<Canvas = Self::Canvas>>(
+    //     &'a mut self,
+    //     child_transform_pairs: impl Container<Item = (&'a ArcChildRenderObject<P>, &'a P::Transform)>,
+    // );
 
     fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>);
 }

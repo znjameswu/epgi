@@ -54,7 +54,10 @@ impl Scheduler {
                     requesters,
                 } => {
                     let mut tree_scheduler = self.tree_scheduler.write();
-                    tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    // let commited_async_batches = tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    // for commited_async_batch in commited_async_batches {
+                    //     self.job_batcher.remove_commited_batch(&commited_async_batch)
+                    // }
                     let new_jobs = {
                         let _guard = handle.sync_job_building_lock.write();
                         handle.job_id_counter.increment_frame();
@@ -63,11 +66,15 @@ impl Scheduler {
                     self.job_batcher.update_with_new_jobs(new_jobs);
                     let updates = self.job_batcher.get_batch_updates();
                     tree_scheduler.apply_batcher_result(updates);
-                    tree_scheduler.dispatch_async_batches();
-                    tree_scheduler.dispatch_sync_batch();
-                    tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
-                    // let boundaries_needing_relayout =
-                    //     { std::mem::take(&mut *handle.boundaries_needing_relayout.lock()) };
+                    // tree_scheduler.dispatch_async_batches();
+                    let commited_sync_batch = tree_scheduler.dispatch_sync_batch();
+                    if let Some(commited_sync_batch) = commited_sync_batch {
+                        self.job_batcher.remove_commited_batch(&commited_sync_batch);
+                    }
+                    // let commited_async_batches = tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    // for commited_async_batch in commited_async_batches {
+                    //     self.job_batcher.remove_commited_batch(&commited_async_batch)
+                    // }
                     // TODO: Skip layout if empty
                     tree_scheduler.perform_layout();
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.

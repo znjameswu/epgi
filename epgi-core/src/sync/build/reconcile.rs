@@ -223,7 +223,7 @@ where
         scope: &rayon::Scope<'_>,
         tree_scheduler: &TreeScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        match visit_action {
+        let result = match visit_action {
             VisitAction::Visit {
                 children,
                 render_object,
@@ -332,11 +332,12 @@ where
                             tree_scheduler,
                         )
                     }
-                };
-                todo!()
+                }
             }
             VisitAction::EndOfVisit => SubtreeRenderObjectChange::new_no_update(),
-        }
+        };
+        self.context.purge_lane(LanePos::Sync);
+        return result;
     }
 
     fn perform_rebuild_node_sync_new(
@@ -513,7 +514,9 @@ where
             .collect::<Vec<_>>();
 
         for update in updates {
-            todo!()
+            (update.op)(hooks.array_hooks[update.hook_index].as_mut())
+                .ok()
+                .expect("We currently do not handle hook failure") //TODO
         }
     }
 

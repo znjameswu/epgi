@@ -6,8 +6,8 @@ use epgi_core::{
         ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, DryLayout, Element, Render, RenderAction,
-        RenderElement, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, Render,
+        RenderAction, RenderElement, Widget,
     },
 };
 
@@ -112,15 +112,23 @@ impl Render for RenderPhantomBox {
 
     type LayoutMemo = ();
 
-    fn perform_layout(&self, _constraints: &BoxConstraints) -> (BoxSize, Self::LayoutMemo) {
+    fn perform_layout(
+        &self,
+        _constraints: &BoxConstraints,
+        _children: &[ArcChildRenderObject<BoxProtocol>; 0],
+    ) -> (BoxSize, Self::LayoutMemo) {
         unreachable!()
     }
+
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<epgi_core::tree::DryLayoutFunctionTable<Self>> =
+        <Self as DryLayout>::DRY_LAYOUT_FUNCTION_TABLE;
 
     fn perform_paint(
         &self,
         _size: &BoxSize,
         _transform: &Affine2d,
         _memo: &Self::LayoutMemo,
+        _children: &[ArcChildRenderObject<BoxProtocol>; 0],
         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
     }
@@ -137,6 +145,7 @@ impl DryLayout for RenderPhantomBox {
         &'a self,
         _constraints: &'a BoxConstraints,
         _size: &'a BoxSize,
+        _children: &[ArcChildRenderObject<BoxProtocol>; 0],
     ) {
     }
 }

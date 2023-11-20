@@ -229,7 +229,7 @@ where
         mut op: impl FnMut(T, T1) -> R,
     ) -> [R; N] {
         // Optimization result: https://godbolt.org/z/sc7q5e3of
-        // Zero cost abstraction for our concerned scenarios (len=0,1,2) for both Drop types and Copy types. 
+        // Zero cost abstraction for our concerned scenarios (len=0,1,2) for both Drop types and Copy types.
         // In constrast, IntoIterator::into_iter causes asm code explosion.
         // SAFETY: https://github.com/rust-lang/rust/blob/28345f06d785213e6d37de5464c7070a4fc9ca67/library/core/src/array/iter.rs#L58
         unsafe {

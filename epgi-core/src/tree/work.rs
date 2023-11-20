@@ -23,7 +23,7 @@ pub struct WorkContext {
 
 impl WorkContext {
     pub(crate) fn job_ids(&self) -> &Inlinable64Vec<JobId> {
-        &self.batch.jobs
+        &self.batch.job_ids
     }
 }
 

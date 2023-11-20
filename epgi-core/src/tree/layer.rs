@@ -12,7 +12,7 @@ use std::{any::Any, ops::Mul};
 
 use crate::foundation::{Arc, Aweak, Canvas, Identity, Key, LayerProtocol, Protocol};
 
-use super::{AnyRenderObject, ChildRenderObject, Render};
+use super::{AnyRenderObject, Render};
 
 // pub type ArcChildLayer<C> = Arc<dyn ChildLayer<ParentCanvas = C>>;
 // pub type ArcParentLayer<C> = Arc<dyn ParentLayer<ChildCanvas = C>>;

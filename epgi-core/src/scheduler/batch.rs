@@ -13,7 +13,7 @@ pub struct BatchId(pub u64);
 #[derive(Clone)]
 pub struct BatchConf {
     pub id: BatchId,
-    pub jobs: Inlinable64Vec<JobId>,
+    pub job_ids: Inlinable64Vec<JobId>,
     pub(crate) priority: JobPriority,
     // earliest_job: JobId,
     pub roots: HashSet<PtrEq<AweakElementContextNode>>,

@@ -8,8 +8,8 @@ use crate::{
         InlinableDwsizeVec, Key, Never, PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObjectsUpdateCallback,
-        Element, ElementReconcileItem, Render, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, Render, Widget,
     },
 };
 
@@ -153,6 +153,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn perform_layout<'a, 'layout>(
         &'a self,
         constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+        children: &[ArcChildRenderObject<P>; 1],
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         unreachable!()
     }
@@ -162,6 +163,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
+        children: &[ArcChildRenderObject<P>; 1],
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         todo!()

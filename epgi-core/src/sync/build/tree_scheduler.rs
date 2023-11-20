@@ -1,6 +1,8 @@
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+
 use crate::{
-    foundation::{Asc, Inlinable64Vec},
-    scheduler::{BatchConf, BatchResult, JobId, LaneMask, LanePos},
+    foundation::{Asc, PtrEq},
+    scheduler::{BatchConf, BatchResult, LaneMask, LanePos},
     tree::ArcAnyElementNode,
 };
 
@@ -51,10 +53,10 @@ impl LaneScheduler {
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
     }
 
-    pub(crate) fn get_sync_job_id(&self) -> Option<&Inlinable64Vec<JobId>> {
+    pub(crate) fn sync_batch(&self) -> Option<&BatchConf> {
         self.sync_lane
             .as_ref()
-            .map(|sync_lane| &sync_lane.batch.jobs)
+            .map(|sync_lane| sync_lane.batch.as_ref())
     }
 
     pub(crate) fn apply_batcher_result(
@@ -85,9 +87,10 @@ impl LaneScheduler {
                 }
             }
         }
+
         if let Some(sync_batch) = new_sync_batch {
+            mark_batch(&sync_batch, LanePos::Sync);
             self.sync_lane = Some(LaneData::new(LanePos::Sync, sync_batch));
-            todo!()
         }
 
         if !new_async_batches.is_empty() {
@@ -105,9 +108,30 @@ impl LaneScheduler {
                     break;
                 };
                 let lane_pos = LanePos::Async(lane_index as u8);
+                mark_batch(&new_async_batch, lane_pos);
                 *async_lane = Some(LaneData::new(lane_pos, new_async_batch));
                 todo!()
             }
         }
+    }
+
+    pub(crate) fn remove_commited_batch(&mut self, lane_pos: LanePos) {
+        if lane_pos.is_sync() {
+            self.sync_lane = None;
+            return;
+        }
+        todo!()
+    }
+}
+
+fn mark_batch(batch_conf: &BatchConf, lane_pos: LanePos) {
+    if batch_conf.roots.len() <= 100 {
+        for PtrEq(node) in batch_conf.roots.iter() {
+            node.upgrade().map(|node| node.mark_root(lane_pos));
+        }
+    } else {
+        batch_conf.roots.par_iter().for_each(|PtrEq(node)| {
+            node.upgrade().map(|node| node.mark_root(lane_pos));
+        })
     }
 }

@@ -1,6 +1,6 @@
 use epgi_core::{
     foundation::{Canvas, Identity, Protocol},
-    tree::{ArcChildRenderObject, PaintResults},
+    tree::{ArcChildRenderObject, PaintResults, StructuredChildLayerOrFragment},
 };
 
 use crate::{
@@ -60,6 +60,9 @@ impl Canvas for Affine2dCanvas {
         for render_object in render_objects {
             render_object.paint(&<P::Transform as Identity>::IDENTITY, &mut paint_ctx);
         }
+        // Save the recordings on the tail
+        let new_child = StructuredChildLayerOrFragment::Fragment(paint_ctx.curr_fragment_encoding);
+        paint_results.structured_children.push(new_child);
         paint_results
     }
 

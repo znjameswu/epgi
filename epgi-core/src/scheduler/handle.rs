@@ -11,12 +11,12 @@ use hashbrown::HashSet;
 use crate::{
     foundation::{
         bounded_channel, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
-        SyncRwLock, Arc,
+        SyncRwLock,
     },
     sync::CommitBarrier,
     tree::{
-        AweakAnyElementNode, AweakAnyLayerRenderObject, AweakAnyRenderObject, AweakElementContextNode,
-        WorkContext, WorkHandle,
+        AweakAnyElementNode, AweakAnyLayerRenderObject, AweakAnyRenderObject,
+        AweakElementContextNode, WorkContext, WorkHandle,
     },
 };
 
@@ -152,8 +152,13 @@ impl SchedulerHandle {
     //         .insert(PtrEq(object));
     // }
 
-    pub(crate) fn push_layer_render_objects_needing_paint(&self, layer_render_object: AweakAnyLayerRenderObject) {
-        self.layer_needing_repaint.lock().insert(PtrEq(layer_render_object));
+    pub(crate) fn push_layer_render_objects_needing_paint(
+        &self,
+        layer_render_object: AweakAnyLayerRenderObject,
+    ) {
+        self.layer_needing_repaint
+            .lock()
+            .insert(PtrEq(layer_render_object));
     }
 
     // pub fn schedule_idle_callback

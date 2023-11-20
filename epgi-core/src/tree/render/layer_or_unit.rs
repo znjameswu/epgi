@@ -1,11 +1,13 @@
 use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
+    scheduler::get_current_scheduler,
     tree::{
-        ArcChildLayerRenderObject, AweakAnyLayerRenderObject, LayerMark, LayerRender, PaintCache, ArcAnyLayerRenderObject,
+        ArcAnyLayerRenderObject, ArcChildLayerRenderObject, AweakAnyLayerRenderObject, LayerMark,
+        LayerRender, PaintCache,
     },
 };
 
-use super::{Render, RenderObject};
+use super::{Render, RenderAction, RenderObject};
 
 pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
@@ -16,7 +18,15 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
 
     fn create_layer_mark() -> Self::LayerMark;
 
-    fn downcast_arc_any_layer_render_object(render_object: Arc<RenderObject<R>>) -> Option<ArcAnyLayerRenderObject>;
+    fn layer_mark_render_action(
+        render_object: &Arc<RenderObject<R>>,
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction;
+
+    fn downcast_arc_any_layer_render_object(
+        render_object: Arc<RenderObject<R>>,
+    ) -> Option<ArcAnyLayerRenderObject>;
 }
 
 impl<R> LayerOrUnit<R> for R
@@ -41,8 +51,27 @@ where
         LayerMark::new()
     }
 
-    fn downcast_arc_any_layer_render_object(render_object: Arc<RenderObject<R>>) -> Option<ArcAnyLayerRenderObject> {
+    fn downcast_arc_any_layer_render_object(
+        render_object: Arc<RenderObject<R>>,
+    ) -> Option<ArcAnyLayerRenderObject> {
         Some(render_object as _)
+    }
+
+    fn layer_mark_render_action(
+        render_object: &Arc<RenderObject<R>>,
+        mut child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction {
+        if child_render_action == RenderAction::Repaint {
+            get_current_scheduler()
+                .push_layer_render_objects_needing_paint(Arc::downgrade(render_object) as _);
+            child_render_action = RenderAction::Recomposite
+        }
+        if child_render_action == RenderAction::Recomposite {
+            render_object.layer_mark.set_needs_composite()
+        }
+        // if subtree_has_action == RenderAction::Recomposite
+        return child_render_action;
     }
 }
 
@@ -61,8 +90,18 @@ where
         ()
     }
 
-    fn downcast_arc_any_layer_render_object(render_object: Arc<RenderObject<R>>) -> Option<ArcAnyLayerRenderObject> {
+    fn downcast_arc_any_layer_render_object(
+        render_object: Arc<RenderObject<R>>,
+    ) -> Option<ArcAnyLayerRenderObject> {
         None
+    }
+
+    fn layer_mark_render_action(
+        render_object: &Arc<RenderObject<R>>,
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction {
+        child_render_action
     }
 }
 

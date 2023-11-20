@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    foundation::{Asc, InlinableDwsizeVec, InlinableUsizeVec, Container},
+    foundation::{Asc, Container, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
     tree::{AsyncInflating, Hook, HookContext},
 };

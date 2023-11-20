@@ -1,7 +1,7 @@
 use crate::foundation::{PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildWidget, ChildRenderObject, DryLayoutFunctionTable, LayerOrUnit, RenderAction, Widget, ArcChildRenderObject,
+    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, LayerOrUnit, RenderAction, Widget,
 };
 
 use super::{
@@ -36,8 +36,8 @@ pub trait ProxyWidget:
     #[allow(unused_variables)]
     fn perform_layout(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::Protocol>,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        child: &ArcChildRenderObject<Self::Protocol>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         let size = child.layout_use_size(constraints);
         (size, Default::default())
@@ -52,10 +52,10 @@ pub trait ProxyWidget:
     #[allow(unused_variables)]
     fn perform_paint(
         state: &Self::RenderState,
-        child: ArcChildRenderObject<Self::Protocol>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
+        child: &ArcChildRenderObject<Self::Protocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         paint_ctx.paint(child, transform)
@@ -97,26 +97,26 @@ where
     #[inline(always)]
     fn perform_layout(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::ChildProtocol>,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        T::perform_layout(state, child, constraints)
+        T::perform_layout(state, constraints, child)
     }
 
-    const PERFORM_DRY_LAYOUT: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> =
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> =
         T::PERFORM_DRY_LAYOUT;
 
     #[inline(always)]
     fn perform_paint(
         state: &Self::RenderState,
-        child: ArcChildRenderObject<Self::ChildProtocol>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
-        T::perform_paint(state, child, size, transform, memo, paint_ctx)
+        T::perform_paint(state, size, transform, memo, child, paint_ctx)
     }
 
-    type LayerRenderDelegate = T::LayerRenderDelegate;
+    type LayerOrUnit = T::LayerRenderDelegate;
 }

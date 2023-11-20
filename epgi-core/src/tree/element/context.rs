@@ -5,11 +5,10 @@ use hashbrown::HashMap;
 use crate::{
     foundation::{Arc, Asc, Aweak, InlinableUsizeVec, SyncMutex, TypeKey},
     scheduler::JobId,
-    sync::ElementMark,
     tree::Update,
 };
 
-use super::{AweakAnyElementNode, Element, ProviderObject};
+use super::{AweakAnyElementNode, Element, ElementMark, ProviderObject};
 
 pub type ArcElementContextNode = Arc<ElementContextNode>;
 pub type AweakElementContextNode = Aweak<ElementContextNode>;

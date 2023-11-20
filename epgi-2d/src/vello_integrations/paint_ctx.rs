@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Canvas, PaintContext, Container, Protocol},
+    foundation::{Canvas, PaintContext, Protocol},
     tree::{
         ArcChildRenderObject, ComposableChildLayer, PaintResults, StructuredChildLayerOrFragment,
     },
@@ -72,20 +72,20 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: ArcChildRenderObject<P>,
+        child: &ArcChildRenderObject<P>,
         transform: &P::Transform,
     ) {
-        child.paint(transform, self)
+        child.clone().paint(transform, self)
     }
 
-    fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
-        &'b mut self,
-        child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
-    ) {
-        child_transform_pairs
-            .into_iter()
-            .for_each(|(child, transform)| self.paint(child, transform))
-    }
+    // fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
+    //     &'b mut self,
+    //     child_transform_pairs: impl IntoIterator<Item = (&'b, ArcChildRenderObject<P>, &'b P::Transform)>,
+    // ) {
+    //     child_transform_pairs
+    //         .into_iter()
+    //         .for_each(|(child, transform)| self.paint(child, transform))
+    // }
 
     fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {
         if !self.curr_fragment_encoding.is_empty() {
@@ -107,16 +107,16 @@ impl PaintContext for VelloPaintScanner {
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
-        child: ArcChildRenderObject<P>,
+        child: &ArcChildRenderObject<P>,
         transform: &P::Transform,
     ) {
     }
 
-    fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
-        &'b mut self,
-        child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
-    ) {
-    }
+    // fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
+    //     &'b mut self,
+    //     child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
+    // ) {
+    // }
 
     fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {}
 }

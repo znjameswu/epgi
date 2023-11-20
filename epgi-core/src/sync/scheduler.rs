@@ -1,11 +1,10 @@
 use std::any::Any;
 
 use crate::{
-    foundation::{Asc, Arc},
-    scheduler::{BatchResult, JobBatcher, LanePos, SchedulerHandle},
+    foundation::{Arc, Asc},
+    scheduler::{BatchId, BatchResult, JobBatcher, LanePos, SchedulerHandle},
     tree::{
-        ArcAnyElementNode, ArcAnyLayerRenderObject, ArcAnyRenderObject, AweakAnyElementNode,
-        AweakElementContextNode,
+        ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakElementContextNode,
     },
 };
 
@@ -45,7 +44,11 @@ impl TreeScheduler {
             .apply_batcher_result(result, &self.root_element);
     }
 
-    pub(crate) fn commit_completed_async_batches(&mut self, job_batcher: &mut JobBatcher) {
+    pub(crate) fn commit_completed_async_batches(
+        &mut self,
+        job_batcher: &mut JobBatcher,
+    ) -> Vec<BatchId> {
+        todo!()
         // todo!()
         // for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
         //     let Some(async_lane) = async_lane else {
@@ -58,14 +61,18 @@ impl TreeScheduler {
         // }
     }
 
-    pub(crate) fn dispatch_sync_batch(&mut self) {
-        if let Some(sync_job_ids) = self.lane_scheduler.get_sync_job_id() {
-            rayon::scope(|scope| {
-                self.root_element
-                    .clone()
-                    .visit_and_work_sync_any(sync_job_ids, scope, self);
-            });
-        }
+    pub(crate) fn dispatch_sync_batch(&mut self) -> Option<BatchId> {
+        let Some(sync_batch) = self.lane_scheduler.sync_batch() else {
+            return None;
+        };
+        rayon::scope(|scope| {
+            self.root_element
+                .clone()
+                .visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
+        });
+        let batch_id = sync_batch.id;
+        self.lane_scheduler.remove_commited_batch(LanePos::Sync);
+        return Some(batch_id);
     }
 
     pub(crate) fn dispatch_async_batches(&self) {

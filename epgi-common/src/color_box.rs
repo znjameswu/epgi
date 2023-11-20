@@ -3,9 +3,9 @@ use epgi_2d::{
     Painter, Point2d, Rect,
 };
 use epgi_core::{
-    foundation::PaintContext,
+    foundation::{Asc, PaintContext},
     nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{ArcChildRenderObject, ArcChildWidget, Element, RenderAction, Widget},
+    tree::{ArcChildRenderObject, ArcChildWidget, RenderAction, Widget},
 };
 
 #[derive(Debug)]
@@ -21,8 +21,8 @@ impl Widget for ColorBox {
 
     type Element = SingleChildRenderObjectElement<Self>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
-        todo!()
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
+        self
     }
 }
 
@@ -57,10 +57,10 @@ impl ProxyWidget for ColorBox {
     #[inline(never)]
     fn perform_paint(
         state: &Self::RenderState,
-        child: ArcChildRenderObject<Self::Protocol>,
         size: &BoxSize,
         transform: &Affine2d,
         _memo: &Self::LayoutMemo,
+        child: &ArcChildRenderObject<Self::Protocol>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         let color = state;

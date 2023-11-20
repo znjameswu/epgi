@@ -24,7 +24,17 @@ struct ProviderObjectInner {
 
 impl ProviderObject {
     pub(crate) fn new<T: Provide>(value: Arc<T>) -> Self {
-        todo!()
+        Self {
+            value: SyncRwLock::new(value),
+            inner: SyncMutex::new(ProviderObjectInner {
+                consumers: Default::default(),
+                occupation: AsyncProviderOccupation::Reading {
+                    new_readers: Default::default(),
+                    backqueue_writer: None,
+                },
+            }),
+            type_key: TypeKey::of::<T>(),
+        }
     }
     pub(crate) fn get_value(&self) -> Arc<dyn Provide> {
         self.value.read().clone()

@@ -1,17 +1,11 @@
 use core::sync::atomic::{AtomicBool, Ordering::*};
-use std::sync::atomic::AtomicU16;
 
 use crate::{
-    foundation::PtrEq,
     scheduler::{AtomicLaneMask, LaneMask, LanePos},
-    tree::{ArcElementContextNode, Element, ElementContextNode, ElementNode},
+    tree::ElementContextNode,
 };
 
 pub(crate) struct ElementMark {
-    /// Sum of all the `self_lanes` in the subtree, including this node, plus `is_poll_ready` for sync lane.
-    pub(super) _subtree_lanes: AtomicLaneMask,
-    /// Lanes in the mailbox + lanes marked as secondary roots
-    pub(super) _self_lanes: AtomicLaneMask,
     /// Lanes that are present in the mailbox
     pub(super) mailbox_lanes: AtomicLaneMask,
 
@@ -25,8 +19,6 @@ pub(crate) struct ElementMark {
 impl ElementMark {
     pub(crate) fn new() -> Self {
         Self {
-            _subtree_lanes: AtomicLaneMask::new(LaneMask::new()),
-            _self_lanes: AtomicLaneMask::new(LaneMask::new()),
             mailbox_lanes: AtomicLaneMask::new(LaneMask::new()),
             consumer_root_lanes: AtomicLaneMask::new(LaneMask::new()),
             descendant_lanes: AtomicLaneMask::new(LaneMask::new()),
@@ -95,5 +87,20 @@ impl ElementContextNode {
             }
         }
         return true;
+    }
+
+    pub(crate) fn purge_lane(&self, lane_pos: LanePos) {
+        self.mark
+            .mailbox_lanes
+            .fetch_remove_single(lane_pos, Relaxed);
+        self.mark
+            .consumer_root_lanes
+            .fetch_remove_single(lane_pos, Relaxed);
+        self.mark
+            .descendant_lanes
+            .fetch_remove_single(lane_pos, Relaxed);
+        if lane_pos.is_sync() {
+            self.mark.needs_poll.store(false, Relaxed)
+        }
     }
 }

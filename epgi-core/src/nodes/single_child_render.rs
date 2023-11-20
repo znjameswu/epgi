@@ -6,7 +6,7 @@ use crate::foundation::{
 };
 
 use crate::tree::{
-    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
+    ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
     LayerOrUnit, Render, RenderAction, RenderElement, Widget,
 };
@@ -32,25 +32,51 @@ pub trait SingleChildRenderObjectWidget:
 
     fn perform_layout(
         state: &Self::RenderState,
-        child: &dyn ChildRenderObject<Self::ChildProtocol>,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
     /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
-    const PERFORM_DRY_LAYOUT: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> = None;
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> =
+        None;
 
     // We don't make perform paint into an associated constant because it has an generic paramter
     // Then we have to go to associated generic type, which makes the boilerplate explodes.
     fn perform_paint(
         state: &Self::RenderState,
-        child: ArcChildRenderObject<Self::ChildProtocol>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    type LayerRenderDelegate: LayerOrUnit<SingleChildRenderObject<Self>>;
+    type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
+}
+
+pub trait SingleChildDryLayout: SingleChildRenderObjectWidget {
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> =
+        Some(DryLayoutFunctionTable {
+            compute_dry_layout: |render, constraints| {
+                Self::compute_dry_layout(&render.state, constraints)
+            },
+            compute_layout_memo: |render, constraints, size, children| {
+                let [child] = children;
+                Self::compute_layout_memo(&render.state, constraints, size, child)
+            },
+        });
+
+    fn compute_dry_layout(
+        state: &Self::RenderState,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> <Self::ParentProtocol as Protocol>::Size;
+
+    fn compute_layout_memo(
+        state: &Self::RenderState,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
+    ) -> Self::LayoutMemo;
 }
 
 pub struct SingleChildRenderObjectElement<W: SingleChildRenderObjectWidget>(PhantomData<W>);
@@ -81,7 +107,7 @@ where
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: [ArcChildElementNode<Self::ChildProtocol>; 1],
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
@@ -107,8 +133,8 @@ where
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        _ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
         let child_widget = widget.child().clone();
         Ok((Self(PhantomData), [child_widget]))
@@ -169,9 +195,14 @@ where
     fn perform_layout(
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        todo!()
-        // W::perform_layout(&self.state, self.child.as_ref(), constraints)
+        let [child] = children;
+        if W::DRY_LAYOUT_FUNCTION_TABLE.is_some() {
+            unreachable!()
+        } else {
+            return W::perform_layout(&self.state, constraints, child);
+        }
     }
 
     #[inline(always)]
@@ -180,16 +211,15 @@ where
         size: &<Self::ParentProtocol as Protocol>::Size,
         transform: &<Self::ParentProtocol as Protocol>::Transform,
         memo: &Self::LayoutMemo,
+        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
-        // W::perform_paint(
-        //     &self.state,
-        //     self.child.as_ref(),
-        //     size,
-        //     transform,
-        //     memo,
-        //     paint_ctx,
-        // )
+        let [child] = children;
+        if <W::LayerOrUnit as LayerOrUnit<Self>>::LAYER_RENDER_FUNCTION_TABLE.is_some() {
+            unreachable!()
+        } else {
+            return W::perform_paint(&self.state, size, transform, memo, child, paint_ctx);
+        }
     }
 
     type LayerOrUnit = ();
