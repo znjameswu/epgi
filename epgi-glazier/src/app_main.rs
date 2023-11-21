@@ -8,7 +8,7 @@ use epgi_core::{
     hooks::{SetState, StateHook},
     nodes::Function,
     scheduler::{
-        get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, TreeScheduler,
+        get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, BuildScheduler,
     },
     tree::{create_root_element, ArcChildWidget, Hooks},
 };
@@ -423,9 +423,9 @@ impl MainState {
             setup_scheduler(scheduler_handle);
         }
 
-        let tree_scheduler = TreeScheduler::new(element_node, get_current_scheduler());
+        let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
 
-        let scheduler = Scheduler::new(tree_scheduler);
+        let scheduler = Scheduler::new(build_scheduler);
         let join_handle = std::thread::spawn(move || {
             scheduler.start_event_loop(get_current_scheduler());
         });

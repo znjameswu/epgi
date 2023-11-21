@@ -4,8 +4,23 @@ use crate::{
 };
 use core::sync::atomic::Ordering::*;
 
+
+pub trait AnyElementNodeUnmountExt {
+    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
+}
+
+impl<E> AnyElementNodeUnmountExt for ElementNode<E>
+where
+    E: Element,
+{
+    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>) {
+        ElementNode::unmount(&self, scope)
+    }
+}
+
+
 impl<E: Element> ElementNode<E> {
-    // We could require a TreeScheduler in parameter to ensure the global lock
+    // We could require a BuildScheduler in parameter to ensure the global lock
     // However, doing so on a virtual function incurs additional overhead.
     fn unmount(self: &Arc<Self>, scope: &rayon::Scope<'_>) {
         self.context.unmounted.store(true, Relaxed);
@@ -13,10 +28,10 @@ impl<E: Element> ElementNode<E> {
             // How do we ensure no one else will occupy/lane-mark this node after we unmount it?
             // 1. Ways of async batch to occupy this node
             //      1. Async reconciling down from the parent, which is occupied by the caller of this method
-            //      2. Spawned batch root and visit down from the TreeScheduler
+            //      2. Spawned batch root and visit down from the BuildScheduler
             //      3. Wake-up from suspend
             // 2. Ways to lane-mark this node
-            //      1. primary root lane mark from TreeScheduler.
+            //      1. primary root lane mark from BuildScheduler.
             //      2. secondary root lane mark from any async batch
             //      A staled call can still make scheduler enter this node later.
             let mut snapshot = self.snapshot.lock();
@@ -82,15 +97,3 @@ impl<E: Element> ElementNode<E> {
     }
 }
 
-pub trait AnyElementNodeUnmountExt {
-    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
-}
-
-impl<E> AnyElementNodeUnmountExt for ElementNode<E>
-where
-    E: Element,
-{
-    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>) {
-        ElementNode::unmount(&self, scope)
-    }
-}

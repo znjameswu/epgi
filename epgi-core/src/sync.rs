@@ -2,10 +2,10 @@ mod build;
 mod composite;
 mod layout;
 mod paint;
-mod scheduler;
+mod build_scheduler;
 
 pub use build::*;
 pub use composite::*;
 pub use layout::*;
 pub use paint::*;
-pub use scheduler::*;
+pub use build_scheduler::*;

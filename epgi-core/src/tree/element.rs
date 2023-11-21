@@ -39,6 +39,7 @@ pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
 ///
 /// However, we designate Suspense to be the only component to have different containers,
 /// which will be handled by Suspense's specialized function pointers.
+#[allow(type_alias_bounds)]
 pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
     dyn FnOnce(
         ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
@@ -76,6 +77,7 @@ pub enum RenderObjectSlots<P: Protocol> {
     Reuse(ArcChildRenderObject<P>),
 }
 
+#[allow(type_alias_bounds)]
 pub type ContainerOf<E: Element, T> = <E::ChildContainer as HktContainer>::Container<T>;
 
 pub trait Element: Send + Sync + Clone + 'static {

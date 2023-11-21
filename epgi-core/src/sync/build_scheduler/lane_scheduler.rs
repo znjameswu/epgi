@@ -28,14 +28,14 @@ impl LaneData {
     }
 }
 
-pub(in crate::sync) struct LaneScheduler {
+pub(super) struct LaneScheduler {
     sync_lane: Option<LaneData>,
     async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
     queued_batches: Vec<Asc<BatchConf>>,
 }
 
 impl LaneScheduler {
-    pub(crate) fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             sync_lane: None,
             async_lanes: [(); LaneMask::ASYNC_LANE_COUNT].map(|_| None),
@@ -43,7 +43,7 @@ impl LaneScheduler {
         }
     }
 
-    pub(crate) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
+    pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
         let LanePos::Async(pos) = lane_pos else {
             panic!("Only async lanes have commit barriers");
         };
@@ -53,13 +53,13 @@ impl LaneScheduler {
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
     }
 
-    pub(crate) fn sync_batch(&self) -> Option<&BatchConf> {
+    pub(super) fn sync_batch(&self) -> Option<&BatchConf> {
         self.sync_lane
             .as_ref()
             .map(|sync_lane| sync_lane.batch.as_ref())
     }
 
-    pub(crate) fn apply_batcher_result(
+    pub(super) fn apply_batcher_result(
         &mut self,
         result: BatchResult,
         root_element: &ArcAnyElementNode,

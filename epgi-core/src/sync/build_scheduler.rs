@@ -1,21 +1,24 @@
-use std::any::Any;
+mod commit_barrier;
+mod lane_scheduler;
+
+pub use commit_barrier::*;
+use lane_scheduler::*;
 
 use crate::{
-    foundation::{Arc, Asc},
+    foundation::Arc,
     scheduler::{BatchId, BatchResult, JobBatcher, LanePos, SchedulerHandle},
     tree::{
         ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakElementContextNode,
     },
 };
 
-use super::{CommitBarrier, LaneScheduler};
-pub struct TreeScheduler {
+pub struct BuildScheduler {
     lane_scheduler: LaneScheduler,
     pub(super) root_element: ArcAnyElementNode,
     pub(super) root_render_object: ArcAnyLayerRenderObject,
 }
 
-impl TreeScheduler {
+impl BuildScheduler {
     pub fn new(root_element: ArcAnyElementNode, scheduler_handle: &SchedulerHandle) -> Self {
         let root_render_object = root_element
             .render_object()
@@ -29,10 +32,6 @@ impl TreeScheduler {
             root_element,
             root_render_object,
         }
-    }
-
-    pub(crate) fn perform_composite(&self) -> Asc<dyn Any + Send + Sync> {
-        self.root_render_object.recomposite_into_cache()
     }
 
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {

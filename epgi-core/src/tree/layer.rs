@@ -143,7 +143,7 @@ pub enum ChildLayerOrFragmentRef<'a, C: Canvas> {
 }
 
 pub trait ChildLayerRenderObject<PC: Canvas>:
-    crate::sync::composite_private::ChildLayerCompositeExt<PC> + Send + Sync
+    crate::sync::ChildLayerRenderObjectCompositeExt<PC> + Send + Sync
 {
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject;
 }
@@ -186,8 +186,8 @@ pub trait AdoptedLayerRenderObject<PC: Canvas>: Send + Sync {
 
 pub trait AnyLayerRenderObject:
     AnyRenderObject
-    + crate::sync::paint_private::AnyLayerPaintExt
-    + crate::sync::composite_private::AnyLayerCompositeExt
+    + crate::sync::AnyLayerRenderObjectPaintExt
+    + crate::sync::AnyLayerRenderObjectCompositeExt
     + Send
     + Sync
 {

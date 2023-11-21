@@ -164,8 +164,8 @@ impl RenderAction {
 
 pub trait ChildRenderObject<PP: Protocol>:
     AnyRenderObject
-    + crate::sync::layout_private::ChildRenderObjectLayoutExt<PP>
-    + crate::sync::paint_private::ChildRenderObjectPaintExt<PP>
+    + crate::sync::ChildRenderObjectLayoutExt<PP>
+    + crate::sync::ChildRenderObjectPaintExt<PP>
     + Send
     + Sync
     + 'static
@@ -187,9 +187,7 @@ where
     }
 }
 
-pub trait AnyRenderObject:
-    crate::sync::layout_private::AnyRenderObjectLayoutExt + Send + Sync + 'static
-{
+pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync + 'static {
     fn element_context(&self) -> &ElementContextNode;
     fn detach(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;

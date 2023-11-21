@@ -4,7 +4,7 @@ use crate::{
     tree::{AweakAnyElementNode, AweakElementContextNode, WorkContext, WorkHandle},
 };
 
-pub use crate::sync::TreeScheduler;
+pub use crate::sync::BuildScheduler;
 
 use super::{FrameResults, JobBatcher, SchedulerHandle};
 
@@ -31,19 +31,19 @@ pub(super) enum SchedulerTask {
 }
 
 pub struct Scheduler {
-    tree_scheduler: Asc<SyncRwLock<TreeScheduler>>,
+    build_scheduler: Asc<SyncRwLock<BuildScheduler>>,
     job_batcher: JobBatcher,
 }
 
 impl Scheduler {
-    pub fn new(tree_scheduler: TreeScheduler) -> Self {
+    pub fn new(build_scheduler: BuildScheduler) -> Self {
         Self {
-            tree_scheduler: Asc::new(SyncRwLock::new(tree_scheduler)),
+            build_scheduler: Asc::new(SyncRwLock::new(build_scheduler)),
             job_batcher: JobBatcher::new(),
         }
     }
     pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
-        // handle.push_layer_render_objects_needing_paint(self.tree_scheduler.roo)
+        // handle.push_layer_render_objects_needing_paint(self.build_scheduler.roo)
         let tasks = &handle.task_rx;
         loop {
             let task = tasks.recv();
@@ -53,8 +53,8 @@ impl Scheduler {
                     frame_id,
                     requesters,
                 } => {
-                    let mut tree_scheduler = self.tree_scheduler.write();
-                    // let commited_async_batches = tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    let mut build_scheduler = self.build_scheduler.write();
+                    // let commited_async_batches = build_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
@@ -65,29 +65,28 @@ impl Scheduler {
                     };
                     self.job_batcher.update_with_new_jobs(new_jobs);
                     let updates = self.job_batcher.get_batch_updates();
-                    tree_scheduler.apply_batcher_result(updates);
-                    // tree_scheduler.dispatch_async_batches();
-                    let commited_sync_batch = tree_scheduler.dispatch_sync_batch();
+                    build_scheduler.apply_batcher_result(updates);
+                    // build_scheduler.dispatch_async_batches();
+                    let commited_sync_batch = build_scheduler.dispatch_sync_batch();
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
                     }
-                    // let commited_async_batches = tree_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    // let commited_async_batches = build_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
-                    // TODO: Skip layout if empty
-                    tree_scheduler.perform_layout();
+                    build_scheduler.perform_layout();
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.
                     // TODO: Parking_lot owned downgradable guard
-                    drop(tree_scheduler);
-                    let read_guard = self.tree_scheduler.read();
-                    let tree_scheduler = self.tree_scheduler.clone();
+                    drop(build_scheduler);
+                    let read_guard = self.build_scheduler.read();
+                    let build_scheduler = self.build_scheduler.clone();
                     let layer_needing_repaint =
                         { std::mem::take(&mut *handle.layer_needing_repaint.lock()) };
                     let paint_started_event = event_listener::Event::new();
                     let paint_started = paint_started_event.listen();
                     handle.sync_threadpool.spawn(move || {
-                        let scheduler = tree_scheduler.read();
+                        let scheduler = build_scheduler.read();
                         paint_started_event.notify(usize::MAX);
                         scheduler.perform_paint(layer_needing_repaint);
                         let result = scheduler.perform_composite();
@@ -104,17 +103,17 @@ impl Scheduler {
                 }
                 PointerEvent {} => {}
                 ReorderAsyncWork { node } => {
-                    let tree_scheduler = self.tree_scheduler.clone();
+                    let build_scheduler = self.build_scheduler.clone();
                     handle.sync_threadpool.spawn(move || {
-                        let tree_scheduler = tree_scheduler.read();
-                        tree_scheduler.reorder_async_work(node);
+                        let build_scheduler = build_scheduler.read();
+                        build_scheduler.reorder_async_work(node);
                     })
                 }
                 ReorderProviderReservation { context } => {
-                    let tree_scheduler = self.tree_scheduler.clone();
+                    let build_scheduler = self.build_scheduler.clone();
                     handle.sync_threadpool.spawn(move || {
-                        let tree_scheduler = tree_scheduler.read();
-                        tree_scheduler.reorder_provider_reservation(context);
+                        let build_scheduler = build_scheduler.read();
+                        build_scheduler.reorder_provider_reservation(context);
                     })
                 }
                 AsyncYieldSubtree {

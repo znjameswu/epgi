@@ -9,7 +9,7 @@ use crate::{
     foundation::{Arc, Container},
     r#async::AsyncRebuild,
     scheduler::{get_current_scheduler, LanePos},
-    sync::TreeScheduler,
+    sync::BuildScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, ContainerOf, Element, ElementNode, ElementSnapshot,
@@ -40,7 +40,7 @@ where
     // pub(super) fn cancel_async_work(
     //     self: &Arc<Self>,
     //     lane_pos: LanePos,
-    //     tree_scheduler: &TreeScheduler,
+    //     build_scheduler: &BuildScheduler,
     // ) {
     //     let remove_result = {
     //         let mut snapshot = self.snapshot.lock();
@@ -49,7 +49,7 @@ where
     //             .inner
     //             .mainline_mut()
     //             .expect("Cancel can only be called on mainline nodes");
-    //         Self::prepare_cancel_async_work(mainline, lane_pos, tree_scheduler)
+    //         Self::prepare_cancel_async_work(mainline, lane_pos, build_scheduler)
     //     };
 
     //     match remove_result {
@@ -65,7 +65,7 @@ where
     pub(in super::super) fn prepare_cancel_async_work(
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> Result<
         CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
@@ -87,7 +87,7 @@ where
                 handle.abort();
                 async_queue.push_backqueue(
                     work,
-                    tree_scheduler
+                    build_scheduler
                         .get_commit_barrier_for(lane_pos)
                         .expect("CommitBarrier should exist"),
                 );

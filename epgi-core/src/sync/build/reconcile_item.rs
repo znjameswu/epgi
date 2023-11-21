@@ -1,6 +1,6 @@
 use crate::{
     foundation::{Arc, Inlinable64Vec, Protocol},
-    scheduler::{JobId, TreeScheduler},
+    scheduler::{JobId, BuildScheduler},
     sync::SubtreeRenderObjectChange,
     tree::{
         ArcChildElementNode, ArcElementContextNode, Element, ElementNode, ElementWidgetPair, Widget,
@@ -12,14 +12,14 @@ pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
         self,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
 
     fn rebuild_sync_box(
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
 }
 
@@ -31,14 +31,14 @@ where
         self,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let subtree_results =
             self.element
-                .rebuild_node_sync(Some(self.widget), job_ids, scope, tree_scheduler);
+                .rebuild_node_sync(Some(self.widget), job_ids, scope, build_scheduler);
         (self.element, subtree_results)
     }
 
@@ -46,12 +46,12 @@ where
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        self.rebuild_sync(job_ids, scope, tree_scheduler)
+        self.rebuild_sync(job_ids, scope, build_scheduler)
     }
 }
 
@@ -59,7 +59,7 @@ pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
     fn inflate_sync(
         self: Arc<Self>,
         parent_context: ArcElementContextNode,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
 }
 
@@ -70,7 +70,7 @@ where
     fn inflate_sync(
         self: Arc<Self>,
         parent_context: ArcElementContextNode,
-        tree_scheduler: &TreeScheduler,
+        build_scheduler: &BuildScheduler,
     ) -> (
         ArcChildElementNode<<<T as Widget>::Element as Element>::ParentProtocol>,
         SubtreeRenderObjectChange<<<T as Widget>::Element as Element>::ParentProtocol>,
@@ -78,7 +78,7 @@ where
         let (node, results) = ElementNode::<<T as Widget>::Element>::inflate_node_sync(
             &self.into_arc_widget(),
             parent_context,
-            tree_scheduler,
+            build_scheduler,
         );
         (node as _, results)
     }
