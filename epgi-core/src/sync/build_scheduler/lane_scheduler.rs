@@ -126,12 +126,20 @@ impl LaneScheduler {
 
 fn mark_batch(batch_conf: &BatchConf, lane_pos: LanePos) {
     if batch_conf.roots.len() <= 100 {
-        for PtrEq(node) in batch_conf.roots.iter() {
-            node.upgrade().map(|node| node.mark_root(lane_pos));
-        }
+        batch_conf.roots.iter().for_each(|PtrEq(node)| {
+            let Some(node) = node.upgrade() else { return };
+            if node.is_unmounted() {
+                return;
+            }
+            node.mark_root(lane_pos);
+        });
     } else {
         batch_conf.roots.par_iter().for_each(|PtrEq(node)| {
-            node.upgrade().map(|node| node.mark_root(lane_pos));
+            let Some(node) = node.upgrade() else { return };
+            if node.is_unmounted() {
+                return;
+            }
+            node.mark_root(lane_pos);
         })
     }
 }
