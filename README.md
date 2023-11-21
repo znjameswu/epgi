@@ -27,6 +27,15 @@ Besides, the capabilities from the Rust language and its ecosystem enables us to
 - [ ] Complete set of hooks
 - [ ] Widgets library for actually useful UI building
 
+# Organization of Repo
+- `epgi-core`: Core functionalities to spin up EPGI's scheduler and pipeline. Does not assume canvas type, backend, or embeddings.
+- `epgi-2d`: Basic definitions and utilies for 2D affine canvas rendering. Default to use `vello` as backend.
+- `epgi-glazier`: Integrations to run EPGI on `glazier`.
+- `epgi-common`: Basic widget library to enabling building a minimal 2D UI.
+- [ ] `epgi-material`: Material design widget library for EPGI.
+- [ ] `epgi-3d`: Basic definitions and utilies for 3D rendering. Default to use `bevy` as backedn.
+- [ ] `epgi`: Re-export for common library users' convenience.
+
 # License
 Licensed under either of
 - Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
