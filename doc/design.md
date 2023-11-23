@@ -784,3 +784,13 @@ Decision: Do not merge.
 Layout and composition have to maintain level-ordering, therefore we need a marking system to guide the visit.
 
 Painting is embarrassingly parallel. Therefore we collect dirty nodes to fully parallelize painting. However, the collected results requires a filtering of detached render objects before being dispatched. Therefore, we need to track the detached state for render objects, which should be very cheap.
+
+
+# PaintCommand by ref or by value (short-lived or long-lived)?
+Long-lived PaintCommand can potentially be cached.
+
+Short-lived PaintCommand allows the render object to hold on with layout results without cloning. One such example is the text layout calculation: parley::Layout (which is used by ParagraphLayout) can be expensive to clone or to construct, and holding onto it can help reduce relayout cost.
+
+PaintCommand has already be populated by short-lived transforms (Semi-absolute transforms are inherently short lived). There is no point to cache.
+
+Decision: short-lived

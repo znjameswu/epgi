@@ -791,6 +791,7 @@ dependencies = [
  "epgi-2d",
  "epgi-core",
  "lazy_static",
+ "smallvec",
 ]
 
 [[package]]

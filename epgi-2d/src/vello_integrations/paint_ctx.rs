@@ -8,7 +8,7 @@ use peniko::{BrushRef, Stroke};
 
 use crate::{
     Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
-    BlendMode, Fill, IntoKurbo, Painter,
+    BlendMode, Fill, IntoKurbo, Painter, ParagraphLayout,
 };
 
 /// This is the serial version of paint context
@@ -66,7 +66,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             DrawParagraph {
                 paragraph,
                 transform,
-            } => todo!(),
+            } => render_text(&mut self.curr_fragment_encoding, transform, &paragraph),
         }
     }
 
@@ -103,7 +103,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
 impl PaintContext for VelloPaintScanner {
     type Canvas = Affine2dCanvas;
 
-    fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand) {}
+    fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand<'_>) {}
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
@@ -220,6 +220,41 @@ impl<'a> VelloPaintContext<'a> {
             EllipticalArc(x) => encoding.encode_shape(&x.into_kurbo(), is_fill),
             QuadBez(x) => encoding.encode_shape(&x.into_kurbo(), is_fill),
             CubicBez(x) => encoding.encode_shape(&x.into_kurbo(), is_fill),
+        }
+    }
+}
+
+pub fn render_text(encoding: &mut Affine2dEncoding, transform: Affine2d, layout: &ParagraphLayout) {
+    let mut gcx = vello::glyph::GlyphContext::new();
+    for line in layout.0.lines() {
+        for glyph_run in line.glyph_runs() {
+            let mut x = glyph_run.offset();
+            let y = glyph_run.baseline();
+            let run = glyph_run.run();
+            let font = run.font();
+            let font_size = run.font_size();
+            let font_ref = font.as_ref();
+            if let Ok(font_ref) =
+                vello::glyph::fello::raw::FontRef::from_index(font_ref.data, font.index())
+            {
+                let style = glyph_run.style();
+                let vars: [(&str, f32); 0] = [];
+                let mut gp = gcx.new_provider(&font_ref, None, font_size, false, vars);
+                for glyph in glyph_run.glyphs() {
+                    if let Some(fragment) = gp.get(glyph.id, Some(&style.brush.0)) {
+                        let gx = x + glyph.x;
+                        let gy = y - glyph.y;
+                        let xform = peniko::kurbo::Affine::translate((gx as f64, gy as f64))
+                            * peniko::kurbo::Affine::scale_non_uniform(1.0, -1.0);
+                        let xform = Affine2d::from_kurbo(&xform);
+                        encoding.append(
+                            unsafe { std::mem::transmute(&fragment) },
+                            &Some(transform * xform),
+                        );
+                    }
+                    x += glyph.advance;
+                }
+            }
         }
     }
 }

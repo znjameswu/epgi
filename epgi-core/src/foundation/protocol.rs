@@ -3,11 +3,12 @@ use std::{fmt::Debug, ops::Mul};
 use crate::tree::{ArcChildRenderObject, ComposableChildLayer, PaintResults};
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
-    type Constraints: Constraints<Self::Size>;
-    type Size: Debug + Clone + Send + Sync + 'static;
-    type Offset: Debug + Clone + Send + Sync + 'static;
+    type Constraints: PartialEq + Clone + Debug + Send + Sync;
+    type Size: Clone + Debug + Send + Sync + 'static;
+    type Offset: Clone + Debug + Send + Sync + 'static;
+    // We cannot use reference to return intrinsic results, because we would still need to cache the result before returning.
     type Intrinsics: Intrinsics;
-    type Transform: Identity + Debug + Clone + Send + Sync + 'static;
+    type Transform: Clone + Debug + Send + Sync + 'static;
     type Canvas: Canvas;
     fn transform_canvas(
         transform: &Self::Transform,
@@ -18,12 +19,6 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     //     transform: Self::CanvasTransformation,
     //     point_on_canvas: BoxOffset,
     // ) -> bool;
-}
-
-pub trait Constraints<Size>: Debug + PartialEq + Clone + Send + Sync + 'static {
-    fn is_tight(&self) -> bool;
-    // fn tighten(&self) -> Option<Size>;
-    fn constrains(&self, size: Size) -> Size;
 }
 
 pub trait Intrinsics: Debug + Send + Sync {
@@ -72,7 +67,7 @@ where
 
 pub trait Canvas: Sized + 'static {
     type Transform: Mul<Self::Transform> + Identity + Debug + Clone + Send + Sync + 'static;
-    type PaintCommand: Send + Sync;
+    type PaintCommand<'a>: Send + Sync;
 
     type PaintContext<'a>: PaintContext<Canvas = Self>;
     type PaintScanner<'a>: PaintContext<Canvas = Self>;
@@ -86,7 +81,7 @@ pub trait Canvas: Sized + 'static {
     //     paint: impl FnOnce(&mut Self::PaintContext<'_>),
     // );
 
-    fn paint_render_objects<P: Protocol<Canvas = Self>>(
+    fn paint_render_objects<P: LayerProtocol<Canvas = Self>>(
         render_objects: impl IntoIterator<Item = ArcChildRenderObject<P>>,
     ) -> PaintResults<Self>;
 
@@ -110,7 +105,7 @@ pub trait Canvas: Sized + 'static {
 pub trait PaintContext {
     type Canvas: Canvas;
 
-    fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand);
+    fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand<'_>);
 
     // /// Get access to the parent layer to create a new [Layer].
     // ///

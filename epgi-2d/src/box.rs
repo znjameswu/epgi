@@ -1,4 +1,4 @@
-use epgi_core::foundation::{Constraints, Intrinsics, Protocol};
+use epgi_core::foundation::{Intrinsics, Protocol};
 
 use crate::{Affine2d, Affine2dCanvas};
 
@@ -11,19 +11,6 @@ pub struct BoxConstraints {
     pub max_width: f32,
     pub min_height: f32,
     pub max_height: f32,
-}
-
-impl Constraints<BoxSize> for BoxConstraints {
-    fn is_tight(&self) -> bool {
-        self.min_width == self.max_width && self.min_height == self.max_height
-    }
-
-    fn constrains(&self, size: BoxSize) -> BoxSize {
-        BoxSize {
-            width: size.width.clamp(self.min_width, self.max_width),
-            height: size.height.clamp(self.min_height, self.max_height),
-        }
-    }
 }
 
 impl BoxConstraints {
@@ -64,6 +51,13 @@ impl BoxConstraints {
             })
         } else {
             None
+        }
+    }
+
+    fn constrains(&self, size: BoxSize) -> BoxSize {
+        BoxSize {
+            width: size.width.clamp(self.min_width, self.max_width),
+            height: size.height.clamp(self.min_height, self.max_height),
         }
     }
 }

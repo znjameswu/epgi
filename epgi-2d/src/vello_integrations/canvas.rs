@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Canvas, Identity, Protocol},
+    foundation::{Canvas, Identity, LayerProtocol, Protocol},
     tree::{ArcChildRenderObject, PaintResults, StructuredChildLayerOrFragment},
 };
 
@@ -16,7 +16,7 @@ pub struct Affine2dCanvas;
 impl Canvas for Affine2dCanvas {
     type Transform = Affine2d;
 
-    type PaintCommand = Affine2dPaintCommand;
+    type PaintCommand<'a> = Affine2dPaintCommand<'a>;
 
     type PaintContext<'a> = VelloPaintContext<'a>;
 
@@ -45,7 +45,7 @@ impl Canvas for Affine2dCanvas {
         this.reset(true)
     }
 
-    fn paint_render_objects<P: Protocol<Canvas = Self>>(
+    fn paint_render_objects<P: LayerProtocol<Canvas = Self>>(
         render_objects: impl IntoIterator<Item = ArcChildRenderObject<P>>,
     ) -> PaintResults<Self> {
         let mut paint_results = PaintResults {
@@ -58,7 +58,10 @@ impl Canvas for Affine2dCanvas {
             results: &mut paint_results,
         };
         for render_object in render_objects {
-            render_object.paint(&<P::Transform as Identity>::IDENTITY, &mut paint_ctx);
+            render_object.paint(
+                &<<P::Canvas as Canvas>::Transform as Identity>::IDENTITY,
+                &mut paint_ctx,
+            );
         }
         // Save the recordings on the tail
         let new_child = StructuredChildLayerOrFragment::Fragment(paint_ctx.curr_fragment_encoding);

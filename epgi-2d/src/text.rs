@@ -8,7 +8,7 @@ pub struct Paragraph {
     font_ctx: FontContext,
 }
 
-pub struct ParagraphLayout(parley::Layout<ParleyBrush>);
+pub struct ParagraphLayout(pub(crate)parley::Layout<ParleyBrush>);
 
 // For some reason, parley uses a RefCell in its FontContext
 // We have no other choice but to go for a mutex

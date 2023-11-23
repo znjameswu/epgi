@@ -1,11 +1,16 @@
 [package]
+edition = "2021"
 name = "epgi-common"
 version = "0.1.0"
-edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-epgi-core = { workspace = true }
-epgi-2d = { workspace = true }
+epgi-2d = {workspace = true}
+epgi-core = {workspace = true}
 lazy_static = "1.4"
+smallvec = {version = "1.10", features = [
+  "union",
+  "const_generics",
+  "const_new",
+]}

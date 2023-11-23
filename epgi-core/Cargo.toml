@@ -13,6 +13,7 @@ vello = []
 
 async-channel = "1.9"
 crossbeam = "0.8"
+derivative = "2.2.0"
 either = "1.9"
 event-listener = "2.5"
 futures = "0.3.27"
@@ -20,13 +21,11 @@ hashbrown = { version = "0.14", features = ["rayon"] }
 linear-map = "1.2.0"
 portable-atomic = "1.0"
 rayon = { workspace = true }
-smallvec = { version = "1.10", features = [
-    "union",
-    "const_generics",
-    "const_new",
-] }
-derivative = "2.2.0"
 replace_with = "0.1"
-
+smallvec = { version = "1.10", features = [
+  "union",
+  "const_generics",
+  "const_new",
+] }
 
 vello_encoding = { workspace = true }

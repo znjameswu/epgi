@@ -1,4 +1,4 @@
-use epgi_core::foundation::{Canvas, PaintContext};
+use epgi_core::foundation::{Asc, Canvas, PaintContext};
 
 pub use peniko::{
     BlendMode, Brush, Cap, Color, ColorStops, Dashes, Extend, Fill, Format, Gradient, GradientKind,
@@ -10,7 +10,7 @@ use crate::{
     ParagraphLayout, Point2d, QuadBez, RRect, Rect, RingSector,
 };
 
-pub enum Affine2dPaintCommand {
+pub enum Affine2dPaintCommand<'a> {
     DrawShape {
         shape: Affine2dCanvasShape,
         transform: Affine2d,
@@ -24,7 +24,7 @@ pub enum Affine2dPaintCommand {
     },
     PopClip,
     DrawParagraph {
-        paragraph: ParagraphLayout,
+        paragraph: &'a ParagraphLayout,
         transform: Affine2d,
     },
 }
@@ -210,13 +210,13 @@ pub trait Affine2dPaintContextExt {
 
     fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect, dst_transform: Affine2d);
 
-    fn draw_paragraph(&mut self, paragraph: ParagraphLayout, transform: Affine2d);
+    fn draw_paragraph(&mut self, paragraph: &ParagraphLayout, transform: Affine2d);
 }
 
 impl<T: ?Sized> Affine2dPaintContextExt for T
 where
     T: PaintContext,
-    T::Canvas: Canvas<Transform = Affine2d, PaintCommand = Affine2dPaintCommand>,
+    for<'a> T::Canvas: Canvas<Transform = Affine2d, PaintCommand<'a> = Affine2dPaintCommand<'a>>,
 {
     #[inline(always)]
     fn clip_rect(
@@ -563,7 +563,7 @@ where
     }
 
     #[inline(always)]
-    fn draw_paragraph(&mut self, paragraph: ParagraphLayout, transform: Affine2d) {
+    fn draw_paragraph(&mut self, paragraph: &ParagraphLayout, transform: Affine2d) {
         self.add_command(Affine2dPaintCommand::DrawParagraph {
             paragraph,
             transform,
