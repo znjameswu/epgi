@@ -5,6 +5,7 @@ members = [
     "epgi-2d",
     "epgi-glazier",
     "examples/*",
+    "optargs"
 ]
 resolver = "2"
 
@@ -30,6 +31,10 @@ path = "./epgi-common"
 [workspace.dependencies.epgi-glazier]
 package = "epgi-glazier"
 path = "./epgi-glazier"
+
+[workspace.dependencies.optargs]
+package = "optargs"
+path = "./optargs"
 
 
 [workspace.dependencies]

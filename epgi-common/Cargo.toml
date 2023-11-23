@@ -14,3 +14,5 @@ smallvec = {version = "1.10", features = [
   "const_generics",
   "const_new",
 ]}
+
+optargs = {workspace = true}

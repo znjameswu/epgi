@@ -6,7 +6,7 @@ use epgi_core::{
     tree::{ArcChildRenderObject, ArcChildWidget, Element, RenderAction, Widget},
 };
 
-#[derive(Debug)]
+#[derive(Debug, optargs::OptStructArc)]
 pub struct ConstrainedBox {
     pub constraints: BoxConstraints,
     pub child: ArcChildWidget<BoxProtocol>,

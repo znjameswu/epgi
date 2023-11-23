@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxOffset};
 use epgi_core::foundation::{Canvas, Intrinsics, Protocol};
 
@@ -129,5 +131,22 @@ impl Intrinsics for MultiLineIntrinsics {
 
 #[derive(Clone, Debug)]
 pub struct MultiLineTransform {
-    affine: Affine2d,
+    pub affine: Affine2d,
 }
+
+#[macro_export]
+macro_rules! MultiLineTransform {
+    () => {
+        
+    };
+}
+
+MultiLineTransform!();
+// pub struct Text {
+//     str: Cow<'static, str>,
+//     text_style: 
+// }
+
+// pub struct SingleLineText {
+
+// }
