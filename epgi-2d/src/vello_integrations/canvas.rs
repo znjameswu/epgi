@@ -24,6 +24,8 @@ impl Canvas for Affine2dCanvas {
 
     type Encoding = Affine2dEncoding;
 
+    type HitTestCoordinate = Point2d;
+
     fn composite_encoding(
         dst: &mut Self::Encoding,
         src: &Self::Encoding,

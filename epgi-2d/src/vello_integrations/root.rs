@@ -7,8 +7,8 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        Element, ElementReconcileItem, LayerCompositionConfig, LayerRender, Render, RenderAction,
-        RenderElement, RenderObjectSlots, Widget,
+        Element, ElementReconcileItem, HitTestResults, LayerCompositionConfig, LayerRender, Render,
+        RenderAction, RenderElement, RenderObjectSlots, Widget,
     },
 };
 
@@ -162,6 +162,16 @@ impl Render for RenderRoot {
         _paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         unreachable!()
+    }
+
+    fn hit_test(
+        &self,
+        results: &mut HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        children: &Option<ArcChildRenderObject<Self::ChildProtocol>>,
+    ) {
+        let Some(child) = children else { return };
+        child.hit_test(results, coord)
     }
 
     type LayerOrUnit = RenderRoot;

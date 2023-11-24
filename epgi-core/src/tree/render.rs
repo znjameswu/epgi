@@ -6,7 +6,7 @@ pub use layer_or_unit::*;
 pub use mark::*;
 pub use node::*;
 
-use crate::foundation::{Arc, Aweak, HktContainer, PaintContext, Protocol};
+use crate::foundation::{Arc, Aweak, Canvas, HktContainer, PaintContext, Protocol};
 
 use super::{ArcAnyLayerRenderObject, ArcElementContextNode, ElementContextNode};
 
@@ -14,6 +14,8 @@ pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
+
+pub struct HitTestResults {}
 
 pub trait Render: Sized + Send + Sync + 'static {
     // type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
@@ -61,6 +63,15 @@ pub trait Render: Sized + Send + Sync + 'static {
             ArcChildRenderObject<Self::ChildProtocol>,
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
+    );
+
+    fn hit_test(
+        &self,
+        results: &mut HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        children: &<Self::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
     );
 
     type LayerOrUnit: LayerOrUnit<Self>;
@@ -166,6 +177,7 @@ pub trait ChildRenderObject<PP: Protocol>:
     AnyRenderObject
     + crate::sync::ChildRenderObjectLayoutExt<PP>
     + crate::sync::ChildRenderObjectPaintExt<PP>
+    + crate::sync::ChildRenderObjectHitTestExt<PP>
     + Send
     + Sync
     + 'static

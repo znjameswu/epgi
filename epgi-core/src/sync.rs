@@ -1,11 +1,13 @@
 mod build;
+mod build_scheduler;
 mod composite;
+mod hit_test;
 mod layout;
 mod paint;
-mod build_scheduler;
 
 pub use build::*;
+pub use build_scheduler::*;
 pub use composite::*;
+pub use hit_test::*;
 pub use layout::*;
 pub use paint::*;
-pub use build_scheduler::*;

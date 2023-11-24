@@ -4,7 +4,7 @@ use either::Either;
 
 use crate::{
     foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, EitherContainer, EitherParallel,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, EitherContainer, EitherParallel,
         InlinableDwsizeVec, Key, Never, PaintContext, Protocol, Provide,
     },
     tree::{
@@ -167,6 +167,16 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         todo!()
+    }
+
+    fn hit_test(
+        &self,
+        results: &mut crate::tree::HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
+    ) {
+        let [child] = children;
+        child.hit_test(results, coord)
     }
 
     type LayerOrUnit = ();

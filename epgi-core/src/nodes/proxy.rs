@@ -1,13 +1,15 @@
-use crate::foundation::{PaintContext, Protocol};
+use crate::foundation::{Canvas, PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, LayerOrUnit, RenderAction, Widget,
+    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestResults, LayerOrUnit,
+    RenderAction, Widget,
 };
 
 use super::{
     SingleChildRenderObject, SingleChildRenderObjectElement, SingleChildRenderObjectWidget,
 };
 
+/// Apart from having a single child and a RenderObject, the proxy widget does not alter the protocol.
 pub trait ProxyWidget:
     Widget<
         Element = SingleChildRenderObjectElement<Self>,
@@ -59,6 +61,15 @@ pub trait ProxyWidget:
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         paint_ctx.paint(child, transform)
+    }
+
+    fn hit_test(
+        render_state: &Self::RenderState,
+        results: &mut HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
+    ) {
+        child.hit_test(results, coord)
     }
 
     type LayerRenderDelegate: LayerOrUnit<SingleChildRenderObject<Self>>;
@@ -116,6 +127,15 @@ where
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         T::perform_paint(state, size, transform, memo, child, paint_ctx)
+    }
+
+    fn hit_test(
+        render_state: &Self::RenderState,
+        results: &mut HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
+    ) {
+        T::hit_test(render_state, results, coord, child)
     }
 
     type LayerOrUnit = T::LayerRenderDelegate;

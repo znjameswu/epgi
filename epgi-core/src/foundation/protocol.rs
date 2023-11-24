@@ -75,6 +75,8 @@ pub trait Canvas: Sized + 'static {
     /// The Picture class in Flutter
     type Encoding: Send + Sync + 'static;
 
+    type HitTestCoordinate: Clone + Send + Sync;
+
     // fn paint_layer(
     //     layer: ArcParentLayer<Self>,
     //     scan: impl FnOnce(&mut Self::PaintScanner<'_>),

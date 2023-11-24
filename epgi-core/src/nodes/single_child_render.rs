@@ -1,14 +1,14 @@
 use std::marker::PhantomData;
 
 use crate::foundation::{
-    Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext,
+    Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext,
     Protocol, Provide,
 };
 
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    LayerOrUnit, Render, RenderAction, RenderElement, Widget,
+    HitTestResults, LayerOrUnit, Render, RenderAction, RenderElement, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -49,6 +49,13 @@ pub trait SingleChildRenderObjectWidget:
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
+    );
+
+    fn hit_test(
+        render_state: &Self::RenderState,
+        results: &mut HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
     );
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
@@ -220,6 +227,18 @@ where
         } else {
             return W::perform_paint(&self.state, size, transform, memo, child, paint_ctx);
         }
+    }
+
+    fn hit_test(
+        &self,
+        results: &mut HitTestResults,
+        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        children: &<Self::ChildContainer as crate::foundation::HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
+    ) {
+        let [child] = children;
+        W::hit_test(&self.state, results, coord, child);
     }
 
     type LayerOrUnit = ();

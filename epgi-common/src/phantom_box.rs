@@ -3,11 +3,12 @@ use std::sync::Arc;
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize};
 use epgi_core::{
     foundation::{
-        ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
+        ArrayContainer, BuildSuspendedError, Canvas, HktContainer, InlinableDwsizeVec, Never,
+        PaintContext, Protocol, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element, Render,
-        RenderAction, RenderElement, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element,
+        HitTestResults, Render, RenderAction, RenderElement, Widget,
     },
 };
 
@@ -130,6 +131,14 @@ impl Render for RenderPhantomBox {
         _memo: &Self::LayoutMemo,
         _children: &[ArcChildRenderObject<BoxProtocol>; 0],
         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+    ) {
+    }
+
+    fn hit_test(
+        &self,
+        _results: &mut HitTestResults,
+        _coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        _children: &[ArcChildRenderObject<Self::ChildProtocol>; 0],
     ) {
     }
 
