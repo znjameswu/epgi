@@ -114,7 +114,7 @@ impl Render for RenderPhantomBox {
     type LayoutMemo = ();
 
     fn perform_layout(
-        &self,
+        &mut self,
         _constraints: &BoxConstraints,
         _children: &[ArcChildRenderObject<BoxProtocol>; 0],
     ) -> (BoxSize, Self::LayoutMemo) {

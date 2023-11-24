@@ -42,7 +42,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     type LayoutMemo: Send + Sync + 'static;
 
     fn perform_layout(
-        &self,
+        &mut self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
         children: &<Self::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<Self::ChildProtocol>,

@@ -143,7 +143,7 @@ impl Render for RenderRoot {
     type LayoutMemo = ();
 
     fn perform_layout<'a, 'layout>(
-        &'a self,
+        &'a mut self,
         _constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
         _children: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {

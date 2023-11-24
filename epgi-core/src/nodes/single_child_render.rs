@@ -200,7 +200,7 @@ where
 
     #[inline(always)]
     fn perform_layout(
-        &self,
+        &mut self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
         children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {

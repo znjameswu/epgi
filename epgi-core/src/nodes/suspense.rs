@@ -151,7 +151,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     type LayoutMemo = ();
 
     fn perform_layout<'a, 'layout>(
-        &'a self,
+        &'a mut self,
         constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
         children: &[ArcChildRenderObject<P>; 1],
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
