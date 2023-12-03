@@ -347,7 +347,7 @@ pub fn create_root_element<E, R>(
     constraints: <E::ParentProtocol as Protocol>::Constraints,
     size: <E::ParentProtocol as Protocol>::Size,
     layout_memo: R::LayoutMemo,
-) -> Arc<ElementNode<E>>
+) -> (Arc<ElementNode<E>>, Arc<RenderObject<R>>)
 where
     E: RenderElement<Render = R>,
     R: Render<
@@ -359,6 +359,8 @@ where
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
 {
+    let mut render_object_built = None;
+    let render_object_built_mut = &mut render_object_built;
     let element_node = Arc::new_cyclic(move |node| {
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
         // let render = R::try_create_render_object_from_element(&element, &widget)
@@ -368,6 +370,7 @@ where
             render_children,
             element_context.clone(),
         ));
+        *render_object_built_mut = Some(render_object.clone());
         {
             render_object
                 .inner
@@ -399,5 +402,8 @@ where
             }),
         }
     });
-    element_node
+    (
+        element_node,
+        render_object_built.expect("Impossible to fail"),
+    )
 }

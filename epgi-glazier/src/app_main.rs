@@ -8,9 +8,9 @@ use epgi_core::{
     hooks::{SetState, StateHook},
     nodes::Function,
     scheduler::{
-        get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle, BuildScheduler,
+        get_current_scheduler, setup_scheduler, BuildScheduler, Scheduler, SchedulerHandle,
     },
-    tree::{create_root_element, ArcChildWidget, Hooks},
+    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObject},
 };
 use glazier::{
     kurbo::{Affine, Size},
@@ -61,7 +61,7 @@ impl AppLauncher {
         menubar.add_dropdown(file_menu, "&File", true);
 
         let mut main_state = MainState::new();
-        main_state.spin_up_scheduler(self.app);
+        main_state.start_scheduler_with(self.app);
 
         let window = WindowBuilder::new(glazier_app.clone())
             .handler(Box::new(main_state))
@@ -244,7 +244,7 @@ impl MainState {
 
         self.update_size(size_dp);
         self.update_frame(self.counter);
-        let frame_results = scheduler.request_new_frame().recv_blocking().unwrap();
+        let frame_results = scheduler.request_new_frame().recv().unwrap();
         let encoding = frame_results
             .composited
             .as_ref()
@@ -331,41 +331,9 @@ impl FrameInfo {
 }
 
 impl MainState {
-    fn spin_up_scheduler(&mut self, app: ArcChildWidget<BoxProtocol>) {
-        // First we inflate a simple root widget by hand, with no children attached.
-        // This is to allow the injection of a child widget later on.
-        let root_widget = Arc::new(RootView {
-            build: Box::new(move |mut ctx| {
-                let (child, _) = ctx.use_state::<Option<ArcChildWidget<BoxProtocol>>>(None);
-                child
-            }),
-        });
-        let element = RootElement {};
-        let element_node = create_root_element::<RootElement, RenderRoot>(
-            root_widget,
-            element,
-            None,
-            RenderRoot { child: None },
-            None,
-            Hooks {
-                array_hooks: [Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> {
-                    val: None,
-                }) as _]
-                .into(),
-            },
-            BoxConstraints::default(),
-            BoxSize {
-                width: f32::INFINITY,
-                height: f32::INFINITY,
-            },
-            (),
-        );
-
-        // Construct the widget injection binding by hand for later use.
-        let widget_binding = SetState::<Option<ArcChildWidget<BoxProtocol>>>::new(
-            Arc::downgrade(&element_node.context),
-            0,
-        );
+    fn start_scheduler_with(&mut self, app: ArcChildWidget<BoxProtocol>) {
+        // First we construct an empty root with no children. Later we will inject our application widget inside
+        let (element_node, render_object, widget_binding) = initialize_root();
 
         // Now we wrap the application in wrapper widgets that provides bindigns to basic functionalities,
         // such as window size and frame information.
@@ -381,60 +349,130 @@ impl MainState {
 
         let child = app;
 
-        // Bind the frame info, which provides time.
-        let frame_binding = Arc::new(SyncMutex::<Option<SetState<FrameInfo>>>::new(None));
+        let (child, frame_binding) = bind_frame_info(child);
+        self.frame_binding = frame_binding;
 
-        let child = Arc::new(Function(move |mut ctx| {
-            let frame_binding = frame_binding.clone();
-            let child = child.clone();
-            let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
-            ctx.use_effect(move || *frame_binding.lock() = Some(set_frame));
-            BoxProvider::value_inner(
-                frame.frame_count,
-                BoxProvider::value_inner(
-                    frame.system_time,
-                    BoxProvider::value_inner(frame.instant, child),
-                ),
-            )
-        }));
+        let (child, constraints_binding) = bind_constraints(child);
+        self.constraints_binding = constraints_binding;
 
-        // Bind the window size.
-        let constraints_binding =
-            Arc::new(SyncMutex::<Option<SetState<BoxConstraints>>>::new(None));
-
-        let child = Arc::new(Function(move |mut ctx| {
-            let constraints_binding = constraints_binding.clone();
-            let child = child.clone();
-            let (constraints, set_constraints) = ctx.use_state_with_default::<BoxConstraints>();
-            ctx.use_effect(move || *constraints_binding.lock() = Some(set_constraints));
-            Arc::new(ConstrainedBox { constraints, child })
-        }));
-
-        let sync_threadpool = rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
-            .build()
-            .unwrap();
-        let async_threadpool = rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
-            .build()
-            .unwrap();
-        let scheduler_handle = SchedulerHandle::new(sync_threadpool, async_threadpool);
-        unsafe {
-            setup_scheduler(scheduler_handle);
-        }
-
-        let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
-
-        let scheduler = Scheduler::new(build_scheduler);
-        let join_handle = std::thread::spawn(move || {
-            scheduler.start_event_loop(get_current_scheduler());
-        });
+        initialize_scheduler_handle();
 
         // Now we call the scheduler to inject the wrapped widget
         get_current_scheduler().create_sync_job(|job_builder| {
             widget_binding.set(Some(child), job_builder);
         });
 
+        let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
+
+        let scheduler = Scheduler::new(build_scheduler, vec![]);
+        let join_handle = std::thread::spawn(move || {
+            scheduler.start_event_loop(get_current_scheduler());
+        });
+
         self.scheduler_join_handle = Some(join_handle);
     }
+}
+
+fn initialize_root() -> (
+    Arc<ElementNode<RootElement>>,
+    Arc<RenderObject<RenderRoot>>,
+    SetState<Option<Arc<dyn ChildWidget<BoxProtocol>>>>,
+) {
+    // First we inflate a simple root widget by hand, with no children attached.
+    // This is to allow the injection of a child widget later on.
+    let root_widget = Arc::new(RootView {
+        build: Box::new(move |mut ctx| {
+            let (child, _) = ctx.use_state::<Option<ArcChildWidget<BoxProtocol>>>(None);
+            child
+        }),
+    });
+    let element = RootElement {};
+    let (element_node, render_object) = create_root_element::<RootElement, RenderRoot>(
+        root_widget,
+        element,
+        None,
+        RenderRoot { child: None },
+        None,
+        Hooks {
+            array_hooks: [
+                Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> { val: None }) as _,
+            ]
+            .into(),
+        },
+        BoxConstraints::default(),
+        BoxSize {
+            width: f32::INFINITY,
+            height: f32::INFINITY,
+        },
+        (),
+    );
+
+    // Construct the widget injection binding by hand for later use.
+    let widget_binding = SetState::<Option<ArcChildWidget<BoxProtocol>>>::new(
+        Arc::downgrade(&element_node.context),
+        0,
+    );
+
+    (element_node, render_object, widget_binding)
+}
+
+fn initialize_scheduler_handle() {
+    let sync_threadpool = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .unwrap();
+    let async_threadpool = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .unwrap();
+    let scheduler_handle = SchedulerHandle::new(sync_threadpool, async_threadpool);
+    unsafe {
+        setup_scheduler(scheduler_handle);
+    }
+}
+
+fn bind_frame_info(
+    child: ArcChildWidget<BoxProtocol>,
+) -> (
+    ArcChildWidget<BoxProtocol>,
+    Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
+) {
+    // Bind the frame info, which provides time.
+    let frame_binding = Arc::new(SyncMutex::<Option<SetState<FrameInfo>>>::new(None));
+    let result = frame_binding.clone();
+
+    let child = Arc::new(Function(move |mut ctx| {
+        let frame_binding = frame_binding.clone();
+        let child = child.clone();
+        let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
+        ctx.use_effect(move || *frame_binding.lock() = Some(set_frame));
+        BoxProvider::value_inner(
+            frame.frame_count,
+            BoxProvider::value_inner(
+                frame.system_time,
+                BoxProvider::value_inner(frame.instant, child),
+            ),
+        )
+    }));
+    (child, result)
+}
+
+fn bind_constraints(
+    child: ArcChildWidget<BoxProtocol>,
+) -> (
+    ArcChildWidget<BoxProtocol>,
+    Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
+) {
+    // Bind the window size.
+    let constraints_binding = Arc::new(SyncMutex::<Option<SetState<BoxConstraints>>>::new(None));
+    let result = constraints_binding.clone();
+
+    let child = Arc::new(Function(move |mut ctx| {
+        let constraints_binding = constraints_binding.clone();
+        let child = child.clone();
+        let (constraints, set_constraints) = ctx.use_state_with_default::<BoxConstraints>();
+        ctx.use_effect(move || *constraints_binding.lock() = Some(set_constraints));
+        Arc::new(ConstrainedBox { constraints, child })
+    }));
+    (child, result)
 }

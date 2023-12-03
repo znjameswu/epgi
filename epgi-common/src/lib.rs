@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 mod color_box;
 mod constrained_box;
+pub mod gesture;
 mod phantom_box;
 mod text;
 

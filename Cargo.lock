@@ -345,7 +345,7 @@ version = "0.66.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2b84e06fc203107bfbad243f4aba2af864eb7db3b1cf46ea0a023b0b433d2a7"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "cexpr",
  "clang-sys",
  "lazy_static",
@@ -385,9 +385,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.3"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
+checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
 name = "block"
@@ -705,7 +705,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16e44ab292b1dddfdaf7be62cfd8877df52f2f3fde5858d95bab606be259f20"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "libloading 0.8.0",
  "winapi",
 ]
@@ -788,8 +788,10 @@ dependencies = [
 name = "epgi-common"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.4.1",
  "epgi-2d",
  "epgi-core",
+ "glazier",
  "lazy_static",
  "optargs",
  "smallvec",
@@ -1123,7 +1125,7 @@ dependencies = [
  "anyhow",
  "ashpd",
  "bindgen",
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "block",
  "cfg-if",
  "cocoa",
@@ -1197,7 +1199,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbcd2dba93594b227a1f57ee09b8b9da8892c34d55aa332e034a228d0fe6a171"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "gpu-alloc-types",
 ]
 
@@ -1207,7 +1209,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98ff03b468aa837d70984d55f5d3f846f6ec31fe34bbb97c4f85219caeee1ca4"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
 ]
 
 [[package]]
@@ -1374,7 +1376,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b750dcadc39a09dbadd74e118f6dd6598df77fa01df0cfcdc52c28dece74528a"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
 ]
 
 [[package]]
@@ -1538,7 +1540,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "623b5e6cefd76e58f774bd3cc0c6f5c7615c58c03a97815245a25c3c9bdee318"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "block",
  "core-graphics-types",
  "foreign-types 0.5.0",
@@ -1569,7 +1571,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1ceaaa4eedaece7e4ec08c55c640ba03dbb73fb812a6570a59bcf1930d0f70e"
 dependencies = [
  "bit-set",
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "codespan-reporting",
  "hexf-parse",
  "indexmap 1.9.3",
@@ -2053,7 +2055,7 @@ version = "0.38.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a962918ea88d644592894bc6dc55acc6c0956488adcebbfb6e273506b7fd6e5"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "errno",
  "libc",
  "linux-raw-sys 0.4.3",
@@ -2665,7 +2667,7 @@ checksum = "0f8a44dd301a30ceeed3c27d8c0090433d3da04d7b2a4042738095a424d12ae7"
 dependencies = [
  "arrayvec",
  "bit-vec",
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "codespan-reporting",
  "log",
  "naga",
@@ -2690,7 +2692,7 @@ dependencies = [
  "arrayvec",
  "ash",
  "bit-set",
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "block",
  "core-graphics-types",
  "d3d12",
@@ -2727,7 +2729,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee64d7398d0c2f9ca48922c902ef69c42d000c759f3db41e355f4a570b052b67"
 dependencies = [
- "bitflags 2.3.3",
+ "bitflags 2.4.1",
  "js-sys",
  "web-sys",
 ]

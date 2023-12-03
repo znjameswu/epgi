@@ -10,7 +10,7 @@ use hashbrown::HashSet;
 
 use crate::{
     foundation::{
-        bounded_channel, Asc, AsyncMpscReceiver, AsyncMpscSender, MpscQueue, PtrEq, SyncMutex,
+        bounded_channel_sync, Asc, MpscQueue, PtrEq, SyncMpscReceiver, SyncMpscSender, SyncMutex,
         SyncRwLock,
     },
     sync::CommitBarrier,
@@ -106,8 +106,8 @@ impl SchedulerHandle {
         }
     }
 
-    pub fn request_new_frame(&self) -> AsyncMpscReceiver<FrameResults> {
-        let (tx, rx) = bounded_channel(1);
+    pub fn request_new_frame(&self) -> SyncMpscReceiver<FrameResults> {
+        let (tx, rx) = bounded_channel_sync(1);
         {
             self.task_rx.request_frame.lock().requesters.push(tx);
         }
@@ -176,7 +176,7 @@ pub(super) struct SchedulerTaskReceiver {
 
 struct RequestFrame {
     next_frame_id: u64,
-    requesters: Vec<AsyncMpscSender<FrameResults>>,
+    requesters: Vec<SyncMpscSender<FrameResults>>,
 }
 
 pub struct FrameResults {

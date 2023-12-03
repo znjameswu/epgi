@@ -1,7 +1,9 @@
+mod hit_test;
 mod layer_or_unit;
 mod mark;
 mod node;
 
+pub use hit_test::*;
 pub use layer_or_unit::*;
 pub use mark::*;
 pub use node::*;
@@ -14,8 +16,6 @@ pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
-
-pub struct HitTestResults {}
 
 pub trait Render: Sized + Send + Sync + 'static {
     // type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;

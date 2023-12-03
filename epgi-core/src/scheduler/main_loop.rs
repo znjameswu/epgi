@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Asc, AsyncMpscSender, SyncRwLock},
+    foundation::{Arc, Asc, SyncMpscSender, SyncRwLock},
     sync::CommitBarrier,
     tree::{AweakAnyElementNode, AweakElementContextNode, WorkContext, WorkHandle},
 };
@@ -12,7 +12,7 @@ use super::{FrameResults, JobBatcher, SchedulerHandle};
 pub(super) enum SchedulerTask {
     NewFrame {
         frame_id: u64,
-        requesters: Vec<AsyncMpscSender<FrameResults>>,
+        requesters: Vec<SyncMpscSender<FrameResults>>,
     },
     ReorderAsyncWork {
         node: AweakAnyElementNode,
@@ -33,13 +33,18 @@ pub(super) enum SchedulerTask {
 pub struct Scheduler {
     build_scheduler: Asc<SyncRwLock<BuildScheduler>>,
     job_batcher: JobBatcher,
+    persistent_callbacks: Arc<[Box<dyn Fn() + Send + Sync>]>,
 }
 
 impl Scheduler {
-    pub fn new(build_scheduler: BuildScheduler) -> Self {
+    pub fn new(
+        build_scheduler: BuildScheduler,
+        persistent_callbacks: Vec<Box<dyn Fn() + Send + Sync>>,
+    ) -> Self {
         Self {
             build_scheduler: Asc::new(SyncRwLock::new(build_scheduler)),
             job_batcher: JobBatcher::new(),
+            persistent_callbacks: persistent_callbacks.into(),
         }
     }
     pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
@@ -49,6 +54,7 @@ impl Scheduler {
             let task = tasks.recv();
             use SchedulerTask::*;
             match task {
+                // TODO: backpressure to prevent new frame event overrun
                 NewFrame {
                     frame_id,
                     requesters,
@@ -81,6 +87,7 @@ impl Scheduler {
                     drop(build_scheduler);
                     let read_guard = self.build_scheduler.read();
                     let build_scheduler = self.build_scheduler.clone();
+                    let persistent_callbacks = self.persistent_callbacks.clone();
                     let layer_needing_repaint =
                         { std::mem::take(&mut *handle.layer_needing_repaint.lock()) };
                     let paint_started_event = event_listener::Event::new();
@@ -90,13 +97,14 @@ impl Scheduler {
                         paint_started_event.notify(usize::MAX);
                         scheduler.perform_paint(layer_needing_repaint);
                         let result = scheduler.perform_composite();
-                        // TODO: Composition
                         for requester in requesters {
                             let _ = requester.try_send(FrameResults {
                                 composited: result.clone(),
                                 id: frame_id,
                             }); // TODO: log failure
                         }
+                        persistent_callbacks.iter().for_each(|callback| callback());
+                        drop(scheduler)
                     });
                     paint_started.wait();
                     drop(read_guard);
