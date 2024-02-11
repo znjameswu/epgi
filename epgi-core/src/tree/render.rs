@@ -1,16 +1,22 @@
-mod hit_test;
 mod layer_or_unit;
-mod mark;
-mod node;
-
-pub use hit_test::*;
 pub use layer_or_unit::*;
+
+mod mark;
 pub use mark::*;
+
+mod node;
 pub use node::*;
 
-use crate::foundation::{Arc, Aweak, Canvas, HktContainer, PaintContext, Protocol};
+use std::any::TypeId;
 
-use super::{ArcAnyLayerRenderObject, ArcElementContextNode, ElementContextNode};
+use crate::foundation::{
+    AnyPointer, AnyRawPointer, Arc, Aweak, Canvas, HktContainer, PaintContext, Protocol,
+};
+
+use super::{
+    ArcAnyLayeredRenderObject, ArcElementContextNode, ElementContextNode, HitTestConfig,
+    TransformedHitTestEntry,
+};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
@@ -65,16 +71,31 @@ pub trait Render: Sized + Send + Sync + 'static {
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    fn hit_test(
+    fn compute_hit_test(
         &self,
-        results: &mut HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        //results: &mut dyn ParentHitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        memo: &Self::LayoutMemo,
+        //composition: &Self::CachedComposition,
         children: &<Self::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<Self::ChildProtocol>,
         >,
-    );
+    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol>;
 
     type LayerOrUnit: LayerOrUnit<Self>;
+
+    fn all_interfaces() -> &'static [(TypeId, fn(ArcAnyRenderObject) -> AnyPointer)] {
+        &[]
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(
+        TypeId,
+        fn(*const TransformedHitTestEntry<Self>) -> AnyRawPointer,
+    )] {
+        &[]
+    }
 }
 
 /// Dry layout means that under all circumstances, this render object's size is solely determined
@@ -202,7 +223,9 @@ where
 pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync + 'static {
     fn element_context(&self) -> &ElementContextNode;
     fn detach(&self);
-    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
+    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayeredRenderObject>;
+
+    fn all_interfaces(&self) -> &'static [(TypeId, fn(ArcAnyRenderObject) -> AnyPointer)];
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -217,8 +240,30 @@ where
         todo!()
     }
 
-    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
+    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayeredRenderObject> {
         <R::LayerOrUnit as LayerOrUnit<R>>::downcast_arc_any_layer_render_object(self)
+    }
+
+    fn all_interfaces(&self) -> &'static [(TypeId, fn(ArcAnyRenderObject) -> AnyPointer)] {
+        R::all_interfaces()
+    }
+}
+
+pub trait ArcAnyRenderObjectExt {
+    fn query_interface<I: 'static>(self) -> Option<I>;
+}
+
+impl ArcAnyRenderObjectExt for ArcAnyRenderObject {
+    fn query_interface<I: 'static>(self) -> Option<I> {
+        self.all_interfaces()
+            .iter()
+            .find(|(type_id, _)| TypeId::of::<I>() == *type_id)
+            .map(|(_, op)| {
+                op(self).downcast::<I>().expect(
+                    "The interface conversion function should convert the payload \
+                    into the interface claimed by the type id",
+                )
+            })
     }
 }
 

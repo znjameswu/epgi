@@ -10,7 +10,7 @@ pub use node::*;
 
 use std::{any::Any, ops::Mul};
 
-use crate::foundation::{Arc, Aweak, Canvas, Identity, Key, LayerProtocol, Protocol};
+use crate::foundation::{Arc, Aweak, Canvas, Key, LayerProtocol, Protocol};
 
 use super::{AnyRenderObject, Render};
 
@@ -20,10 +20,12 @@ use super::{AnyRenderObject, Render};
 // pub type ArcAnyLayer = Arc<dyn AnyLayer>;
 
 pub type ArcChildLayerRenderObject<C> = Arc<dyn ChildLayerRenderObject<C>>;
+pub type AweakLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
+pub type ArcLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 // pub type ArcParentLayerNode<C> = Arc<dyn ParentLayerNode<C>>;
 pub type ArcAdoptedLayerRenderObject<C> = Arc<dyn AdoptedLayerRenderObject<C>>;
-pub type ArcAnyLayerRenderObject = Arc<dyn AnyLayerRenderObject>;
-pub type AweakAnyLayerRenderObject = Aweak<dyn AnyLayerRenderObject>;
+pub type ArcAnyLayeredRenderObject = Arc<dyn AnyLayerRenderObject>;
+pub type AweakAnyLayeredRenderObject = Aweak<dyn AnyLayerRenderObject>;
 
 pub trait LayerRender: Render<LayerOrUnit = Self> + Send + Sync + Sized + 'static
 where
@@ -40,6 +42,11 @@ where
         self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
         child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
     ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
+
+    fn transform_hit_test(
+        &self,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+    ) -> <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::HitPosition;
 
     fn key(&self) -> Option<&Arc<dyn Key>>;
 
@@ -145,7 +152,7 @@ pub enum ChildLayerOrFragmentRef<'a, C: Canvas> {
 pub trait ChildLayerRenderObject<PC: Canvas>:
     crate::sync::ChildLayerRenderObjectCompositeExt<PC> + Send + Sync
 {
-    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject;
+    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayeredRenderObject;
 }
 
 // pub trait ParentLayerNode<CC: Canvas>: Send + Sync {}
@@ -184,6 +191,8 @@ pub trait AdoptedLayerRenderObject<PC: Canvas>: Send + Sync {
 //     }
 // }
 
+pub trait LayerRenderObject<PC: Canvas, CC: Canvas>: Send + Sync {}
+
 pub trait AnyLayerRenderObject:
     AnyRenderObject
     + crate::sync::AnyLayerRenderObjectPaintExt
@@ -204,7 +213,7 @@ trait ArcAnyLayerRenderObjectExt {
     //     -> Result<ArcParentLayerNode<C>, ArcAnyLayerNode>;
 }
 
-impl ArcAnyLayerRenderObjectExt for ArcAnyLayerRenderObject {
+impl ArcAnyLayerRenderObjectExt for ArcAnyLayeredRenderObject {
     fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcAdoptedLayerRenderObject<C>> {
         self.as_any_arc_adopted_layer()
             .downcast::<Arc<dyn AdoptedLayerRenderObject<C>>>()
@@ -231,7 +240,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            transform: Identity::IDENTITY,
+            transform: C::identity_transform(),
         }
     }
 

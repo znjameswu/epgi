@@ -12,6 +12,7 @@ mod try_result;
 mod type_key;
 mod utils;
 mod vec_push_last;
+mod query_interface;
 
 pub use as_any::*;
 pub use constants::*;
@@ -27,3 +28,4 @@ pub use try_result::*;
 pub use type_key::*;
 pub use utils::*;
 pub use vec_push_last::*;
+pub use query_interface::*;

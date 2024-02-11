@@ -2,8 +2,8 @@ use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
     scheduler::get_current_scheduler,
     tree::{
-        ArcAnyLayerRenderObject, ArcChildLayerRenderObject, AweakAnyLayerRenderObject, LayerMark,
-        LayerRender, PaintCache,
+        ArcAnyLayeredRenderObject, ArcChildLayerRenderObject, AweakAnyLayeredRenderObject,
+        LayerMark, LayerRender, PaintCache,
     },
 };
 
@@ -26,7 +26,15 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
 
     fn downcast_arc_any_layer_render_object(
         render_object: Arc<RenderObject<R>>,
-    ) -> Option<ArcAnyLayerRenderObject>;
+    ) -> Option<ArcAnyLayeredRenderObject>;
+
+    // fn cast_hit_position_ref(
+    //     hit_position: &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+    // ) -> &<<R::ChildProtocol as Protocol>::Canvas as Canvas>::HitPosition;
+
+    // fn cast_hit_test_node(
+    //     hit_test_node: HitNode<<R::ChildProtocol as Protocol>::Canvas>,
+    // ) -> HitNode<<R::ParentProtocol as Protocol>::Canvas>;
 }
 
 impl<R> LayerOrUnit<R> for R
@@ -53,7 +61,7 @@ where
 
     fn downcast_arc_any_layer_render_object(
         render_object: Arc<RenderObject<R>>,
-    ) -> Option<ArcAnyLayerRenderObject> {
+    ) -> Option<ArcAnyLayeredRenderObject> {
         Some(render_object as _)
     }
 
@@ -78,6 +86,7 @@ where
 impl<R> LayerOrUnit<R> for ()
 where
     R: Render<LayerOrUnit = Self>,
+    // R::ChildProtocol: Protocol<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
 {
     type LayerMark = ();
 
@@ -92,7 +101,7 @@ where
 
     fn downcast_arc_any_layer_render_object(
         render_object: Arc<RenderObject<R>>,
-    ) -> Option<ArcAnyLayerRenderObject> {
+    ) -> Option<ArcAnyLayeredRenderObject> {
         None
     }
 
@@ -107,7 +116,7 @@ where
 
 pub enum LayerRenderFunctionTable<R: Render> {
     LayerRender {
-        as_aweak_any_layer_render_object: fn(&Arc<RenderObject<R>>) -> AweakAnyLayerRenderObject,
+        as_aweak_any_layer_render_object: fn(&Arc<RenderObject<R>>) -> AweakAnyLayeredRenderObject,
         into_arc_child_layer_render_object:
             fn(
                 Arc<RenderObject<R>>,

@@ -17,3 +17,6 @@ Code-style hazard
 
 Architectural hazard
 1. An expensive work item could potentially block every other tasks in the rayon scheduelr. https://github.com/rayon-rs/rayon/issues/1054
+
+Workflow hazard
+1. RenderElement::SUSPENSE_FUNCTION_TABLE will break rustdoc. Hence its doc was hidden. Reason unknown. Repulsive enough.

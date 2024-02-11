@@ -794,3 +794,7 @@ Short-lived PaintCommand allows the render object to hold on with layout results
 PaintCommand has already be populated by short-lived transforms (Semi-absolute transforms are inherently short lived). There is no point to cache.
 
 Decision: short-lived
+
+
+# Should paint really be a pure function without effects?
+Difficulties has been encountered during hit-test due to the lack of cached protocol transform received inside painting.

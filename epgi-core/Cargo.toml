@@ -22,10 +22,10 @@ linear-map = "1.2.0"
 portable-atomic = "1.0"
 rayon = { workspace = true }
 replace_with = "0.1"
-smallvec = { version = "1.10", features = [
+smallvec = { version = "1.13", features = [
   "union",
   "const_generics",
   "const_new",
 ] }
-
-vello_encoding = { workspace = true }
+lazy_static = "1.4"
+# vello_encoding = { workspace = true }

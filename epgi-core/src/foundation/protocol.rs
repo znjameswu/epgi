@@ -66,7 +66,13 @@ where
 }
 
 pub trait Canvas: Sized + 'static {
-    type Transform: Mul<Self::Transform> + Identity + Debug + Clone + Send + Sync + 'static;
+    type Transform: Mul<Self::Transform, Output = Self::Transform>
+        + Transform<Self, Self>
+        + Debug
+        + Clone
+        + Send
+        + Sync
+        + 'static;
     type PaintCommand<'a>: Send + Sync;
 
     type PaintContext<'a>: PaintContext<Canvas = Self>;
@@ -75,7 +81,7 @@ pub trait Canvas: Sized + 'static {
     /// The Picture class in Flutter
     type Encoding: Send + Sync + 'static;
 
-    type HitTestCoordinate: Clone + Send + Sync;
+    type HitPosition: Clone + Send + Sync;
 
     // fn paint_layer(
     //     layer: ArcParentLayer<Self>,
@@ -102,6 +108,15 @@ pub trait Canvas: Sized + 'static {
     fn clear(this: &mut Self::Encoding);
 
     fn new_encoding() -> Self::Encoding;
+
+    fn transform_hit_position(
+        transform: &Self::Transform,
+        hit_position: &Self::HitPosition,
+    ) -> Self::HitPosition;
+
+    fn identity_transform() -> Self::Transform;
+
+    fn mul_transform_ref(a: &Self::Transform, b: &Self::Transform) -> Self::Transform;
 }
 
 pub trait PaintContext {
@@ -133,14 +148,6 @@ pub trait PaintContext {
     fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>);
 }
 
-pub trait Identity {
-    const IDENTITY: Self;
-}
-
-impl Identity for vello_encoding::Transform {
-    const IDENTITY: Self = Self::IDENTITY;
-}
-
 pub trait Encoding<T>: Send + Sync + 'static {
     fn composite(&mut self, src: &Self, transform: Option<&T>);
 
@@ -155,4 +162,8 @@ pub trait LayerProtocol:
 impl<P> LayerProtocol for P where
     P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>
 {
+}
+
+pub trait Transform<PC: Canvas, CC: Canvas> {
+    fn transform(&self, input: &PC::HitPosition) -> CC::HitPosition;
 }

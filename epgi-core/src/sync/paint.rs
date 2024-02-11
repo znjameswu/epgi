@@ -4,7 +4,7 @@ use crate::{
     foundation::{Arc, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        layer_render_function_table_of, AweakAnyLayerRenderObject, ComposableChildLayer,
+        layer_render_function_table_of, AweakAnyLayeredRenderObject, ComposableChildLayer,
         LayerCompositionConfig, LayerRender, LayerRenderFunctionTable, NotDetachedToken,
         PaintCache, Render, RenderObject,
     },
@@ -13,7 +13,7 @@ use crate::{
 impl BuildScheduler {
     pub(crate) fn perform_paint(
         &self,
-        layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,
+        layer_render_objects: HashSet<PtrEq<AweakAnyLayeredRenderObject>>,
     ) {
         rayon::scope(|scope| {
             for PtrEq(layer_render_object) in layer_render_objects {

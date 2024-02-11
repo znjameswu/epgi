@@ -204,11 +204,11 @@ Declarative subscription (dynamic but pre-calculated).
         1. ActiveChild
             1. consumed_types = \[Time\]
             2. new_position = interpolate(last static position, last command position, animation time, time - last command time, curve)
-            3. use_effect(|| if active {set_current_position(new_position)} else {set_last_static_position()}, \[position, is_active\])
+            3. use_effect(|position, active| if active {set_current_position(new_position)} else {set_last_static_position()}, \[new_position, true\])
     3. If current position == last command position || last command position == None, return ChildVariant::StaticChild
         1. StaticChild
             1. consumed_types = \[\]
-            2. 
+            2. use_effect(|position, active| if active {set_current_position(new_position)} else {set_last_static_position()}, \[current_position, false\])
 
 ### What about provider: declarative or dynamic?
 

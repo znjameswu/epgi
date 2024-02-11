@@ -8,7 +8,7 @@ use crate::foundation::{
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    HitTestResults, LayerOrUnit, Render, RenderAction, RenderElement, Widget,
+    HitTestConfig, LayerOrUnit, Render, RenderAction, RenderElement, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -51,12 +51,14 @@ pub trait SingleChildRenderObjectWidget:
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    fn hit_test(
+    fn compute_hit_test(
         render_state: &Self::RenderState,
-        results: &mut HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
-    );
+    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol>;
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
 }
@@ -229,17 +231,17 @@ where
         }
     }
 
-    fn hit_test(
-        &self,
-        results: &mut HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
-        children: &<Self::ChildContainer as crate::foundation::HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) {
-        let [child] = children;
-        W::hit_test(&self.state, results, coord, child);
-    }
-
     type LayerOrUnit = ();
+
+    fn compute_hit_test(
+        &self,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        memo: &Self::LayoutMemo,
+        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
+    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
+        let [child] = children;
+        W::compute_hit_test(&self.state, position, size, transform, memo, child)
+    }
 }

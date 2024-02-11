@@ -7,12 +7,14 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        Element, ElementReconcileItem, HitTestResults, LayerCompositionConfig, LayerRender, Render,
+        Element, ElementReconcileItem, HitTestConfig, LayerCompositionConfig, LayerRender, Render,
         RenderAction, RenderElement, RenderObjectSlots, Widget,
     },
 };
 
-use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize};
+use crate::{
+    Affine2d, Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize, Point2d,
+};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -144,7 +146,7 @@ impl Render for RenderRoot {
 
     fn perform_layout<'a, 'layout>(
         &'a mut self,
-        _constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+        _constraints: &'a BoxConstraints,
         _children: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
         unreachable!()
@@ -155,23 +157,24 @@ impl Render for RenderRoot {
 
     fn perform_paint(
         &self,
-        _size: &<Self::ParentProtocol as Protocol>::Size,
-        _transform: &<Self::ParentProtocol as Protocol>::Transform,
+        _size: &BoxSize,
+        _transform: &Affine2d,
         _memo: &Self::LayoutMemo,
         _children: &Option<ArcChildRenderObject<BoxProtocol>>,
-        _paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
+        _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         unreachable!()
     }
 
-    fn hit_test(
+    fn compute_hit_test(
         &self,
-        results: &mut HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
-        children: &Option<ArcChildRenderObject<Self::ChildProtocol>>,
-    ) {
-        let Some(child) = children else { return };
-        child.hit_test(results, coord)
+        position: &Point2d,
+        size: &BoxSize,
+        transform: &Affine2d,
+        memo: &Self::LayoutMemo,
+        children: &Option<ArcChildRenderObject<BoxProtocol>>,
+    ) -> HitTestConfig<BoxProtocol, BoxProtocol> {
+        todo!()
     }
 
     type LayerOrUnit = RenderRoot;
@@ -208,6 +211,13 @@ impl LayerRender for RenderRoot {
         self_config: &LayerCompositionConfig<Affine2dCanvas>,
         child_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) -> LayerCompositionConfig<Affine2dCanvas> {
+        todo!()
+    }
+
+    fn transform_hit_test(
+        &self,
+        position: &<Affine2dCanvas as Canvas>::HitPosition,
+    ) -> <Affine2dCanvas as Canvas>::HitPosition {
         todo!()
     }
 

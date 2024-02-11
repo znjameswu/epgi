@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::{
-    AnyLayerRenderObject, ArcAdoptedLayerRenderObject, ArcAnyLayerRenderObject,
+    AnyLayerRenderObject, ArcAdoptedLayerRenderObject, ArcAnyLayeredRenderObject,
     ArcChildLayerRenderObject, ChildLayerOrFragmentRef, ChildLayerRenderObject,
     LayerCompositionConfig, LayerRender, NoRecompositeToken,
 };
@@ -84,7 +84,7 @@ pub struct ComposableChildLayer<C: Canvas> {
 pub struct ComposableUnadoptedLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
     pub adopter_key: Option<Arc<dyn Key>>,
-    pub layer: ArcAnyLayerRenderObject,
+    pub layer: ArcAnyLayeredRenderObject,
 }
 
 pub struct ComposableAdoptedLayer<C: Canvas> {
@@ -117,7 +117,7 @@ where
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
 {
-    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject {
+    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayeredRenderObject {
         todo!()
     }
 }

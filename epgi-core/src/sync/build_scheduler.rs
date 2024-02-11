@@ -8,14 +8,14 @@ use crate::{
     foundation::Arc,
     scheduler::{BatchId, BatchResult, JobBatcher, LanePos, SchedulerHandle},
     tree::{
-        ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakElementContextNode,
+        ArcAnyElementNode, ArcAnyLayeredRenderObject, AweakAnyElementNode, AweakElementContextNode,
     },
 };
 
 pub struct BuildScheduler {
     lane_scheduler: LaneScheduler,
     pub(super) root_element: ArcAnyElementNode,
-    pub(super) root_render_object: ArcAnyLayerRenderObject,
+    pub(super) root_render_object: ArcAnyLayeredRenderObject,
 }
 
 impl BuildScheduler {

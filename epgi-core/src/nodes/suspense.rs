@@ -9,7 +9,8 @@ use crate::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, Render, Widget,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, HitTestConfig, Render,
+        Widget,
     },
 };
 
@@ -56,24 +57,15 @@ impl<P: Protocol> Element for SuspenseElement<P> {
         widget: &Self::ArcWidget,
         _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: EitherParallel<
-            [ArcChildElementNode<Self::ChildProtocol>; 1],
-            [ArcChildElementNode<Self::ChildProtocol>; 2],
-        >,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        children: EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<P>>,
     ) -> Result<
         (
-            EitherParallel<
-                [ElementReconcileItem<Self::ChildProtocol>; 1],
-                [ElementReconcileItem<Self::ChildProtocol>; 2],
-            >,
+            EitherParallel<[ElementReconcileItem<P>; 1], [ElementReconcileItem<P>; 2]>,
             Option<ChildRenderObjectsUpdateCallback<Self>>,
         ),
         (
-            EitherParallel<
-                [ArcChildElementNode<Self::ChildProtocol>; 1],
-                [ArcChildElementNode<Self::ChildProtocol>; 2],
-            >,
+            EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
             BuildSuspendedError,
         ),
     > {
@@ -116,10 +108,7 @@ impl<P: Protocol> Element for SuspenseElement<P> {
     ) -> Result<
         (
             Self,
-            EitherParallel<
-                [ArcChildWidget<Self::ChildProtocol>; 1],
-                [ArcChildWidget<Self::ChildProtocol>; 2],
-            >,
+            EitherParallel<[ArcChildWidget<P>; 1], [ArcChildWidget<P>; 2]>,
         ),
         BuildSuspendedError,
     > {
@@ -152,31 +141,32 @@ impl<P: Protocol> Render for RenderSuspense<P> {
 
     fn perform_layout<'a, 'layout>(
         &'a mut self,
-        constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
+        constraints: &'a P::Constraints,
         children: &[ArcChildRenderObject<P>; 1],
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
+    ) -> (P::Size, Self::LayoutMemo) {
         unreachable!()
     }
 
     fn perform_paint(
         &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        size: &P::Size,
+        transform: &P::Transform,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<P>; 1],
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
+        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
     ) {
         todo!()
     }
 
-    fn hit_test(
+    fn compute_hit_test(
         &self,
-        results: &mut crate::tree::HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
-        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
-    ) {
-        let [child] = children;
-        child.hit_test(results, coord)
+        position: &<P::Canvas as Canvas>::HitPosition,
+        size: &P::Size,
+        transform: &P::Transform,
+        memo: &Self::LayoutMemo,
+        children: &[ArcChildRenderObject<P>; 1],
+    ) -> HitTestConfig<P, P> {
+        todo!()
     }
 
     type LayerOrUnit = ();

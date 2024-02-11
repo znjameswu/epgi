@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Canvas, Identity, LayerProtocol, Protocol},
+    foundation::{Canvas, LayerProtocol, Transform},
     tree::{ArcChildRenderObject, PaintResults, StructuredChildLayerOrFragment},
 };
 
@@ -24,7 +24,7 @@ impl Canvas for Affine2dCanvas {
 
     type Encoding = Affine2dEncoding;
 
-    type HitTestCoordinate = Point2d;
+    type HitPosition = Point2d;
 
     fn composite_encoding(
         dst: &mut Self::Encoding,
@@ -60,10 +60,7 @@ impl Canvas for Affine2dCanvas {
             results: &mut paint_results,
         };
         for render_object in render_objects {
-            render_object.paint(
-                &<<P::Canvas as Canvas>::Transform as Identity>::IDENTITY,
-                &mut paint_ctx,
-            );
+            render_object.paint(&<P::Canvas as Canvas>::identity_transform(), &mut paint_ctx);
         }
         // Save the recordings on the tail
         let new_child = StructuredChildLayerOrFragment::Fragment(paint_ctx.curr_fragment_encoding);
@@ -73,5 +70,26 @@ impl Canvas for Affine2dCanvas {
 
     fn new_encoding() -> Self::Encoding {
         Affine2dEncoding::new()
+    }
+
+    fn transform_hit_position(
+        transform: &Self::Transform,
+        hit_position: &Self::HitPosition,
+    ) -> Self::HitPosition {
+        todo!()
+    }
+
+    fn identity_transform() -> Self::Transform {
+        Affine2d::IDENTITY
+    }
+
+    fn mul_transform_ref(a: &Self::Transform, b: &Self::Transform) -> Self::Transform {
+        todo!()
+    }
+}
+
+impl Transform<Affine2dCanvas, Affine2dCanvas> for Affine2d {
+    fn transform(&self, input: &Point2d) -> <Affine2dCanvas as Canvas>::HitPosition {
+        todo!()
     }
 }

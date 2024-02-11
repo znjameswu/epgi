@@ -1,7 +1,7 @@
 use crate::foundation::{Canvas, PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestResults, LayerOrUnit,
+    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestConfig, LayerOrUnit,
     RenderAction, Widget,
 };
 
@@ -63,13 +63,15 @@ pub trait ProxyWidget:
         paint_ctx.paint(child, transform)
     }
 
-    fn hit_test(
+    fn compute_hit_test(
         render_state: &Self::RenderState,
-        results: &mut HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
-    ) {
-        child.hit_test(results, coord)
+    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
+        todo!() //child.hit_test(results, coord)
     }
 
     type LayerRenderDelegate: LayerOrUnit<SingleChildRenderObject<Self>>;
@@ -129,14 +131,16 @@ where
         T::perform_paint(state, size, transform, memo, child, paint_ctx)
     }
 
-    fn hit_test(
-        render_state: &Self::RenderState,
-        results: &mut HitTestResults,
-        coord: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitTestCoordinate,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
-    ) {
-        T::hit_test(render_state, results, coord, child)
-    }
-
     type LayerOrUnit = T::LayerRenderDelegate;
+
+    fn compute_hit_test(
+        render_state: &Self::RenderState,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        memo: &Self::LayoutMemo,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
+    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
+        T::compute_hit_test(render_state, position, size, transform, memo, child)
+    }
 }

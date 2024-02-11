@@ -155,6 +155,8 @@ pub trait RenderElement: Element<RenderOrUnit = <Self as RenderElement>::Render>
         element_children: <Self::ChildContainer as HktContainer>::Container<T>,
     ) -> <<Self::Render as Render>::ChildContainer as HktContainer>::Container<T>;
 
+    /// BUG: Somehow rustdoc breaks on this item
+    #[doc(hidden)]
     const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> = None;
 }
 

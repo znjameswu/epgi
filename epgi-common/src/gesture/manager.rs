@@ -1,20 +1,21 @@
 use std::{collections::HashMap, sync::Mutex};
 
+use epgi_2d::Affine2dCanvas;
 use epgi_core::{
     foundation::{SyncMpscReceiver, SyncMpscSender},
-    tree::HitTestResults,
+    tree::HitTestConfig,
 };
 
 // use crate::gesture::PointerEventKind;
 
-use crate::gesture::{PointerDownEvent, PointerPanZoomStartEvent};
+use crate::gesture::PointerEventInner;
 
-use super::PointerEvent;
+use super::{PointerEvent, PointerId};
 
 struct GestureManager {
     // We choose to use channel instead of arc mutex, because mutex could be unfair and thus indefinitely block our scheduler
     rx: SyncMpscReceiver<PointerEvent>,
-    hit_test_cache: HashMap<usize, HitTestResults>,
+    // captured_pointers: HashMap<PointerId, HitTestResults<Affine2dCanvas>>, TODO
 }
 
 #[derive(Clone, Debug)]
@@ -28,28 +29,26 @@ impl GestureManager {
     }
 
     fn handle_pointer_event(event: PointerEvent) {
-        use PointerEvent::*;
-        match event {
-            Down(PointerDownEvent { common, active }) => {
-                // let mut hit_test_result = HitTestResults::new();
-            },
-            PanZoomStart(PointerPanZoomStartEvent {
-                common,
+        use PointerEventInner::*;
+        match event.inner {
+            Down { active } => todo!(),
+            Signal { signal } => todo!(),
+            PanZoomStart { synthesized } => todo!(),
+            Hover { hover, synthesized } => todo!(),
+
+            Move {
+                active,
                 synthesized,
-            }) => todo!(),
-
-            Signal(_) => todo!(),
-            Hover(_) => todo!(),
-
-            Up(_) => todo!(),
-            Cancel(_) => todo!(),
-            PanZoomEnd(_) => todo!(),
-
-            Move(_) => todo!(),
-            PanZoomUpdate(_) => todo!(),
-
-            Add(_) => todo!(),
-            Remove(_) => todo!(),
+            } => todo!(),
+            Up { hover } => todo!(),
+            Cancel => todo!(),
+            Add => todo!(),
+            Remove => todo!(),
+            PanZoomUpdate {
+                update,
+                synthesized,
+            } => todo!(),
+            PanZoomEnd { synthesized } => todo!(),
         }
     }
 
