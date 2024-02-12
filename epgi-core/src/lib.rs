@@ -5,3 +5,5 @@ pub mod nodes;
 pub mod scheduler;
 mod sync;
 pub mod tree;
+
+pub use sync::ChildRenderObjectHitTestExt;

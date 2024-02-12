@@ -61,7 +61,6 @@ Hittest
 
 GestureBinding::_handlePointerEventImmediately -> WidgetsFlutterBinding::hitTestInView -> RendererBinding::hitTestInView -> RenderView::hitTest
 
-## Flutter MultiTouch
 Example: MultiTapGestureRecognizer (Tap never declares victory but rather wait for all competitors to withdraw)
 
 GestureRecognizer::addPointer -> MultiTapGestureRecognizer::addAloowedPointer -> _TapGesture -> gestureArena.add(MultiTapGestureRecognizer) & add_TapTracker::startTrackingPointer -> PointerRouter
@@ -73,6 +72,7 @@ PointerRouter -> _TapGesture::handleEvent -> update info. Never declares victory
 _TapGesture::_check -> MultiTapGestureRecognizer::_dispatchTap
 
  
+## Flutter MultiTouch
 Example: ScaleGestureRecognizer
 
 GestureRecognizer::addPointer -> ScaleGestureRecognizer::addAllowedPointer -> OneSequenceGestureRecognizer::addAllowedPointer -> OneSequenceGestureRecognizer::startTrackingPointer 
@@ -92,6 +92,16 @@ MouseTracker::_handleDeviceUpdateMouseEvents
 
 # Gesture Recognition Systen Design
 EPGI's gesture recognition system is heavily influenced by Flutter. However, the design is modified and adapted to better fit the overall architecture in EPGI and Rust style guidelines. Compared to Flutter, this systems is more explicit, less recursive (self-referencing) in terms of implementation style.
+
+## Major challenges
+1. Multi-pointer gesture recognition
+    1. A gesture recognizer might simultaneously subscribe to multiple pointers. And when the recognizer requests resolution / withdraws / handles victory / handles defeat due to one pointer event from one pointer, it will cause **cascade effect** on other pointer arenas.
+    2. This requires a multiplex between pointer ids and gesture recognizers. And mostly importantly, a **stable** identity of each gesture recognizer.
+    3. More alarmingly, this stable identity of each recognizer is hard to emulate with a stable gesture recognizer team.
+2. sweep-hold-release alternative for double taps
+3. External notification to the arena
+    1. The arena has to take external notifications. For exmaple, when a widget gets rebuilt and one of its gesture recognizer gets destroyed/replaced, the arena must be notified and evict the recognizer, since there could be only one other recognizer that could win by default after this eviction.
+        1. What about a delayed eviction? The outdated recognizer only gets evicted when processing next relevant pointer event.
 
 ## Gesture Arena, Gesture Recognizer Teams, and Gesture Recognizers
 There exists a unique, application-wide *gesture arena* for each pointer.
@@ -192,6 +202,7 @@ On top of this diffult scenarios, other challenges exist as well
     3. Decision: snapshot transforms.
 
 
+
 ## Design
 1. Bind the hit position with the render object to form a single polymorphic object.
     1. Since from the scheduler's point of view, we only have on-screen positions and have no idea about each candidate's canvas type, if we ever want to enumerate/store the candidates, we either bind and seal the render object with its corresponding hit position together and dyn cast them away, or we use `mut Box<dyn Any>` to pass in hit position, which is not type-safe.
@@ -203,6 +214,10 @@ On top of this diffult scenarios, other challenges exist as well
             2. Even for a non-"dumb" render object, it could have nothing to do with the current hit business (i.e. a pointer event handling render obejct during gesture arena iterations), we should avoid mutex locking in this scenario. It is impossible to prevent this while being concurrent.
             3. Admittedly, caching inside produces prettier interface with less clogs.
 2. How to identify a certain capability.
+    0. Should we separate pointer event listener and gesture recognizers as separate capabilities?
+        1. No we shouldn't. 
+            1. ~~Pointer event listeners, as long as they are hit-tested in the newest frame, will always receive hit positions with *up-to-date* transform.~~ (False, flutter's pointer event also uses snapshotted transform) While gesture recognizers, takes a snapshot.
+            2. Essentially, push to gesture recognizer and push to pointer event listeners should be two disparate channel. No one wants interference from pointer event listener while performing gesture recognition. Therefore, there need to be at least two handler methods.
     1. Interface query table
         1. For description, see `epgi-core::foundation::query_interface`
         2. Disadvantage: user can misimplement table since by casting into wrong interface different from the table key.

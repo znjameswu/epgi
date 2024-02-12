@@ -23,6 +23,16 @@ where
     // We can, of course, collect all child hit test entry and then prepend them with transforms in the return phase. But it would be O(N^2) complexity on node depth.
     // If we squash as many transform as we can (limited by trait object interface design), and pass them down in the recursion phase, it would be O(NM) complexity on M=canvas depth, which is usually just a few.
     // Hence the prepend_transform
+    pub fn find_interface<T: ?Sized + 'static>(
+        self,
+        prepend_transform: Option<&C::Transform>,
+    ) -> Option<Vec<Box<dyn ChildHitTestEntry<C>>>> {
+        self.find_interface_id(TypeId::of::<T>(), prepend_transform)
+    }
+    // The prepend_transform serves as an optimization
+    // We can, of course, collect all child hit test entry and then prepend them with transforms in the return phase. But it would be O(N^2) complexity on node depth.
+    // If we squash as many transform as we can (limited by trait object interface design), and pass them down in the recursion phase, it would be O(NM) complexity on M=canvas depth, which is usually just a few.
+    // Hence the prepend_transform
     pub fn find_interface_id(
         self,
         type_id: TypeId,
