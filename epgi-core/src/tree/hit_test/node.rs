@@ -19,57 +19,51 @@ impl<C> HitTestNode<C>
 where
     C: Canvas,
 {
-    // The prepend_transform serves as an optimization
-    // We can, of course, collect all child hit test entry and then prepend them with transforms in the return phase. But it would be O(N^2) complexity on node depth.
-    // If we squash as many transform as we can (limited by trait object interface design), and pass them down in the recursion phase, it would be O(NM) complexity on M=canvas depth, which is usually just a few.
-    // Hence the prepend_transform
     pub fn find_interface<T: ?Sized + 'static>(
         self,
+        // The prepend_transform serves as an optimization
+        // We can, of course, collect all child hit test entry and then prepend them with transforms in the return phase. But it would be O(N^2) complexity on node depth.
+        // If we squash as many transform as we can (limited by trait object interface design), and pass them down in the recursion phase, it would be O(NM) complexity on M=canvas depth, which is usually just a few.
+        // Hence the prepend_transform
         prepend_transform: Option<&C::Transform>,
-    ) -> Option<Vec<Box<dyn ChildHitTestEntry<C>>>> {
+    ) -> Vec<Box<dyn ChildHitTestEntry<C>>> {
         self.find_interface_id(TypeId::of::<T>(), prepend_transform)
     }
-    // The prepend_transform serves as an optimization
-    // We can, of course, collect all child hit test entry and then prepend them with transforms in the return phase. But it would be O(N^2) complexity on node depth.
-    // If we squash as many transform as we can (limited by trait object interface design), and pass them down in the recursion phase, it would be O(NM) complexity on M=canvas depth, which is usually just a few.
-    // Hence the prepend_transform
     pub fn find_interface_id(
         self,
         type_id: TypeId,
+        // The prepend_transform serves as an optimization
+        // We can, of course, collect all child hit test entry and then prepend them with transforms in the return phase. But it would be O(N^2) complexity on node depth.
+        // If we squash as many transform as we can (limited by trait object interface design), and pass them down in the recursion phase, it would be O(NM) complexity on M=canvas depth, which is usually just a few.
+        // Hence the prepend_transform
         prepend_transform: Option<&C::Transform>,
-    ) -> Option<Vec<Box<dyn ChildHitTestEntry<C>>>> {
+    ) -> Vec<Box<dyn ChildHitTestEntry<C>>> {
         let self_has_interface = self.target.has_interface(type_id);
-        let mut descendant_result = None;
-        if self_has_interface {
-            descendant_result = Some(Vec::new());
-        }
+        let mut result = Vec::new();
         for child in self.children {
             use HitTestNodeChild::*;
-            match child {
-                InLayer(node, transform) => {
-                    descendant_result = match (prepend_transform, transform.as_ref()) {
-                        (transform, None) | (None, transform @ Some(_)) => {
-                            node.find_interface_id(type_id, transform)
-                        }
-                        (Some(prepend_transform), Some(transform)) => node.find_interface_id(
-                            type_id,
-                            Some(&C::mul_transform_ref(transform, prepend_transform)),
-                        ),
-                    };
-                    if descendant_result.is_some() {
-                        break;
+            result = match child {
+                InLayer(node, transform) => match (prepend_transform, transform.as_ref()) {
+                    (transform, None) | (None, transform @ Some(_)) => {
+                        node.find_interface_id(type_id, transform)
                     }
-                }
-                NewLayer(child) => {
-                    child.find_interface_id_box(type_id, prepend_transform);
-                }
+                    (Some(prepend_transform), Some(transform)) => node.find_interface_id(
+                        type_id,
+                        Some(&C::mul_transform_ref(transform, prepend_transform)),
+                    ),
+                },
+                NewLayer(child) => child.find_interface_id_box(type_id, prepend_transform),
+            };
+            if !result.is_empty() {
+                // We find corresponding interface in this specific child's subtree. Cut other tree walks
+                break;
             }
         }
 
-        if let Some(path) = &mut descendant_result {
-            path.push(self.target.into_entry_box(prepend_transform.cloned()));
+        if self_has_interface || !result.is_empty() {
+            result.push(self.target.into_entry_box(prepend_transform.cloned()));
         }
-        descendant_result
+        result
     }
 }
 
@@ -119,7 +113,7 @@ pub trait ChildHitTestNode<C: Canvas> {
         self: Box<Self>,
         type_id: TypeId,
         prepend_transform: Option<&C::Transform>,
-    ) -> Option<Vec<Box<dyn ChildHitTestEntry<C>>>>;
+    ) -> Vec<Box<dyn ChildHitTestEntry<C>>>;
 }
 
 impl<PC, CC> ChildHitTestNode<PC> for HitTestNodeWithLayerTransform<PC, CC>
@@ -131,20 +125,18 @@ where
         self: Box<Self>,
         type_id: TypeId,
         prepend_transform: Option<&<PC as Canvas>::Transform>,
-    ) -> Option<Vec<Box<dyn ChildHitTestEntry<PC>>>> {
+    ) -> Vec<Box<dyn ChildHitTestEntry<PC>>> {
         let child_result = self.child.find_interface_id(type_id, None);
 
-        child_result.map(|child_result| {
-            child_result
-                .into_iter()
-                .map(|child| {
-                    Box::new(LinkedHitTestEntry::new(
-                        prepend_transform.cloned(),
-                        self.transform.clone(),
-                        child,
-                    )) as _
-                })
-                .collect()
-        })
+        return child_result
+            .into_iter()
+            .map(|child| {
+                Box::new(LinkedHitTestEntry::new(
+                    prepend_transform.cloned(),
+                    self.transform.clone(),
+                    child,
+                )) as _
+            })
+            .collect();
     }
 }

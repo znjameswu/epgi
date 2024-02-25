@@ -23,8 +23,7 @@ where
         hit_position: &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         transform: &<R::ParentProtocol as Protocol>::Transform,
     ) -> Option<HitTestNode<<R::ParentProtocol as Protocol>::Canvas>> {
-        let mut inner = self.inner.lock();
-        let inner_reborrow = &mut *inner;
+        let inner = self.inner.lock();
         let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
         let layout_cache = inner
             .cache

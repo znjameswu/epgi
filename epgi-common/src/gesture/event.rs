@@ -127,7 +127,7 @@ pub struct PointerBaseData {
     pub pointer_kind: PointerDeviceKind,
     pub pointer_id: PointerId,
 }
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct PointerId(pub(crate) u64);
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]

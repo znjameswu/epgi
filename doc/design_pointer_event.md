@@ -61,9 +61,9 @@ Hittest
 
 GestureBinding::_handlePointerEventImmediately -> WidgetsFlutterBinding::hitTestInView -> RendererBinding::hitTestInView -> RenderView::hitTest
 
-Example: MultiTapGestureRecognizer (Tap never declares victory but rather wait for all competitors to withdraw)
+### Example: MultiTapGestureRecognizer (Tap never declares victory but rather wait for all competitors to withdraw)
 
-GestureRecognizer::addPointer -> MultiTapGestureRecognizer::addAloowedPointer -> _TapGesture -> gestureArena.add(MultiTapGestureRecognizer) & add_TapTracker::startTrackingPointer -> PointerRouter
+GestureRecognizer::addPointer -> MultiTapGestureRecognizer::addAllowedPointer -> _TapGesture -> gestureArena.add(MultiTapGestureRecognizer) & add_TapTracker::startTrackingPointer -> PointerRouter
 
 PointerRouter -> _TapGesture::handleEvent -> update info. Never declares victory, only checks when pointer up or informed victory.
 
@@ -73,7 +73,7 @@ _TapGesture::_check -> MultiTapGestureRecognizer::_dispatchTap
 
  
 ## Flutter MultiTouch
-Example: ScaleGestureRecognizer
+### Example: ScaleGestureRecognizer
 
 GestureRecognizer::addPointer -> ScaleGestureRecognizer::addAllowedPointer -> OneSequenceGestureRecognizer::addAllowedPointer -> OneSequenceGestureRecognizer::startTrackingPointer 
 
@@ -98,10 +98,16 @@ EPGI's gesture recognition system is heavily influenced by Flutter. However, the
     1. A gesture recognizer might simultaneously subscribe to multiple pointers. And when the recognizer requests resolution / withdraws / handles victory / handles defeat due to one pointer event from one pointer, it will cause **cascade effect** on other pointer arenas.
     2. This requires a multiplex between pointer ids and gesture recognizers. And mostly importantly, a **stable** identity of each gesture recognizer.
     3. More alarmingly, this stable identity of each recognizer is hard to emulate with a stable gesture recognizer team.
+    4. This stable identity can be solved by a hit test entry with recognizer type id tuple.
 2. sweep-hold-release alternative for double taps
+    1. Can we simply keep the last tap timestamp inside our gesture recognizer when we are ordered to clean-up? 
+        1. NO, NO, NO. We have to notify the arena to update it state in case the withdrawal produces a winner.
+            1. Actually rather than notifying, we can simply poll every frame.
 3. External notification to the arena
     1. The arena has to take external notifications. For exmaple, when a widget gets rebuilt and one of its gesture recognizer gets destroyed/replaced, the arena must be notified and evict the recognizer, since there could be only one other recognizer that could win by default after this eviction.
         1. What about a delayed eviction? The outdated recognizer only gets evicted when processing next relevant pointer event.
+4. Gestures recognition is inherently time-dependent.
+    1. Flutter and JS has built-in async timer support. While we must impl an equivalent timer service just for gesture recognition.
 
 ## Gesture Arena, Gesture Recognizer Teams, and Gesture Recognizers
 There exists a unique, application-wide *gesture arena* for each pointer.
@@ -127,6 +133,7 @@ There are four possible outcomes for an arena:
 1. Resolved. At least one team has requested for resolution, and the team with the highest confidence is declared winner. If multiple candidate reports the same confidence, then we compare the render object's depth in tree (the deeper the better), then its hit-test order (the upper the better).
 2. Defaulted. No team has requested for resolution, but only one team has remained in the arena. The team is declared winner by default.
 3. Empty. No one is declared winner because the pointer up event has fired because no team has remained in the arena. Either there is no team to begin with, or all remaining teams withdrawed at the same time.
+4. Swept. The pointer up event has been fired and no team requested for resolution, nor report an inconclusive result. The team with the highest confidence is declared winner.
 
 From there on, the arena will continuously feed pointer events to the winner if there is one, until the pointer up event fires and the arena closes and becomes inactive.
 
@@ -234,3 +241,29 @@ On top of this diffult scenarios, other challenges exist as well
 
 Correction: The capability is not only generic over hit position, but it is also generic over `Protocol::Transform` as well if we chose not to cache it during painting!!!
 1. If we continue with the transparent temporary tuple, it means an additional tuple element!!!!!
+
+
+
+
+
+# Miscellaneous Flutter notes
+1. Single tap never declares victory
+2. Double tap can be declared victory before the first tap even finishes
+3. What happens with the second pointer down event in a double tap, when the arean is held? Won't it add recognizers into a closed arena?
+    1. DoubleTapGestureRecognizer::addAllowedPointer. Always tracks tap and register itself into arena.
+    2. The process when the second pointer down event is fired
+        1. GestureBinding::dispatchEvent calls pointerRouter before dispatching hit test result
+        2. pointerRouter invokes DoubleTapGestureRecognizer::_handleEvent -> 
+        3. DoubleTapGestureRecognzier::_registerSecondTap ->
+        4. claims victory in arena and DoubleTapGestureRecognizer::_reset ->
+        5. GestureArena::release ->
+        6. GestureArena::sweep ->
+        7. removes the current arena and resolves in favor of double tap
+        8. Then GestureBinding::dispatchEvent dispatches hit test result, and new arena is created
+        9. **THIS DESIGN STINKS IN RACING.**
+4. How does single tap handles multi touch scenario?
+    1. PrimaryPointerGestureRecognizer still participates in each arena, but
+    2. It will only handle events from the pointer that fired the down event when it was in ready state (primaryPointer)
+        1. PrimaryPointerGestureRecognizer::addAllowedPointer: state: ready -> possible
+        2. OneSequenceGestureRecognizer::stopTrackingPointer(if empty tracked pointer) -> PrimaryPointerGestureRecognizer::didStopTrackingLastPointer: state: * -> ready
+    3. BaseTapGestureRecognizer will also only invoke callbacks on winning the primaryPointer arena.
