@@ -5,6 +5,8 @@ Performance hazard
         1. De-optimize the code by introducing an extra filter combinator to allow the compiler see it.
         2. Add a patch feature for above operations
     3. Resolution 
+2. https://github.com/rust-lang/rust/issues/121719
+    1. Effect: PointerEvent, if designed as a union of struct types, will generate horrendous asm when accessing common fields
 
 
 Code-style hazard

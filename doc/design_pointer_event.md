@@ -250,20 +250,29 @@ Correction: The capability is not only generic over hit position, but it is also
 1. Single tap never declares victory
 2. Double tap can be declared victory before the first tap even finishes
 3. What happens with the second pointer down event in a double tap, when the arean is held? Won't it add recognizers into a closed arena?
+    1. No, Flutter's `PointerEvent::pointer` is not a pointer_id, it is a unique pointer interaction id that is not re-used.
+        1. Therefore, the second pointer down creates a different arena than the first one. The two arenas coexist.
     1. DoubleTapGestureRecognizer::addAllowedPointer. Always tracks tap and register itself into arena.
     2. The process when the second pointer down event is fired
-        1. GestureBinding::dispatchEvent calls pointerRouter before dispatching hit test result
+        1. GestureBinding::dispatchEvent dispatching new pointer event with new pointer id to the hit test result
+        2. GestureBinding::dispatchEvent dispatch to itself and calls pointerRouter and route to previous subscribers
         2. pointerRouter invokes DoubleTapGestureRecognizer::_handleEvent -> 
         3. DoubleTapGestureRecognzier::_registerSecondTap ->
         4. claims victory in arena and DoubleTapGestureRecognizer::_reset ->
         5. GestureArena::release ->
         6. GestureArena::sweep ->
         7. removes the current arena and resolves in favor of double tap
-        8. Then GestureBinding::dispatchEvent dispatches hit test result, and new arena is created
-        9. **THIS DESIGN STINKS IN RACING.**
 4. How does single tap handles multi touch scenario?
     1. PrimaryPointerGestureRecognizer still participates in each arena, but
     2. It will only handle events from the pointer that fired the down event when it was in ready state (primaryPointer)
         1. PrimaryPointerGestureRecognizer::addAllowedPointer: state: ready -> possible
         2. OneSequenceGestureRecognizer::stopTrackingPointer(if empty tracked pointer) -> PrimaryPointerGestureRecognizer::didStopTrackingLastPointer: state: * -> ready
     3. BaseTapGestureRecognizer will also only invoke callbacks on winning the primaryPointer arena.
+
+
+
+# Sources of updates
+1. Pointer events
+2. Recognizer timer
+3. Recognizer reconciliation changes during rebuild (Could cause the recognizer to be gone for good, i.e. loss of stable identity)
+4. Updates from the same gesture recognizer from an associated arena update.

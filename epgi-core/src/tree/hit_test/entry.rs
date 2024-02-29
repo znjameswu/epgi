@@ -2,15 +2,21 @@ use std::any::TypeId;
 
 use crate::{
     foundation::{
-        cast_interface_by_table_raw, AnyRawPointer, Arc, Aweak, Canvas, CastInterfaceByRawPtr,
-        Protocol, Transform,
+        default_cast_interface_by_table_raw, default_query_interface_ref, AnyRawPointer, Arc, Aweak,
+        Canvas, CastInterfaceByRawPtr, Protocol, Transform,
     },
-    tree::{Render, RenderObject},
+    tree::{AweakAnyRenderObject, Render, RenderObject},
 };
 
 use super::TransformedHitTestTarget;
 
 pub trait AnyTransformedHitTestEntry: CastInterfaceByRawPtr {}
+
+impl dyn AnyTransformedHitTestEntry {
+    pub fn query_interface<T: ?Sized + 'static>(&self) -> Option<&T> {
+        default_query_interface_ref(self)
+    }
+}
 
 pub struct TransformedHitTestEntry<R: Render> {
     pub render_object: Aweak<RenderObject<R>>,
@@ -23,7 +29,7 @@ where
     R: Render,
 {
     fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
-        cast_interface_by_table_raw(self, raw_ptr_type_id, R::all_hit_test_interfaces())
+        default_cast_interface_by_table_raw(self, raw_ptr_type_id, R::all_hit_test_interfaces())
     }
 }
 
@@ -33,6 +39,8 @@ pub trait ChildHitTestEntry<C: Canvas> {
     fn prepend_transform(&mut self, transform: &C::Transform);
 
     fn with_position(&self, hit_position: C::HitPosition) -> Box<dyn AnyTransformedHitTestEntry>;
+
+    fn render_object(&self) -> AweakAnyRenderObject;
 }
 
 pub struct InLayerHitTestEntry<R: Render> {
@@ -88,6 +96,10 @@ where
             transform: self.target.transform.clone(),
         })
     }
+
+    fn render_object(&self) -> AweakAnyRenderObject {
+        self.target.render_object.clone()
+    }
 }
 
 pub struct LinkedHitTestEntry<PC: Canvas, CC: Canvas> {
@@ -139,5 +151,9 @@ where
         };
         let hit_position = self.transform.transform(&hit_position);
         self.next.with_position(hit_position)
+    }
+
+    fn render_object(&self) -> AweakAnyRenderObject {
+        self.next.render_object()
     }
 }

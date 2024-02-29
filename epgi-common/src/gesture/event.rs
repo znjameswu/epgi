@@ -4,131 +4,173 @@ use epgi_2d::{BoxOffset, Point2d};
 
 #[derive(Clone, Debug)]
 pub struct PointerEvent {
-    pub base: PointerBaseData,
-    pub inner: PointerEventInner,
+    pub common: PointerEventCommonData,
+    pub variant: PointerEventVariantData,
+}
+
+// This is the events that can be truly routed by Flutter's PointerRouter
+pub struct PointerInteractionEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+    pub variant: PointerInteractionVariantData,
 }
 
 #[derive(Clone, Debug)]
-pub enum PointerEventInner {
-    Hover {
-        hover: PointerHoverData,
-        synthesized: bool,
+pub enum PointerEventVariantData {
+    // Could be synthesized
+    Interaction {
+        interaction_id: PointerInteractionId,
+        variant: PointerInteractionVariantData,
     },
-    Down {
-        active: PointerActiveData,
-    },
-    Move {
-        active: PointerActiveData,
-        synthesized: bool,
-    },
-    Up {
-        hover: PointerHoverData,
-    },
-    Cancel,
+    Hover(PointerHoverData),
+    Signal(PointerSignalData),
     Add,
     Remove,
-    PanZoomStart {
-        synthesized: bool,
-    },
-    PanZoomUpdate {
-        update: PointerPanZoonUpdateData,
-        synthesized: bool,
-    },
-    PanZoomEnd {
-        synthesized: bool,
-    },
-    Signal {
-        signal: PointerSignalData,
-    },
 }
 
-// pub enum PointerEvent {
-//     Hover(PointerHoverEvent),
-//     Down(PointerDownEvent),
-//     Move(PointerMoveEvent),
-//     Up(PointerUpEvent),
-//     Cancel(PointerCancelEvent),
-//     Add(PointerAddEvent),
-//     Remove(PointerRemoveEvent),
-//     PanZoomStart(PointerPanZoomStartEvent),
-//     PanZoomUpdate(PointerPanZoomUpdateEvent),
-//     PanZoomEnd(PointerPanZoomEndEvent),
-//     Signal(PointerSignalEvent),
-//     // Scroll(PointerScrollEvent),
-//     // ScrollInertialCancel(PointerScrollInertialCancelEvent),
-//     // Scale(PointerScaleEvent),
-// }
+#[derive(Clone, Debug)]
+pub enum PointerInteractionVariantData {
+    Down(PointerContactData),
+    // Could be synthesized
+    Move(PointerContactData),
+    Up(PointerHoverData),
+    Cancel,
+    // Could be synthesized
+    PanZoomStart,
+    // Could be synthesized
+    PanZoomUpdate(PointerPanZoomUpdateData),
+    // Could be synthesized
+    PanZoomEnd,
+}
 
-// /// The pointer has moved with respect to the device while the pointer is not in contact with the device.
-// ///
-// /// Hover event has no registered buttons, even for stylus, since we followed https://github.com/flutter/flutter/issues/30454
-// pub struct PointerHoverEvent {
-//     pub base: PointerBaseData,
-//     pub hover: PointerHoverData,
-//     pub synthesized: bool,
-// }
+pub enum PointerEvent2 {
+    Add(PointerAddEvent),
+    Remove(PointerRemoveEvent),
+    Hover(PointerHoverEvent),
+    Down(PointerDownEvent),
+    Move(PointerMoveEvent),
+    Up(PointerUpEvent),
+    Cancel(PointerCancelEvent),
+    PanZoomStart(PointerPanZoomStartEvent),
+    PanZoomUpdate(PointerPanZoomUpdateEvent),
+    PanZoomEnd(PointerPanZoomEndEvent),
+    Signal(PointerSignalEvent),
+}
 
-// pub struct PointerDownEvent {
-//     pub base: PointerBaseData,
-//     pub active: PointerActiveData,
-// }
+impl PointerEvent2 {
+    fn common(&self) -> &PointerEventCommonData {
+        use PointerEvent2::*;
+        match self {
+            Add(PointerAddEvent { common, .. })
+            | Remove(PointerRemoveEvent { common, .. })
+            | Hover(PointerHoverEvent { common, .. })
+            | Down(PointerDownEvent { common, .. })
+            | Move(PointerMoveEvent { common, .. })
+            | Up(PointerUpEvent { common, .. })
+            | Cancel(PointerCancelEvent { common, .. })
+            | PanZoomStart(PointerPanZoomStartEvent { common, .. })
+            | PanZoomUpdate(PointerPanZoomUpdateEvent { common, .. })
+            | PanZoomEnd(PointerPanZoomEndEvent { common, .. })
+            | Signal(PointerSignalEvent { common, .. }) => common,
+        }
+    }
+}
 
-// pub struct PointerMoveEvent {
-//     pub base: PointerBaseData,
-//     pub active: PointerActiveData,
-//     pub synthesized: bool,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerAddEvent {
+    pub common: PointerEventCommonData,
+}
 
-// pub struct PointerUpEvent {
-//     pub base: PointerBaseData,
-//     pub hover: PointerHoverData,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerRemoveEvent {
+    pub common: PointerEventCommonData,
+}
 
-// pub struct PointerCancelEvent {
-//     pub base: PointerBaseData,
-// }
+/// The pointer has moved with respect to the device while the pointer is not in contact with the device.
+///
+/// Hover event has no registered buttons, even for stylus, since we followed https://github.com/flutter/flutter/issues/30454
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerHoverEvent {
+    pub common: PointerEventCommonData,
+    pub hover: PointerHoverData,
+}
 
-// pub struct PointerAddEvent {
-//     pub base: PointerBaseData,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerDownEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+    pub contact: PointerContactData,
+}
 
-// pub struct PointerRemoveEvent {
-//     pub base: PointerBaseData,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerMoveEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+    pub contact: PointerContactData,
+}
 
-// pub struct PointerPanZoomStartEvent {
-//     pub base: PointerBaseData,
-//     pub synthesized: bool,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerUpEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+    pub hover: PointerHoverData,
+}
 
-// pub struct PointerPanZoomUpdateEvent {
-//     pub base: PointerBaseData,
-//     pub synthesized: bool,
-//     pub pan: BoxOffset,
-//     // pub pan_delta: BoxOffset,
-//     pub scale: f32,
-//     pub rotation: f32,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerCancelEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+}
 
-// pub struct PointerPanZoomEndEvent {
-//     pub base: PointerBaseData,
-//     pub synthesized: bool,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerPanZoomStartEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+}
 
-// pub struct PointerSignalEvent {
-//     pub base: PointerBaseData,
-//     pub signal: PointerSignalData,
-// }
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerPanZoomUpdateEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+
+    pub pan: BoxOffset,
+    // pub pan_delta: BoxOffset,
+    pub scale: f32,
+    pub rotation: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerPanZoomEndEvent {
+    pub common: PointerEventCommonData,
+    pub interaction_id: PointerInteractionId,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct PointerSignalEvent {
+    pub common: PointerEventCommonData,
+    pub signal: PointerSignalData,
+}
 
 #[derive(Clone, Debug)]
-pub struct PointerBaseData {
+pub struct PointerEventCommonData {
     pub time_stamp: Instant,
     pub physical_position: Point2d,
     pub pointer_kind: PointerDeviceKind,
-    pub pointer_id: PointerId,
+    pub synthesized: bool,
 }
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub struct PointerId(pub(crate) u64);
+pub struct PointerInteractionId(pub(crate) u64);
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum PointerDeviceKind {
@@ -140,15 +182,15 @@ pub enum PointerDeviceKind {
 }
 
 #[derive(Clone, Debug)]
-pub struct PointerActiveData {
+pub struct PointerContactData {
     pub buttons: PointerButtons,
     // Pointer down could be caused by a stylus secondary button which is still hovering
     pub hover: PointerHoverData,
-    pub contact: PointerContactData,
+    pub profile: PointerContactProfile,
 }
 
 #[derive(Clone, Debug)]
-pub struct PointerContactData {
+pub struct PointerContactProfile {
     pub pressure: f32,
     pub pressure_min: f32,
     pub pressure_max: f32,
@@ -168,7 +210,7 @@ pub struct PointerHoverData {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PointerPanZoonUpdateData {
+pub struct PointerPanZoomUpdateData {
     pub pan: BoxOffset,
     // pub pan_delta: BoxOffset,
     pub scale: f32,

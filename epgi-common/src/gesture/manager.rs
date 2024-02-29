@@ -8,17 +8,18 @@ use epgi_core::{
 
 // use crate::gesture::PointerEventKind;
 
-use crate::gesture::{PointerEventHandler, PointerEventInner};
+use crate::gesture::{PointerEventHandler, PointerEventVariantData, PointerInteractionVariantData};
 
-use super::{PointerEvent, PointerId};
+use super::{PointerEvent, PointerInteractionId};
 
 pub struct GestureArenaId();
 
 struct PointerGestureManager {
     // We choose to use channel instead of arc mutex, because mutex could be unfair and thus indefinitely block our scheduler
     rx: SyncMpscReceiver<PointerEvent>,
-    captured_pointers: HashMap<PointerId, Vec<Box<dyn ChildHitTestEntry<Affine2dCanvas>>>>,
-    arenas: HashMap<PointerId, Vec<GestureRecognizerHandle>>,
+    pointers_in_contact:
+        HashMap<PointerInteractionId, Vec<Box<dyn ChildHitTestEntry<Affine2dCanvas>>>>,
+    // arenas: HashMap<PointerInteractionId, Vec<GestureRecognizerHandle>>,
 }
 
 struct GestureArena {}
@@ -38,31 +39,44 @@ impl PointerGestureManager {
         event: PointerEvent,
         root: ArcChildRenderObject<BoxProtocol>,
     ) {
-        use PointerEventInner::*;
-        match event.inner {
-            Down { .. } | Signal { .. } | Hover { .. } | PanZoomStart { .. } => {
+        use PointerEventVariantData::*;
+        use PointerInteractionVariantData::*;
+        match event.variant {
+            Add => todo!(),
+            Remove => todo!(),
+
+            Interaction {
+                variant: Down(_) | PanZoomStart,
+                ..
+            }
+            | Signal(_)
+            | Hover(_) => {
                 let hit_test_result =
-                    root.hit_test(&event.base.physical_position, &Affine2d::IDENTITY);
+                    root.hit_test(&event.common.physical_position, &Affine2d::IDENTITY);
                 let entries = hit_test_result
                     .map(|hit_test_result| {
                         hit_test_result.find_interface::<dyn PointerEventHandler>(None)
                     })
                     .unwrap_or_default();
 
-                if let Down { .. } | PanZoomStart { .. } = event.inner {
-                    self.captured_pointers
-                        .insert(event.base.pointer_id, entries);
+                if let Interaction { interaction_id, .. } = event.variant {
+                    self.pointers_in_contact.insert(interaction_id, entries);
                 }
             }
 
-            Move { .. } | PanZoomUpdate { .. } => {
-                self.captured_pointers.get(&event.base.pointer_id);
+            Interaction {
+                variant: Move(_) | PanZoomUpdate(_),
+                interaction_id,
+            } => {
+                self.pointers_in_contact.get(&interaction_id);
             }
-            Up { .. } | Cancel | PanZoomEnd { .. } => {
-                self.captured_pointers.remove(&event.base.pointer_id);
+
+            Interaction {
+                variant: Up(_) | Cancel | PanZoomEnd,
+                interaction_id,
+            } => {
+                self.pointers_in_contact.remove(&interaction_id);
             }
-            Add => todo!(),
-            Remove => todo!(),
         }
     }
 
@@ -71,7 +85,4 @@ impl PointerGestureManager {
     fn handle_event(event: PointerEvent) {}
 }
 
-struct GestureRecognizerHandle {
-    entry: Box<dyn ChildHitTestEntry<Affine2dCanvas>>,
-    type_id: TypeId,
-}
+

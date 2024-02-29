@@ -151,20 +151,13 @@ pub trait CastInterfaceByRawPtr {
 }
 
 impl dyn CastInterfaceByRawPtr {
-    pub fn query_interface<T: ?Sized + 'static>(&self) -> Option<&T> {
-        self.cast_interface_raw(TypeId::of::<*const T>())
-            .map(|ptr| {
-                let downcasted = ptr.downcast_const::<T>().ok().expect(
-                    "Interface query table function should return a raw fat pointer \
-                    with the type it claimed",
-                );
-                unsafe { downcasted.as_ref().expect("Impossible to fail") }
-            })
+    pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
+        default_query_interface_ref(self)
     }
 }
 
-pub fn cast_interface_by_table_raw<'a, T>(
-    this: &'a T,
+pub fn default_cast_interface_by_table_raw<'a, T: 'a>(
+    this: *const T,
     raw_ptr_type_id: TypeId,
     table: impl IntoIterator<Item = &'a (TypeId, fn(*const T) -> AnyRawPointer)>,
 ) -> Option<AnyRawPointer> {
@@ -176,6 +169,34 @@ pub fn cast_interface_by_table_raw<'a, T>(
     }
     return None;
 }
+
+pub fn default_query_interface_ref<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
+    source: &S,
+) -> Option<&T> {
+    source
+        .cast_interface_raw(TypeId::of::<*const T>())
+        .map(|ptr| {
+            let downcasted = ptr.downcast_const::<T>().ok().expect(
+                "Interface query table function should return a raw fat pointer \
+                    with the same type as it has claimed",
+            );
+            unsafe { downcasted.as_ref().expect("Impossible to fail") }
+        })
+}
+
+// pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
+//     source: Box<S>,
+// ) -> Result<Box<T>, Box<S>> {
+//     (Box::into_raw(source) as *const _)
+//         .cast_interface_raw(TypeId::of::<*const T>())
+//         .map(|ptr| {
+//             let downcasted = ptr.downcast_const::<T>().ok().expect(
+//                 "Interface query table function should return a raw fat pointer \
+//                     with the same type as it has claimed",
+//             );
+//             unsafe { downcasted.as_ref().expect("Impossible to fail") }
+//         })
+// }
 
 #[cfg(test)]
 mod tests {
@@ -198,7 +219,7 @@ mod tests {
 
     impl CastInterfaceByRawPtr for TestStruct {
         fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
-            cast_interface_by_table_raw(self, raw_ptr_type_id, INTERFACE_TABLE.as_slice())
+            default_cast_interface_by_table_raw(self, raw_ptr_type_id, INTERFACE_TABLE.as_slice())
         }
     }
 
@@ -214,7 +235,7 @@ mod tests {
         let x: TestStruct = TestStruct(I);
         let x_ref: &TestStruct = &x;
         let x_up = x_ref as &dyn CastInterfaceByRawPtr;
-        let x_down = x_up.query_interface::<dyn TestTrait>().unwrap();
+        let x_down = x_up.query_interface_ref::<dyn TestTrait>().unwrap();
         assert_eq!(x_down.value(), I)
     }
 }
