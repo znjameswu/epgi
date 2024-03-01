@@ -38,6 +38,7 @@ path = "./optargs"
 
 
 [workspace.dependencies]
+hashbrown = { version = "0.14", features = ["rayon"] }
 vello = { git = "https://github.com/linebender/vello", rev = "9d7c4f00d8db420337706771a37937e9025e089c" }
 vello_encoding = { git = "https://github.com/linebender/vello", rev = "9d7c4f00d8db420337706771a37937e9025e089c" }
 peniko = { git = "https://github.com/linebender/peniko", rev = "cafdac9a211a0fb2fec5656bd663d1ac770bcc81" }

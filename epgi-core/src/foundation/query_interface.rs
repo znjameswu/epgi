@@ -1,7 +1,7 @@
 //! ## Interface query
 //! By "interface query", we refer to the process of downcasting a *selected* trait object pointer to
 //! other *arbitrary* trait object pointers defined in downstream crates. It usually has a signature like the following
-//! ```rust
+//! ```ignore
 //! trait TraitA {
 //!     fn all_interfaces(&self) -> &[(TypeId, fn(&Self) -> Box<dyn Any>)] where Self: Sized;
 //!     fn cast_interface(&self, type_id: TypeId) -> Option<Box<dyn Any>>;
@@ -19,7 +19,7 @@
 //! Note how implementers can supply their custom interface conversion entries in `TraitA::all_interfaces`.
 //! This is different from normal trait object casting, which can only cast into *selected* trait object pointers
 //! within the definition scope of `TraitA`, and every cast must be explicitly special-cased in the base trait signature.
-//! ```rust
+//! ```ignore
 //! trait TraitA {
 //!     // TraitB must be in scope when we define `TraitA`
 //!     fn as_b(&self) -> Option<&TraitB>;
@@ -154,6 +154,10 @@ impl dyn CastInterfaceByRawPtr {
     pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
         default_query_interface_ref(self)
     }
+
+    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+        default_query_interface_box(self)
+    }
 }
 
 pub fn default_cast_interface_by_table_raw<'a, T: 'a>(
@@ -184,24 +188,27 @@ pub fn default_query_interface_ref<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized 
         })
 }
 
-// pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
-//     source: Box<S>,
-// ) -> Result<Box<T>, Box<S>> {
-//     (Box::into_raw(source) as *const _)
-//         .cast_interface_raw(TypeId::of::<*const T>())
-//         .map(|ptr| {
-//             let downcasted = ptr.downcast_const::<T>().ok().expect(
-//                 "Interface query table function should return a raw fat pointer \
-//                     with the same type as it has claimed",
-//             );
-//             unsafe { downcasted.as_ref().expect("Impossible to fail") }
-//         })
-// }
+pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
+    source: Box<S>,
+) -> Result<Box<T>, Box<S>> {
+    let leaked = Box::into_raw(source);
+    let casted = unsafe { leaked.as_mut() }
+        .expect("Impossible to fail")
+        .cast_interface_raw(TypeId::of::<*const T>());
+    match casted {
+        Some(ptr) => {
+            let downcasted = ptr.downcast_const::<T>().ok().expect(
+                "Interface query table function should return a raw fat pointer \
+                with the same type as it has claimed",
+            );
+            unsafe { Ok(Box::from_raw(downcasted as *mut T)) }
+        }
+        None => unsafe { Err(Box::from_raw(leaked)) },
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use std::any::TypeId;
-
     use super::*;
 
     trait TestTrait {
@@ -230,12 +237,22 @@ mod tests {
     }
 
     #[test]
-    fn query_interface_raw() {
+    fn query_interface_ref() {
         const I: i32 = 42;
         let x: TestStruct = TestStruct(I);
         let x_ref: &TestStruct = &x;
         let x_up = x_ref as &dyn CastInterfaceByRawPtr;
         let x_down = x_up.query_interface_ref::<dyn TestTrait>().unwrap();
+        assert_eq!(x_down.value(), I)
+    }
+
+    #[test]
+    fn query_interface_box() {
+        const I: i32 = 42;
+        let x: TestStruct = TestStruct(I);
+        let x_box: Box<TestStruct> = Box::new(x);
+        let x_up = x_box as Box<dyn CastInterfaceByRawPtr>;
+        let x_down = x_up.query_interface_box::<dyn TestTrait>().ok().unwrap();
         assert_eq!(x_down.value(), I)
     }
 }

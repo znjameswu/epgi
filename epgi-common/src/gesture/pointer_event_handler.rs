@@ -2,32 +2,29 @@ use std::{any::TypeId, sync::Arc, time::Instant};
 
 use epgi_core::foundation::SyncMutex;
 
-use super::{
-    GestureRecognizerTeamPolicy, PointerEvent, PointerInteractionEvent, PointerInteractionId,
-};
+use super::{PointerEvent, PointerInteractionEvent, PointerInteractionId};
 
-pub trait PointerEventHandler {
-    fn handle_pointer_event(&self, event: PointerEvent);
-}
+pub trait TransformedPointerEventHandler {
+    fn handle_pointer_event(&self, event: &PointerEvent);
 
-/// GestureHandler differs from PointerEventHandler in that gesture recognition is arena-based.
-/// Once a winner is resolved, all other competitors lose and will no longer receives event.
-///
-/// All GestureRecognizer must have a PointerEventHandler impl and an interface table entry,
-/// to optimize the hit-test down-selection interface design.
-/// The PointerEventHandler impl can be left empty, however.
-pub trait AnyTransformedGestureRecognizerContainer: PointerEventHandler {
-    fn handle_pointer_interaction_start(
-        &self,
-    ) -> (
-        GestureRecognizerTeamPolicy,
-        Vec<Box<dyn AnyTransformedGestureRecognizerWrapper>>,
-    );
+    fn all_gesture_recognizers(&self) -> Option<(GestureRecognizerTeamPolicy, Vec<TypeId>)> {
+        None
+    }
 
-    fn get_recognizer(
+    #[allow(unused_variables)]
+    fn get_gesture_recognizer(
         &self,
         type_id: TypeId,
-    ) -> Option<Box<dyn AnyTransformedGestureRecognizerWrapper>>;
+    ) -> Option<Box<dyn AnyTransformedGestureRecognizer>> {
+        None
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum GestureRecognizerTeamPolicy {
+    Competing,
+    Cooperative,
+    Hereditary,
 }
 
 pub enum RecognitionResult {
@@ -80,7 +77,7 @@ pub trait GestureRecognizer: 'static {
     fn handle_arena_defeat(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 }
 
-pub trait AnyTransformedGestureRecognizerWrapper {
+pub trait AnyTransformedGestureRecognizer {
     fn handle_event(&self, event: &PointerInteractionEvent) -> RecognizerResponse;
 
     /// Query the current recognition result of this recognizer without new events arriving.
@@ -94,16 +91,14 @@ pub trait AnyTransformedGestureRecognizerWrapper {
     fn handle_arena_defeat(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     fn recognizer_type_id(&self) -> TypeId;
-
-    fn strip_position(self: Box<Self>) -> Box<dyn AnyGestureRecognizerWrapper>;
 }
 
-pub struct TransformedGestureRecognizerWrapper<R: GestureRecognizer> {
+pub struct TransformedGestureRecognizer<R: GestureRecognizer> {
     recognizer: Arc<SyncMutex<R>>,
     hit_position: R::HitPosition,
 }
 
-impl<R> AnyTransformedGestureRecognizerWrapper for TransformedGestureRecognizerWrapper<R>
+impl<R> AnyTransformedGestureRecognizer for TransformedGestureRecognizer<R>
 where
     R: GestureRecognizer,
 {
@@ -124,53 +119,6 @@ where
     }
 
     fn handle_arena_defeat(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer.lock().handle_arena_defeat(interaction_id)
-    }
-
-    fn recognizer_type_id(&self) -> TypeId {
-        TypeId::of::<R>()
-    }
-
-    fn strip_position(self: Box<Self>) -> Box<dyn AnyGestureRecognizerWrapper> {
-        Box::new(GestureRecognizerWrapper {
-            recognizer: self.recognizer,
-        })
-    }
-}
-
-pub struct GestureRecognizerWrapper<R: GestureRecognizer> {
-    recognizer: Arc<SyncMutex<R>>,
-}
-
-pub trait AnyGestureRecognizerWrapper {
-    /// Query the current recognition result of this recognizer without new events arriving.
-    /// This typically happens because the recognizer reported inconclusive result previously.
-    fn query_recognition_state(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
-
-    /// Intepret pointer event into gestures. This happens because the recognizer has already won.
-    fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
-
-    /// Handle defeat and clean up. This happens because the arena has picked another winner.
-    fn handle_arena_defeat(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
-
-    fn recognizer_type_id(&self) -> TypeId;
-}
-
-impl<R> AnyGestureRecognizerWrapper for GestureRecognizerWrapper<R>
-where
-    R: GestureRecognizer,
-{
-    fn query_recognition_state(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer
-            .lock()
-            .query_recognition_state(interaction_id)
-    }
-
-    fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer.lock().handle_arena_victory(interaction_id)
-    }
-
-    fn handle_arena_defeat(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse {
         self.recognizer.lock().handle_arena_defeat(interaction_id)
     }
 

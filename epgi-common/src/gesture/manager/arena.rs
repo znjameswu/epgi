@@ -2,23 +2,25 @@ use std::{any::TypeId, time::Instant};
 
 use epgi_2d::Affine2dCanvas;
 use epgi_core::{
-    foundation::PtrEq,
+    foundation::{Asc, PtrEq},
     tree::{AnyTransformedHitTestEntry, AweakAnyRenderObject, ChildHitTestEntry},
 };
 use smallvec::SmallVec;
 
-use crate::gesture::AnyTransformedGestureRecognizerContainer;
-
-use super::{
-    AnyTransformedGestureRecognizerWrapper, PointerInteractionEvent, PointerInteractionId,
-    RecognitionResult, RecognizerResponse,
+use crate::gesture::{
+    AnyTransformedGestureRecognizer, GestureRecognizerTeamPolicy, RecognizerResponse,
+    TransformedPointerEventHandler,
 };
 
-pub struct GestureArena {
-    state: GestureArenaState,
+use super::{PointerGestureManager, PointerInteractionEvent, PointerInteractionId, RecognitionResult};
+
+impl PointerGestureManager {}
+
+pub(super) struct GestureArena {
+    pub(super) state: GestureArenaState,
 }
 
-enum GestureArenaState {
+pub(super) enum GestureArenaState {
     Competing { teams: Vec<GestureArenaTeam> },
     Resolved { winner: GestureRecognizerHandle },
     Closed,
@@ -34,36 +36,27 @@ impl GestureArenaState {
     }
 }
 
-struct GestureArenaTeam {
-    policy: GestureRecognizerTeamPolicy,
-    self_has_won: bool,
-    member_has_won: bool,
-    entry: Box<dyn ChildHitTestEntry<Affine2dCanvas>>,
-    last_transformed_container: Box<dyn AnyTransformedHitTestEntry>,
-    members: SmallVec<[GestureArenaTeamMemberHandle; 1]>,
+pub(super) struct GestureArenaTeam {
+    pub(super) policy: GestureRecognizerTeamPolicy,
+    pub(super) entry: Asc<dyn ChildHitTestEntry<Affine2dCanvas>>,
+    pub(super) last_transformed_entry: Box<dyn AnyTransformedHitTestEntry>,
+    pub(super) members: SmallVec<[GestureArenaTeamMemberHandle; 1]>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum GestureRecognizerTeamPolicy {
-    Competing,
-    Cooperative,
-    Hereditary,
+pub(super) struct GestureArenaTeamMemberHandle {
+    pub(super) recognizer_type_id: TypeId,
+    pub(super) last_result: RecognitionResult,
 }
 
-struct GestureArenaTeamMemberHandle {
-    recognizer_type_id: TypeId,
-    last_result: RecognitionResult,
-}
-
-struct GestureRecognizerHandle {
-    entry: Box<dyn ChildHitTestEntry<Affine2dCanvas>>,
+pub(super) struct GestureRecognizerHandle {
+    entry: Asc<dyn ChildHitTestEntry<Affine2dCanvas>>,
     // TODO: Can we store Box<dyn AnyTransformedGestureRecognizerContainer> directly? This would require a query_interface_box which is hard to impl
-    last_transformed_container: Box<dyn AnyTransformedHitTestEntry>,
+    last_transformed_entry: Box<dyn AnyTransformedHitTestEntry>,
     member_handle: GestureArenaTeamMemberHandle,
 }
 
 #[derive(Clone)]
-struct GestureRecognizerKey {
+pub(super) struct GestureRecognizerKey {
     render_object: AweakAnyRenderObject,
     recognizer_type_id: TypeId,
 }
@@ -73,7 +66,7 @@ pub(super) struct AssociatedUpdates {
 }
 
 impl AssociatedUpdates {
-    fn empty() -> Self {
+    pub(super) fn empty() -> Self {
         Self { inner: Vec::new() }
     }
 
@@ -107,19 +100,19 @@ impl AssociatedUpdates {
 }
 
 impl GestureArena {
-    fn handle_event(&mut self, event: &PointerInteractionEvent) -> AssociatedUpdates {
+    pub(super) fn handle_event(&mut self, event: &PointerInteractionEvent) -> AssociatedUpdates {
         self.update_arena_state(
             event.interaction_id,
             |_| true,
-            |last_transformed_container, entry| {
-                *last_transformed_container = entry.with_position(event.common.physical_position)
+            |last_transformed_entry, entry| {
+                *last_transformed_entry = entry.with_position(event.common.physical_position)
             },
             |_| true,
             |recognizer| recognizer.handle_event(event),
         )
     }
 
-    fn poll_revisit(
+    pub(super) fn poll_revisit(
         &mut self,
         interaction_id: PointerInteractionId,
         current: Instant,
@@ -133,7 +126,7 @@ impl GestureArena {
         )
     }
 
-    fn poll_specific(
+    pub(super) fn poll_specific(
         &mut self,
         interaction_id: PointerInteractionId,
         key: &GestureRecognizerKey,
@@ -157,9 +150,7 @@ impl GestureArena {
             &dyn ChildHitTestEntry<Affine2dCanvas>,
         ),
         should_visit_member: impl Fn(&GestureArenaTeamMemberHandle) -> bool,
-        new_member_result: impl Fn(
-            Box<dyn AnyTransformedGestureRecognizerWrapper>,
-        ) -> RecognizerResponse,
+        new_member_result: impl Fn(Box<dyn AnyTransformedGestureRecognizer>) -> RecognizerResponse,
     ) -> AssociatedUpdates {
         use GestureArenaState::*;
         match &mut self.state {
@@ -170,16 +161,16 @@ impl GestureArena {
                     if !should_visit_team(team.entry.as_ref()) {
                         continue;
                     }
-                    update_position(&mut team.last_transformed_container, team.entry.as_ref());
+                    update_position(&mut team.last_transformed_entry, team.entry.as_ref());
                     for member in team.members.iter_mut() {
                         if !should_visit_member(member) {
                             continue;
                         }
                         let recognizer = team
-                            .last_transformed_container
-                            .query_interface::<dyn AnyTransformedGestureRecognizerContainer>()
-                            .expect("The entry should be a gesture recognizer container")
-                            .get_recognizer(member.recognizer_type_id);
+                            .last_transformed_entry
+                            .query_interface::<dyn TransformedPointerEventHandler>()
+                            .expect("The entry should be a pointer event handler")
+                            .get_gesture_recognizer(member.recognizer_type_id);
                         let Some(recognizer) = recognizer else {
                             member.last_result = RecognitionResult::Impossible;
                             continue;
@@ -252,9 +243,7 @@ impl GestureArena {
             &dyn ChildHitTestEntry<Affine2dCanvas>,
         ),
         should_visit_member: impl Fn(&GestureArenaTeamMemberHandle) -> bool,
-        new_member_result: impl Fn(
-            Box<dyn AnyTransformedGestureRecognizerWrapper>,
-        ) -> RecognizerResponse,
+        new_member_result: impl Fn(Box<dyn AnyTransformedGestureRecognizer>) -> RecognizerResponse,
     ) -> AssociatedUpdates {
         use GestureArenaState::*;
         let Resolved { winner } = &mut self.state else {
@@ -264,15 +253,12 @@ impl GestureArena {
         {
             return AssociatedUpdates::empty();
         }
-        update_position(
-            &mut winner.last_transformed_container,
-            winner.entry.as_ref(),
-        );
+        update_position(&mut winner.last_transformed_entry, winner.entry.as_ref());
         let recognizer = winner
-            .last_transformed_container
-            .query_interface::<dyn AnyTransformedGestureRecognizerContainer>()
-            .expect("The entry should be a gesture recognizer container")
-            .get_recognizer(winner.member_handle.recognizer_type_id);
+            .last_transformed_entry
+            .query_interface::<dyn TransformedPointerEventHandler>()
+            .expect("The entry should be a pointer event handler")
+            .get_gesture_recognizer(winner.member_handle.recognizer_type_id);
         let Some(recognizer) = recognizer else {
             self.state = Closed;
             return AssociatedUpdates::empty();
@@ -309,7 +295,7 @@ impl GestureArena {
                     if let Some(winner_member) = winner_member {
                         winner = Some(GestureRecognizerHandle {
                             entry: team.entry,
-                            last_transformed_container: team.last_transformed_container,
+                            last_transformed_entry: team.last_transformed_entry,
                             member_handle: winner_member,
                         });
                     }
@@ -329,7 +315,7 @@ impl GestureArena {
                             team.members.into_iter().next().expect("Impossible to fail");
                         winner = Some(GestureRecognizerHandle {
                             entry: team.entry,
-                            last_transformed_container: team.last_transformed_container,
+                            last_transformed_entry: team.last_transformed_entry,
                             member_handle: winner_member,
                         });
                     }
@@ -362,7 +348,7 @@ impl GestureArena {
             .expect("Empty gesture teams should have already been deleted");
         let winner = GestureRecognizerHandle {
             entry: team.entry,
-            last_transformed_container: team.last_transformed_container,
+            last_transformed_entry: team.last_transformed_entry,
             member_handle: winner_member,
         };
         return Ok(winner);
