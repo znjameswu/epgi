@@ -1,4 +1,4 @@
-use epgi_core::foundation::{Asc, Canvas, PaintContext};
+use epgi_core::foundation::{Canvas, PaintContext};
 
 pub use peniko::{
     BlendMode, Brush, Cap, Color, ColorStops, Dashes, Extend, Fill, Format, Gradient, GradientKind,
@@ -6,8 +6,8 @@ pub use peniko::{
 };
 
 use crate::{
-    Affine2d, BoxOffset, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Paragraph,
-    ParagraphLayout, Point2d, QuadBez, RRect, Rect, RingSector,
+    Affine2d, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, ParagraphLayout,
+    Point2d, QuadBez, RRect, Rect, RingSector,
 };
 
 pub enum Affine2dPaintCommand<'a> {

@@ -1,10 +1,5 @@
 use std::ops::BitAnd;
 
-pub use peniko::{
-    BlendMode, Brush, Cap, Color, ColorStops, Dashes, Extend, Fill, Format, Gradient, GradientKind,
-    Image, Join, Stroke,
-};
-
 use crate::{Affine2d, BoxOffset, BoxSize, Point2d};
 
 pub struct Line {

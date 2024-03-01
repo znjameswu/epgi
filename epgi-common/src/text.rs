@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxOffset};
 use epgi_core::foundation::{Canvas, Intrinsics, Protocol};
 
@@ -136,15 +134,13 @@ pub struct MultiLineTransform {
 
 #[macro_export]
 macro_rules! MultiLineTransform {
-    () => {
-        
-    };
+    () => {};
 }
 
 MultiLineTransform!();
 // pub struct Text {
 //     str: Cow<'static, str>,
-//     text_style: 
+//     text_style:
 // }
 
 // pub struct SingleLineText {

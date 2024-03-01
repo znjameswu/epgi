@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::collections::HashMap;
 
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxProtocol};
 use epgi_core::{
@@ -19,7 +19,7 @@ struct PointerGestureManager {
     rx: SyncMpscReceiver<PointerEvent>,
     pointers_in_contact:
         HashMap<PointerInteractionId, Vec<Box<dyn ChildHitTestEntry<Affine2dCanvas>>>>,
-    // arenas: HashMap<PointerInteractionId, Vec<GestureRecognizerHandle>>,
+    arenas: HashMap<PointerInteractionId, GestureArena>,
 }
 
 struct GestureArena {}
@@ -84,5 +84,3 @@ impl PointerGestureManager {
 
     fn handle_event(event: PointerEvent) {}
 }
-
-

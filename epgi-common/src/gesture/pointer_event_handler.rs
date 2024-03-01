@@ -1,9 +1,6 @@
 use std::{any::TypeId, sync::Arc, time::Instant};
 
-use epgi_core::{
-    foundation::{Inlinable64Vec, SyncMutex},
-    tree::AweakAnyRenderObject,
-};
+use epgi_core::foundation::SyncMutex;
 
 use super::{
     GestureRecognizerTeamPolicy, PointerEvent, PointerInteractionEvent, PointerInteractionId,
@@ -34,10 +31,10 @@ pub trait AnyTransformedGestureRecognizerContainer: PointerEventHandler {
 }
 
 pub enum RecognitionResult {
-    Certain { confidence: f32 },
-    Possible,
-    Inconclusive { revisit: Instant },
     Impossible,
+    Inconclusive { revisit: Instant },
+    Possible,
+    Certain { confidence: f32 },
 }
 
 impl RecognitionResult {
@@ -60,7 +57,7 @@ impl RecognitionResult {
 
 pub struct RecognizerResponse {
     pub primary_result: RecognitionResult,
-    pub associated_updates: Vec<PointerInteractionId>,
+    pub associated_arenas: Vec<PointerInteractionId>,
 }
 
 pub trait GestureRecognizer: 'static {
@@ -84,17 +81,17 @@ pub trait GestureRecognizer: 'static {
 }
 
 pub trait AnyTransformedGestureRecognizerWrapper {
-    fn handle_event(&mut self, event: &PointerInteractionEvent) -> RecognizerResponse;
+    fn handle_event(&self, event: &PointerInteractionEvent) -> RecognizerResponse;
 
     /// Query the current recognition result of this recognizer without new events arriving.
     /// This typically happens because the recognizer reported inconclusive result previously.
     fn query_recognition_state(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     /// Intepret pointer event into gestures. This happens because the recognizer has already won.
-    fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
+    fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     /// Handle defeat and clean up. This happens because the arena has picked another winner.
-    fn handle_arena_defeat(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
+    fn handle_arena_defeat(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     fn recognizer_type_id(&self) -> TypeId;
 
@@ -110,7 +107,7 @@ impl<R> AnyTransformedGestureRecognizerWrapper for TransformedGestureRecognizerW
 where
     R: GestureRecognizer,
 {
-    fn handle_event(&mut self, event: &PointerInteractionEvent) -> RecognizerResponse {
+    fn handle_event(&self, event: &PointerInteractionEvent) -> RecognizerResponse {
         self.recognizer
             .lock()
             .handle_event(&self.hit_position, event)
@@ -122,11 +119,11 @@ where
             .query_recognition_state(interaction_id)
     }
 
-    fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse {
+    fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
         self.recognizer.lock().handle_arena_victory(interaction_id)
     }
 
-    fn handle_arena_defeat(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse {
+    fn handle_arena_defeat(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
         self.recognizer.lock().handle_arena_defeat(interaction_id)
     }
 

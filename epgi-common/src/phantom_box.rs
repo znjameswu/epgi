@@ -3,8 +3,7 @@ use std::sync::Arc;
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize, Point2d};
 use epgi_core::{
     foundation::{
-        ArrayContainer, BuildSuspendedError, Canvas, HktContainer, InlinableDwsizeVec, Never,
-        PaintContext, Protocol, Provide,
+        ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element,
