@@ -1,12 +1,12 @@
 mod arena;
 
-pub use arena::*;
+use arena::*;
 
-use std::{collections::VecDeque, ops::Deref};
+use std::{ops::Deref, time::Instant};
 
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxProtocol};
 use epgi_core::{
-    foundation::{Asc, AssertExt, SyncMpscReceiver, SyncMpscSender},
+    foundation::{Asc, AssertExt, MapEntryExtenision, SyncMpscReceiver, SyncMpscSender},
     tree::{ArcChildRenderObject, ChildHitTestEntry},
 };
 use hashbrown::{hash_map::Entry, HashMap};
@@ -31,10 +31,18 @@ pub struct PointerGestureManager {
 }
 
 impl PointerGestureManager {
-    pub fn flush(&mut self, root: &ArcChildRenderObject<BoxProtocol>) {
+    pub fn flush_events(&mut self, root: &ArcChildRenderObject<BoxProtocol>) {
         while let Ok(event) = self.rx.try_recv() {
             self.handle_pointer_event(event, root.clone())
         }
+    }
+
+    pub fn poll_revisit_all(&mut self, current: Instant) {
+        let mut associated_updates = AssociatedUpdates::empty();
+        for (&interaction_id, arena) in self.arenas.iter_mut() {
+            associated_updates.append(arena.poll_revisit(interaction_id, current));
+        }
+        self.process_associated_updates(associated_updates);
     }
 
     fn handle_pointer_event(
@@ -52,7 +60,7 @@ impl PointerGestureManager {
             entries.iter().for_each(|entry| {
                 entry
                     .with_position(event.common.physical_position)
-                    .query_interface::<dyn TransformedPointerEventHandler>()
+                    .query_interface_ref::<dyn TransformedPointerEventHandler>()
                     .expect("The entry should be a pointer event handler")
                     .handle_pointer_event(&event)
             });
@@ -94,24 +102,13 @@ impl PointerGestureManager {
                 let teams = entries
                     .iter()
                     .filter_map(|entry| {
-                        let transformed_entry = entry.with_position(event.common.physical_position);
-                        let handler = transformed_entry
-                            .query_interface::<dyn TransformedPointerEventHandler>()
+                        let handler = entry
+                            .with_position(event.common.physical_position)
+                            .query_interface_box::<dyn TransformedPointerEventHandler>()
+                            .ok()
                             .expect("The entry should be a pointer event handler");
                         handler.handle_pointer_event(&event);
-                        let (policy, recognizer_type_ids) = handler.all_gesture_recognizers()?;
-                        Some(GestureArenaTeam {
-                            policy,
-                            entry: entry.clone(),
-                            last_transformed_entry: transformed_entry,
-                            members: recognizer_type_ids
-                                .into_iter()
-                                .map(|recognizer_type_id| GestureArenaTeamMemberHandle {
-                                    recognizer_type_id,
-                                    last_result: RecognitionResult::Possible,
-                                })
-                                .collect(),
-                        })
+                        GestureArenaTeam::try_from_entry(entry.clone(), handler)
                     })
                     .collect();
 
@@ -124,9 +121,7 @@ impl PointerGestureManager {
                 self.arenas
                     .insert(
                         *interaction_id,
-                        GestureArena {
-                            state: GestureArenaState::Competing { teams },
-                        },
+                        GestureArena::from_competing_teams(teams),
                     )
                     .debug_assert_with(
                         Option::is_none,
@@ -154,32 +149,69 @@ impl PointerGestureManager {
         } = event.variant
         {
             let associated_updates = self
-                .arenas
-                .get_mut(&interaction_id)
-                .expect("Arena should exist")
-                .handle_event(&PointerInteractionEvent {
+                .arena_handle_event(&PointerInteractionEvent {
                     common: event.common,
                     interaction_id,
                     variant,
-                });
+                })
+                .expect("Arena should exist");
             self.process_associated_updates(associated_updates);
         }
     }
 
     fn process_associated_updates(&mut self, mut associated_updates: AssociatedUpdates) {
-        let mut dequeue = VecDeque::new();
         loop {
+            let mut next_associated_updates = AssociatedUpdates::empty();
             for (interaction_id, key) in associated_updates.inner {
-                let Some(arena) = self.arenas.get_mut(&interaction_id) else {
-                    continue;
-                };
-                dequeue.push_back(arena.poll_specific(interaction_id, &key));
+                if let Some(associated_updates) = self.arena_poll_specific(interaction_id, &key) {
+                    next_associated_updates.append(associated_updates);
+                }
             }
-            let Some(next_associated_updates) = dequeue.pop_front() else {
+            if next_associated_updates.inner.is_empty() {
                 break;
-            };
+            }
             associated_updates = next_associated_updates;
         }
+    }
+}
+
+impl PointerGestureManager {
+    fn arena_handle_event(&mut self, event: &PointerInteractionEvent) -> Option<AssociatedUpdates> {
+        let mut entry = self.arenas.entry(event.interaction_id).occupied()?;
+        let arena = entry.get_mut();
+        let associated_updates = arena.handle_event(event);
+        if arena.is_closed() {
+            entry.remove();
+        }
+        return Some(associated_updates);
+    }
+
+    // fn arena_poll_revisit(
+    //     &mut self,
+    //     interaction_id: PointerInteractionId,
+    //     current: Instant,
+    // ) -> Option<AssociatedUpdates> {
+    //     let mut entry = self.arenas.entry(interaction_id).occupied()?;
+    //     let arena = entry.get_mut();
+    //     let associated_updates = arena.poll_revisit(interaction_id, current);
+    //     if arena.is_closed() {
+    //         entry.remove();
+    //     }
+    //     return Some(associated_updates);
+    // }
+
+    fn arena_poll_specific(
+        &mut self,
+        interaction_id: PointerInteractionId,
+        key: &GestureRecognizerKey,
+    ) -> Option<AssociatedUpdates> {
+        let mut entry = self.arenas.entry(interaction_id).occupied()?;
+        let arena = entry.get_mut();
+        let associated_updates = arena.poll_specific(interaction_id, key);
+        if arena.is_closed() {
+            entry.remove();
+        }
+        return Some(associated_updates);
     }
 }
 

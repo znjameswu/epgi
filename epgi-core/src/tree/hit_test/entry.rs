@@ -3,8 +3,8 @@ use std::any::TypeId;
 use crate::{
     foundation::{
         default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
-        default_query_interface_ref, AnyRawPointer, Arc, Aweak, Canvas, CastInterfaceByRawPtr,
-        Protocol, Transform,
+        default_query_interface_box, default_query_interface_ref, AnyRawPointer, Arc, Aweak,
+        Canvas, CastInterfaceByRawPtr, Protocol, Transform,
     },
     tree::{AweakAnyRenderObject, Render, RenderObject},
 };
@@ -14,8 +14,12 @@ use super::TransformedHitTestTarget;
 pub trait AnyTransformedHitTestEntry: CastInterfaceByRawPtr {}
 
 impl dyn AnyTransformedHitTestEntry {
-    pub fn query_interface<T: ?Sized + 'static>(&self) -> Option<&T> {
+    pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
         default_query_interface_ref(self)
+    }
+
+    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+        default_query_interface_box(self)
     }
 }
 
