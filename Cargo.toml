@@ -3,11 +3,14 @@ members = [
     "epgi-core",
     "epgi-common",
     "epgi-2d",
-    "epgi-glazier",
+    # # Glazier was broken due to wgpu updates
+    # "epgi-glazier",
     "epgi-winit",
-    "examples/*",
-    "optargs"
-, "epgi-winit"]
+    # We have to manually expand each sub-item to exclude defunt glazier example https://github.com/rust-lang/cargo/issues/6745
+    "examples/winit-simple",
+    "optargs",
+    "epgi-winit",
+]
 resolver = "2"
 
 
@@ -29,9 +32,9 @@ path = "./epgi-2d"
 package = "epgi-common"
 path = "./epgi-common"
 
-[workspace.dependencies.epgi-glazier]
-package = "epgi-glazier"
-path = "./epgi-glazier"
+# [workspace.dependencies.epgi-glazier]
+# package = "epgi-glazier"
+# path = "./epgi-glazier"
 
 [workspace.dependencies.epgi-winit]
 package = "epgi-winit"
