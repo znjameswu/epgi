@@ -20,12 +20,6 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
 name = "accesskit"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76eb1adf08c5bcaa8490b9851fd53cca27fa9880076f178ea9d29f05196728a8"
-
-[[package]]
-name = "accesskit"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cb10ed32c63247e4e39a8f42e8e30fb9442fbf7878c8e4a9849e7e381619bea"
@@ -36,7 +30,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c17cca53c09fbd7288667b22a201274b9becaa27f0b91bf52a526db95de45e6"
 dependencies = [
- "accesskit 0.12.2",
+ "accesskit",
 ]
 
 [[package]]
@@ -45,7 +39,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd3b6ae1eabbfbced10e840fd3fce8a93ae84f174b3e4ba892ab7bcb42e477a7"
 dependencies = [
- "accesskit 0.12.2",
+ "accesskit",
  "accesskit_consumer",
  "objc2 0.3.0-beta.3.patch-leaks.3",
  "once_cell",
@@ -57,7 +51,7 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afcae27ec0974fc7c3b0b318783be89fd1b2e66dd702179fe600166a38ff4a0b"
 dependencies = [
- "accesskit 0.12.2",
+ "accesskit",
  "accesskit_consumer",
  "once_cell",
  "paste",
@@ -998,12 +992,13 @@ dependencies = [
 name = "epgi-glazier"
 version = "0.1.0"
 dependencies = [
- "accesskit 0.11.2",
+ "accesskit",
  "epgi-2d",
  "epgi-common",
  "epgi-core",
  "futures",
  "glazier",
+ "raw-window-handle 0.6.0",
  "rayon",
  "vello",
  "vello_encoding",
@@ -1014,7 +1009,6 @@ dependencies = [
 name = "epgi-winit"
 version = "0.1.0"
 dependencies = [
- "accesskit 0.11.2",
  "epgi-2d",
  "epgi-common",
  "epgi-core",
@@ -1353,7 +1347,7 @@ name = "glazier"
 version = "0.1.0"
 source = "git+https://github.com/linebender/glazier?rev=8d2a4b2cafd5e6be49bfb4ac8d0bd26fe02f036e#8d2a4b2cafd5e6be49bfb4ac8d0bd26fe02f036e"
 dependencies = [
- "accesskit 0.12.2",
+ "accesskit",
  "accesskit_macos",
  "accesskit_windows",
  "anyhow",

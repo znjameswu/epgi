@@ -15,14 +15,13 @@ wayland = ["winit/wayland"]
 taffy = ["dep:taffy"]
 
 [dependencies]
-accesskit = { workspace = true }
 epgi-core = { workspace = true }
 epgi-2d = { workspace = true }
 epgi-common = { workspace = true }
 vello = { workspace = true }
 vello_encoding = { workspace = true }
 wgpu = { workspace = true }
-winit = {workspace = true}
+winit = { workspace = true, features = ["rwh_05"] }
 futures = "0.3.27"
 rayon = { workspace = true }
 taffy = { version = "0.4.0", optional = true }

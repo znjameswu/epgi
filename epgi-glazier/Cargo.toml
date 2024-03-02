@@ -12,7 +12,7 @@ x11 = ["glazier/x11"]
 wayland = ["glazier/wayland"]
 
 [dependencies]
-accesskit = { workspace = true }
+accesskit = "0.12"
 epgi-core = { workspace = true }
 epgi-2d = { workspace = true }
 epgi-common = { workspace = true }
@@ -22,6 +22,9 @@ vello_encoding = { workspace = true }
 wgpu = { workspace = true }
 futures = "0.3.27"
 rayon = { workspace = true }
+
+#to patch glazier
+rwh_06 = { package = "raw-window-handle", version = "0.6", features = ["std"] }
 
 [profile.dev]
 panic = 'abort'

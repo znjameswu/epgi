@@ -19,10 +19,13 @@ use glazier::{
 };
 use std::{
     any::Any,
+    num::NonZeroUsize,
     time::{Instant, SystemTime},
 };
 use vello::{
-    peniko::Color, util::{RenderContext, RenderSurface}, AaSupport, RenderParams, Renderer, RendererOptions, Scene
+    peniko::Color,
+    util::{RenderContext, RenderSurface},
+    AaSupport, RenderParams, Renderer, RendererOptions, Scene,
 };
 
 use crate::EpgiGlazierSchedulerExtension;
@@ -75,11 +78,11 @@ impl AppLauncher {
     }
 }
 
-struct MainState<'a> {
+struct MainState {
     handle: WindowHandle,
     // app: App<T, V>,
     render_cx: RenderContext,
-    surface: Option<RenderSurface<'a>>,
+    surface: Option<RenderSurface<'static>>,
     renderer: Option<Renderer>,
     // root_layer: Option<Layer<Affine2dCanvas>>,
     scene: Scene,
@@ -90,7 +93,7 @@ struct MainState<'a> {
     constraints_binding: Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
 }
 
-impl<'a> WinHandler for MainState<'a> {
+impl WinHandler for MainState {
     fn connect(&mut self, handle: &WindowHandle) {
         self.handle = handle.clone();
         // self.app.connect(handle.clone());
@@ -173,12 +176,11 @@ impl<'a> WinHandler for MainState<'a> {
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
-        // WGPU 1.90 totally broke glazier
-        todo!()
+        self
     }
 }
 
-impl<'a> MainState<'a> {
+impl MainState {
     fn new() -> Self {
         let render_cx = RenderContext::new().unwrap();
 
@@ -296,7 +298,7 @@ impl<'a> MainState<'a> {
             let device = &self.render_cx.devices[dev_id].device;
             let queue = &self.render_cx.devices[dev_id].queue;
             let renderer_options = RendererOptions {
-                surface_format: Some(self.surface.format),
+                surface_format: Some(surface.format),
                 use_cpu: false,
                 antialiasing_support: AaSupport {
                     area: true,
@@ -309,9 +311,10 @@ impl<'a> MainState<'a> {
                 base_color: Color::BLACK,
                 width,
                 height,
+                antialiasing_method: vello::AaConfig::Area,
             };
             self.renderer
-                .get_or_insert_with(|| Renderer::new(device, &renderer_options).unwrap())
+                .get_or_insert_with(|| Renderer::new(device, renderer_options).unwrap())
                 .render_to_surface(device, queue, &self.scene, &surface_texture, &render_params)
                 .expect("failed to render to surface");
             surface_texture.present();
@@ -337,7 +340,7 @@ impl FrameInfo {
     }
 }
 
-impl<'a> MainState<'a> {
+impl MainState {
     fn start_scheduler_with(&mut self, app: ArcChildWidget<BoxProtocol>) {
         // First we construct an empty root with no children. Later we will inject our application widget inside
         let (element_node, render_object, widget_binding) = initialize_root();
