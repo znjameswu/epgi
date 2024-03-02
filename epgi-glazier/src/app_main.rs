@@ -27,6 +27,8 @@ use vello::{
     RenderParams, Renderer, RendererOptions, Scene,
 };
 
+use crate::EpgiGlazierSchedulerExtension;
+
 pub struct AppLauncher {
     title: String,
     app: ArcChildWidget<BoxProtocol>,
@@ -364,7 +366,7 @@ impl MainState {
 
         let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
 
-        let scheduler = Scheduler::new(build_scheduler, vec![]);
+        let scheduler = Scheduler::new(build_scheduler, EpgiGlazierSchedulerExtension::new());
         let join_handle = std::thread::spawn(move || {
             scheduler.start_event_loop(get_current_scheduler());
         });

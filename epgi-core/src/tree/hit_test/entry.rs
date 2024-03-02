@@ -44,7 +44,7 @@ where
 
 impl<R> AnyTransformedHitTestEntry for TransformedHitTestEntry<R> where R: Render {}
 
-pub trait ChildHitTestEntry<C: Canvas> {
+pub trait ChildHitTestEntry<C: Canvas>: Send + Sync {
     fn prepend_transform(&mut self, transform: &C::Transform);
 
     fn with_position(&self, hit_position: C::HitPosition) -> Box<dyn AnyTransformedHitTestEntry>;

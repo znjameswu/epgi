@@ -46,7 +46,7 @@ pub struct SchedulerHandle {
 
     pub(super) task_rx: SchedulerTaskReceiver,
 
-    pub(super) sync_job_building_lock: SyncRwLock<()>,
+    pub(super) global_sync_job_build_lock: SyncRwLock<()>,
     pub(super) job_id_counter: AtomicJobIdCounter,
 
     // mode: LatencyMode,
@@ -64,7 +64,7 @@ impl SchedulerHandle {
             sync_threadpool,
             async_threadpool,
             task_rx: SchedulerTaskReceiver::new(),
-            sync_job_building_lock: SyncRwLock::new(()),
+            global_sync_job_build_lock: SyncRwLock::new(()),
             job_id_counter: AtomicJobIdCounter::new(),
             // is_executing_sync: (),
             nodes_needing_paint: Default::default(),
@@ -80,7 +80,7 @@ impl SchedulerHandle {
         // This lock is to ensure the scheduler could not process jobs before all sync jobs create in the previous frame have finished building.
         // Therefore, the scheduler will never see an outdated sync job from previous frames.
         // However, it also means that blocking in the job builder will block the entire event loop.
-        let guard = self.sync_job_building_lock.read();
+        let guard = self.global_sync_job_build_lock.read();
         let job_id = self.job_id_counter.generate_sync_job_id();
         let mut job_builder = JobBuilder::new(job_id, Instant::now());
         builder(&mut job_builder);

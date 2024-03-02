@@ -164,6 +164,6 @@ impl<P> LayerProtocol for P where
 {
 }
 
-pub trait Transform<PC: Canvas, CC: Canvas> {
+pub trait Transform<PC: Canvas, CC: Canvas>: Send + Sync{
     fn transform(&self, input: &PC::HitPosition) -> CC::HitPosition;
 }

@@ -31,6 +31,14 @@ pub struct PointerGestureManager {
 }
 
 impl PointerGestureManager {
+    pub fn new(rx: SyncMpscReceiver<PointerEvent>) -> Self {
+        Self {
+            rx,
+            pointers_in_contact: Default::default(),
+            arenas: Default::default(),
+        }
+    }
+    
     pub fn flush_events(&mut self, root: &ArcChildRenderObject<BoxProtocol>) {
         while let Ok(event) = self.rx.try_recv() {
             self.handle_pointer_event(event, root.clone())

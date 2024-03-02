@@ -4,7 +4,7 @@ use epgi_core::foundation::SyncMutex;
 
 use super::{PointerEvent, PointerInteractionEvent, PointerInteractionId};
 
-pub trait TransformedPointerEventHandler {
+pub trait TransformedPointerEventHandler: Send {
     fn handle_pointer_event(&self, event: &PointerEvent);
 
     fn all_gesture_recognizers(&self) -> Option<(GestureRecognizerTeamPolicy, Vec<TypeId>)> {

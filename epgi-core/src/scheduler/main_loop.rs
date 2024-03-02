@@ -1,5 +1,7 @@
+use std::any::Any;
+
 use crate::{
-    foundation::{Arc, Asc, SyncMpscSender, SyncRwLock},
+    foundation::{Asc, SyncMpscSender, SyncRwLock},
     sync::CommitBarrier,
     tree::{AweakAnyElementNode, AweakElementContextNode, WorkContext, WorkHandle},
 };
@@ -26,25 +28,35 @@ pub(super) enum SchedulerTask {
         work_handle: WorkHandle,
         commit_barrier: CommitBarrier,
     },
-    PointerEvent {},
     Shutdown,
+    SchedulerExtensionEvent(Box<dyn Any + Send + Sync>),
 }
 
-pub struct Scheduler {
+pub struct Scheduler<E: SchedulerExtension> {
     build_scheduler: Asc<SyncRwLock<BuildScheduler>>,
     job_batcher: JobBatcher,
-    persistent_callbacks: Arc<[Box<dyn Fn() + Send + Sync>]>,
+    extension: E,
 }
 
-impl Scheduler {
-    pub fn new(
-        build_scheduler: BuildScheduler,
-        persistent_callbacks: Vec<Box<dyn Fn() + Send + Sync>>,
-    ) -> Self {
+pub trait SchedulerExtension: Send {
+    fn on_frame_begin(&mut self);
+
+    fn on_layout_complete(&mut self);
+
+    fn on_frame_complete();
+
+    fn on_extension_event(&mut self, event: Box<dyn Any + Send + Sync>);
+}
+
+impl<E> Scheduler<E>
+where
+    E: SchedulerExtension,
+{
+    pub fn new(build_scheduler: BuildScheduler, extension: E) -> Self {
         Self {
             build_scheduler: Asc::new(SyncRwLock::new(build_scheduler)),
             job_batcher: JobBatcher::new(),
-            persistent_callbacks: persistent_callbacks.into(),
+            extension,
         }
     }
     pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
@@ -65,7 +77,7 @@ impl Scheduler {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
                     let new_jobs = {
-                        let _guard = handle.sync_job_building_lock.write();
+                        let _guard = handle.global_sync_job_build_lock.write();
                         handle.job_id_counter.increment_frame();
                         std::mem::take(&mut *handle.accumulated_jobs.lock())
                     };
@@ -73,6 +85,7 @@ impl Scheduler {
                     let updates = self.job_batcher.get_batch_updates();
                     build_scheduler.apply_batcher_result(updates);
                     // build_scheduler.dispatch_async_batches();
+                    self.extension.on_frame_begin();
                     let commited_sync_batch = build_scheduler.dispatch_sync_batch();
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
@@ -82,12 +95,12 @@ impl Scheduler {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
                     build_scheduler.perform_layout();
+                    self.extension.on_layout_complete();
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.
                     // TODO: Parking_lot owned downgradable guard
                     drop(build_scheduler);
                     let read_guard = self.build_scheduler.read();
                     let build_scheduler = self.build_scheduler.clone();
-                    let persistent_callbacks = self.persistent_callbacks.clone();
                     let layer_needing_repaint =
                         { std::mem::take(&mut *handle.layer_needing_repaint.lock()) };
                     let paint_started_event = event_listener::Event::new();
@@ -103,13 +116,13 @@ impl Scheduler {
                                 id: frame_id,
                             }); // TODO: log failure
                         }
-                        persistent_callbacks.iter().for_each(|callback| callback());
+
+                        E::on_frame_complete();
                         drop(scheduler)
                     });
                     paint_started.wait();
                     drop(read_guard);
                 }
-                PointerEvent {} => {}
                 ReorderAsyncWork { node } => {
                     let build_scheduler = self.build_scheduler.clone();
                     handle.sync_threadpool.spawn(move || {
@@ -131,6 +144,9 @@ impl Scheduler {
                     commit_barrier,
                 } => todo!(),
                 Shutdown => break,
+                SchedulerExtensionEvent(event) => {
+                    self.extension.on_extension_event(event);
+                }
             }
         }
     }
