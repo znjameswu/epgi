@@ -119,24 +119,50 @@ pub struct AnyRawPointer {
 }
 
 impl AnyRawPointer {
-    pub fn new_const<T: ?Sized + 'static>(ptr: *const T) -> Self {
-        if std::mem::size_of::<*const T>() > std::mem::size_of::<[*const (); 2]>() {
+    // pub fn new_raw<T: ?Sized + 'static>(ptr: *const T) -> Self {
+    //     if std::mem::size_of::<*const T>() > std::mem::size_of::<[*const (); 2]>() {
+    //         panic!("RawPointerBox can only hold data up to two pointer size!")
+    //     }
+    //     let mut buffer = MaybeUninit::uninit();
+    //     unsafe {
+    //         (buffer.as_mut_ptr() as *mut *const T).write(ptr);
+    //         Self {
+    //             type_id: TypeId::of::<*const T>(),
+    //             buffer: buffer.assume_init(),
+    //         }
+    //     }
+    // }
+
+    // pub fn downcast_raw<T: ?Sized + 'static>(self) -> Result<*const T, Self> {
+    //     if TypeId::of::<*const T>() == self.type_id {
+    //         unsafe {
+    //             let result = std::mem::transmute_copy::<_, *const T>(&self.buffer);
+    //             std::mem::forget(self);
+    //             Ok(result)
+    //         }
+    //     } else {
+    //         Err(self)
+    //     }
+    // }
+
+    pub fn new_raw_mut<T: ?Sized + 'static>(ptr: *mut T) -> Self {
+        if std::mem::size_of::<*mut T>() > std::mem::size_of::<[*const (); 2]>() {
             panic!("RawPointerBox can only hold data up to two pointer size!")
         }
         let mut buffer = MaybeUninit::uninit();
         unsafe {
-            (buffer.as_mut_ptr() as *mut *const T).write(ptr);
+            (buffer.as_mut_ptr() as *mut *mut T).write(ptr);
             Self {
-                type_id: TypeId::of::<*const T>(),
+                type_id: TypeId::of::<*mut T>(),
                 buffer: buffer.assume_init(),
             }
         }
     }
 
-    pub fn downcast_const<T: ?Sized + 'static>(self) -> Result<*const T, Self> {
-        if TypeId::of::<*const T>() == self.type_id {
+    pub fn downcast_raw_mut<T: ?Sized + 'static>(self) -> Result<*mut T, Self> {
+        if TypeId::of::<*mut T>() == self.type_id {
             unsafe {
-                let result = std::mem::transmute_copy::<_, *const T>(&self.buffer);
+                let result = std::mem::transmute_copy::<_, *mut T>(&self.buffer);
                 std::mem::forget(self);
                 Ok(result)
             }
@@ -146,8 +172,18 @@ impl AnyRawPointer {
     }
 }
 
+/// The two methods all have default implementations. You are encouraged to just use the default implementations.
+/// And the default implementations are the same.
+///
+/// The very same method is split into two to make MIRI happy.
+///
+/// Because loss of mutability here will trigger MIRI error when you try to recover the mutability later on.
+/// Therefore we have to have a mut version of the function,
+/// while the immutable version is a necessary for any other scenarios where users cannot obtain a mutable ref safely.
 pub trait CastInterfaceByRawPtr {
     fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer>;
+
+    fn cast_interface_raw_mut(&mut self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer>;
 }
 
 impl dyn CastInterfaceByRawPtr {
@@ -160,10 +196,23 @@ impl dyn CastInterfaceByRawPtr {
     }
 }
 
+/// The table uses `*mut` ptrs to make MIRI happy.
+///
+/// If we perform pointer cast in `*const` ptrs, then the cast will strip previous mutability carried by the pointer,
+/// and causes MIRI error when you try to recover the mutability later on.
+/// Perform the cast in `*mut` ptrs, however, has no negative effect on immutable versions of implmentation.
 pub fn default_cast_interface_by_table_raw<'a, T: 'a>(
     this: *const T,
     raw_ptr_type_id: TypeId,
-    table: impl IntoIterator<Item = &'a (TypeId, fn(*const T) -> AnyRawPointer)>,
+    table: impl IntoIterator<Item = &'a (TypeId, fn(*mut T) -> AnyRawPointer)>,
+) -> Option<AnyRawPointer> {
+    default_cast_interface_by_table_raw_mut(this as _, raw_ptr_type_id, table)
+}
+
+pub fn default_cast_interface_by_table_raw_mut<'a, T: 'a>(
+    this: *mut T,
+    raw_ptr_type_id: TypeId,
+    table: impl IntoIterator<Item = &'a (TypeId, fn(*mut T) -> AnyRawPointer)>,
 ) -> Option<AnyRawPointer> {
     for (type_id, cast) in table.into_iter() {
         if *type_id == raw_ptr_type_id {
@@ -178,9 +227,9 @@ pub fn default_query_interface_ref<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized 
     source: &S,
 ) -> Option<&T> {
     source
-        .cast_interface_raw(TypeId::of::<*const T>())
+        .cast_interface_raw(TypeId::of::<*mut T>())
         .map(|ptr| {
-            let downcasted = ptr.downcast_const::<T>().ok().expect(
+            let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
                 "Interface query table function should return a raw fat pointer \
                     with the same type as it has claimed",
             );
@@ -194,10 +243,11 @@ pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized 
     let leaked = Box::into_raw(source);
     let casted = unsafe { leaked.as_mut() }
         .expect("Impossible to fail")
-        .cast_interface_raw(TypeId::of::<*const T>());
+        .cast_interface_raw_mut(TypeId::of::<*mut T>());
+    // .cast_interface_raw(TypeId::of::<*mut T>());
     match casted {
         Some(ptr) => {
-            let downcasted = ptr.downcast_const::<T>().ok().expect(
+            let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
                 "Interface query table function should return a raw fat pointer \
                 with the same type as it has claimed",
             );
@@ -218,15 +268,23 @@ mod tests {
     struct TestStruct(i32);
 
     lazy_static::lazy_static! {
-        static ref INTERFACE_TABLE: [(TypeId, fn(*const TestStruct) -> AnyRawPointer);1] =
-            [(TypeId::of::<*const dyn TestTrait>(), |x| {
-                AnyRawPointer::new_const(x as *const dyn TestTrait)
+        static ref INTERFACE_TABLE: [(TypeId, fn(*mut TestStruct) -> AnyRawPointer);1] =
+            [(TypeId::of::<*mut dyn TestTrait>(), |x| {
+                AnyRawPointer::new_raw_mut(x as *mut dyn TestTrait)
             })];
     }
 
     impl CastInterfaceByRawPtr for TestStruct {
         fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
             default_cast_interface_by_table_raw(self, raw_ptr_type_id, INTERFACE_TABLE.as_slice())
+        }
+
+        fn cast_interface_raw_mut(&mut self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
+            default_cast_interface_by_table_raw_mut(
+                self,
+                raw_ptr_type_id,
+                INTERFACE_TABLE.as_slice(),
+            )
         }
     }
 

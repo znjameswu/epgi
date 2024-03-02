@@ -92,7 +92,7 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
-        fn(*const TransformedHitTestEntry<Self>) -> AnyRawPointer,
+        fn(*mut TransformedHitTestEntry<Self>) -> AnyRawPointer,
     )] {
         &[]
     }

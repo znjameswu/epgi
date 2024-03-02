@@ -2,8 +2,9 @@ use std::any::TypeId;
 
 use crate::{
     foundation::{
-        default_cast_interface_by_table_raw, default_query_interface_ref, AnyRawPointer, Arc, Aweak,
-        Canvas, CastInterfaceByRawPtr, Protocol, Transform,
+        default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
+        default_query_interface_ref, AnyRawPointer, Arc, Aweak, Canvas, CastInterfaceByRawPtr,
+        Protocol, Transform,
     },
     tree::{AweakAnyRenderObject, Render, RenderObject},
 };
@@ -30,6 +31,10 @@ where
 {
     fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
         default_cast_interface_by_table_raw(self, raw_ptr_type_id, R::all_hit_test_interfaces())
+    }
+
+    fn cast_interface_raw_mut(&mut self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
+        default_cast_interface_by_table_raw_mut(self, raw_ptr_type_id, R::all_hit_test_interfaces())
     }
 }
 
