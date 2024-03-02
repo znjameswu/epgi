@@ -1,8 +1,9 @@
 use epgi_core::foundation::{Canvas, PaintContext};
 
+use peniko::kurbo::Stroke;
+
 pub use peniko::{
-    BlendMode, Brush, Cap, Color, ColorStops, Dashes, Extend, Fill, Format, Gradient, GradientKind,
-    Image, Join, Stroke,
+    BlendMode, Brush, Color, ColorStops, Extend, Fill, Format, Gradient, GradientKind, Image,
 };
 
 use crate::{

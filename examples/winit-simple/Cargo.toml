@@ -1,0 +1,13 @@
+[package]
+name = "winit-simple"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+epgi-winit = {workspace = true}
+epgi-core = {workspace = true}
+epgi-common = {workspace = true}
+epgi-2d = {workspace = true}

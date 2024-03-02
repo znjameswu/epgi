@@ -4,7 +4,7 @@ use epgi_core::{
         ArcChildRenderObject, ComposableChildLayer, PaintResults, StructuredChildLayerOrFragment,
     },
 };
-use peniko::{BrushRef, Stroke};
+use peniko::{kurbo::Stroke, BrushRef};
 
 use crate::{
     Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
@@ -133,7 +133,7 @@ impl<'a> VelloPaintContext<'a> {
     ) {
         let blend = blend.into();
         self.curr_fragment_encoding.encode_transform(transform);
-        self.curr_fragment_encoding.encode_linewidth(-1.0);
+        self.curr_fragment_encoding.encode_fill_style(Fill::NonZero);
         if !self.encode_shape(shape, true) {
             // If the layer shape is invalid, encode a valid empty path. This suppresses
             // all drawing until the layer is popped.
@@ -159,10 +159,7 @@ impl<'a> VelloPaintContext<'a> {
         shape: Affine2dCanvasShape,
     ) {
         self.curr_fragment_encoding.encode_transform(transform);
-        self.curr_fragment_encoding.encode_linewidth(match style {
-            Fill::NonZero => -1.0,
-            Fill::EvenOdd => -2.0,
-        });
+        self.curr_fragment_encoding.encode_fill_style(style);
         if self.encode_shape(shape, true) {
             if let Some(brush_transform) = brush_transform {
                 // Only encode transform after we can confirm shape encoding success
@@ -186,8 +183,9 @@ impl<'a> VelloPaintContext<'a> {
         brush_transform: Option<Affine2d>,
         shape: Affine2dCanvasShape,
     ) {
+        // TODO: catch up with vello support for dash style
         self.curr_fragment_encoding.encode_transform(transform);
-        self.curr_fragment_encoding.encode_linewidth(style.width);
+        self.curr_fragment_encoding.encode_stroke_style(style);
         if self.encode_shape(shape, false) {
             if let Some(brush_transform) = brush_transform {
                 if self
@@ -225,7 +223,6 @@ impl<'a> VelloPaintContext<'a> {
 }
 
 pub fn render_text(encoding: &mut Affine2dEncoding, transform: Affine2d, layout: &ParagraphLayout) {
-    let mut gcx = vello::glyph::GlyphContext::new();
     for line in layout.0.lines() {
         for glyph_run in line.glyph_runs() {
             let mut x = glyph_run.offset();
@@ -233,28 +230,31 @@ pub fn render_text(encoding: &mut Affine2dEncoding, transform: Affine2d, layout:
             let run = glyph_run.run();
             let font = run.font();
             let font_size = run.font_size();
-            let font_ref = font.as_ref();
-            if let Ok(font_ref) =
-                vello::glyph::fello::raw::FontRef::from_index(font_ref.data, font.index())
-            {
-                let style = glyph_run.style();
-                let vars: [(&str, f32); 0] = [];
-                let mut gp = gcx.new_provider(&font_ref, None, font_size, false, vars);
-                for glyph in glyph_run.glyphs() {
-                    if let Some(fragment) = gp.get(glyph.id, Some(&style.brush.0)) {
+            let font = vello::peniko::Font::new(font.data().0.clone(), font.index());
+            let style = glyph_run.style();
+            let coords = run
+                .normalized_coords()
+                .iter()
+                .map(|coord| vello::skrifa::instance::NormalizedCoord::from_bits(*coord))
+                .collect::<Vec<_>>();
+            vello::DrawGlyphs::new(encoding, &font)
+                .brush(&style.brush.0)
+                .transform(transform.to_kurbo())
+                .font_size(font_size)
+                .normalized_coords(&coords)
+                .draw(
+                    Fill::NonZero,
+                    glyph_run.glyphs().map(|glyph| {
                         let gx = x + glyph.x;
                         let gy = y - glyph.y;
-                        let xform = peniko::kurbo::Affine::translate((gx as f64, gy as f64))
-                            * peniko::kurbo::Affine::scale_non_uniform(1.0, -1.0);
-                        let xform = Affine2d::from_kurbo(&xform);
-                        encoding.append(
-                            unsafe { std::mem::transmute(&fragment) },
-                            &Some(transform * xform),
-                        );
-                    }
-                    x += glyph.advance;
-                }
-            }
+                        x += glyph.advance;
+                        vello::glyph::Glyph {
+                            id: glyph.id as _,
+                            x: gx,
+                            y: gy,
+                        }
+                    }),
+                );
         }
     }
 }

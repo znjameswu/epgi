@@ -12,17 +12,21 @@ use epgi_core::{
     },
     tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObject},
 };
-use glazier::{
-    kurbo::{Affine, Size},
-    Application, HotKey, IdleToken, Menu, PointerEvent, Region, Scalable, SysMods, WinHandler,
-    WindowBuilder, WindowHandle,
-};
 use std::{
     any::Any,
+    num::NonZeroUsize,
     time::{Instant, SystemTime},
 };
 use vello::{
-    peniko::Color, util::{RenderContext, RenderSurface}, AaSupport, RenderParams, Renderer, RendererOptions, Scene
+    kurbo::Affine,
+    peniko::Color,
+    util::{RenderContext, RenderSurface},
+    AaSupport, RenderParams, Renderer, RendererOptions, Scene,
+};
+use winit::{
+    event::{ElementState, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::{Window, WindowBuilder},
 };
 
 use crate::EpgiGlazierSchedulerExtension;
@@ -31,7 +35,21 @@ pub struct AppLauncher {
     title: String,
     app: ArcChildWidget<BoxProtocol>,
 }
-const QUIT_MENU_ID: u32 = 0x100;
+
+struct MainState<'a> {
+    window: Arc<Window>,
+    // app: App<T, V>,
+    render_cx: RenderContext,
+    surface: RenderSurface<'a>,
+    renderer: Option<Renderer>,
+    // root_layer: Option<Layer<Affine2dCanvas>>,
+    scene: Scene,
+    counter: u64,
+
+    scheduler_join_handle: Option<std::thread::JoinHandle<()>>,
+    frame_binding: Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
+    constraints_binding: Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
+}
 
 impl AppLauncher {
     pub fn new(app: ArcChildWidget<BoxProtocol>) -> Self {
@@ -47,147 +65,64 @@ impl AppLauncher {
     }
 
     pub fn run(self) {
-        let glazier_app = Application::new().unwrap();
-        let mut file_menu = Menu::new();
-        file_menu.add_item(
-            QUIT_MENU_ID,
-            "E&xit",
-            Some(&HotKey::new(SysMods::Cmd, "q")),
-            Some(false),
-            true,
-        );
-        let mut menubar = Menu::new();
-        menubar.add_dropdown(Menu::new(), "Application", true);
-        menubar.add_dropdown(file_menu, "&File", true);
-
-        let mut main_state = MainState::new();
+        let event_loop = EventLoop::new().unwrap();
+        event_loop.set_control_flow(ControlFlow::Wait);
+        // let _guard = self.app.rt.enter();
+        let window = WindowBuilder::new()
+            .with_inner_size(winit::dpi::LogicalSize {
+                width: 1024.,
+                height: 768.,
+            })
+            .build(&event_loop)
+            .unwrap();
+        let mut main_state = MainState::new(window);
         main_state.start_scheduler_with(self.app);
 
-        let window = WindowBuilder::new(glazier_app.clone())
-            .handler(Box::new(main_state))
-            .title(self.title)
-            .menu(menubar)
-            .size(Size::new(1024., 768.))
-            .build()
+        event_loop
+            .run(move |event, elwt| {
+                if let winit::event::Event::WindowEvent { event: e, .. } = event {
+                    match e {
+                        WindowEvent::CloseRequested => elwt.exit(),
+                        WindowEvent::RedrawRequested => main_state.render(),
+                        WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
+                            // main_state.size(Size {
+                            //     width: width.into(),
+                            //     height: height.into(),
+                            // });
+                        }
+                        WindowEvent::ModifiersChanged(modifiers) => {}
+                        WindowEvent::CursorMoved {
+                            position: winit::dpi::PhysicalPosition { x, y },
+                            ..
+                        } => {}
+                        WindowEvent::CursorLeft { .. } => {}
+                        WindowEvent::MouseInput { state, button, .. } => {}
+                        WindowEvent::MouseWheel { delta, .. } => {}
+                        _ => (),
+                    }
+                }
+            })
             .unwrap();
-        window.show();
-        glazier_app.run(None);
-    }
-}
-
-struct MainState<'a> {
-    handle: WindowHandle,
-    // app: App<T, V>,
-    render_cx: RenderContext,
-    surface: Option<RenderSurface<'a>>,
-    renderer: Option<Renderer>,
-    // root_layer: Option<Layer<Affine2dCanvas>>,
-    scene: Scene,
-    counter: u64,
-
-    scheduler_join_handle: Option<std::thread::JoinHandle<()>>,
-    frame_binding: Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
-    constraints_binding: Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
-}
-
-impl<'a> WinHandler for MainState<'a> {
-    fn connect(&mut self, handle: &WindowHandle) {
-        self.handle = handle.clone();
-        // self.app.connect(handle.clone());
-    }
-
-    fn prepare_paint(&mut self) {}
-
-    fn paint(&mut self, _: &Region) {
-        println!("paint");
-        self.render();
-        self.schedule_render();
-    }
-
-    fn idle(&mut self, _: IdleToken) {}
-
-    fn command(&mut self, id: u32) {
-        match id {
-            QUIT_MENU_ID => {
-                self.handle.close();
-                Application::global().quit()
-            }
-            _ => println!("unexpected id {}", id),
-        }
-    }
-
-    fn accesskit_tree(&mut self) -> accesskit::TreeUpdate {
-        todo!()
-        // self.app.accesskit_connected = true;
-        // self.app.accessibility()
-    }
-
-    fn accesskit_action(&mut self, request: accesskit::ActionRequest) {
-        // todo!()
-        // self.app
-        //     .window_event(Event::TargetedAccessibilityAction(request));
-        // self.handle.invalidate();
-    }
-
-    fn pointer_down(&mut self, event: &PointerEvent) {
-        // todo!()
-        // self.app.window_event(Event::MouseDown(event.into()));
-        // self.handle.invalidate();
-    }
-
-    fn pointer_up(&mut self, event: &PointerEvent) {
-        // todo!()
-        // self.app.window_event(Event::MouseUp(event.into()));
-        // self.handle.invalidate();
-    }
-
-    fn pointer_move(&mut self, event: &PointerEvent) {
-        // todo!()
-        // self.app.window_event(Event::MouseMove(event.into()));
-        // self.handle.invalidate();
-        // self.handle.set_cursor(&Cursor::Arrow);
-    }
-
-    fn wheel(&mut self, event: &PointerEvent) {
-        // todo!()
-        // self.app.window_event(Event::MouseWheel(event.into()));
-        // self.handle.invalidate();
-    }
-
-    fn pointer_leave(&mut self) {
-        // todo!()
-        // self.app.window_event(Event::MouseLeft());
-        // self.handle.invalidate();
-    }
-
-    fn size(&mut self, size: Size) {
-        self.update_size(size)
-    }
-
-    fn request_close(&mut self) {
-        self.handle.close();
-    }
-
-    fn destroy(&mut self) {
-        Application::global().quit()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        // WGPU 1.90 totally broke glazier
-        todo!()
     }
 }
 
 impl<'a> MainState<'a> {
-    fn new() -> Self {
-        let render_cx = RenderContext::new().unwrap();
-
-        Self {
-            handle: Default::default(),
+    fn new(window: Window) -> Self {
+        let mut render_cx = RenderContext::new().unwrap();
+        let size = window.inner_size();
+        let window = Arc::new(window);
+        let surface = futures::executor::block_on(render_cx.create_surface(
+            window.clone(),
+            size.width,
+            size.height,
+        ))
+        .unwrap();
+        MainState {
+            window,
             render_cx,
-            surface: None,
+            surface,
             renderer: None,
-            scene: Default::default(),
+            scene: Scene::default(),
             counter: 0,
             scheduler_join_handle: None,
             frame_binding: Default::default(),
@@ -195,20 +130,7 @@ impl<'a> MainState<'a> {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    fn schedule_render(&self) {
-        self.handle
-            .get_idle_handle()
-            .unwrap()
-            .schedule_idle(IdleToken::new(0));
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn schedule_render(&self) {
-        self.handle.invalidate();
-    }
-
-    fn update_size(&self, size_dp: Size) {
+    fn update_size(&self, size_dp: BoxSize) {
         let constraints = BoxConstraints {
             min_width: size_dp.width as f32,
             max_width: size_dp.width as f32,
@@ -232,19 +154,14 @@ impl<'a> MainState<'a> {
 
     fn render(&mut self) {
         // let fragment = self.app.fragment();
-        let handle = &self.handle;
-        let size_dp = handle.get_size();
-        let insets_dp = handle.content_insets();
-        let constraints = BoxConstraints {
-            min_width: size_dp.width as f32,
-            max_width: size_dp.width as f32,
-            min_height: size_dp.height as f32,
-            max_height: size_dp.height as f32,
-        };
-        let scheduler = get_current_scheduler();
+        let scale = self.window.scale_factor();
+        let size = self.window.inner_size();
+        let width = size.width;
+        let height = size.height;
 
-        self.update_size(size_dp);
+        let scheduler = get_current_scheduler();
         self.update_frame(self.counter);
+
         let frame_results = scheduler.request_new_frame().recv().unwrap();
         let encoding = frame_results
             .composited
@@ -252,71 +169,56 @@ impl<'a> MainState<'a> {
             .downcast_ref::<Arc<Affine2dEncoding>>()
             .unwrap();
 
-        let scale = handle.get_scale().unwrap_or_default();
-        let insets = insets_dp.to_px(scale);
-        let mut size = size_dp.to_px(scale);
-        size.width -= insets.x_value();
-        size.height -= insets.y_value();
-        let width = size.width as u32;
-        let height = size.height as u32;
-        if self.surface.is_none() {
-            //println!("render size: {:?}", size);
-            self.surface = Some(
-                futures::executor::block_on(self.render_cx.create_surface(handle, width, height))
-                    .unwrap(),
-            );
+        if self.surface.config.width != width || self.surface.config.height != height {
+            self.render_cx
+                .resize_surface(&mut self.surface, width, height);
         }
-        if let Some(surface) = self.surface.as_mut() {
-            if surface.config.width != width || surface.config.height != height {
-                self.render_cx.resize_surface(surface, width, height);
-            }
-            let (scale_x, scale_y) = (scale.x(), scale.y());
-            let transform = if scale_x != 1.0 || scale_y != 1.0 {
-                Some(Affine::scale_non_uniform(scale_x, scale_y))
-            } else {
-                None
-            };
-            // let mut builder = SceneBuilder::for_scene(&mut self.scene);
-            // builder.append(&encoding, transform);
-            let mut scene = vello_encoding::Encoding::new();
-            scene.reset();
-            scene.append(
-                &encoding,
-                &transform.map(|transform| vello_encoding::Transform::from_kurbo(&transform)),
-            );
-            // SceneBuilder's API is crippled, we use an unsafe transmute to avoid invent a whole new set of APIs
-            self.scene = unsafe { std::mem::transmute(scene) };
+        let transform = if scale != 1.0 {
+            Some(Affine::scale(scale))
+        } else {
+            None
+        };
 
-            self.counter += 1;
-            let surface_texture = surface
-                .surface
-                .get_current_texture()
-                .expect("failed to acquire next swapchain texture");
-            let dev_id = surface.dev_id;
-            let device = &self.render_cx.devices[dev_id].device;
-            let queue = &self.render_cx.devices[dev_id].queue;
-            let renderer_options = RendererOptions {
-                surface_format: Some(self.surface.format),
-                use_cpu: false,
-                antialiasing_support: AaSupport {
-                    area: true,
-                    msaa8: false,
-                    msaa16: false,
-                },
-                num_init_threads: NonZeroUsize::new(1),
-            };
-            let render_params = RenderParams {
-                base_color: Color::BLACK,
-                width,
-                height,
-            };
-            self.renderer
-                .get_or_insert_with(|| Renderer::new(device, &renderer_options).unwrap())
-                .render_to_surface(device, queue, &self.scene, &surface_texture, &render_params)
-                .expect("failed to render to surface");
-            surface_texture.present();
-            device.poll(wgpu::Maintain::Wait);
-        }
+        let mut scene = vello_encoding::Encoding::new();
+        scene.reset();
+        scene.append(
+            &encoding,
+            &transform.map(|transform| vello_encoding::Transform::from_kurbo(&transform)),
+        );
+        // SceneBuilder's API is crippled, we use an unsafe transmute to avoid invent a whole new set of APIs
+        self.scene = unsafe { std::mem::transmute(scene) };
+
+        self.counter += 1;
+        let surface_texture = self
+            .surface
+            .surface
+            .get_current_texture()
+            .expect("failed to acquire next swapchain texture");
+        let dev_id = self.surface.dev_id;
+        let device = &self.render_cx.devices[dev_id].device;
+        let queue = &self.render_cx.devices[dev_id].queue;
+        let renderer_options = RendererOptions {
+            surface_format: Some(self.surface.format),
+            use_cpu: false,
+            antialiasing_support: AaSupport {
+                area: true,
+                msaa8: false,
+                msaa16: false,
+            },
+            num_init_threads: NonZeroUsize::new(1),
+        };
+        let render_params = RenderParams {
+            base_color: Color::BLACK,
+            width,
+            height,
+            antialiasing_method: vello::AaConfig::Area,
+        };
+        self.renderer
+            .get_or_insert_with(|| Renderer::new(device, renderer_options).unwrap())
+            .render_to_surface(device, queue, &self.scene, &surface_texture, &render_params)
+            .expect("failed to render to surface");
+        surface_texture.present();
+        device.poll(wgpu::Maintain::Wait);
     }
 }
 

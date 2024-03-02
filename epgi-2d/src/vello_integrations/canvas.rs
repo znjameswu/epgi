@@ -44,7 +44,7 @@ impl Canvas for Affine2dCanvas {
     // }
 
     fn clear(this: &mut Self::Encoding) {
-        this.reset(true)
+        this.reset()
     }
 
     fn paint_render_objects<P: LayerProtocol<Canvas = Self>>(
