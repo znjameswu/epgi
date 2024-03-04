@@ -6,7 +6,7 @@ use std::{ops::Deref, time::Instant};
 
 use epgi_2d::{Affine2d, Affine2dCanvas, BoxProtocol};
 use epgi_core::{
-    foundation::{Asc, AssertExt, MapEntryExtenision, SyncMpscReceiver, SyncMpscSender},
+    foundation::{Asc, AssertExt, BoolExpectExt, SyncMpscReceiver, SyncMpscSender},
     tree::{ArcChildRenderObject, ChildHitTestEntry},
 };
 use hashbrown::{hash_map::Entry, HashMap};
@@ -38,7 +38,7 @@ impl PointerGestureManager {
             arenas: Default::default(),
         }
     }
-    
+
     pub fn flush_events(&mut self, root: &ArcChildRenderObject<BoxProtocol>) {
         while let Ok(event) = self.rx.try_recv() {
             self.handle_pointer_event(event, root.clone())
@@ -48,7 +48,7 @@ impl PointerGestureManager {
     pub fn poll_revisit_all(&mut self, current: Instant) {
         let mut associated_updates = AssociatedUpdates::empty();
         for (&interaction_id, arena) in self.arenas.iter_mut() {
-            associated_updates.append(arena.poll_revisit(interaction_id, current));
+            arena.poll_revisit(interaction_id, current, &mut associated_updates);
         }
         self.process_associated_updates(associated_updates);
     }
@@ -147,22 +147,39 @@ impl PointerGestureManager {
                 dispatch_pointer_event(entry.get(), &event);
                 if let Up(_) | Cancel | PanZoomEnd = variant {
                     entry.remove();
+                    todo!()
                 }
             }
         }
 
+        // Dispatch for gestures
         if let Interaction {
             interaction_id,
             variant,
         } = event.variant
         {
-            let associated_updates = self
-                .arena_handle_event(&PointerInteractionEvent {
-                    common: event.common,
-                    interaction_id,
-                    variant,
-                })
-                .expect("Arena should exist");
+            let mut associated_updates = AssociatedUpdates::empty();
+            if let Up(_) | Cancel | PanZoomEnd = variant {
+                self.arena_handle_event_and_try_sweep(
+                    &PointerInteractionEvent {
+                        common: event.common,
+                        interaction_id,
+                        variant,
+                    },
+                    &mut associated_updates,
+                )
+                .debug_assert("Arena should exist");
+            } else {
+                self.arena_handle_event(
+                    &PointerInteractionEvent {
+                        common: event.common,
+                        interaction_id,
+                        variant,
+                    },
+                    &mut associated_updates,
+                )
+                .debug_assert("Arena should exist");
+            }
             self.process_associated_updates(associated_updates);
         }
     }
@@ -171,9 +188,7 @@ impl PointerGestureManager {
         loop {
             let mut next_associated_updates = AssociatedUpdates::empty();
             for (interaction_id, key) in associated_updates.inner {
-                if let Some(associated_updates) = self.arena_poll_specific(interaction_id, &key) {
-                    next_associated_updates.append(associated_updates);
-                }
+                self.arena_poll_specific(interaction_id, &key, &mut next_associated_updates);
             }
             if next_associated_updates.inner.is_empty() {
                 break;
@@ -184,14 +199,36 @@ impl PointerGestureManager {
 }
 
 impl PointerGestureManager {
-    fn arena_handle_event(&mut self, event: &PointerInteractionEvent) -> Option<AssociatedUpdates> {
-        let mut entry = self.arenas.entry(event.interaction_id).occupied()?;
+    fn arena_handle_event(
+        &mut self,
+        event: &PointerInteractionEvent,
+        associated_updates: &mut AssociatedUpdates,
+    ) -> bool {
+        let Entry::Occupied(mut entry) = self.arenas.entry(event.interaction_id) else {
+            return false;
+        };
         let arena = entry.get_mut();
-        let associated_updates = arena.handle_event(event);
+        arena.handle_event(event, associated_updates);
         if arena.is_closed() {
             entry.remove();
         }
-        return Some(associated_updates);
+        return true;
+    }
+
+    fn arena_handle_event_and_try_sweep(
+        &mut self,
+        event: &PointerInteractionEvent,
+        associated_updates: &mut AssociatedUpdates,
+    ) -> bool {
+        let Entry::Occupied(mut entry) = self.arenas.entry(event.interaction_id) else {
+            return false;
+        };
+        let arena = entry.get_mut();
+        arena.handle_event_and_try_sweep(event, associated_updates);
+        if arena.is_closed() {
+            entry.remove();
+        }
+        return true;
     }
 
     // fn arena_poll_revisit(
@@ -212,14 +249,16 @@ impl PointerGestureManager {
         &mut self,
         interaction_id: PointerInteractionId,
         key: &GestureRecognizerKey,
-    ) -> Option<AssociatedUpdates> {
-        let mut entry = self.arenas.entry(interaction_id).occupied()?;
+        associated_updates: &mut AssociatedUpdates,
+    ) {
+        let Entry::Occupied(mut entry) = self.arenas.entry(interaction_id) else {
+            return;
+        };
         let arena = entry.get_mut();
-        let associated_updates = arena.poll_specific(interaction_id, key);
+        arena.poll_specific(interaction_id, key, associated_updates);
         if arena.is_closed() {
             entry.remove();
         }
-        return Some(associated_updates);
     }
 }
 

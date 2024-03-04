@@ -8,4 +8,3 @@ mod pointer_event_converter;
 use pointer_event_converter::*;
 
 mod utils;
-use utils::*;

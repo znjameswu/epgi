@@ -1,6 +1,6 @@
 use crate::{
     foundation::{Arc, Inlinable64Vec, Protocol},
-    scheduler::{JobId, BuildScheduler},
+    scheduler::{BuildScheduler, JobId},
     sync::SubtreeRenderObjectChange,
     tree::{
         ArcChildElementNode, ArcElementContextNode, Element, ElementNode, ElementWidgetPair, Widget,

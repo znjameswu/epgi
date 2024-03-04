@@ -13,7 +13,6 @@ use epgi_core::{
     tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObject},
 };
 use std::{
-    any::Any,
     num::NonZeroUsize,
     time::{Instant, SystemTime},
 };
@@ -24,12 +23,12 @@ use vello::{
     AaSupport, RenderParams, Renderer, RendererOptions, Scene,
 };
 use winit::{
-    event::{ElementState, WindowEvent},
+    event::WindowEvent,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
 
-use crate::{pointer_event_converter::WinitPointerEventConverter, EpgiGlazierSchedulerExtension};
+use crate::{EpgiGlazierSchedulerExtension, WinitPointerEventConverter};
 
 pub struct AppLauncher {
     title: String,
@@ -286,7 +285,10 @@ impl<'a> MainState<'a> {
 
         let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
 
-        let scheduler = Scheduler::new(build_scheduler, EpgiGlazierSchedulerExtension::new(rx));
+        let scheduler = Scheduler::new(
+            build_scheduler,
+            EpgiGlazierSchedulerExtension::new(render_object, rx),
+        );
         let join_handle = std::thread::spawn(move || {
             scheduler.start_event_loop(get_current_scheduler());
         });

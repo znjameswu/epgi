@@ -36,19 +36,18 @@ pub enum RecognitionResult {
 
 impl RecognitionResult {
     pub fn is_certain(&self) -> Option<f32> {
-        use RecognitionResult::*;
         match self {
-            Certain { confidence } => Some(*confidence),
+            RecognitionResult::Certain { confidence } => Some(*confidence),
             _ => None,
         }
     }
 
     pub fn is_impossible(&self) -> bool {
-        use RecognitionResult::*;
-        match self {
-            Impossible => true,
-            _ => false,
-        }
+        matches!(self, RecognitionResult::Impossible { .. })
+    }
+
+    pub fn is_inconclusive(&self) -> bool {
+        matches!(self, RecognitionResult::Inconclusive { .. })
     }
 }
 
@@ -60,6 +59,8 @@ pub struct RecognizerResponse {
 pub trait GestureRecognizer: 'static {
     type HitPosition;
 
+    /// If the primary response is impossible, then the implementation should also clean up
+    /// as if handle_arena_evict has been called.
     fn handle_event(
         &mut self,
         position: &Self::HitPosition,
@@ -74,7 +75,11 @@ pub trait GestureRecognizer: 'static {
     fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     /// Handle defeat and clean up. This happens because the arena has picked another winner.
-    fn handle_arena_defeat(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
+    ///
+    /// The primary response will be ignored. The eviction is non-negotiable.
+    ///
+    /// This will also be called after handle_arena_victory when the arena is closed.
+    fn handle_arena_evict(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 }
 
 pub trait AnyTransformedGestureRecognizer {
@@ -88,7 +93,7 @@ pub trait AnyTransformedGestureRecognizer {
     fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     /// Handle defeat and clean up. This happens because the arena has picked another winner.
-    fn handle_arena_defeat(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
+    fn handle_arena_evict(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     fn recognizer_type_id(&self) -> TypeId;
 }
@@ -118,8 +123,8 @@ where
         self.recognizer.lock().handle_arena_victory(interaction_id)
     }
 
-    fn handle_arena_defeat(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer.lock().handle_arena_defeat(interaction_id)
+    fn handle_arena_evict(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
+        self.recognizer.lock().handle_arena_evict(interaction_id)
     }
 
     fn recognizer_type_id(&self) -> TypeId {

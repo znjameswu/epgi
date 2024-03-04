@@ -10,7 +10,7 @@ use crate::{
         Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{SubtreeRenderObjectChange, BuildScheduler},
+    sync::{BuildScheduler, SubtreeRenderObjectChange},
     tree::{
         no_widget_update, ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf,
         AsyncWorkQueue, BuildContext, ContainerOf, Element, ElementContextNode, ElementNode,

@@ -54,7 +54,11 @@ pub(crate) mod restart_private {
     where
         E: Element,
     {
-        fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, build_scheduler: &BuildScheduler) {
+        fn restart_async_work(
+            self: Arc<Self>,
+            lane_pos: LanePos,
+            build_scheduler: &BuildScheduler,
+        ) {
             ElementNode::restart_async_work(&self, lane_pos, build_scheduler)
         }
     }

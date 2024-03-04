@@ -4,7 +4,6 @@
 /**************************** Concurrent channels *******************************/
 // https://github.com/fereidani/rust-channel-benchmarks
 
-
 // pub type AsyncMpscSender<T> = async_channel::Sender<T>;
 // pub type AsyncMpscReceiver<T> = async_channel::Receiver<T>;
 // pub fn unbounded_channel_async<T>() -> (AsyncMpscSender<T>, AsyncMpscReceiver<T>) {

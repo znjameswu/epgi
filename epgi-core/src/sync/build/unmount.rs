@@ -4,7 +4,6 @@ use crate::{
 };
 use core::sync::atomic::Ordering::*;
 
-
 pub trait AnyElementNodeUnmountExt {
     fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
 }
@@ -17,7 +16,6 @@ where
         ElementNode::unmount(&self, scope)
     }
 }
-
 
 impl<E: Element> ElementNode<E> {
     // We could require a BuildScheduler in parameter to ensure the global lock
@@ -96,4 +94,3 @@ impl<E: Element> ElementNode<E> {
         }
     }
 }
-
