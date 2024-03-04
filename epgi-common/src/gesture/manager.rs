@@ -74,8 +74,8 @@ impl PointerGestureManager {
             });
         }
         match &event.variant {
-            Add => todo!(),
-            Remove => todo!(),
+            Added => todo!(),
+            Removed => todo!(),
 
             Signal(_) | Hover(_) => {
                 let hit_test_result =

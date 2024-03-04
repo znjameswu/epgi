@@ -1,12 +1,15 @@
-use epgi_common::gesture::PointerGestureManager;
-use epgi_core::{foundation::unbounded_channel_sync, scheduler::SchedulerExtension};
+use epgi_common::{gesture::PointerGestureManager, PointerEvent};
+use epgi_core::{
+    foundation::{unbounded_channel_sync, SyncMpscReceiver},
+    scheduler::SchedulerExtension,
+};
 
 pub(crate) struct EpgiGlazierSchedulerExtension {
     pointer_gesture_manager: PointerGestureManager,
 }
 
 impl EpgiGlazierSchedulerExtension {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(rx: SyncMpscReceiver<PointerEvent>) -> Self {
         let (tx, rx) = unbounded_channel_sync();
         Self {
             pointer_gesture_manager: PointerGestureManager::new(rx),

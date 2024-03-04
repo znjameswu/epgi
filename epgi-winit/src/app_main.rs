@@ -2,9 +2,9 @@ use epgi_2d::{
     Affine2dEncoding, BoxConstraints, BoxProtocol, BoxProvider, BoxSize, RenderRoot, RootElement,
     RootView,
 };
-use epgi_common::ConstrainedBox;
+use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
-    foundation::{Arc, SyncMutex},
+    foundation::{unbounded_channel_sync, Arc, SyncMpscReceiver, SyncMutex},
     hooks::{SetState, StateHook},
     nodes::Function,
     scheduler::{
@@ -29,7 +29,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::EpgiGlazierSchedulerExtension;
+use crate::{pointer_event_converter::WinitPointerEventConverter, EpgiGlazierSchedulerExtension};
 
 pub struct AppLauncher {
     title: String,
@@ -76,28 +76,37 @@ impl AppLauncher {
             .build(&event_loop)
             .unwrap();
         let mut main_state = MainState::new(window);
-        main_state.start_scheduler_with(self.app);
+
+        let (tx, rx) = unbounded_channel_sync();
+        main_state.start_scheduler_with(self.app, rx);
+        let mut pointer_event_converter = WinitPointerEventConverter::new(tx);
 
         event_loop
             .run(move |event, elwt| {
-                if let winit::event::Event::WindowEvent { event: e, .. } = event {
+                if let winit::event::Event::WindowEvent { event: e, .. } = &event {
+                    println!("{:?}", e);
+                    use WindowEvent::*;
                     match e {
-                        WindowEvent::CloseRequested => elwt.exit(),
-                        WindowEvent::RedrawRequested => main_state.render(),
-                        WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
+                        CloseRequested => elwt.exit(),
+                        RedrawRequested => main_state.render(),
+                        Resized(winit::dpi::PhysicalSize { width, height }) => {
                             // main_state.size(Size {
                             //     width: width.into(),
                             //     height: height.into(),
                             // });
                         }
-                        WindowEvent::ModifiersChanged(modifiers) => {}
-                        WindowEvent::CursorMoved {
-                            position: winit::dpi::PhysicalPosition { x, y },
-                            ..
-                        } => {}
-                        WindowEvent::CursorLeft { .. } => {}
-                        WindowEvent::MouseInput { state, button, .. } => {}
-                        WindowEvent::MouseWheel { delta, .. } => {}
+                        ModifiersChanged(modifiers) => {}
+                        CursorMoved { .. }
+                        | CursorEntered { .. }
+                        | CursorLeft { .. }
+                        | MouseWheel { .. }
+                        | MouseInput { .. }
+                        | TouchpadMagnify { .. }
+                        | SmartMagnify { .. }
+                        | TouchpadRotate { .. }
+                        | TouchpadPressure { .. }
+                        | AxisMotion { .. }
+                        | Touch { .. } => pointer_event_converter.convert(e),
                         _ => (),
                     }
                 }
@@ -240,7 +249,11 @@ impl FrameInfo {
 }
 
 impl<'a> MainState<'a> {
-    fn start_scheduler_with(&mut self, app: ArcChildWidget<BoxProtocol>) {
+    fn start_scheduler_with(
+        &mut self,
+        app: ArcChildWidget<BoxProtocol>,
+        rx: SyncMpscReceiver<PointerEvent>,
+    ) {
         // First we construct an empty root with no children. Later we will inject our application widget inside
         let (element_node, render_object, widget_binding) = initialize_root();
 
@@ -273,7 +286,7 @@ impl<'a> MainState<'a> {
 
         let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
 
-        let scheduler = Scheduler::new(build_scheduler, EpgiGlazierSchedulerExtension::new());
+        let scheduler = Scheduler::new(build_scheduler, EpgiGlazierSchedulerExtension::new(rx));
         let join_handle = std::thread::spawn(move || {
             scheduler.start_event_loop(get_current_scheduler());
         });

@@ -982,6 +982,8 @@ dependencies = [
  "epgi-common",
  "epgi-core",
  "futures",
+ "hashbrown",
+ "log",
  "rayon",
  "taffy",
  "vello",

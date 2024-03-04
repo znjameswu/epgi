@@ -73,7 +73,7 @@ impl Default for BoxConstraints {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct BoxSize {
     pub width: f32,
     pub height: f32,
@@ -86,7 +86,7 @@ impl BoxSize {
     };
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct BoxOffset {
     pub x: f32,
     pub y: f32,

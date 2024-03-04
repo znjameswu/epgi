@@ -2,12 +2,16 @@
 extern crate lazy_static;
 
 mod color_box;
-mod constrained_box;
-pub mod gesture;
-mod phantom_box;
-mod text;
-
 pub use color_box::*;
+
+mod constrained_box;
 pub use constrained_box::*;
+
+pub mod gesture;
+pub use gesture::*;
+
+mod phantom_box;
 pub use phantom_box::*;
+
 pub use text::*;
+mod text;
