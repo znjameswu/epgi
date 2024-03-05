@@ -174,7 +174,12 @@ impl Render for RenderRoot {
         memo: &Self::LayoutMemo,
         children: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> HitTestConfig<BoxProtocol, BoxProtocol> {
-        todo!()
+        HitTestConfig::new_in_layer(
+            false,
+            children
+                .iter()
+                .map(|child| (child.clone(), transform.clone(), None)),
+        )
     }
 
     type LayerOrUnit = RenderRoot;

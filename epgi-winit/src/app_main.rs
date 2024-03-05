@@ -64,6 +64,7 @@ impl AppLauncher {
     }
 
     pub fn run(self) {
+        pretty_env_logger::init();
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Wait);
         // let _guard = self.app.rt.enter();
@@ -83,11 +84,13 @@ impl AppLauncher {
         event_loop
             .run(move |event, elwt| {
                 if let winit::event::Event::WindowEvent { event: e, .. } = &event {
-                    println!("{:?}", e);
+                    // println!("{:?}", e);
                     use WindowEvent::*;
                     match e {
                         CloseRequested => elwt.exit(),
-                        RedrawRequested => main_state.render(),
+                        RedrawRequested => {
+                            main_state.render();
+                        }
                         Resized(winit::dpi::PhysicalSize { width, height }) => {
                             // main_state.size(Size {
                             //     width: width.into(),
@@ -105,7 +108,10 @@ impl AppLauncher {
                         | TouchpadRotate { .. }
                         | TouchpadPressure { .. }
                         | AxisMotion { .. }
-                        | Touch { .. } => pointer_event_converter.convert(e),
+                        | Touch { .. } => {
+                            pointer_event_converter.convert(e);
+                            main_state.window.request_redraw();
+                        }
                         _ => (),
                     }
                 }

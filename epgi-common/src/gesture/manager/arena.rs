@@ -413,6 +413,8 @@ impl GestureArena {
                         Ok(winner) => self.state = Resolved { winner },
                         Err(_teams) => *teams = _teams,
                     }
+                } else if teams.is_empty() {
+                    self.state = Closed
                 }
                 if self.is_resolved() {
                     self.on_arena_resolved(interaction_id, associated_updates);

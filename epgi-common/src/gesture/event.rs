@@ -9,6 +9,7 @@ pub struct PointerEvent {
 }
 
 // This is the events that can be truly routed by Flutter's PointerRouter
+#[derive(Clone, Debug)]
 pub struct PointerInteractionEvent {
     pub common: PointerEventCommonData,
     pub interaction_id: PointerInteractionId,

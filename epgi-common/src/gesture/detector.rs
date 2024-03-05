@@ -1,14 +1,17 @@
 use std::{any::TypeId, ops::DerefMut, sync::Arc};
 
-use epgi_2d::{BoxProtocol, Point2d};
+use epgi_2d::{Affine2d, BoxProtocol, BoxSize, Point2d};
 use epgi_core::{
-    foundation::{AnyRawPointer, Asc, SyncMutex},
+    foundation::{AnyRawPointer, Asc, Canvas, Protocol, SyncMutex},
     hit_test_interface_query_table,
     nodes::{
         ComponentElement, ComponentWidget, ProxyWidget, SingleChildRenderObject,
         SingleChildRenderObjectElement,
     },
-    tree::{ArcChildWidget, BuildContext, Element, RenderAction, TransformedHitTestEntry, Widget},
+    tree::{
+        ArcChildRenderObject, ArcChildWidget, BuildContext, Element, HitTestConfig, RenderAction,
+        TransformedHitTestEntry, Widget,
+    },
 };
 use hashbrown::HashMap;
 
@@ -19,8 +22,8 @@ use crate::{
 };
 
 pub struct GestureDetector {
-    on_tap: Option<ArcCallback>,
-    child: ArcChildWidget<BoxProtocol>,
+    pub on_tap: Option<ArcCallback>,
+    pub child: ArcChildWidget<BoxProtocol>,
 }
 
 impl std::fmt::Debug for GestureDetector {
@@ -126,7 +129,7 @@ impl Widget for RawGestureDetector {
     fn into_arc_widget(
         self: std::sync::Arc<Self>,
     ) -> <Self::Element as epgi_core::tree::Element>::ArcWidget {
-        todo!()
+        self
     }
 }
 
@@ -179,6 +182,17 @@ impl ProxyWidget for RawGestureDetector {
     type LayoutMemo = ();
 
     type LayerOrUnit = ();
+
+    fn compute_hit_test(
+        render_state: &Self::RenderState,
+        position: &Point2d,
+        size: &BoxSize,
+        transform: &Affine2d,
+        memo: &Self::LayoutMemo,
+        child: &ArcChildRenderObject<BoxProtocol>,
+    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
+        HitTestConfig::new_single_in_layer(true, child.clone(), transform.clone(), None)
+    }
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,

@@ -19,6 +19,21 @@ impl<C> HitTestNode<C>
 where
     C: Canvas,
 {
+    /// Why not cast the interface for the result?
+    ///
+    /// Because the implementation depends on trait object virtual functions. And trait object method cannot be generic.
+    /// And casting interface in our method requires a return-position generics.
+    /// Therefore, we simply cannot cast the interface within our implementation.
+    /// The interface cast should be performed by the caller later on. (Please see the following warning on doing that)
+    ///
+    /// Warning: this method will return ALL entries in the path to the first interface-compatible entry encountered in a post-order tree walk,
+    /// which means, the result will contain entries that DO NOT have the interface in question.
+    /// They are there simply because they stand in the path.
+    /// If you wish to cast the interface later on, you need to filter out those entries.
+    ///
+    // TODO: is this behavior really necessary? This behavior is introduced on the premise that PointerEventHandler and GestureHandler to be two separate capabilities. 
+    // Therefore, we then would probably (doubtly) need to retain GestureHandler entries after we find a PointerEventHandler entry.
+    // But now they are simply unified into one interface.
     pub fn find_interface<T: ?Sized + 'static>(
         self,
         // The prepend_transform serves as an optimization

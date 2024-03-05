@@ -69,13 +69,14 @@ impl PointerGestureManager {
                 entry
                     .with_position(event.common.physical_position)
                     .query_interface_ref::<dyn TransformedPointerEventHandler>()
-                    .expect("The entry should be a pointer event handler")
-                    .handle_pointer_event(&event)
+                    .map(|handler| handler.handle_pointer_event(&event));
             });
         }
         match &event.variant {
-            Added => todo!(),
-            Removed => todo!(),
+            Added => { // TODO
+            }
+            Removed => { // TODO
+            }
 
             Signal(_) | Hover(_) => {
                 let hit_test_result =
@@ -101,7 +102,7 @@ impl PointerGestureManager {
                             .find_interface::<dyn TransformedPointerEventHandler>(None)
                             .into_iter()
                             .map(Into::into)
-                            .collect()
+                            .collect::<Vec<_>>()
                     })
                     .unwrap_or_default();
 
@@ -113,8 +114,8 @@ impl PointerGestureManager {
                         let handler = entry
                             .with_position(event.common.physical_position)
                             .query_interface_box::<dyn TransformedPointerEventHandler>()
-                            .ok()
-                            .expect("The entry should be a pointer event handler");
+                            .ok()?;
+                        // This is only for pointer event handler, not for gesture recognizers.
                         handler.handle_pointer_event(&event);
                         GestureArenaTeam::try_from_entry(entry.clone(), handler)
                     })
@@ -147,7 +148,6 @@ impl PointerGestureManager {
                 dispatch_pointer_event(entry.get(), &event);
                 if let Up(_) | Cancel | PanZoomEnd = variant {
                     entry.remove();
-                    todo!()
                 }
             }
         }
@@ -167,18 +167,25 @@ impl PointerGestureManager {
                         variant,
                     },
                     &mut associated_updates,
-                )
-                .debug_assert("Arena should exist");
+                );
             } else {
-                self.arena_handle_event(
+                let is_down = matches!(variant, Down(_));
+                let found_arena = self.arena_handle_event(
                     &PointerInteractionEvent {
                         common: event.common,
                         interaction_id,
                         variant,
                     },
                     &mut associated_updates,
-                )
-                .debug_assert("Arena should exist");
+                );
+                if is_down {
+                    debug_assert!(
+                        found_arena,
+                        // Because the create arena impl has no sweep and default logic.
+                        // We are obliged to try resolve by default at least once, and this is done in handle_event method.
+                        "Down event should create an arena, even if there is no member inside.", 
+                    )
+                }
             }
             self.process_associated_updates(associated_updates);
         }

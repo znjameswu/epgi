@@ -181,9 +181,9 @@ impl AnyRawPointer {
 /// Therefore we have to have a mut version of the function,
 /// while the immutable version is a necessary for any other scenarios where users cannot obtain a mutable ref safely.
 pub trait CastInterfaceByRawPtr {
-    fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer>;
+    fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer>;
 
-    fn cast_interface_raw_mut(&mut self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer>;
+    fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer>;
 }
 
 impl dyn CastInterfaceByRawPtr {
@@ -207,7 +207,7 @@ macro_rules! interface_query_table {
         lazy_static::lazy_static! {
             static ref $name: [(TypeId, fn(*mut $type) -> AnyRawPointer);[$(std::stringify!($trait),)*].len()] =
                 [
-                    $((TypeId::of::<*mut $trait>(), |x| {
+                    $((TypeId::of::<$trait>(), |x| {
                         AnyRawPointer::new_raw_mut(x as *mut $trait)
                     }),)*
                 ];
@@ -245,15 +245,13 @@ pub fn default_cast_interface_by_table_raw_mut<'a, T: 'a>(
 pub fn default_query_interface_ref<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
     source: &S,
 ) -> Option<&T> {
-    source
-        .cast_interface_raw(TypeId::of::<*mut T>())
-        .map(|ptr| {
-            let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
-                "Interface query table function should return a raw fat pointer \
+    source.cast_interface_raw(TypeId::of::<T>()).map(|ptr| {
+        let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
+            "Interface query table function should return a raw fat pointer \
                     with the same type as it has claimed",
-            );
-            unsafe { downcasted.as_ref().expect("Impossible to fail") }
-        })
+        );
+        unsafe { downcasted.as_ref().expect("Impossible to fail") }
+    })
 }
 
 pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
@@ -262,7 +260,7 @@ pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized 
     let leaked = Box::into_raw(source);
     let casted = unsafe { leaked.as_mut() }
         .expect("Impossible to fail")
-        .cast_interface_raw_mut(TypeId::of::<*mut T>());
+        .cast_interface_raw_mut(TypeId::of::<T>());
     // .cast_interface_raw(TypeId::of::<*mut T>());
     match casted {
         Some(ptr) => {
@@ -286,24 +284,15 @@ mod tests {
 
     struct TestStruct(i32);
 
-    lazy_static::lazy_static! {
-        static ref INTERFACE_TABLE: [(TypeId, fn(*mut TestStruct) -> AnyRawPointer);1] =
-            [(TypeId::of::<*mut dyn TestTrait>(), |x| {
-                AnyRawPointer::new_raw_mut(x as *mut dyn TestTrait)
-            })];
-    }
+    interface_query_table!(INTERFACE_TABLE, TestStruct, dyn TestTrait);
 
     impl CastInterfaceByRawPtr for TestStruct {
-        fn cast_interface_raw(&self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
-            default_cast_interface_by_table_raw(self, raw_ptr_type_id, INTERFACE_TABLE.as_slice())
+        fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
+            default_cast_interface_by_table_raw(self, trait_type_id, INTERFACE_TABLE.as_slice())
         }
 
-        fn cast_interface_raw_mut(&mut self, raw_ptr_type_id: TypeId) -> Option<AnyRawPointer> {
-            default_cast_interface_by_table_raw_mut(
-                self,
-                raw_ptr_type_id,
-                INTERFACE_TABLE.as_slice(),
-            )
+        fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
+            default_cast_interface_by_table_raw_mut(self, trait_type_id, INTERFACE_TABLE.as_slice())
         }
     }
 

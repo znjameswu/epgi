@@ -40,6 +40,42 @@ where
             },
         }
     }
+
+    pub fn new_in_layer(
+        self_is_hit: bool,
+        children: impl IntoIterator<
+            Item = (
+                ArcChildRenderObject<CP>,
+                CP::Transform,
+                Option<<CP::Canvas as Canvas>::Transform>,
+            ),
+        >,
+    ) -> Self {
+        Self {
+            self_is_hit,
+            children: children.into_iter().collect(),
+            layer_transform: HitTestLayerTransform::None {
+                cast_hit_position_ref: |x| x,
+                cast_hit_test_node_child: |x| x,
+            },
+        }
+    }
+
+    pub fn new_single_in_layer(
+        self_is_hit: bool,
+        child: ArcChildRenderObject<CP>,
+        transform: CP::Transform,
+        canvas_transform: Option<<CP::Canvas as Canvas>::Transform>,
+    ) -> Self {
+        Self {
+            self_is_hit,
+            children: [(child, transform, canvas_transform)].into(),
+            layer_transform: HitTestLayerTransform::None {
+                cast_hit_position_ref: |x| x,
+                cast_hit_test_node_child: |x| x,
+            },
+        }
+    }
 }
 
 impl<PP, CP> HitTestConfig<PP, CP>

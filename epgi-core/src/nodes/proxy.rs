@@ -75,14 +75,7 @@ pub trait ProxyWidget:
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
-        HitTestConfig {
-            self_is_hit: false,
-            children: [(child.clone(), transform.clone(), None)].into(),
-            layer_transform: HitTestLayerTransform::None {
-                cast_hit_position_ref: |x| x,
-                cast_hit_test_node_child: |x| x,
-            },
-        }
+        HitTestConfig::new_single_in_layer(false, child.clone(), transform.clone(), None)
     }
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;

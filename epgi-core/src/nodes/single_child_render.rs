@@ -253,4 +253,11 @@ where
         let [child] = children;
         W::compute_hit_test(&self.state, position, size, transform, memo, child)
     }
+
+    fn all_hit_test_interfaces() -> &'static [(
+        TypeId,
+        fn(*mut TransformedHitTestEntry<Self>) -> AnyRawPointer,
+    )] {
+        W::all_hit_test_interfaces()
+    }
 }
