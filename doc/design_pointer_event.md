@@ -277,8 +277,10 @@ Correction: The capability is not only generic over hit position, but it is also
     1. PointerSignalEvent need a PointerSignalResolver https://api.flutter.dev/flutter/gestures/PointerSignalResolver-class.html
     2. Decision: on hold
 7. Scroll amount
-    1. On gnome wayland, 1 tick = 53px
+    1. Experiment: On gnome wayland, 1 tick = 53px
     2. https://github.com/flutter/engine/pull/32094
+8. How does flutter keep paint transform and hit test transform? (In theory, the two should be inverse to each other and one may simply not exist)
+    1. `BoxHitTestResult::addWithPaintTransform` called `Matrix4:::tryInvert`
 
 
 
