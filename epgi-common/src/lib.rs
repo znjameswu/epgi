@@ -13,5 +13,8 @@ pub use gesture::*;
 mod phantom_box;
 pub use phantom_box::*;
 
-pub use text::*;
 mod text;
+pub use text::*;
+
+mod utils;
+pub use utils::*;

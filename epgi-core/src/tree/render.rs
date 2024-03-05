@@ -86,10 +86,6 @@ pub trait Render: Sized + Send + Sync + 'static {
 
     type LayerOrUnit: LayerOrUnit<Self>;
 
-    fn all_interfaces() -> &'static [(TypeId, fn(ArcAnyRenderObject) -> AnyPointer)] {
-        &[]
-    }
-
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
         fn(*mut TransformedHitTestEntry<Self>) -> AnyRawPointer,
@@ -224,8 +220,6 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync +
     fn element_context(&self) -> &ElementContextNode;
     fn detach(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayeredRenderObject>;
-
-    fn all_interfaces(&self) -> &'static [(TypeId, fn(ArcAnyRenderObject) -> AnyPointer)];
 }
 
 impl<R> AnyRenderObject for RenderObject<R>
@@ -242,28 +236,6 @@ where
 
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayeredRenderObject> {
         <R::LayerOrUnit as LayerOrUnit<R>>::downcast_arc_any_layer_render_object(self)
-    }
-
-    fn all_interfaces(&self) -> &'static [(TypeId, fn(ArcAnyRenderObject) -> AnyPointer)] {
-        R::all_interfaces()
-    }
-}
-
-pub trait ArcAnyRenderObjectExt {
-    fn query_interface<I: 'static>(self) -> Option<I>;
-}
-
-impl ArcAnyRenderObjectExt for ArcAnyRenderObject {
-    fn query_interface<I: 'static>(self) -> Option<I> {
-        self.all_interfaces()
-            .iter()
-            .find(|(type_id, _)| TypeId::of::<I>() == *type_id)
-            .map(|(_, op)| {
-                op(self).downcast::<I>().expect(
-                    "The interface conversion function should convert the payload \
-                    into the interface claimed by the type id",
-                )
-            })
     }
 }
 

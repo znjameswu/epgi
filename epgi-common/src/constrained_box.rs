@@ -66,5 +66,5 @@ impl ProxyWidget for ConstrainedBox {
         }
     }
 
-    type LayerRenderDelegate = ();
+    type LayerOrUnit = ();
 }

@@ -1,8 +1,10 @@
-use crate::foundation::{Canvas, PaintContext, Protocol};
+use std::any::TypeId;
+
+use crate::foundation::{AnyRawPointer, Canvas, PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestConfig, LayerOrUnit,
-    RenderAction, Widget,
+    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestConfig,
+    HitTestLayerTransform, LayerOrUnit, RenderAction, TransformedHitTestEntry, Widget,
 };
 
 use super::{
@@ -63,6 +65,8 @@ pub trait ProxyWidget:
         paint_ctx.paint(child, transform)
     }
 
+    #[inline(always)]
+    #[allow(unused_variables)]
     fn compute_hit_test(
         render_state: &Self::RenderState,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
@@ -71,10 +75,24 @@ pub trait ProxyWidget:
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
-        todo!() //child.hit_test(results, coord)
+        HitTestConfig {
+            self_is_hit: false,
+            children: [(child.clone(), transform.clone(), None)].into(),
+            layer_transform: HitTestLayerTransform::None {
+                cast_hit_position_ref: |x| x,
+                cast_hit_test_node_child: |x| x,
+            },
+        }
     }
 
-    type LayerRenderDelegate: LayerOrUnit<SingleChildRenderObject<Self>>;
+    type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
+
+    fn all_hit_test_interfaces() -> &'static [(
+        TypeId,
+        fn(*mut TransformedHitTestEntry<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+    )] {
+        &[]
+    }
 }
 
 impl<T> SingleChildRenderObjectWidget for T
@@ -131,7 +149,7 @@ where
         T::perform_paint(state, size, transform, memo, child, paint_ctx)
     }
 
-    type LayerOrUnit = T::LayerRenderDelegate;
+    type LayerOrUnit = T::LayerOrUnit;
 
     fn compute_hit_test(
         render_state: &Self::RenderState,
@@ -142,5 +160,12 @@ where
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
         T::compute_hit_test(render_state, position, size, transform, memo, child)
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(
+        TypeId,
+        fn(*mut TransformedHitTestEntry<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+    )] {
+        T::all_hit_test_interfaces()
     }
 }

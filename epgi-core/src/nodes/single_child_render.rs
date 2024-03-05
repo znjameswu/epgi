@@ -1,14 +1,16 @@
+use std::any::TypeId;
 use std::marker::PhantomData;
 
 use crate::foundation::{
-    Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Never, PaintContext,
-    Protocol, Provide,
+    AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec,
+    Never, PaintContext, Protocol, Provide,
 };
 
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    HitTestConfig, LayerOrUnit, Render, RenderAction, RenderElement, Widget,
+    HitTestConfig, LayerOrUnit, Render, RenderAction, RenderElement, TransformedHitTestEntry,
+    Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -61,6 +63,13 @@ pub trait SingleChildRenderObjectWidget:
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol>;
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
+
+    fn all_hit_test_interfaces() -> &'static [(
+        TypeId,
+        fn(*mut TransformedHitTestEntry<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+    )] {
+        &[]
+    }
 }
 
 pub trait SingleChildDryLayout: SingleChildRenderObjectWidget {

@@ -1,6 +1,6 @@
 use std::{any::TypeId, sync::Arc, time::Instant};
 
-use epgi_core::foundation::SyncMutex;
+use epgi_core::foundation::{SyncMutex, AsAny};
 
 use super::{PointerEvent, PointerInteractionEvent, PointerInteractionId};
 
@@ -56,7 +56,37 @@ pub struct RecognizerResponse {
     pub associated_arenas: Vec<PointerInteractionId>,
 }
 
-pub trait GestureRecognizer: 'static {
+impl RecognizerResponse {
+    pub const fn possible() -> Self {
+        Self {
+            primary_result: RecognitionResult::Possible,
+            associated_arenas: Vec::new(),
+        }
+    }
+
+    pub const fn impossible() -> Self {
+        Self {
+            primary_result: RecognitionResult::Impossible,
+            associated_arenas: Vec::new(),
+        }
+    }
+
+    pub const fn certain(confidence: f32) -> Self {
+        Self {
+            primary_result: RecognitionResult::Certain { confidence },
+            associated_arenas: Vec::new(),
+        }
+    }
+
+    pub const fn inconclusive(revisit: Instant) -> Self {
+        Self {
+            primary_result: RecognitionResult::Inconclusive { revisit },
+            associated_arenas: Vec::new(),
+        }
+    }
+}
+
+pub trait GestureRecognizer: AsAny +  Send + 'static {
     type HitPosition;
 
     /// If the primary response is impossible, then the implementation should also clean up
@@ -80,6 +110,8 @@ pub trait GestureRecognizer: 'static {
     ///
     /// This will also be called after handle_arena_victory when the arena is closed.
     fn handle_arena_evict(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
+
+    fn on_detach(&mut self);
 }
 
 pub trait AnyTransformedGestureRecognizer {
