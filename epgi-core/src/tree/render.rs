@@ -94,6 +94,15 @@ pub trait Render: Sized + Send + Sync + 'static {
     }
 }
 
+#[macro_export]
+macro_rules! hit_test_interface_query_table {
+    ($name: ident, $type: ty, $($trait: ty),* $(,)?) => {
+        epgi_core::interface_query_table!($name, TransformedHitTestEntry<$type>, $($trait,)*);
+    };
+}
+
+pub use hit_test_interface_query_table;
+
 /// Dry layout means that under all circumstances, this render object's size is solely determined
 /// by the constraints given by its parents.
 ///

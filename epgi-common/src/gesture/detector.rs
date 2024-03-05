@@ -1,28 +1,79 @@
-use std::{any::TypeId, ops::DerefMut};
+use std::{any::TypeId, ops::DerefMut, sync::Arc};
 
 use epgi_2d::{BoxProtocol, Point2d};
 use epgi_core::{
-    foundation::{AnyRawPointer, Asc, Canvas, PaintContext, Protocol, SyncMutex},
-    interface_query_entry,
+    foundation::{AnyRawPointer, Asc, SyncMutex},
+    hit_test_interface_query_table,
     nodes::{
-        ProxyWidget, SingleChildRenderObject, SingleChildRenderObjectElement,
-        SingleChildRenderObjectWidget,
+        ComponentElement, ComponentWidget, ProxyWidget, SingleChildRenderObject,
+        SingleChildRenderObjectElement,
     },
-    tree::{
-        ArcChildRenderObject, ArcChildWidget, Element, HitTestConfig, RenderAction,
-        TransformedHitTestEntry, Widget,
-    },
+    tree::{ArcChildWidget, BuildContext, Element, RenderAction, TransformedHitTestEntry, Widget},
 };
 use hashbrown::HashMap;
 
 use crate::{
     AnyTransformedGestureRecognizer, ArcCallback, GestureRecognizer, GestureRecognizerTeamPolicy,
-    PointerEvent, TapGestureRecognizer, TransformedPointerEventHandler,
+    PointerEvent, TapGestureRecognizer, TransformedGestureRecognizer,
+    TransformedPointerEventHandler,
 };
+
+pub struct GestureDetector {
+    on_tap: Option<ArcCallback>,
+    child: ArcChildWidget<BoxProtocol>,
+}
+
+impl std::fmt::Debug for GestureDetector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GestureDetector")
+            .field("on_tap", &self.on_tap.as_ref().map(|_| ()))
+            .field("child", &self.child)
+            .finish()
+    }
+}
+
+impl Widget for GestureDetector {
+    type ParentProtocol = BoxProtocol;
+
+    type ChildProtocol = BoxProtocol;
+
+    type Element = ComponentElement<BoxProtocol>;
+
+    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+        self as _
+    }
+}
+
+impl ComponentWidget<BoxProtocol> for GestureDetector {
+    fn build(&self, _ctx: BuildContext) -> ArcChildWidget<BoxProtocol> {
+        let mut recognizer_factories = Vec::new();
+        if let Some(on_tap) = &self.on_tap {
+            recognizer_factories.push(GestureRecognizerFactory::new::<TapGestureRecognizer>(
+                {
+                    let on_tap = on_tap.clone();
+                    move || TapGestureRecognizer {
+                        device_pixel_ratio: 1.0, //TODO
+                        on_tap: on_tap.clone(),
+                    }
+                },
+                {
+                    let on_tap = on_tap.clone();
+                    move |recognizer| {
+                        recognizer.device_pixel_ratio = 1.0;
+                        recognizer.on_tap = on_tap.clone();
+                    }
+                },
+            ));
+        }
+        Asc::new(RawGestureDetector {
+            recognizer_factories,
+            child: self.child.clone(),
+        })
+    }
+}
 
 #[derive(Debug)]
 pub struct RawGestureDetector {
-    device_pixel_ratio: f32,
     recognizer_factories: Vec<GestureRecognizerFactory>,
     child: ArcChildWidget<BoxProtocol>,
 }
@@ -133,28 +184,47 @@ impl ProxyWidget for RawGestureDetector {
         TypeId,
         fn(*mut TransformedHitTestEntry<SingleChildRenderObject<Self>>) -> AnyRawPointer,
     )] {
-        &[interface_query_entry!(dyn TransformedPointerEventHandler)]
+        RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE.as_slice()
     }
 }
 
-const GESTURE_DETECTOR_INTERFACE_QUERY_TABLE = [interface_query_entry!(dyn TransformedPointerEventHandler)];
+hit_test_interface_query_table!(
+    RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE,
+    SingleChildRenderObject<RawGestureDetector>,
+    dyn TransformedPointerEventHandler,
+);
 
 impl TransformedPointerEventHandler
     for TransformedHitTestEntry<SingleChildRenderObject<RawGestureDetector>>
 {
-    fn handle_pointer_event(&self, event: &PointerEvent) {}
+    fn handle_pointer_event(&self, _event: &PointerEvent) {}
 
     fn all_gesture_recognizers(&self) -> Option<(GestureRecognizerTeamPolicy, Vec<TypeId>)> {
         let Some(render_object) = self.render_object.upgrade() else {
             return None;
         };
-        Some((GestureRecognizerTeamPolicy::Competing, todo!()))
+        Some((
+            GestureRecognizerTeamPolicy::Competing,
+            render_object
+                .modify_render_with(|render| render.state.recognizers.keys().cloned().collect()),
+        ))
     }
 
     fn get_gesture_recognizer(
         &self,
         type_id: TypeId,
     ) -> Option<Box<dyn AnyTransformedGestureRecognizer>> {
-        todo!()
+        let Some(render_object) = self.render_object.upgrade() else {
+            return None;
+        };
+
+        render_object
+            .modify_render_with(|render| render.state.recognizers.get(&type_id).cloned())
+            .map(|recognizer| {
+                Box::new(TransformedGestureRecognizer {
+                    recognizer,
+                    hit_position: self.hit_position,
+                }) as _
+            })
     }
 }

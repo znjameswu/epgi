@@ -201,23 +201,16 @@ pub struct InterfaceQueryTableEntry<S> {
     cast: fn(*mut S) -> AnyRawPointer,
 }
 
-// impl<S> InterfaceQueryTableEntry<S> {
-//     fn new<T: ?Sized>(cast: fn(*mut S) -> *mut T) -> Self {
-//         Self {
-//             type_id: TypeId::of::<T>(),
-//             cast: |src| AnyRawPointer::new_raw_mut(cast(src)),
-//         }
-//     }
-// }
-
 #[macro_export]
 macro_rules! interface_query_table {
     ($name: ident, $type: ty, $($trait: ty),* $(,)?) => {
         lazy_static::lazy_static! {
-            static ref $name: [(TypeId, fn(*mut TestStruct) -> AnyRawPointer);1] =
-                [(TypeId::of::<*mut dyn TestTrait>(), |x| {
-                    AnyRawPointer::new_raw_mut(x as *mut dyn TestTrait)
-                })];
+            static ref $name: [(TypeId, fn(*mut $type) -> AnyRawPointer);[$(std::stringify!($trait),)*].len()] =
+                [
+                    $((TypeId::of::<*mut $trait>(), |x| {
+                        AnyRawPointer::new_raw_mut(x as *mut $trait)
+                    }),)*
+                ];
         }
     };
 }

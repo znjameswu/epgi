@@ -1,6 +1,6 @@
 use std::{any::TypeId, sync::Arc, time::Instant};
 
-use epgi_core::foundation::{SyncMutex, AsAny};
+use epgi_core::foundation::{AsAny, SyncMutex};
 
 use super::{PointerEvent, PointerInteractionEvent, PointerInteractionId};
 
@@ -86,7 +86,7 @@ impl RecognizerResponse {
     }
 }
 
-pub trait GestureRecognizer: AsAny +  Send + 'static {
+pub trait GestureRecognizer: AsAny + Send + 'static {
     type HitPosition;
 
     /// If the primary response is impossible, then the implementation should also clean up
@@ -130,15 +130,12 @@ pub trait AnyTransformedGestureRecognizer {
     fn recognizer_type_id(&self) -> TypeId;
 }
 
-pub struct TransformedGestureRecognizer<R: GestureRecognizer> {
-    recognizer: Arc<SyncMutex<R>>,
-    hit_position: R::HitPosition,
+pub struct TransformedGestureRecognizer<P: 'static> {
+    pub recognizer: Arc<SyncMutex<dyn GestureRecognizer<HitPosition = P>>>,
+    pub hit_position: P,
 }
 
-impl<R> AnyTransformedGestureRecognizer for TransformedGestureRecognizer<R>
-where
-    R: GestureRecognizer,
-{
+impl<P> AnyTransformedGestureRecognizer for TransformedGestureRecognizer<P> {
     fn handle_event(&self, event: &PointerInteractionEvent) -> RecognizerResponse {
         self.recognizer
             .lock()
@@ -160,6 +157,6 @@ where
     }
 
     fn recognizer_type_id(&self) -> TypeId {
-        TypeId::of::<R>()
+        TypeId::of::<P>()
     }
 }

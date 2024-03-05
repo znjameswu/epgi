@@ -37,6 +37,11 @@ where
             }),
         }
     }
+
+    
+    pub fn modify_render_with<T>(&self, f: impl Fn(&mut R) -> T) -> T {
+        f(&mut self.inner.lock().render)
+    }
 }
 
 pub(crate) struct RenderObjectInner<R: Render> {
