@@ -281,6 +281,19 @@ Correction: The capability is not only generic over hit position, but it is also
     2. https://github.com/flutter/engine/pull/32094
 8. How does flutter keep paint transform and hit test transform? (In theory, the two should be inverse to each other and one may simply not exist)
     1. `BoxHitTestResult::addWithPaintTransform` called `Matrix4:::tryInvert`
+9. Most of flutter's widget actually uses `HitTestBehavior::deferToChild` semantics, which makes them not claiming the  hit test by default
+    1. This even includes default PointerListener and RawGestureDetectorState
+    2. Then how do pointer listener and raw gesture detector enroll in hit test?
+        1. RenderColorBox uses opaque semantics.
+        2. A lot of high-level widgets uses `GestureDetector` in an opaque manner.
+        3. We should follow their approach. Separating capability query and hit-test concrete-ness.
+            1. And do not cut tree-walks based on concreteness. This will allow us to unify hit-testing in 3D.
+                1. The tree-walk cuts in theory should be best handled by a render object, not a scheduler extension. Because 2D and 3D would have vastly different behavior, and they could be nested
+                    1. This creates the problem of where to fit the hit test inside the pipeline
+                        1. Handled in render object callback, initiated by a simplistic gesture bindings in scheduler extension
+                    2. This enable us to make capabilities non-generic!!! Excellent news!
+                        1. Now 2D PointerManager only collects 2D PointerHandler. 3D works in a similar manner!!! They only delivers event to their respect scope, and do not probe too deep into descendent.
+                        2. Now the gesture recognition system becomes fractal instead of centralized!!!!
 
 
 
