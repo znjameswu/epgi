@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use crate::{
-    foundation::{Arc, Aweak, Canvas, Protocol, Transform},
+    foundation::{Arc, Aweak, Canvas, Protocol, TransformHitPosition},
     tree::{Render, RenderObject},
 };
 
@@ -84,7 +84,7 @@ where
 
 pub struct TransformedHitTestTarget<R: Render> {
     pub render_object: Aweak<RenderObject<R>>,
-    pub transform: <R::ParentProtocol as Protocol>::Transform,
+    pub transform: <R::ParentProtocol as Protocol>::Offset,
 }
 
 pub trait TransformedHitTestTargetWithCanvas<C: Canvas> {
@@ -121,7 +121,7 @@ pub enum HitTestNodeChild<C: Canvas> {
 
 pub struct HitTestNodeWithLayerTransform<PC: Canvas, CC: Canvas> {
     pub child: HitTestNode<CC>,
-    pub transform: Arc<dyn Transform<PC, CC>>,
+    pub transform: Arc<dyn TransformHitPosition<PC, CC>>,
 }
 pub trait ChildHitTestNode<C: Canvas> {
     fn find_interface_id_box(

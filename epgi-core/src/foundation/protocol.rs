@@ -1,24 +1,23 @@
 use std::{fmt::Debug, ops::Mul};
 
-use crate::tree::{ArcChildRenderObject, ComposableChildLayer, PaintResults};
+use crate::tree::{ArcChildLayerRenderObject, ArcChildRenderObject, PaintResults};
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: PartialEq + Clone + Debug + Send + Sync;
-    type Size: Clone + Debug + Send + Sync + 'static;
     type Offset: Clone + Debug + Send + Sync + 'static;
+    type Size: Clone + Debug + Send + Sync + 'static;
     // We cannot use reference to return intrinsic results, because we would still need to cache the result before returning.
     type Intrinsics: Intrinsics;
-    type Transform: Clone + Debug + Send + Sync + 'static;
     type Canvas: Canvas;
-    fn transform_canvas(
-        transform: &Self::Transform,
-        transform_canvas: &<Self::Canvas as Canvas>::Transform,
-    ) -> Self::Transform;
-    // fn point_in_area(
-    //     size: Self::Size,
-    //     transform: Self::CanvasTransformation,
-    //     point_on_canvas: BoxOffset,
-    // ) -> bool;
+}
+
+pub trait LayerProtocol: Protocol {
+    fn zero_offset() -> Self::Offset;
+    
+    fn compute_layer_transform(
+        offset: &Self::Offset,
+        transform: &<<Self as Protocol>::Canvas as Canvas>::Transform,
+    ) -> <<Self as Protocol>::Canvas as Canvas>::Transform;
 }
 
 pub trait Intrinsics: Debug + Send + Sync {
@@ -67,12 +66,8 @@ where
 
 pub trait Canvas: Sized + 'static {
     type Transform: Mul<Self::Transform, Output = Self::Transform>
-        + Transform<Self, Self>
-        + Debug
-        + Clone
-        + Send
-        + Sync
-        + 'static;
+        + Transform<Self>
+        + TransformHitPosition<Self, Self>;
     type PaintCommand<'a>: Send + Sync;
 
     type PaintContext<'a>: PaintContext<Canvas = Self>;
@@ -124,20 +119,14 @@ pub trait PaintContext {
 
     fn add_command(&mut self, command: <Self::Canvas as Canvas>::PaintCommand<'_>);
 
-    // /// Get access to the parent layer to create a new [Layer].
-    // ///
-    // /// Do not call this method if you do not intend to push a new layer,
-    // /// even if this method seems to allow arbitrary operation.
-    // // The method was forced to designed as such to avoid mutable borrow conflicts from two closures.
-    // fn paint_layered_child(
-    //     &mut self,
-    //     op: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> ArcChildLayer<Self::Canvas>,
-    // );
-
+    /// Call this method instead of [ChildRenderObject::paint]!
+    /// [ChildRenderObject::paint]'s signature uses the actual concrete implementation of [PaintContext].
+    /// This is different from this generic trait, which is designed to abstract over both the concrete implementation
+    /// and the paint scanner for parallel painting.
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &ArcChildRenderObject<P>,
-        transform: &P::Transform,
+        offset: &P::Offset,
     );
 
     // fn paint_multiple<'a, P: Protocol<Canvas = Self::Canvas>>(
@@ -145,7 +134,20 @@ pub trait PaintContext {
     //     child_transform_pairs: impl Container<Item = (&'a ArcChildRenderObject<P>, &'a P::Transform)>,
     // );
 
-    fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>);
+    // Temporary signature
+    fn add_layer(
+        &mut self,
+        layer: ArcChildLayerRenderObject<Self::Canvas>,
+        transform: impl FnOnce(
+            &<Self::Canvas as Canvas>::Transform,
+        ) -> <Self::Canvas as Canvas>::Transform,
+    );
+
+    fn with_transform(
+        &mut self,
+        transform: <Self::Canvas as Canvas>::Transform,
+        op: impl FnOnce(&mut Self),
+    );
 }
 
 pub trait Encoding<T>: Send + Sync + 'static {
@@ -154,16 +156,10 @@ pub trait Encoding<T>: Send + Sync + 'static {
     fn clear(&mut self);
 }
 
-pub trait LayerProtocol:
-    Protocol<Transform = <<Self as Protocol>::Canvas as Canvas>::Transform>
-{
-}
-
-impl<P> LayerProtocol for P where
-    P: Protocol<Transform = <<P as Protocol>::Canvas as Canvas>::Transform>
-{
-}
-
-pub trait Transform<PC: Canvas, CC: Canvas>: Send + Sync {
+pub trait TransformHitPosition<PC: Canvas, CC: Canvas>: Send + Sync {
     fn transform(&self, input: &PC::HitPosition) -> CC::HitPosition;
+}
+
+pub trait Transform<C: Canvas>: Debug + Clone + Send + Sync + 'static {
+    fn mul(&self, other: &Self) -> Self;
 }

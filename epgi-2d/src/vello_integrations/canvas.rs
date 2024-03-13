@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Canvas, LayerProtocol, Transform},
+    foundation::{Canvas, LayerProtocol, Transform, TransformHitPosition},
     tree::{ArcChildRenderObject, PaintResults, StructuredChildLayerOrFragment},
 };
 
@@ -60,7 +60,7 @@ impl Canvas for Affine2dCanvas {
             results: &mut paint_results,
         };
         for render_object in render_objects {
-            render_object.paint(&<P::Canvas as Canvas>::identity_transform(), &mut paint_ctx);
+            render_object.paint(&P::zero_offset(), &mut paint_ctx);
         }
         // Save the recordings on the tail
         let new_child = StructuredChildLayerOrFragment::Fragment(paint_ctx.curr_fragment_encoding);
@@ -88,8 +88,14 @@ impl Canvas for Affine2dCanvas {
     }
 }
 
-impl Transform<Affine2dCanvas, Affine2dCanvas> for Affine2d {
+impl TransformHitPosition<Affine2dCanvas, Affine2dCanvas> for Affine2d {
     fn transform(&self, input: &Point2d) -> <Affine2dCanvas as Canvas>::HitPosition {
+        todo!()
+    }
+}
+
+impl Transform<Affine2dCanvas> for Affine2d {
+    fn mul(&self, other: &Self) -> Self {
         todo!()
     }
 }

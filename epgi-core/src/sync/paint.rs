@@ -4,9 +4,8 @@ use crate::{
     foundation::{Arc, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        layer_render_function_table_of, AweakAnyLayeredRenderObject, ComposableChildLayer,
-        LayerCompositionConfig, LayerRender, LayerRenderFunctionTable, NotDetachedToken,
-        PaintCache, Render, RenderObject,
+        layer_render_function_table_of, AweakAnyLayeredRenderObject, LayerRender,
+        LayerRenderFunctionTable, NotDetachedToken, PaintCache, Render, RenderObject,
     },
 };
 
@@ -73,7 +72,7 @@ pub trait ChildRenderObjectPaintExt<PP: Protocol> {
     /// This operation will unmark any needs_paint and subtree_has_paint flag.
     fn paint(
         self: Arc<Self>,
-        transform: &PP::Transform,
+        offset: &PP::Offset,
         paint_ctx: &mut <PP::Canvas as Canvas>::PaintContext<'_>,
     );
 
@@ -84,7 +83,7 @@ pub trait ChildRenderObjectPaintExt<PP: Protocol> {
     /// This operation will NOT unmark any needs_paint and subtree_has_paint flag.
     fn paint_scan(
         self: Arc<Self>,
-        transform: &PP::Transform,
+        offset: &PP::Offset,
         paint_ctx: &mut <PP::Canvas as Canvas>::PaintScanner<'_>,
     );
 }
@@ -95,18 +94,18 @@ where
 {
     fn paint(
         self: Arc<Self>,
-        transform: &<R::ParentProtocol as Protocol>::Transform,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
         paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
     ) {
-        self._paint(transform, paint_ctx);
+        self._paint(offset, paint_ctx);
     }
 
     fn paint_scan(
         self: Arc<Self>,
-        transform: &<R::ParentProtocol as Protocol>::Transform,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
         paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
     ) {
-        self._paint(transform, paint_ctx);
+        self._paint(offset, paint_ctx);
     }
 }
 
@@ -115,8 +114,8 @@ where
     R: Render,
 {
     fn _paint(
-        self: &Arc<Self>,
-        transform: &<R::ParentProtocol as Protocol>::Transform,
+        self: Arc<Self>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
         let inner = self.inner.lock();
@@ -127,20 +126,18 @@ where
 
         if let LayerRenderFunctionTable::LayerRender {
             into_arc_child_layer_render_object,
-            get_canvas_transform_ref,
+            compute_canvas_transform,
             ..
         } = layer_render_function_table_of::<R>()
         {
-            paint_ctx.add_layer(|| ComposableChildLayer {
-                config: LayerCompositionConfig {
-                    transform: get_canvas_transform_ref(transform).clone(),
-                },
-                layer: into_arc_child_layer_render_object(self.clone()),
+            drop(inner);
+            paint_ctx.add_layer(into_arc_child_layer_render_object(self), |transform| {
+                compute_canvas_transform(offset, transform)
             })
         } else {
             inner.render.perform_paint(
                 &cache.layout_results.size,
-                transform,
+                offset,
                 &cache.layout_results.memo,
                 &inner.children,
                 paint_ctx,

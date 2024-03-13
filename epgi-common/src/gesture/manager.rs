@@ -4,9 +4,9 @@ use arena::*;
 
 use std::{ops::Deref, time::Instant};
 
-use epgi_2d::{Affine2d, Affine2dCanvas, BoxProtocol};
+use epgi_2d::{Affine2dCanvas, BoxOffset, BoxProtocol};
 use epgi_core::{
-    foundation::{Asc, AssertExt, BoolExpectExt, SyncMpscReceiver, SyncMpscSender},
+    foundation::{Asc, AssertExt, SyncMpscReceiver, SyncMpscSender},
     tree::{ArcChildRenderObject, ChildHitTestEntry},
 };
 use hashbrown::{hash_map::Entry, HashMap};
@@ -80,7 +80,7 @@ impl PointerGestureManager {
 
             Signal(_) | Hover(_) => {
                 let hit_test_result =
-                    root.hit_test(&event.common.physical_position, &Affine2d::IDENTITY);
+                    root.hit_test(&event.common.physical_position, &BoxOffset::default());
                 let entries = hit_test_result
                     .map(|hit_test_result| {
                         hit_test_result.find_interface::<dyn TransformedPointerEventHandler>(None)
@@ -95,7 +95,7 @@ impl PointerGestureManager {
                 interaction_id,
             } => {
                 let hit_test_result =
-                    root.hit_test(&event.common.physical_position, &Affine2d::IDENTITY);
+                    root.hit_test(&event.common.physical_position, &BoxOffset::default());
                 let entries: Vec<Asc<dyn ChildHitTestEntry<Affine2dCanvas>>> = hit_test_result
                     .map(|hit_test_result| {
                         hit_test_result
@@ -183,7 +183,7 @@ impl PointerGestureManager {
                         found_arena,
                         // Because the create arena impl has no sweep and default logic.
                         // We are obliged to try resolve by default at least once, and this is done in handle_event method.
-                        "Down event should create an arena, even if there is no member inside.", 
+                        "Down event should create an arena, even if there is no member inside.",
                     )
                 }
             }

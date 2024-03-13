@@ -4,7 +4,7 @@ use crate::{
     foundation::{
         default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
         default_query_interface_box, default_query_interface_ref, AnyRawPointer, Arc, Aweak,
-        Canvas, CastInterfaceByRawPtr, Protocol, Transform,
+        Canvas, CastInterfaceByRawPtr, Protocol, TransformHitPosition,
     },
     tree::{AweakAnyRenderObject, Render, RenderObject},
 };
@@ -26,7 +26,7 @@ impl dyn AnyTransformedHitTestEntry {
 pub struct TransformedHitTestEntry<R: Render> {
     pub render_object: Aweak<RenderObject<R>>,
     pub hit_position: <<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-    pub transform: <R::ParentProtocol as Protocol>::Transform,
+    pub transform: <R::ParentProtocol as Protocol>::Offset,
 }
 
 impl<R> CastInterfaceByRawPtr for TransformedHitTestEntry<R>
@@ -113,7 +113,7 @@ where
 
 pub struct LinkedHitTestEntry<PC: Canvas, CC: Canvas> {
     prepend_transform: Option<PC::Transform>,
-    transform: Arc<dyn Transform<PC, CC>>,
+    transform: Arc<dyn TransformHitPosition<PC, CC>>,
     next: Box<dyn ChildHitTestEntry<CC>>,
 }
 
@@ -124,7 +124,7 @@ where
 {
     pub(super) fn new(
         prepend_transform: Option<PC::Transform>,
-        transform: Arc<dyn Transform<PC, CC>>,
+        transform: Arc<dyn TransformHitPosition<PC, CC>>,
         next: Box<dyn ChildHitTestEntry<CC>>,
     ) -> Self {
         Self {

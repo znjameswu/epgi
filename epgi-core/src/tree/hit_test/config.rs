@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Canvas, Protocol, Transform},
+    foundation::{Arc, Canvas, Protocol, TransformHitPosition},
     tree::ArcChildRenderObject,
 };
 
@@ -9,7 +9,7 @@ pub struct HitTestConfig<PP: Protocol, CP: Protocol> {
     pub(crate) self_is_hit: bool,
     pub(crate) children: Vec<(
         ArcChildRenderObject<CP>,
-        CP::Transform,
+        CP::Offset,
         Option<<CP::Canvas as Canvas>::Transform>,
     )>,
     pub(crate) layer_transform: HitTestLayerTransform<PP::Canvas, CP::Canvas>,
@@ -21,7 +21,7 @@ pub enum HitTestLayerTransform<PC: Canvas, CC: Canvas> {
         cast_hit_test_node_child: fn(HitTestNodeChild<CC>) -> HitTestNodeChild<PC>,
     },
     Layer {
-        transform: Arc<dyn Transform<PC, CC>>,
+        transform: Arc<dyn TransformHitPosition<PC, CC>>,
     },
 }
 
@@ -46,7 +46,7 @@ where
         children: impl IntoIterator<
             Item = (
                 ArcChildRenderObject<CP>,
-                CP::Transform,
+                CP::Offset,
                 Option<<CP::Canvas as Canvas>::Transform>,
             ),
         >,
@@ -64,7 +64,7 @@ where
     pub fn new_single_in_layer(
         self_is_hit: bool,
         child: ArcChildRenderObject<CP>,
-        transform: CP::Transform,
+        transform: CP::Offset,
         canvas_transform: Option<<CP::Canvas as Canvas>::Transform>,
     ) -> Self {
         Self {

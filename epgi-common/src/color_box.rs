@@ -1,6 +1,6 @@
 use epgi_2d::{
-    Affine2d, Affine2dCanvas, Affine2dPaintContextExt, BoxProtocol, BoxSize, Color, FillPainter,
-    Painter, Point2d, Rect,
+    Affine2dCanvas, Affine2dPaintContextExt, BoxOffset, BoxProtocol, BoxSize, Color,
+    FillPainter, Painter, Rect,
 };
 use epgi_core::{
     foundation::{Asc, PaintContext},
@@ -58,22 +58,21 @@ impl ProxyWidget for ColorBox {
     fn perform_paint(
         state: &Self::RenderState,
         size: &BoxSize,
-        transform: &Affine2d,
+        offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::Protocol>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         let color = state;
         paint_ctx.draw_rect(
-            Rect::new_point_size(Point2d::ZERO, *size),
-            *transform,
+            Rect::new_point_size(*offset, *size),
             Painter::Fill(FillPainter {
                 fill: epgi_2d::Fill::EvenOdd,
                 brush: epgi_2d::Brush::Solid(*color),
                 transform: None,
             }),
         );
-        paint_ctx.paint(child, transform);
+        paint_ctx.paint(child, offset);
     }
 
     type LayerOrUnit = ();

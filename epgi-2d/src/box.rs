@@ -1,4 +1,4 @@
-use epgi_core::foundation::{Intrinsics, Protocol};
+use epgi_core::foundation::{Intrinsics, LayerProtocol, Protocol};
 
 use crate::{Affine2d, Affine2dCanvas};
 
@@ -86,7 +86,7 @@ impl BoxSize {
     };
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Default, PartialEq, Clone, Copy, Debug)]
 pub struct BoxOffset {
     pub x: f32,
     pub y: f32,
@@ -142,19 +142,19 @@ impl Protocol for BoxProtocol {
 
     type Size = BoxSize;
 
-    type Offset = BoxOffset;
-
     type Intrinsics = BoxIntrinsics;
 
-    type Transform = Affine2d;
+    type Offset = BoxOffset;
 
     type Canvas = Affine2dCanvas;
+}
 
-    #[inline]
-    fn transform_canvas(
-        transform: &Self::Transform,
-        transform_canvas: &<Self::Canvas as epgi_core::foundation::Canvas>::Transform,
-    ) -> Self::Transform {
-        *transform_canvas * *transform
+impl LayerProtocol for BoxProtocol {
+    fn compute_layer_transform(offset: &BoxOffset, transform: &Affine2d) -> Affine2d {
+        todo!()
+    }
+
+    fn zero_offset() -> BoxOffset {
+        BoxOffset { x: 0.0, y: 0.0 }
     }
 }

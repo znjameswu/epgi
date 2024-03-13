@@ -229,7 +229,7 @@ impl ArcAnyLayerRenderObjectExt for ArcAnyLayeredRenderObject {
 
 #[derive(derivative::Derivative)]
 #[derivative(Clone(bound = ""))]
-#[non_exhaustive]
+// #[non_exhaustive]
 pub struct LayerCompositionConfig<C: Canvas> {
     pub transform: C::Transform,
 }

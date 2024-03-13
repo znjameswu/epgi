@@ -1,7 +1,8 @@
 use epgi_core::{
-    foundation::{Canvas, PaintContext, Protocol},
+    foundation::{Canvas, PaintContext, Protocol, Transform},
     tree::{
-        ArcChildRenderObject, ComposableChildLayer, PaintResults, StructuredChildLayerOrFragment,
+        ArcChildLayerRenderObject, ArcChildRenderObject, ComposableChildLayer,
+        LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
     },
 };
 use peniko::{kurbo::Stroke, BrushRef};
@@ -36,21 +37,17 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
     fn add_command(&mut self, command: Affine2dPaintCommand) {
         use Affine2dPaintCommand::*;
         match command {
-            DrawShape {
-                shape,
-                transform,
-                painter,
-            } => match painter {
+            DrawShape { shape, painter } => match painter {
                 Painter::Fill(painter) => self.fill(
                     painter.fill,
-                    transform,
+                    self.curr_transform,
                     &painter.brush,
                     painter.transform,
                     shape,
                 ),
                 Painter::Stroke(painter) => self.stroke(
                     &painter.stroke,
-                    transform,
+                    self.curr_transform,
                     &painter.brush,
                     painter.transform,
                     shape,
@@ -58,36 +55,51 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             },
             ClipShape {
                 shape,
-                transform,
                 blend,
                 alpha,
-            } => self.push_layer(blend, alpha, transform, shape),
+            } => self.push_layer(blend, alpha, self.curr_transform, shape),
             PopClip => self.pop_layer(),
-            DrawParagraph {
-                paragraph,
-                transform,
-            } => render_text(&mut self.curr_fragment_encoding, transform, &paragraph),
+            DrawParagraph { paragraph } => render_text(
+                &mut self.curr_fragment_encoding,
+                self.curr_transform,
+                &paragraph,
+            ),
         }
     }
 
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &ArcChildRenderObject<P>,
-        transform: &P::Transform,
+        offset: &P::Offset,
     ) {
-        child.clone().paint(transform, self)
+        child.clone().paint(offset, self)
     }
 
-    // fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
-    //     &'b mut self,
-    //     child_transform_pairs: impl IntoIterator<Item = (&'b, ArcChildRenderObject<P>, &'b P::Transform)>,
+    // fn add_layer(
+    //     &mut self,
+    //     layer: epgi_core::tree::ArcChildLayerRenderObject<Self::Canvas>,
+    //     config: epgi_core::tree::LayerCompositionConfig<Self::Canvas>,
     // ) {
-    //     child_transform_pairs
-    //         .into_iter()
-    //         .for_each(|(child, transform)| self.paint(child, transform))
+    //     if !self.curr_fragment_encoding.is_empty() {
+    //         let encoding = std::mem::take(&mut self.curr_fragment_encoding);
+    //         self.results
+    //             .structured_children
+    //             .push(StructuredChildLayerOrFragment::Fragment(encoding));
+    //     }
+    //     self.results
+    //         .structured_children
+    //         .push(StructuredChildLayerOrFragment::StructuredChild(
+    //             ComposableChildLayer { config, layer },
+    //         ));
     // }
 
-    fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {
+    fn add_layer(
+        &mut self,
+        layer: ArcChildLayerRenderObject<Self::Canvas>,
+        transform: impl FnOnce(
+            &<Self::Canvas as Canvas>::Transform,
+        ) -> <Self::Canvas as Canvas>::Transform,
+    ) {
         if !self.curr_fragment_encoding.is_empty() {
             let encoding = std::mem::take(&mut self.curr_fragment_encoding);
             self.results
@@ -96,7 +108,25 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         }
         self.results
             .structured_children
-            .push(StructuredChildLayerOrFragment::StructuredChild(op()));
+            .push(StructuredChildLayerOrFragment::StructuredChild(
+                ComposableChildLayer {
+                    config: LayerCompositionConfig {
+                        transform: transform(&self.curr_transform),
+                    },
+                    layer,
+                },
+            ));
+    }
+
+    fn with_transform(
+        &mut self,
+        transform: <Self::Canvas as Canvas>::Transform,
+        op: impl FnOnce(&mut Self),
+    ) {
+        let new_transform = Transform::mul(&self.curr_transform, &transform);
+        let old_transform = std::mem::replace(&mut self.curr_transform, new_transform);
+        op(self);
+        self.curr_transform = old_transform;
     }
 }
 
@@ -108,17 +138,27 @@ impl PaintContext for VelloPaintScanner {
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &ArcChildRenderObject<P>,
-        transform: &P::Transform,
+        transform: &P::Offset,
     ) {
     }
 
-    // fn paint_multiple<'b, P: Protocol<Canvas = Self::Canvas>>(
-    //     &'b mut self,
-    //     child_transform_pairs: impl Container<Item = (ArcChildRenderObject<P>, &'b P::Transform)>,
-    // ) {
-    // }
+    fn add_layer(
+        &mut self,
+        layer: ArcChildLayerRenderObject<Self::Canvas>,
+        transform: impl FnOnce(
+            &<Self::Canvas as Canvas>::Transform,
+        ) -> <Self::Canvas as Canvas>::Transform,
+    ) {
+        todo!()
+    }
 
-    fn add_layer(&mut self, op: impl FnOnce() -> ComposableChildLayer<Self::Canvas>) {}
+    fn with_transform(
+        &mut self,
+        transform: <Self::Canvas as Canvas>::Transform,
+        op: impl FnOnce(&mut Self),
+    ) {
+        todo!()
+    }
 }
 
 impl<'a> VelloPaintContext<'a> {
@@ -165,7 +205,7 @@ impl<'a> VelloPaintContext<'a> {
                 // Only encode transform after we can confirm shape encoding success
                 if self
                     .curr_fragment_encoding
-                    .encode_transform((self.curr_transform * brush_transform))
+                    .encode_transform(transform * brush_transform)
                 {
                     self.curr_fragment_encoding.swap_last_path_tags();
                 }
@@ -190,7 +230,7 @@ impl<'a> VelloPaintContext<'a> {
             if let Some(brush_transform) = brush_transform {
                 if self
                     .curr_fragment_encoding
-                    .encode_transform(self.curr_transform * brush_transform)
+                    .encode_transform(transform * brush_transform)
                 {
                     self.curr_fragment_encoding.swap_last_path_tags();
                 }

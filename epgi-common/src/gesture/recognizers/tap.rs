@@ -1,9 +1,8 @@
 use epgi_2d::Point2d;
-use epgi_core::foundation::Asc;
 
 use crate::{
     ArcCallback, GestureRecognizer, PointerInteractionEvent, PointerInteractionId,
-    RecognitionResult, RecognizerResponse,
+    RecognizerResponse,
 };
 
 pub struct TapGestureRecognizer {

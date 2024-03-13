@@ -7,7 +7,6 @@ use epgi_common::{
 };
 use epgi_core::foundation::SyncMpscSender;
 use hashbrown::{hash_map::Entry, HashMap};
-use log::warn;
 
 use crate::utils::ToEpgiExt;
 

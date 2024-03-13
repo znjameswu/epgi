@@ -1,8 +1,8 @@
 use std::{any::TypeId, ops::DerefMut, sync::Arc};
 
-use epgi_2d::{Affine2d, BoxProtocol, BoxSize, Point2d};
+use epgi_2d::{BoxOffset, BoxProtocol, BoxSize, Point2d};
 use epgi_core::{
-    foundation::{AnyRawPointer, Asc, Canvas, Protocol, SyncMutex},
+    foundation::{AnyRawPointer, Asc, SyncMutex},
     hit_test_interface_query_table,
     nodes::{
         ComponentElement, ComponentWidget, ProxyWidget, SingleChildRenderObject,
@@ -187,11 +187,11 @@ impl ProxyWidget for RawGestureDetector {
         render_state: &Self::RenderState,
         position: &Point2d,
         size: &BoxSize,
-        transform: &Affine2d,
+        offset: &BoxOffset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<BoxProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
-        HitTestConfig::new_single_in_layer(true, child.clone(), transform.clone(), None)
+        HitTestConfig::new_single_in_layer(true, child.clone(), offset.clone(), None)
     }
 
     fn all_hit_test_interfaces() -> &'static [(

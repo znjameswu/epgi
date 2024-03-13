@@ -13,7 +13,7 @@ use epgi_core::{
 };
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize, Point2d,
+    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize, Point2d, BoxOffset,
 };
 
 pub struct RootView {
@@ -158,7 +158,7 @@ impl Render for RenderRoot {
     fn perform_paint(
         &self,
         _size: &BoxSize,
-        _transform: &Affine2d,
+        _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         _children: &Option<ArcChildRenderObject<BoxProtocol>>,
         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
@@ -170,7 +170,7 @@ impl Render for RenderRoot {
         &self,
         position: &Point2d,
         size: &BoxSize,
-        transform: &Affine2d,
+        offset: &BoxOffset,
         memo: &Self::LayoutMemo,
         children: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> HitTestConfig<BoxProtocol, BoxProtocol> {
@@ -178,7 +178,7 @@ impl Render for RenderRoot {
             false,
             children
                 .iter()
-                .map(|child| (child.clone(), transform.clone(), None)),
+                .map(|child| (child.clone(), offset.clone(), None)),
         )
     }
 

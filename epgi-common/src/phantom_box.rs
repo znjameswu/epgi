@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxProtocol, BoxSize, Point2d};
+use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d};
 use epgi_core::{
     foundation::{
         ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
@@ -126,7 +126,7 @@ impl Render for RenderPhantomBox {
     fn perform_paint(
         &self,
         _size: &BoxSize,
-        _transform: &Affine2d,
+        _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         _children: &[ArcChildRenderObject<BoxProtocol>; 0],
         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
@@ -137,7 +137,7 @@ impl Render for RenderPhantomBox {
         &self,
         _position: &Point2d,
         _size: &BoxSize,
-        _transform: &Affine2d,
+        _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         _children: &[ArcChildRenderObject<BoxProtocol>; 0],
     ) -> HitTestConfig<BoxProtocol, BoxProtocol> {

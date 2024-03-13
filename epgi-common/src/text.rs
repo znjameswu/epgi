@@ -1,5 +1,5 @@
-use epgi_2d::{Affine2d, Affine2dCanvas, BoxConstraints, BoxOffset};
-use epgi_core::foundation::{Canvas, Intrinsics, Protocol};
+use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset};
+use epgi_core::foundation::{Intrinsics, Protocol};
 
 #[derive(Clone, Copy, Debug)]
 pub struct SingleLineProtocol;
@@ -13,16 +13,7 @@ impl Protocol for SingleLineProtocol {
 
     type Intrinsics = SingleLineIntrinsics;
 
-    type Transform = Affine2d;
-
     type Canvas = Affine2dCanvas;
-
-    fn transform_canvas(
-        transform: &Self::Transform,
-        transform_canvas: &<Self::Canvas as Canvas>::Transform,
-    ) -> Self::Transform {
-        todo!()
-    }
 }
 
 pub type SingleLineConstraints = BoxConstraints;
@@ -77,16 +68,7 @@ impl Protocol for MultiLineProtocol {
 
     type Intrinsics = MultiLineIntrinsics;
 
-    type Transform = MultiLineTransform;
-
     type Canvas = Affine2dCanvas;
-
-    fn transform_canvas(
-        transform: &Self::Transform,
-        transform_canvas: &<Self::Canvas as epgi_core::foundation::Canvas>::Transform,
-    ) -> Self::Transform {
-        todo!()
-    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -125,11 +107,6 @@ impl Intrinsics for MultiLineIntrinsics {
     fn eq_param(&self, other: &Self) -> bool {
         todo!()
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct MultiLineTransform {
-    pub affine: Affine2d,
 }
 
 #[macro_export]

@@ -10,7 +10,7 @@ pub trait ChildRenderObjectHitTestExt<PP: Protocol> {
     fn hit_test(
         self: Arc<Self>,
         position: &<PP::Canvas as Canvas>::HitPosition,
-        transform: &PP::Transform,
+        offset: &PP::Offset,
     ) -> Option<HitTestNode<PP::Canvas>>;
 }
 
@@ -21,7 +21,7 @@ where
     fn hit_test(
         self: Arc<Self>,
         hit_position: &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        transform: &<R::ParentProtocol as Protocol>::Transform,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
     ) -> Option<HitTestNode<<R::ParentProtocol as Protocol>::Canvas>> {
         let inner = self.inner.lock();
         let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
@@ -33,7 +33,7 @@ where
         let config = inner.render.compute_hit_test(
             hit_position,
             &layout_cache.layout_results.size,
-            transform,
+            offset,
             &layout_cache.layout_results.memo,
             &inner.children,
         );
@@ -46,17 +46,17 @@ where
         #[inline(always)]
         fn hit_test_child<CP: Protocol>(
             child: ArcChildRenderObject<CP>,
-            protocol_transform: CP::Transform,
-            canvas_transform: &Option<<CP::Canvas as Canvas>::Transform>,
+            offset: CP::Offset,
+            transform: &Option<<CP::Canvas as Canvas>::Transform>,
             hit_position: &<CP::Canvas as Canvas>::HitPosition,
         ) -> Option<HitTestNode<CP::Canvas>> {
-            if let Some(canvas_transform) = &canvas_transform {
+            if let Some(canvas_transform) = &transform {
                 child.hit_test(
                     &<CP::Canvas as Canvas>::transform_hit_position(canvas_transform, hit_position),
-                    &protocol_transform,
+                    &offset,
                 )
             } else {
-                child.hit_test(hit_position, &protocol_transform)
+                child.hit_test(hit_position, &offset)
             }
         }
 
@@ -102,7 +102,7 @@ where
         return Some(HitTestNode {
             target: Box::new(TransformedHitTestTarget {
                 render_object: Arc::downgrade(&self),
-                transform: transform.clone(),
+                transform: offset.clone(),
             }),
             children,
         });

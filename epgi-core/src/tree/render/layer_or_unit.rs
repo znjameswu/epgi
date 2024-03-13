@@ -51,8 +51,7 @@ where
         LayerRenderFunctionTable::LayerRender {
             as_aweak_any_layer_render_object: |x| Arc::downgrade(x) as _,
             into_arc_child_layer_render_object: |x| x,
-            get_canvas_transform_ref: |x| x,
-            get_canvas_transform: |x| x,
+            compute_canvas_transform: <R::ParentProtocol as LayerProtocol>::compute_layer_transform,
         };
 
     fn create_layer_mark() -> LayerMark {
@@ -121,14 +120,11 @@ pub enum LayerRenderFunctionTable<R: Render> {
             fn(
                 Arc<RenderObject<R>>,
             ) -> ArcChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas>,
-        get_canvas_transform_ref:
+        compute_canvas_transform:
             fn(
-                &<R::ParentProtocol as Protocol>::Transform,
-            ) -> &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
-        get_canvas_transform: fn(
-            <R::ParentProtocol as Protocol>::Transform,
-        )
-            -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+                &<R::ParentProtocol as Protocol>::Offset,
+                &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
+            ) -> <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Transform,
     },
     // // pub update_layer_node: fn(&R, &R::ArcLayerNode) -> LayerNodeUpdateResult,
     None {},

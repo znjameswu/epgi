@@ -130,3 +130,17 @@ In flutter, a relayout boundary is determined by multiple factors, such as:
 1. 
 
 However, a lot of them is not necessary if we enforce a explicit parent_use_size
+
+
+
+# Should we strip the affine component out of the protocol transforms (Denote as Offset)
+> Subquestion:
+> ## Should we be even more aggressive, by directly use local coordinates for BoxProtocol during hit-testing?
+> By "local", we mean that hit-testing does not even depend on the offsets from its closest parent.
+> 
+> 1. The only well-defined "local" coordinates for RingProtocol is polar-coordinates. 
+> 2. If we go down this road, we have to invent hit position types for every single protocol
+> 3. Even if we go down this road, there are protocol that is very hard to even define a local hit position type, like MultiLineProtocol
+>     1. MultiLineProtocol position transform not only requires parent offset, but also self size!
+
+

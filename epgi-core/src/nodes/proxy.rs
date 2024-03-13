@@ -3,8 +3,8 @@ use std::any::TypeId;
 use crate::foundation::{AnyRawPointer, Canvas, PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestConfig,
-    HitTestLayerTransform, LayerOrUnit, RenderAction, TransformedHitTestEntry, Widget,
+    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestConfig, LayerOrUnit,
+    RenderAction, TransformedHitTestEntry, Widget,
 };
 
 use super::{
@@ -57,7 +57,7 @@ pub trait ProxyWidget:
     fn perform_paint(
         state: &Self::RenderState,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        transform: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::Protocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
@@ -71,7 +71,7 @@ pub trait ProxyWidget:
         render_state: &Self::RenderState,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        transform: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
@@ -134,7 +134,7 @@ where
     fn perform_paint(
         state: &Self::RenderState,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        transform: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
@@ -148,7 +148,7 @@ where
         render_state: &Self::RenderState,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        transform: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {

@@ -9,9 +9,7 @@ pub use node::*;
 
 use std::any::TypeId;
 
-use crate::foundation::{
-    AnyPointer, AnyRawPointer, Arc, Aweak, Canvas, HktContainer, PaintContext, Protocol,
-};
+use crate::foundation::{AnyRawPointer, Arc, Aweak, Canvas, HktContainer, PaintContext, Protocol};
 
 use super::{
     ArcAnyLayeredRenderObject, ArcElementContextNode, ElementContextNode, HitTestConfig,
@@ -63,7 +61,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_paint(
         &self,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        transform: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &<Self::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<Self::ChildProtocol>,
@@ -76,7 +74,7 @@ pub trait Render: Sized + Send + Sync + 'static {
         //results: &mut dyn ParentHitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Transform,
+        transform: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         //composition: &Self::CachedComposition,
         children: &<Self::ChildContainer as HktContainer>::Container<
