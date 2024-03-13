@@ -150,7 +150,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
     fn perform_paint(
         &self,
         size: &P::Size,
-        transform: &P::Offset,
+        offset: &P::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<P>; 1],
         paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
@@ -162,7 +162,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         &self,
         position: &<P::Canvas as Canvas>::HitPosition,
         size: &P::Size,
-        transform: &P::Offset,
+        offset: &P::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<P>; 1],
     ) -> HitTestConfig<P, P> {

@@ -4,8 +4,8 @@ use crate::{
     foundation::{Arc, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        layer_render_function_table_of, AweakAnyLayeredRenderObject, LayerRender,
-        LayerRenderFunctionTable, NotDetachedToken, PaintCache, Render, RenderObject,
+        layer_render_function_table_of, AweakAnyLayeredRenderObject, LayerCache, LayerRender,
+        LayerRenderFunctionTable, NotDetachedToken, Render, RenderObject,
     },
 };
 
@@ -60,7 +60,7 @@ where
             .cache
             .layout_cache_mut(no_relayout_token)
             .expect("Repaint can only be performed after layout has finished");
-        layout_cache.paint_cache = Some(PaintCache::new(paint_results, None));
+        layout_cache.layer_cache = Some(LayerCache::new(paint_results, None));
     }
 }
 
@@ -118,11 +118,14 @@ where
         offset: &<R::ParentProtocol as Protocol>::Offset,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
-        let inner = self.inner.lock();
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
         let token = self.mark.assume_not_needing_layout();
-        let Some(cache) = inner.cache.layout_cache_ref(token) else {
+        let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
             panic!("Paint should only be called after layout has finished")
         };
+
+        cache.paint_offset = Some(offset.clone());
 
         if let LayerRenderFunctionTable::LayerRender {
             into_arc_child_layer_render_object,
@@ -135,11 +138,11 @@ where
                 compute_canvas_transform(offset, transform)
             })
         } else {
-            inner.render.perform_paint(
+            inner_reborrow.render.perform_paint(
                 &cache.layout_results.size,
                 offset,
                 &cache.layout_results.memo,
-                &inner.children,
+                &inner_reborrow.children,
                 paint_ctx,
             );
         }

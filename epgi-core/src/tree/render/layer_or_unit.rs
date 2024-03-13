@@ -3,7 +3,7 @@ use crate::{
     scheduler::get_current_scheduler,
     tree::{
         ArcAnyLayeredRenderObject, ArcChildLayerRenderObject, AweakAnyLayeredRenderObject,
-        LayerMark, LayerRender, PaintCache,
+        LayerMark, LayerRender, LayerCache,
     },
 };
 
@@ -14,7 +14,7 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
 
     type LayerMark: Send + Sync + 'static;
 
-    type PaintResults: Send + Sync + 'static;
+    type LayerCache: Send + Sync + 'static;
 
     fn create_layer_mark() -> Self::LayerMark;
 
@@ -45,7 +45,7 @@ where
 {
     type LayerMark = LayerMark;
 
-    type PaintResults = PaintCache<<R::ChildProtocol as Protocol>::Canvas, R::CachedComposition>;
+    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, R::CachedComposition>;
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::LayerRender {
@@ -89,7 +89,7 @@ where
 {
     type LayerMark = ();
 
-    type PaintResults = ();
+    type LayerCache = ();
 
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R> =
         LayerRenderFunctionTable::None {};

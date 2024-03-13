@@ -47,7 +47,7 @@ pub trait SingleChildRenderObjectWidget:
     fn perform_paint(
         state: &Self::RenderState,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
@@ -57,7 +57,7 @@ pub trait SingleChildRenderObjectWidget:
         render_state: &Self::RenderState,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol>;
@@ -227,7 +227,7 @@ where
     fn perform_paint(
         &self,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
@@ -236,7 +236,7 @@ where
         if <W::LayerOrUnit as LayerOrUnit<Self>>::LAYER_RENDER_FUNCTION_TABLE.is_some() {
             unreachable!()
         } else {
-            return W::perform_paint(&self.state, size, transform, memo, child, paint_ctx);
+            return W::perform_paint(&self.state, size, offset, memo, child, paint_ctx);
         }
     }
 
@@ -246,12 +246,12 @@ where
         &self,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
         let [child] = children;
-        W::compute_hit_test(&self.state, position, size, transform, memo, child)
+        W::compute_hit_test(&self.state, position, size, offset, memo, child)
     }
 
     fn all_hit_test_interfaces() -> &'static [(

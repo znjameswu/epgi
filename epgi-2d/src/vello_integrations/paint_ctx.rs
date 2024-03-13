@@ -138,23 +138,21 @@ impl PaintContext for VelloPaintScanner {
     fn paint<P: Protocol<Canvas = Self::Canvas>>(
         &mut self,
         child: &ArcChildRenderObject<P>,
-        transform: &P::Offset,
+        offset: &P::Offset,
     ) {
     }
 
     fn add_layer(
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
-        transform: impl FnOnce(
-            &<Self::Canvas as Canvas>::Transform,
-        ) -> <Self::Canvas as Canvas>::Transform,
+        offset: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> <Self::Canvas as Canvas>::Transform,
     ) {
         todo!()
     }
 
     fn with_transform(
         &mut self,
-        transform: <Self::Canvas as Canvas>::Transform,
+        offset: <Self::Canvas as Canvas>::Transform,
         op: impl FnOnce(&mut Self),
     ) {
         todo!()

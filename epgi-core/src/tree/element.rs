@@ -378,14 +378,11 @@ where
                 .inner
                 .lock()
                 .cache
-                .insert_layout_cache(LayoutCache::new(
-                    LayoutResults {
-                        constraints,
-                        size,
-                        memo: layout_memo,
-                    },
-                    None,
-                ));
+                .insert_layout_cache(LayoutCache::from_layout(LayoutResults {
+                    constraints,
+                    size,
+                    memo: layout_memo,
+                }));
         }
         render_object.mark.set_is_relayout_boundary::<R>();
         ElementNode {

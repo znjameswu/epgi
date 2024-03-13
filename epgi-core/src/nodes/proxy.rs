@@ -57,12 +57,12 @@ pub trait ProxyWidget:
     fn perform_paint(
         state: &Self::RenderState,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::Protocol>,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) {
-        paint_ctx.paint(child, transform)
+        paint_ctx.paint(child, offset)
     }
 
     #[inline(always)]
@@ -71,11 +71,11 @@ pub trait ProxyWidget:
         render_state: &Self::RenderState,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
-        HitTestConfig::new_single_in_layer(false, child.clone(), transform.clone(), None)
+        HitTestConfig::new_single_in_layer(false, child.clone(), offset.clone(), None)
     }
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;

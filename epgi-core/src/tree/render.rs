@@ -61,7 +61,7 @@ pub trait Render: Sized + Send + Sync + 'static {
     fn perform_paint(
         &self,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &<Self::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<Self::ChildProtocol>,
@@ -74,7 +74,7 @@ pub trait Render: Sized + Send + Sync + 'static {
         //results: &mut dyn ParentHitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
-        transform: &<Self::ParentProtocol as Protocol>::Offset,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         //composition: &Self::CachedComposition,
         children: &<Self::ChildContainer as HktContainer>::Container<

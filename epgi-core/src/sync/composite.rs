@@ -45,7 +45,7 @@ where
                 .cache
                 .layout_cache_mut(no_relayout_token)
                 .expect("Layer should only be composited after they are laid out")
-                .paint_cache
+                .layer_cache
                 .as_mut()
                 .expect("Layer should only be composited after they are painted")
                 .composite_results_ref(no_recomposite_token)
@@ -59,22 +59,22 @@ where
 
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let paint_cache = inner_reborrow
+        let layer_cache = inner_reborrow
             .cache
             .layout_cache_mut(no_relayout_token)
             .expect("Layer should only be composited after they are laid out")
-            .paint_cache
+            .layer_cache
             .as_mut()
             .expect("Layer should only be composited after they are painted");
         let mut iter = CachingChildLayerProducingIterator {
-            paint_results: &paint_cache.paint_results,
+            paint_results: &layer_cache.paint_results,
             key: inner_reborrow.render.key().map(Arc::as_ref),
             // key: inner_reborrow.layer.key().map(Arc::as_ref),
             unadopted_layers: Vec::new(),
         };
         let cached_composition = composite_into_cache(&mut iter);
         let result = Asc::new(cached_composition.clone());
-        paint_cache.insert_composite_results(CompositeResults {
+        layer_cache.insert_composite_results(CompositeResults {
             unadopted_layers: iter.unadopted_layers,
             cached_composition,
         });
@@ -106,11 +106,11 @@ where
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let paint_cache = inner_reborrow
+        let layer_cache = inner_reborrow
             .cache
             .layout_cache_mut(no_relayout_token)
             .expect("Layer should only be composited after they are laid out")
-            .paint_cache
+            .layer_cache
             .as_mut()
             .expect("Layer should only be composited after they are painted");
         if let Some(CachedCompositionFunctionTable {
@@ -119,7 +119,7 @@ where
         }) = R::CACHED_COMPOSITION_FUNCTION_TABLE
         {
             if let Err(no_recomposite_token) = self.layer_mark.needs_composite() {
-                paint_cache.composite_results_ref(no_recomposite_token)
+                layer_cache.composite_results_ref(no_recomposite_token)
             } else {
                 None
             };
@@ -128,7 +128,7 @@ where
                 .layer_mark
                 .needs_composite()
                 .err()
-                .and_then(|token| paint_cache.composite_results_ref(token));
+                .and_then(|token| layer_cache.composite_results_ref(token));
 
             let composite_results = if let Some(composite_results) = composite_results {
                 composite_from_cache_to(
@@ -139,14 +139,14 @@ where
                 composite_results
             } else {
                 let mut iter = CachingChildLayerProducingIterator {
-                    paint_results: &paint_cache.paint_results,
+                    paint_results: &layer_cache.paint_results,
                     key: inner_reborrow.render.key().map(Arc::as_ref),
                     // key: inner_reborrow.layer.key().map(Arc::as_ref),
                     unadopted_layers: Vec::new(),
                 };
                 let results = composite_into_cache(&mut iter);
                 composite_from_cache_to(encoding, &results, composition_config);
-                paint_cache.insert_composite_results(CompositeResults {
+                layer_cache.insert_composite_results(CompositeResults {
                     unadopted_layers: iter.unadopted_layers,
                     cached_composition: results,
                 })
@@ -164,7 +164,7 @@ where
                 .collect();
         } else {
             let mut iter = NonCachingChildLayerProducingIterator {
-                paint_results: &paint_cache.paint_results,
+                paint_results: &layer_cache.paint_results,
                 key: inner_reborrow.render.key().map(Arc::as_ref),
                 unadopted_layers: Vec::new(),
                 composition_config,

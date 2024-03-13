@@ -9,14 +9,14 @@ use super::{
     LayerCompositionConfig, LayerRender, NoRecompositeToken,
 };
 
-pub struct PaintCache<C: Canvas, T> {
+pub struct LayerCache<C: Canvas, T> {
     pub(crate) paint_results: PaintResults<C>,
     /// This field should always be None if the layer does not enable cached composition
     /// There is no point in storing adopt results if the layer is going to perform tree walk anyway
     composite_results: Option<CompositeResults<C, T>>,
 }
 
-impl<C, T> PaintCache<C, T>
+impl<C, T> LayerCache<C, T>
 where
     C: Canvas,
 {

@@ -38,7 +38,6 @@ where
         }
     }
 
-    
     pub fn modify_render_with<T>(&self, f: impl Fn(&mut R) -> T) -> T {
         f(&mut self.inner.lock().render)
     }
@@ -59,24 +58,29 @@ pub(crate) struct RenderCache<R: Render>(
         LayoutCache<
             R::ParentProtocol,
             R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
+            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
         >,
     >,
 );
 
-pub(crate) struct LayoutCache<P: Protocol, M, PR> {
+pub(crate) struct LayoutCache<P: Protocol, M, LC> {
     pub(crate) layout_results: LayoutResults<P, M>,
-    pub(crate) paint_cache: Option<PR>,
+    // Because the layer paint is designed to be parallel over dirty render object
+    // Therefore we can never guarantee the order between a layer being given its offset, and it being painted into cache
+    // Therefore we separate the offset and the layer paint cache into two separate fields.
+    pub(crate) paint_offset: Option<P::Offset>,
+    pub(crate) layer_cache: Option<LC>,
 }
 
-impl<P, M, PR> LayoutCache<P, M, PR>
+impl<P, M, LC> LayoutCache<P, M, LC>
 where
     P: Protocol,
 {
-    pub(crate) fn new(layout_results: LayoutResults<P, M>, paint_cache: Option<PR>) -> Self {
+    pub(crate) fn from_layout(layout_results: LayoutResults<P, M>) -> Self {
         Self {
             layout_results,
-            paint_cache,
+            paint_offset: None,
+            layer_cache: None,
         }
     }
 }
@@ -120,7 +124,7 @@ where
         &LayoutCache<
             R::ParentProtocol,
             R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
+            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
         >,
     > {
         self.0.as_ref()
@@ -135,7 +139,7 @@ where
         &mut LayoutCache<
             R::ParentProtocol,
             R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
+            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
         >,
     > {
         self.0.as_mut()
@@ -146,12 +150,12 @@ where
         cache: LayoutCache<
             R::ParentProtocol,
             R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
+            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
         >,
     ) -> &mut LayoutCache<
         R::ParentProtocol,
         R::LayoutMemo,
-        <R::LayerOrUnit as LayerOrUnit<R>>::PaintResults,
+        <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
     > {
         self.0.insert(cache)
     }

@@ -127,10 +127,13 @@ where
         } else {
             self.render.perform_layout(&constraints, &self.children)
         };
-        let cache = self.cache.insert_layout_cache(LayoutCache::new(
-            LayoutResults::new(constraints, size, memo),
-            None,
-        ));
+        let cache = self
+            .cache
+            .insert_layout_cache(LayoutCache::from_layout(LayoutResults::new(
+                constraints,
+                size,
+                memo,
+            )));
 
         mark.clear_self_needs_layout();
         return &cache.layout_results.size;
