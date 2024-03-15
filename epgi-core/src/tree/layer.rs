@@ -20,6 +20,7 @@ use super::{AnyRenderObject, Render};
 // pub type ArcAnyLayer = Arc<dyn AnyLayer>;
 
 pub type ArcChildLayerRenderObject<C> = Arc<dyn ChildLayerRenderObject<C>>;
+pub type AweakChildLayerRenderObject<C> = Aweak<dyn ChildLayerRenderObject<C>>;
 pub type AweakLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 pub type ArcLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 // pub type ArcParentLayerNode<C> = Arc<dyn ParentLayerNode<C>>;

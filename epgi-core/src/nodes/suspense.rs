@@ -4,12 +4,12 @@ use either::Either;
 
 use crate::{
     foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, EitherContainer, EitherParallel,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, EitherContainer, EitherParallel,
         InlinableDwsizeVec, Key, Never, PaintContext, Protocol, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, HitTestConfig, Render,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, HitTestContext, Render,
         Widget,
     },
 };
@@ -158,14 +158,14 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         todo!()
     }
 
-    fn compute_hit_test(
+    fn hit_test_children(
         &self,
-        position: &<P::Canvas as Canvas>::HitPosition,
-        size: &P::Size,
-        offset: &P::Offset,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<P>; 1],
-    ) -> HitTestConfig<P, P> {
+        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool {
         todo!()
     }
 

@@ -62,6 +62,8 @@
 
 use std::{any::TypeId, mem::MaybeUninit};
 
+use super::Arc;
+
 pub struct AnyPointer {
     get_type_id: fn() -> TypeId,
     drop: fn(&mut [*const (); 2]),
@@ -194,6 +196,10 @@ impl dyn CastInterfaceByRawPtr {
     pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
         default_query_interface_box(self)
     }
+
+    pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
+        default_query_interface_arc(self)
+    }
 }
 
 pub struct InterfaceQueryTableEntry<S> {
@@ -222,19 +228,19 @@ macro_rules! interface_query_table {
 /// Perform the cast in `*mut` ptrs, however, has no negative effect on immutable versions of implmentation.
 pub fn default_cast_interface_by_table_raw<'a, T: 'a>(
     this: *const T,
-    raw_ptr_type_id: TypeId,
+    trait_type_id: TypeId,
     table: impl IntoIterator<Item = &'a (TypeId, fn(*mut T) -> AnyRawPointer)>,
 ) -> Option<AnyRawPointer> {
-    default_cast_interface_by_table_raw_mut(this as _, raw_ptr_type_id, table)
+    default_cast_interface_by_table_raw_mut(this as _, trait_type_id, table)
 }
 
 pub fn default_cast_interface_by_table_raw_mut<'a, T: 'a>(
     this: *mut T,
-    raw_ptr_type_id: TypeId,
+    trait_type_id: TypeId,
     table: impl IntoIterator<Item = &'a (TypeId, fn(*mut T) -> AnyRawPointer)>,
 ) -> Option<AnyRawPointer> {
     for (type_id, cast) in table.into_iter() {
-        if *type_id == raw_ptr_type_id {
+        if *type_id == trait_type_id {
             let ptr = cast(this);
             return Some(ptr);
         }
@@ -271,6 +277,26 @@ pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized 
             unsafe { Ok(Box::from_raw(downcasted as *mut T)) }
         }
         None => unsafe { Err(Box::from_raw(leaked)) },
+    }
+}
+
+pub fn default_query_interface_arc<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
+    source: Arc<S>,
+) -> Result<Arc<T>, Arc<S>> {
+    let leaked = Arc::into_raw(source);
+    let casted = unsafe { leaked.as_ref() }
+        .expect("Impossible to fail")
+        .cast_interface_raw(TypeId::of::<T>());
+    // .cast_interface_raw(TypeId::of::<*mut T>());
+    match casted {
+        Some(ptr) => {
+            let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
+                "Interface query table function should return a raw fat pointer \
+                with the same type as it has claimed",
+            );
+            unsafe { Ok(Arc::from_raw(downcasted)) }
+        }
+        None => unsafe { Err(Arc::from_raw(leaked)) },
     }
 }
 

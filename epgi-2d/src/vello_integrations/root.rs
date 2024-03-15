@@ -7,13 +7,13 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        Element, ElementReconcileItem, HitTestConfig, LayerCompositionConfig, LayerRender, Render,
+        Element, ElementReconcileItem, HitTestContext, LayerCompositionConfig, LayerRender, Render,
         RenderAction, RenderElement, RenderObjectSlots, Widget,
     },
 };
 
 use crate::{
-    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxProtocol, BoxSize, Point2d, BoxOffset,
+    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
 };
 
 pub struct RootView {
@@ -166,20 +166,18 @@ impl Render for RenderRoot {
         unreachable!()
     }
 
-    fn compute_hit_test(
+    fn hit_test_children(
         &self,
-        position: &Point2d,
         size: &BoxSize,
         offset: &BoxOffset,
         memo: &Self::LayoutMemo,
         children: &Option<ArcChildRenderObject<BoxProtocol>>,
-    ) -> HitTestConfig<BoxProtocol, BoxProtocol> {
-        HitTestConfig::new_in_layer(
-            false,
-            children
-                .iter()
-                .map(|child| (child.clone(), offset.clone(), None)),
-        )
+        context: &mut HitTestContext<Affine2dCanvas>,
+    ) -> bool {
+        children
+            .as_ref()
+            .map(|child| context.hit_test(child.clone()))
+            .unwrap_or_default()
     }
 
     type LayerOrUnit = RenderRoot;

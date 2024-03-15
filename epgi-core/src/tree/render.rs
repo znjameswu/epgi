@@ -9,17 +9,22 @@ pub use node::*;
 
 use std::any::TypeId;
 
-use crate::foundation::{AnyRawPointer, Arc, Aweak, Canvas, HktContainer, PaintContext, Protocol};
+use crate::foundation::{
+    default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
+    default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
+    AnyRawPointer, Arc, Aweak, Canvas, CastInterfaceByRawPtr, HktContainer, PaintContext, Protocol,
+    Transform, TransformHitPosition,
+};
 
 use super::{
-    ArcAnyLayeredRenderObject, ArcElementContextNode, ElementContextNode, HitTestConfig,
-    TransformedHitTestEntry,
+    ArcAnyLayeredRenderObject, ArcChildLayerRenderObject, ArcElementContextNode, ElementContextNode,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<ChildProtocol = P>>;
+pub type ArcChildRenderObjectWithCanvas<C> = Arc<dyn ChildRenderObjectWithCanvas<C>>;
 
 pub trait Render: Sized + Send + Sync + 'static {
     // type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
@@ -69,26 +74,130 @@ pub trait Render: Sized + Send + Sync + 'static {
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    fn compute_hit_test(
+    fn hit_test_children(
         &self,
-        //results: &mut dyn ParentHitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+        children: &<Self::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
+        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool;
+
+    fn hit_test_self(
+        &self,
         position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-        //composition: &Self::CachedComposition,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol>;
+    ) -> Option<HitTestBehavior> {
+        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
+            .then_some(HitTestBehavior::DeferToChild)
+    }
 
     type LayerOrUnit: LayerOrUnit<Self>;
 
-    fn all_hit_test_interfaces() -> &'static [(
-        TypeId,
-        fn(*mut TransformedHitTestEntry<Self>) -> AnyRawPointer,
-    )] {
+    // Use RenderObject<R> as receiver instead of a self receiver.
+    // Because the receiver type must be at least no lower than the last polymorphic boundary,
+    // if we wish to extend interface from external code.
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    {
         &[]
+    }
+}
+
+pub enum HitTestBehavior {
+    Transparent,
+    DeferToChild,
+    Opaque,
+}
+
+pub struct HitTestContext<C: Canvas> {
+    position: C::HitPosition,
+    curr_transform: C::Transform,
+    curr_position: C::HitPosition,
+    pub results: Vec<(ArcChildRenderObjectWithCanvas<C>, C::Transform)>,
+    interface_type_id: TypeId,
+}
+
+impl<C> HitTestContext<C>
+where
+    C: Canvas,
+{
+    pub fn curr_position(&self) -> &C::HitPosition {
+        &self.curr_position
+    }
+
+    pub fn interface_exist_on<R: Render>(&self) -> bool {
+        R::all_hit_test_interfaces()
+            .iter()
+            .any(|(type_id, _)| self.interface_type_id == *type_id)
+    }
+
+    pub fn push(&mut self, render_object: ArcChildRenderObjectWithCanvas<C>) {
+        self.results
+            .push((render_object, self.curr_transform.clone()));
+    }
+
+    #[inline(always)]
+    pub fn hit_test_with_raw_transform<P: Protocol<Canvas = C>>(
+        &mut self,
+        render_object: ArcChildRenderObject<P>,
+        transform: Option<&C::Transform>,
+    ) -> bool {
+        if let Some(transform) = transform {
+            let new_transform = Transform::mul(&self.curr_transform, transform);
+            let old_position = std::mem::replace(
+                &mut self.curr_position,
+                new_transform.transform(&self.position),
+            );
+            let old_transform = std::mem::replace(&mut self.curr_transform, new_transform);
+            let subtree_has_absorbed = render_object.hit_test(self);
+            self.curr_transform = old_transform;
+            self.curr_position = old_position;
+            return subtree_has_absorbed;
+        } else {
+            return render_object.hit_test(self);
+        }
+    }
+
+    #[inline(always)]
+    pub fn hit_test<P: Protocol<Canvas = C>>(
+        &mut self,
+        render_object: ArcChildRenderObject<P>,
+    ) -> bool {
+        return render_object.hit_test(self);
+    }
+}
+
+impl<R> CastInterfaceByRawPtr for RenderObject<R>
+where
+    R: Render,
+{
+    fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
+        default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
+    }
+
+    fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
+        default_cast_interface_by_table_raw_mut(self, trait_type_id, R::all_hit_test_interfaces())
+    }
+}
+
+impl<R> RenderObject<R>
+where
+    R: Render,
+{
+    pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
+        default_query_interface_ref(self)
+    }
+
+    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+        default_query_interface_box(self)
+    }
+
+    pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
+        default_query_interface_arc(self)
     }
 }
 
@@ -248,4 +357,11 @@ where
 
 pub trait ParentRenderObject: Send + Sync + 'static {
     type ChildProtocol: Protocol;
+}
+
+pub trait ChildRenderObjectWithCanvas<C: Canvas>: Send + Sync + 'static {}
+
+impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R> where
+    R: Render
+{
 }

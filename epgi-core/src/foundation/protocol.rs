@@ -9,11 +9,17 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     // We cannot use reference to return intrinsic results, because we would still need to cache the result before returning.
     type Intrinsics: Intrinsics;
     type Canvas: Canvas;
+
+    fn position_in_shape(
+        position: &<Self::Canvas as Canvas>::HitPosition,
+        offset: &Self::Offset,
+        size: &Self::Size,
+    ) -> bool;
 }
 
 pub trait LayerProtocol: Protocol {
     fn zero_offset() -> Self::Offset;
-    
+
     fn compute_layer_transform(
         offset: &Self::Offset,
         transform: &<<Self as Protocol>::Canvas as Canvas>::Transform,

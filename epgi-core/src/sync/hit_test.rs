@@ -1,17 +1,10 @@
 use crate::{
-    foundation::{Arc, Canvas, Protocol},
-    tree::{
-        ArcChildRenderObject, HitTestLayerTransform, HitTestNode, HitTestNodeChild,
-        HitTestNodeWithLayerTransform, Render, RenderObject, TransformedHitTestTarget,
-    },
+    foundation::{Arc, Protocol},
+    tree::{HitTestBehavior, HitTestContext, Render, RenderObject},
 };
 
 pub trait ChildRenderObjectHitTestExt<PP: Protocol> {
-    fn hit_test(
-        self: Arc<Self>,
-        position: &<PP::Canvas as Canvas>::HitPosition,
-        offset: &PP::Offset,
-    ) -> Option<HitTestNode<PP::Canvas>>;
+    fn hit_test(self: Arc<Self>, context: &mut HitTestContext<PP::Canvas>) -> bool;
 }
 
 impl<R> ChildRenderObjectHitTestExt<R::ParentProtocol> for RenderObject<R>
@@ -20,91 +13,53 @@ where
 {
     fn hit_test(
         self: Arc<Self>,
-        hit_position: &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        offset: &<R::ParentProtocol as Protocol>::Offset,
-    ) -> Option<HitTestNode<<R::ParentProtocol as Protocol>::Canvas>> {
+        context: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool {
         let inner = self.inner.lock();
         let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
         let layout_cache = inner
             .cache
             .layout_cache_ref(no_relayout_token)
             .expect("Hit test should not occur before layout");
+        let offset = layout_cache
+            .paint_offset
+            .as_ref()
+            .expect("Hit test should not occur before paint");
         // let a = layout_cache.paint_cache;
-        let config = inner.render.compute_hit_test(
-            hit_position,
+
+        let hit_within_shape = inner.render.hit_test_self(
+            context.curr_position(),
+            &layout_cache.layout_results.size,
+            offset,
+            &layout_cache.layout_results.memo,
+        );
+
+        let Some(behavior) = hit_within_shape else {
+            return false;
+        };
+
+        let hit_children = inner.render.hit_test_children(
             &layout_cache.layout_results.size,
             offset,
             &layout_cache.layout_results.memo,
             &inner.children,
+            context,
         );
         drop(inner);
 
-        if config.is_empty() {
-            return None;
-        }
-
-        #[inline(always)]
-        fn hit_test_child<CP: Protocol>(
-            child: ArcChildRenderObject<CP>,
-            offset: CP::Offset,
-            transform: &Option<<CP::Canvas as Canvas>::Transform>,
-            hit_position: &<CP::Canvas as Canvas>::HitPosition,
-        ) -> Option<HitTestNode<CP::Canvas>> {
-            if let Some(canvas_transform) = &transform {
-                child.hit_test(
-                    &<CP::Canvas as Canvas>::transform_hit_position(canvas_transform, hit_position),
-                    &offset,
+        let self_has_interface = context.interface_exist_on::<R>();
+        if self_has_interface {
+            if hit_children
+                || matches!(
+                    behavior,
+                    HitTestBehavior::Opaque | HitTestBehavior::Transparent
                 )
-            } else {
-                child.hit_test(hit_position, &offset)
+            {
+                context.push(self as _);
             }
+            return hit_children || matches!(behavior, HitTestBehavior::Opaque);
+        } else {
+            return hit_children;
         }
-
-        let children = match config.layer_transform {
-            HitTestLayerTransform::None {
-                cast_hit_position_ref,
-                cast_hit_test_node_child,
-            } => config
-                .children
-                .into_iter()
-                .filter_map(|(child, protocol_transform, canvas_transform)| {
-                    let child_hit_test_node = hit_test_child(
-                        child,
-                        protocol_transform,
-                        &canvas_transform,
-                        cast_hit_position_ref(hit_position),
-                    );
-                    child_hit_test_node.map(|child| {
-                        cast_hit_test_node_child(HitTestNodeChild::InLayer(child, canvas_transform))
-                    })
-                })
-                .collect::<Vec<_>>(),
-            HitTestLayerTransform::Layer { transform } => config
-                .children
-                .into_iter()
-                .filter_map(|(child, protocol_transform, canvas_transform)| {
-                    let child_hit_test_node = hit_test_child(
-                        child,
-                        protocol_transform,
-                        &canvas_transform,
-                        &transform.transform(hit_position),
-                    );
-                    child_hit_test_node.map(|child| {
-                        HitTestNodeChild::NewLayer(Box::new(HitTestNodeWithLayerTransform {
-                            child,
-                            transform: transform.clone(),
-                        }))
-                    })
-                })
-                .collect::<Vec<_>>(),
-        };
-
-        return Some(HitTestNode {
-            target: Box::new(TransformedHitTestTarget {
-                render_object: Arc::downgrade(&self),
-                transform: offset.clone(),
-            }),
-            children,
-        });
     }
 }

@@ -14,6 +14,7 @@
 14. Render text
 15. Pointer add/remove
 16. Hit test transform design
+17. Optimize query interface probe failure cost
 
 
 TODOs for other crates:

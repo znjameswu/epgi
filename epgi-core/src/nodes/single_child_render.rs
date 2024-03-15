@@ -2,15 +2,14 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 
 use crate::foundation::{
-    AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec,
-    Never, PaintContext, Protocol, Provide,
+    AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Never,
+    PaintContext, Protocol, Provide,
 };
 
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    HitTestConfig, LayerOrUnit, Render, RenderAction, RenderElement, TransformedHitTestEntry,
-    Widget,
+    HitTestContext, LayerOrUnit, Render, RenderAction, RenderElement, RenderObject, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -53,20 +52,20 @@ pub trait SingleChildRenderObjectWidget:
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 
-    fn compute_hit_test(
-        render_state: &Self::RenderState,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+    fn hit_test_children(
+        state: &Self::RenderState,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
-    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol>;
+        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool;
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
-        fn(*mut TransformedHitTestEntry<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+        fn(*mut RenderObject<SingleChildRenderObject<Self>>) -> AnyRawPointer,
     )] {
         &[]
     }
@@ -242,22 +241,20 @@ where
 
     type LayerOrUnit = ();
 
-    fn compute_hit_test(
+    fn hit_test_children(
         &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
-    ) -> HitTestConfig<Self::ParentProtocol, Self::ChildProtocol> {
+        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool {
         let [child] = children;
-        W::compute_hit_test(&self.state, position, size, offset, memo, child)
+        return W::hit_test_children(&self.state, size, offset, memo, child, context);
     }
 
-    fn all_hit_test_interfaces() -> &'static [(
-        TypeId,
-        fn(*mut TransformedHitTestEntry<Self>) -> AnyRawPointer,
-    )] {
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    {
         W::all_hit_test_interfaces()
     }
 }

@@ -1,6 +1,6 @@
 use epgi_core::foundation::{Intrinsics, LayerProtocol, Protocol};
 
-use crate::{Affine2d, Affine2dCanvas};
+use crate::{Affine2d, Affine2dCanvas, Point2d};
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoxProtocol {}
@@ -147,6 +147,13 @@ impl Protocol for BoxProtocol {
     type Offset = BoxOffset;
 
     type Canvas = Affine2dCanvas;
+
+    fn position_in_shape(position: &Point2d, offset: &BoxOffset, size: &BoxSize) -> bool {
+        position.x >= offset.x
+            && position.x <= offset.x + size.width
+            && position.y >= offset.y
+            && position.y <= offset.y + size.height
+    }
 }
 
 impl LayerProtocol for BoxProtocol {
