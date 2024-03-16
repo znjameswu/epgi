@@ -1,6 +1,6 @@
 use epgi_2d::{
-    Affine2dCanvas, Affine2dPaintContextExt, BoxOffset, BoxProtocol, BoxSize, Color,
-    FillPainter, Painter, Rect,
+    Affine2dCanvas, Affine2dPaintContextExt, BoxOffset, BoxProtocol, BoxSize, Color, FillPainter,
+    Painter, Rect,
 };
 use epgi_core::{
     foundation::{Asc, PaintContext},

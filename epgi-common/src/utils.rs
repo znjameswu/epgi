@@ -1,7 +1,5 @@
 use epgi_core::foundation::Asc;
 
-
-
 pub type ArcCallback = Asc<dyn Fn() + Send + Sync>;
 
 // // No, this will not work. They are not alias but two traits whose trait objects cannot be coerced into each other
@@ -44,4 +42,3 @@ pub type ArcCallback = Asc<dyn Fn() + Send + Sync>;
 //         (self)(t)
 //     }
 // }
-

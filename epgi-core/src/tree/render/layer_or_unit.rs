@@ -3,7 +3,7 @@ use crate::{
     scheduler::get_current_scheduler,
     tree::{
         ArcAnyLayeredRenderObject, ArcChildLayerRenderObject, AweakAnyLayeredRenderObject,
-        LayerMark, LayerRender, LayerCache,
+        LayerCache, LayerMark, LayerRender,
     },
 };
 

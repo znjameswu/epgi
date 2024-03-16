@@ -1,6 +1,6 @@
 use epgi_2d::{
-    Affine2dEncoding, BoxConstraints, BoxProtocol, BoxProvider, BoxSize, RenderRoot, RootElement,
-    RootView, BoxOffset,
+    Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxProvider, BoxSize, RenderRoot,
+    RootElement, RootView,
 };
 use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
