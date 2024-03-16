@@ -7,8 +7,9 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        Element, ElementReconcileItem, HitTestResults, LayerCompositionConfig, LayerRender, Render,
-        RenderAction, RenderElement, RenderObjectSlots, Widget,
+        DryLayoutFunctionTable, Element, ElementReconcileItem, HitTestResults,
+        LayerCompositionConfig, LayerRender, Render, RenderAction, RenderElement,
+        RenderObjectSlots, Widget,
     },
 };
 
@@ -150,7 +151,7 @@ impl Render for RenderRoot {
         unreachable!()
     }
 
-    const DRY_LAYOUT_FUNCTION_TABLE: Option<epgi_core::tree::DryLayoutFunctionTable<Self>> =
+    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> =
         <Self as DryLayout>::DRY_LAYOUT_FUNCTION_TABLE;
 
     fn perform_paint(

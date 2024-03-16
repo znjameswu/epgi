@@ -76,11 +76,15 @@ impl<P, M, LC> LayoutCache<P, M, LC>
 where
     P: Protocol,
 {
-    pub(crate) fn from_layout(layout_results: LayoutResults<P, M>) -> Self {
+    pub(crate) fn new(
+        layout_results: LayoutResults<P, M>,
+        paint_offset: Option<P::Offset>,
+        layer_cache: Option<LC>,
+    ) -> Self {
         Self {
             layout_results,
-            paint_offset: None,
-            layer_cache: None,
+            paint_offset,
+            layer_cache,
         }
     }
 }
@@ -161,7 +165,7 @@ where
     }
 
     #[inline(always)]
-    pub(crate) fn last_layout_config_ref(
+    pub(crate) fn last_layout_constraints_ref(
         &self,
     ) -> Option<&<R::ParentProtocol as Protocol>::Constraints> {
         self.0
@@ -170,12 +174,19 @@ where
     }
 
     #[inline(always)]
-    pub(crate) fn last_layout_config_mut(
+    pub(crate) fn last_layout_constraints_mut(
         &mut self,
     ) -> Option<&mut <R::ParentProtocol as Protocol>::Constraints> {
         self.0
             .as_mut()
             .map(|cache| &mut cache.layout_results.constraints)
+    }
+
+    #[inline(always)]
+    pub(crate) fn last_layout_results_mut(
+        &mut self,
+    ) -> Option<&mut LayoutResults<R::ParentProtocol, R::LayoutMemo>> {
+        self.0.as_mut().map(|cache| &mut cache.layout_results)
     }
 }
 

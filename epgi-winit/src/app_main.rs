@@ -1,6 +1,6 @@
 use epgi_2d::{
     Affine2dEncoding, BoxConstraints, BoxProtocol, BoxProvider, BoxSize, RenderRoot, RootElement,
-    RootView,
+    RootView, BoxOffset,
 };
 use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
@@ -330,6 +330,7 @@ fn initialize_root() -> (
             .into(),
         },
         BoxConstraints::default(),
+        BoxOffset::ZERO,
         BoxSize {
             width: f32::INFINITY,
             height: f32::INFINITY,

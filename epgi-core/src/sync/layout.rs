@@ -118,22 +118,20 @@ where
     ) -> &<R::ParentProtocol as Protocol>::Size {
         let (size, memo) = if let Some(DryLayoutFunctionTable {
             compute_dry_layout,
-            compute_layout_memo: perform_layout,
+            compute_layout_memo,
         }) = R::DRY_LAYOUT_FUNCTION_TABLE
         {
             let size = compute_dry_layout(&self.render, &constraints);
-            let memo = perform_layout(&self.render, &constraints, &size, &self.children);
+            let memo = compute_layout_memo(&self.render, &constraints, &size, &self.children);
             (size, memo)
         } else {
             self.render.perform_layout(&constraints, &self.children)
         };
-        let cache = self
-            .cache
-            .insert_layout_cache(LayoutCache::from_layout(LayoutResults::new(
-                constraints,
-                size,
-                memo,
-            )));
+        let cache = self.cache.insert_layout_cache(LayoutCache::new(
+            LayoutResults::new(constraints, size, memo),
+            None,
+            None,
+        ));
 
         mark.clear_self_needs_layout();
         return &cache.layout_results.size;
@@ -141,11 +139,24 @@ where
 
     #[inline(always)]
     fn really_layout_without_resize_inner(&mut self, mark: &RenderMark) {
-        let constraints = self.cache.last_layout_config_mut().expect(
+        let Some(DryLayoutFunctionTable {
+            compute_layout_memo,
+            ..
+        }) = R::DRY_LAYOUT_FUNCTION_TABLE
+        else {
+            panic!("THis operation cannot be performed on non-relayout-boundary objects")
+        };
+        let layout_results = self.cache.last_layout_results_mut().expect(
             "Relayout should only be called on relayout boundaries \
             that has been laid out at least once",
         );
-        let constraints = constraints.clone();
-        self.perform_wet_layout(constraints, mark);
+        let memo = compute_layout_memo(
+            &self.render,
+            &layout_results.constraints,
+            &layout_results.size,
+            &self.children,
+        );
+        layout_results.memo = memo;
+        mark.clear_self_needs_layout();
     }
 }

@@ -347,6 +347,7 @@ pub fn create_root_element<E, R>(
     >,
     hooks: Hooks,
     constraints: <E::ParentProtocol as Protocol>::Constraints,
+    offset: <E::ParentProtocol as Protocol>::Offset,
     size: <E::ParentProtocol as Protocol>::Size,
     layout_memo: R::LayoutMemo,
 ) -> (Arc<ElementNode<E>>, Arc<RenderObject<R>>)
@@ -378,11 +379,11 @@ where
                 .inner
                 .lock()
                 .cache
-                .insert_layout_cache(LayoutCache::from_layout(LayoutResults {
-                    constraints,
-                    size,
-                    memo: layout_memo,
-                }));
+                .insert_layout_cache(LayoutCache::new(
+                    LayoutResults::new(constraints, size, layout_memo),
+                    Some(offset),
+                    None,
+                ));
         }
         render_object.mark.set_is_relayout_boundary::<R>();
         ElementNode {

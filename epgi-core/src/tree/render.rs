@@ -16,9 +16,7 @@ use crate::foundation::{
     Transform, TransformHitPosition,
 };
 
-use super::{
-    ArcAnyLayeredRenderObject, ArcChildLayerRenderObject, ArcElementContextNode, ElementContextNode,
-};
+use super::{ArcAnyLayeredRenderObject, ArcElementContextNode, ElementContextNode};
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
 pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;

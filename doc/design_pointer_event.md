@@ -307,8 +307,13 @@ Correction: The capability is not only generic over hit position, but it is also
 4. Updates from the same gesture recognizer from an associated arena update.
 
 
-# Notes during the new design
+# Notes during the new fractal design
 1. Gesture recognizer: shared instance across all arena, or create unique instance for each new arena?
     1. If we want create unique instances, then we need a way to clean-up retired references inside render object.
     2. The advantage is that we may create fully lock-free gesture recognizers, say tap recognizer.
     3. Decision: Shared instance, as we can follow Flutter's logic. And more complex gesture recognizers will almost certainly need locks.
+2. Should we place the root pointer event manager above/under the device_pixel_ratio layer?
+    1. Place it below has the benefit of using logical pixel unit in the event coordinate, easy to fallback in case `GestureSettings::**slop` is not available.
+    2. Place it above has the benefit of not triggering imaginary pointer movement caused by device_pixel_ratio changes. (Device is persistent, canvas is not)
+    3. Decision: Above
+        1. Immediate result: instead of a fractal manager widget that re-dispatch pointer event and handle gesture recognition, we would be much better off if we just integrate it into scheduler extensions.

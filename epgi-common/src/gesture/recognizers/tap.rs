@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 use epgi_2d::Point2d;
 
 use crate::{
@@ -36,6 +38,6 @@ impl GestureRecognizer for TapGestureRecognizer {
     }
 
     fn recognizer_type_id(&self) -> std::any::TypeId {
-        todo!()
+        TypeId::of::<Self>()
     }
 }

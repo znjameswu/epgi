@@ -13,7 +13,7 @@
 13. Zero size container reconcile optimization (skip updating children, etc.)
 14. Render text
 15. Pointer add/remove
-16. Hit test transform design
+16. ~~Hit test transform design~~
 17. Optimize query interface probe failure cost
 
 
