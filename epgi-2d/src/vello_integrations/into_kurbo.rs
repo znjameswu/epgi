@@ -1,8 +1,8 @@
 use peniko::kurbo;
 
 use crate::{
-    Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Point2d, QuadBez, RRect, Rect,
-    RingSector,
+    Affine2d, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Point2d, QuadBez, RRect,
+    Rect, RingSector,
 };
 
 pub trait IntoKurbo {
@@ -18,6 +18,14 @@ impl IntoKurbo for Point2d {
             x: self.x as _,
             y: self.y as _,
         }
+    }
+}
+
+impl IntoKurbo for Affine2d {
+    type Output = kurbo::Affine;
+
+    fn into_kurbo(self) -> Self::Output {
+        kurbo::Affine::new(self.0.map(|x| x as f64))
     }
 }
 
@@ -72,7 +80,7 @@ impl IntoKurbo for Ellipse {
     type Output = kurbo::Ellipse;
 
     fn into_kurbo(self) -> Self::Output {
-        kurbo::Ellipse::from_affine(self.affine.to_kurbo())
+        kurbo::Ellipse::from_affine(self.affine.into_kurbo())
     }
 }
 
@@ -121,7 +129,7 @@ impl IntoKurbo for EllipticalArc {
     fn into_kurbo(self) -> Self::Output {
         let (th1, d1, d2, th2) = svd::svd(self.affine);
         kurbo::Arc {
-            center: Into::<Point2d>::into(self.affine.translation).into_kurbo(),
+            center: self.affine.translation().into_kurbo(),
             radii: (d1 as _, d2 as _).into(),
             start_angle: th2 as _,
             sweep_angle: self.sweep_angle as _,
@@ -227,10 +235,10 @@ mod svd {
     /// ```
     // From https://scicomp.stackexchange.com/questions/8899/robust-algorithm-for-2-times-2-svd/28506#28506
     fn rq(affine: Affine2d) -> (f32, f32, f32, f32, f32) {
-        let a = affine.matrix[0];
-        let b = affine.matrix[2];
-        let c = affine.matrix[1];
-        let d = affine.matrix[3];
+        let a = affine.0[0];
+        let b = affine.0[2];
+        let c = affine.0[1];
+        let d = affine.0[3];
 
         if c == 0. {
             return (a, b, d, 0., 1.);

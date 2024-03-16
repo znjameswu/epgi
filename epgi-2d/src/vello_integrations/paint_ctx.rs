@@ -170,7 +170,8 @@ impl<'a> VelloPaintContext<'a> {
         shape: Affine2dCanvasShape,
     ) {
         let blend = blend.into();
-        self.curr_fragment_encoding.encode_transform(transform);
+        self.curr_fragment_encoding
+            .encode_transform(transform.into());
         self.curr_fragment_encoding.encode_fill_style(Fill::NonZero);
         if !self.encode_shape(shape, true) {
             // If the layer shape is invalid, encode a valid empty path. This suppresses
@@ -196,14 +197,15 @@ impl<'a> VelloPaintContext<'a> {
         brush_transform: Option<Affine2d>,
         shape: Affine2dCanvasShape,
     ) {
-        self.curr_fragment_encoding.encode_transform(transform);
+        self.curr_fragment_encoding
+            .encode_transform(transform.into());
         self.curr_fragment_encoding.encode_fill_style(style);
         if self.encode_shape(shape, true) {
             if let Some(brush_transform) = brush_transform {
                 // Only encode transform after we can confirm shape encoding success
                 if self
                     .curr_fragment_encoding
-                    .encode_transform(transform * brush_transform)
+                    .encode_transform((transform * brush_transform).into())
                 {
                     self.curr_fragment_encoding.swap_last_path_tags();
                 }
@@ -222,13 +224,14 @@ impl<'a> VelloPaintContext<'a> {
         shape: Affine2dCanvasShape,
     ) {
         // TODO: catch up with vello support for dash style
-        self.curr_fragment_encoding.encode_transform(transform);
+        self.curr_fragment_encoding
+            .encode_transform(transform.into());
         self.curr_fragment_encoding.encode_stroke_style(style);
         if self.encode_shape(shape, false) {
             if let Some(brush_transform) = brush_transform {
                 if self
                     .curr_fragment_encoding
-                    .encode_transform(transform * brush_transform)
+                    .encode_transform((transform * brush_transform).into())
                 {
                     self.curr_fragment_encoding.swap_last_path_tags();
                 }
@@ -277,7 +280,7 @@ pub fn render_text(encoding: &mut Affine2dEncoding, transform: Affine2d, layout:
                 .collect::<Vec<_>>();
             vello::DrawGlyphs::new(encoding, &font)
                 .brush(&style.brush.0)
-                .transform(transform.to_kurbo())
+                .transform(transform.into_kurbo())
                 .font_size(font_size)
                 .normalized_coords(&coords)
                 .draw(
