@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d};
+use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize};
 use epgi_core::{
     foundation::{
         ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element,
-        HitTestConfig, Render, RenderAction, RenderElement, Widget,
+        HitTestResults, Render, RenderAction, RenderElement, Widget,
     },
 };
 
@@ -133,15 +133,15 @@ impl Render for RenderPhantomBox {
     ) {
     }
 
-    fn compute_hit_test(
+    fn hit_test_children(
         &self,
-        _position: &Point2d,
         _size: &BoxSize,
         _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         _children: &[ArcChildRenderObject<BoxProtocol>; 0],
-    ) -> HitTestConfig<BoxProtocol, BoxProtocol> {
-        HitTestConfig::empty()
+        results: &mut HitTestResults<Affine2dCanvas>,
+    ) -> bool {
+        false
     }
 
     type LayerOrUnit = ();

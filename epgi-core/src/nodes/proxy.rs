@@ -3,8 +3,8 @@ use std::any::TypeId;
 use crate::foundation::{AnyRawPointer, Canvas, PaintContext, Protocol};
 
 use crate::tree::{
-    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestContext, LayerOrUnit,
-    RenderAction, RenderObject, Widget,
+    ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestBehavior, HitTestResults,
+    LayerOrUnit, RenderAction, RenderObject, Widget,
 };
 
 use super::{
@@ -73,9 +73,20 @@ pub trait ProxyWidget:
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
-        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
-        context.hit_test(child.clone())
+        results.hit_test(child.clone())
+    }
+
+    fn hit_test_self(
+        state: &Self::RenderState,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+    ) -> Option<HitTestBehavior> {
+        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
+            .then_some(HitTestBehavior::DeferToChild)
     }
 
     type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
@@ -148,9 +159,19 @@ where
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         child: &ArcChildRenderObject<Self::ChildProtocol>,
-        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
-        T::hit_test_children(state, size, offset, memo, child, context)
+        T::hit_test_children(state, size, offset, memo, child, results)
+    }
+
+    fn hit_test_self(
+        state: &Self::RenderState,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+    ) -> Option<HitTestBehavior> {
+        T::hit_test_self(state, position, size, offset, memo)
     }
 
     type LayerOrUnit = T::LayerOrUnit;

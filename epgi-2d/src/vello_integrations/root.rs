@@ -7,14 +7,12 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        Element, ElementReconcileItem, HitTestContext, LayerCompositionConfig, LayerRender, Render,
+        Element, ElementReconcileItem, HitTestResults, LayerCompositionConfig, LayerRender, Render,
         RenderAction, RenderElement, RenderObjectSlots, Widget,
     },
 };
 
-use crate::{
-    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
-};
+use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -168,15 +166,15 @@ impl Render for RenderRoot {
 
     fn hit_test_children(
         &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        memo: &Self::LayoutMemo,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+        _memo: &Self::LayoutMemo,
         children: &Option<ArcChildRenderObject<BoxProtocol>>,
-        context: &mut HitTestContext<Affine2dCanvas>,
+        results: &mut HitTestResults<Affine2dCanvas>,
     ) -> bool {
         children
             .as_ref()
-            .map(|child| context.hit_test(child.clone()))
+            .map(|child| results.hit_test(child.clone()))
             .unwrap_or_default()
     }
 

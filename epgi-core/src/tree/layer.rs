@@ -10,7 +10,7 @@ pub use node::*;
 
 use std::{any::Any, ops::Mul};
 
-use crate::foundation::{Arc, Aweak, Canvas, Key, LayerProtocol, Protocol};
+use crate::foundation::{Arc, Aweak, Canvas, Key, LayerProtocol, Protocol, Transform};
 
 use super::{AnyRenderObject, Render};
 
@@ -241,7 +241,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            transform: C::identity_transform(),
+            transform: <C::Transform as Transform<_>>::identity(),
         }
     }
 

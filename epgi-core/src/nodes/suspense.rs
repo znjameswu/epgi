@@ -9,7 +9,7 @@ use crate::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, HitTestContext, Render,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, HitTestResults, Render,
         Widget,
     },
 };
@@ -164,7 +164,7 @@ impl<P: Protocol> Render for RenderSuspense<P> {
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &[ArcChildRenderObject<P>; 1],
-        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
         todo!()
     }

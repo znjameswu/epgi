@@ -14,6 +14,14 @@ impl Protocol for SingleLineProtocol {
     type Intrinsics = SingleLineIntrinsics;
 
     type Canvas = Affine2dCanvas;
+
+    fn position_in_shape(
+        position: &<Self::Canvas as epgi_core::foundation::Canvas>::HitPosition,
+        offset: &Self::Offset,
+        size: &Self::Size,
+    ) -> bool {
+        todo!()
+    }
 }
 
 pub type SingleLineConstraints = BoxConstraints;
@@ -69,6 +77,14 @@ impl Protocol for MultiLineProtocol {
     type Intrinsics = MultiLineIntrinsics;
 
     type Canvas = Affine2dCanvas;
+
+    fn position_in_shape(
+        position: &<Self::Canvas as epgi_core::foundation::Canvas>::HitPosition,
+        offset: &Self::Offset,
+        size: &Self::Size,
+    ) -> bool {
+        todo!()
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]

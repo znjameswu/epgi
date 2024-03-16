@@ -240,7 +240,10 @@ On top of this diffult scenarios, other challenges exist as well
         1. Our impl introduces an extra dynamic dispatch at `ChildRenderObjectWithCanvas<C>` level.
 
 Correction: The capability is not only generic over hit position, but it is also generic over `Protocol::Transform` as well if we chose not to cache it during painting!!!
-1. If we continue with the transparent temporary tuple, it means an additional tuple element!!!!!
+1. If we continue with the transparent temporary tuple, it means an additional tuple element!!!!! (Adopted)
+
+
+
 
 
 
@@ -302,3 +305,10 @@ Correction: The capability is not only generic over hit position, but it is also
 2. Recognizer timer
 3. Recognizer reconciliation changes during rebuild (Could cause the recognizer to be gone for good, i.e. loss of stable identity)
 4. Updates from the same gesture recognizer from an associated arena update.
+
+
+# Notes during the new design
+1. Gesture recognizer: shared instance across all arena, or create unique instance for each new arena?
+    1. If we want create unique instances, then we need a way to clean-up retired references inside render object.
+    2. The advantage is that we may create fully lock-free gesture recognizers, say tap recognizer.
+    3. Decision: Shared instance, as we can follow Flutter's logic. And more complex gesture recognizers will almost certainly need locks.

@@ -1,21 +1,16 @@
-use std::{any::TypeId, sync::Arc, time::Instant};
+use std::{any::TypeId, time::Instant};
 
-use epgi_core::foundation::{AsAny, SyncMutex};
+use epgi_2d::Point2d;
+use epgi_core::foundation::{AsAny, Asc};
 
 use super::{PointerEvent, PointerInteractionEvent, PointerInteractionId};
 
-pub trait TransformedPointerEventHandler: Send {
-    fn handle_pointer_event(&self, event: &PointerEvent);
+pub trait PointerEventHandler: Send + Sync {
+    fn handle_pointer_event(&self, transformed_position: Point2d, event: &PointerEvent);
 
-    fn all_gesture_recognizers(&self) -> Option<(GestureRecognizerTeamPolicy, Vec<TypeId>)> {
-        None
-    }
-
-    #[allow(unused_variables)]
-    fn get_gesture_recognizer(
+    fn all_gesture_recognizers(
         &self,
-        type_id: TypeId,
-    ) -> Option<Box<dyn AnyTransformedGestureRecognizer>> {
+    ) -> Option<(GestureRecognizerTeamPolicy, Vec<Asc<dyn GestureRecognizer>>)> {
         None
     }
 }
@@ -86,36 +81,14 @@ impl RecognizerResponse {
     }
 }
 
-pub trait GestureRecognizer: AsAny + Send + 'static {
-    type HitPosition;
-
+pub trait GestureRecognizer: AsAny + Send + Sync + 'static {
     /// If the primary response is impossible, then the implementation should also clean up
     /// as if handle_arena_evict has been called.
     fn handle_event(
-        &mut self,
-        position: &Self::HitPosition,
+        &self,
+        transformed_position: &Point2d,
         event: &PointerInteractionEvent,
     ) -> RecognizerResponse;
-
-    /// Query the current recognition result of this recognizer without new events arriving.
-    /// This typically happens because the recognizer reported inconclusive result previously.
-    fn query_recognition_state(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
-
-    /// Intepret pointer event into gestures. This happens because the recognizer has already won.
-    fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
-
-    /// Handle defeat and clean up. This happens because the arena has picked another winner.
-    ///
-    /// The primary response will be ignored. The eviction is non-negotiable.
-    ///
-    /// This will also be called after handle_arena_victory when the arena is closed.
-    fn handle_arena_evict(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse;
-
-    fn on_detach(&mut self);
-}
-
-pub trait AnyTransformedGestureRecognizer {
-    fn handle_event(&self, event: &PointerInteractionEvent) -> RecognizerResponse;
 
     /// Query the current recognition result of this recognizer without new events arriving.
     /// This typically happens because the recognizer reported inconclusive result previously.
@@ -125,38 +98,13 @@ pub trait AnyTransformedGestureRecognizer {
     fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     /// Handle defeat and clean up. This happens because the arena has picked another winner.
+    ///
+    /// The primary response will be ignored. The eviction is non-negotiable.
+    ///
+    /// This will also be called after handle_arena_victory when the arena is closed.
     fn handle_arena_evict(&self, interaction_id: PointerInteractionId) -> RecognizerResponse;
 
     fn recognizer_type_id(&self) -> TypeId;
-}
 
-pub struct TransformedGestureRecognizer<P: 'static> {
-    pub recognizer: Arc<SyncMutex<dyn GestureRecognizer<HitPosition = P>>>,
-    pub hit_position: P,
-}
-
-impl<P> AnyTransformedGestureRecognizer for TransformedGestureRecognizer<P> {
-    fn handle_event(&self, event: &PointerInteractionEvent) -> RecognizerResponse {
-        self.recognizer
-            .lock()
-            .handle_event(&self.hit_position, event)
-    }
-
-    fn query_recognition_state(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer
-            .lock()
-            .query_recognition_state(interaction_id)
-    }
-
-    fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer.lock().handle_arena_victory(interaction_id)
-    }
-
-    fn handle_arena_evict(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        self.recognizer.lock().handle_arena_evict(interaction_id)
-    }
-
-    fn recognizer_type_id(&self) -> TypeId {
-        TypeId::of::<P>()
-    }
+    fn on_detach(&self);
 }

@@ -6,16 +6,13 @@ use crate::{
 };
 
 pub struct TapGestureRecognizer {
-    pub device_pixel_ratio: f32,
     pub on_tap: ArcCallback,
 }
 
 impl GestureRecognizer for TapGestureRecognizer {
-    type HitPosition = Point2d;
-
     fn handle_event(
-        &mut self,
-        position: &Self::HitPosition,
+        &self,
+        position: &Point2d,
         event: &PointerInteractionEvent,
     ) -> RecognizerResponse {
         RecognizerResponse::possible()
@@ -25,16 +22,20 @@ impl GestureRecognizer for TapGestureRecognizer {
         RecognizerResponse::possible()
     }
 
-    fn handle_arena_victory(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse {
+    fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
         (self.on_tap)();
         RecognizerResponse::certain(1.0)
     }
 
-    fn handle_arena_evict(&mut self, interaction_id: PointerInteractionId) -> RecognizerResponse {
+    fn handle_arena_evict(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
         RecognizerResponse::impossible()
     }
 
-    fn on_detach(&mut self) {
+    fn on_detach(&self) {
+        todo!()
+    }
+
+    fn recognizer_type_id(&self) -> std::any::TypeId {
         todo!()
     }
 }

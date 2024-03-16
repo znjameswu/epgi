@@ -82,7 +82,7 @@ pub trait Render: Sized + Send + Sync + 'static {
         children: &<Self::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<Self::ChildProtocol>,
         >,
-        context: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool;
 
     fn hit_test_self(
@@ -113,18 +113,27 @@ pub enum HitTestBehavior {
     Opaque,
 }
 
-pub struct HitTestContext<C: Canvas> {
+pub struct HitTestResults<C: Canvas> {
     position: C::HitPosition,
     curr_transform: C::Transform,
     curr_position: C::HitPosition,
-    pub results: Vec<(ArcChildRenderObjectWithCanvas<C>, C::Transform)>,
-    interface_type_id: TypeId,
+    pub targets: Vec<(C::Transform, ArcChildRenderObjectWithCanvas<C>)>,
+    trait_type_id: TypeId,
 }
 
-impl<C> HitTestContext<C>
+impl<C> HitTestResults<C>
 where
     C: Canvas,
 {
+    pub fn new(position: C::HitPosition, trait_type_id: TypeId) -> Self {
+        Self {
+            position: position.clone(),
+            curr_transform: <C::Transform as Transform<_>>::identity(),
+            curr_position: position,
+            targets: Vec::new(),
+            trait_type_id,
+        }
+    }
     pub fn curr_position(&self) -> &C::HitPosition {
         &self.curr_position
     }
@@ -132,12 +141,12 @@ where
     pub fn interface_exist_on<R: Render>(&self) -> bool {
         R::all_hit_test_interfaces()
             .iter()
-            .any(|(type_id, _)| self.interface_type_id == *type_id)
+            .any(|(type_id, _)| self.trait_type_id == *type_id)
     }
 
     pub fn push(&mut self, render_object: ArcChildRenderObjectWithCanvas<C>) {
-        self.results
-            .push((render_object, self.curr_transform.clone()));
+        self.targets
+            .push((self.curr_transform.clone(), render_object));
     }
 
     #[inline(always)]
@@ -184,27 +193,10 @@ where
     }
 }
 
-impl<R> RenderObject<R>
-where
-    R: Render,
-{
-    pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
-        default_query_interface_ref(self)
-    }
-
-    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
-        default_query_interface_box(self)
-    }
-
-    pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
-        default_query_interface_arc(self)
-    }
-}
-
 #[macro_export]
 macro_rules! hit_test_interface_query_table {
     ($name: ident, $type: ty, $($trait: ty),* $(,)?) => {
-        epgi_core::interface_query_table!($name, TransformedHitTestEntry<$type>, $($trait,)*);
+        epgi_core::interface_query_table!($name, RenderObject<$type>, $($trait,)*);
     };
 }
 
@@ -359,9 +351,29 @@ pub trait ParentRenderObject: Send + Sync + 'static {
     type ChildProtocol: Protocol;
 }
 
-pub trait ChildRenderObjectWithCanvas<C: Canvas>: Send + Sync + 'static {}
+pub trait ChildRenderObjectWithCanvas<C: Canvas>:
+    CastInterfaceByRawPtr + Send + Sync + 'static
+{
+}
 
 impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R> where
     R: Render
 {
+}
+
+impl<C> dyn ChildRenderObjectWithCanvas<C>
+where
+    C: Canvas,
+{
+    pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
+        default_query_interface_ref(self)
+    }
+
+    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+        default_query_interface_box(self)
+    }
+
+    pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
+        default_query_interface_arc(self)
+    }
 }

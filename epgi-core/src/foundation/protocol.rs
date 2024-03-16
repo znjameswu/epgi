@@ -109,15 +109,6 @@ pub trait Canvas: Sized + 'static {
     fn clear(this: &mut Self::Encoding);
 
     fn new_encoding() -> Self::Encoding;
-
-    fn transform_hit_position(
-        transform: &Self::Transform,
-        hit_position: &Self::HitPosition,
-    ) -> Self::HitPosition;
-
-    fn identity_transform() -> Self::Transform;
-
-    fn mul_transform_ref(a: &Self::Transform, b: &Self::Transform) -> Self::Transform;
 }
 
 pub trait PaintContext {
@@ -166,6 +157,9 @@ pub trait TransformHitPosition<PC: Canvas, CC: Canvas>: Send + Sync {
     fn transform(&self, input: &PC::HitPosition) -> CC::HitPosition;
 }
 
-pub trait Transform<C: Canvas>: Debug + Clone + Send + Sync + 'static {
+pub trait Transform<C: Canvas>:
+    TransformHitPosition<C, C> + Debug + Clone + Send + Sync + 'static
+{
+    fn identity() -> Self;
     fn mul(&self, other: &Self) -> Self;
 }

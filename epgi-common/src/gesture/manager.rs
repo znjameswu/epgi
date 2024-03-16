@@ -2,20 +2,20 @@ mod arena;
 
 use arena::*;
 
-use std::{ops::Deref, time::Instant};
+use std::{any::TypeId, time::Instant};
 
-use epgi_2d::{Affine2dCanvas, BoxOffset, BoxProtocol};
+use epgi_2d::{Affine2d, BoxProtocol};
 use epgi_core::{
-    foundation::{Asc, AssertExt, SyncMpscReceiver, SyncMpscSender},
-    tree::{ArcChildRenderObject, ChildHitTestEntry},
+    foundation::{Arc, AssertExt, SyncMpscReceiver, SyncMpscSender, TransformHitPosition},
+    tree::{ArcChildRenderObject, HitTestResults},
 };
 use hashbrown::{hash_map::Entry, HashMap};
 
 // use crate::gesture::PointerEventKind;
 
 use crate::gesture::{
-    PointerEventVariantData, PointerInteractionEvent, PointerInteractionVariantData,
-    RecognitionResult, TransformedPointerEventHandler,
+    PointerEventHandler, PointerEventVariantData, PointerInteractionEvent,
+    PointerInteractionVariantData, RecognitionResult,
 };
 
 use super::{PointerEvent, PointerInteractionId};
@@ -26,7 +26,7 @@ pub struct PointerGestureManager {
     // We choose to use channel instead of arc mutex, because mutex could be unfair and thus indefinitely block our scheduler
     rx: SyncMpscReceiver<PointerEvent>,
     pointers_in_contact:
-        HashMap<PointerInteractionId, Vec<Asc<dyn ChildHitTestEntry<Affine2dCanvas>>>>,
+        HashMap<PointerInteractionId, Vec<(Affine2d, Arc<dyn PointerEventHandler>)>>,
     arenas: HashMap<PointerInteractionId, GestureArena>,
 }
 
@@ -62,14 +62,14 @@ impl PointerGestureManager {
         use PointerInteractionVariantData::*;
 
         fn dispatch_pointer_event(
-            entries: &Vec<impl Deref<Target = dyn ChildHitTestEntry<Affine2dCanvas>>>,
+            entries: &Vec<(Affine2d, Arc<dyn PointerEventHandler>)>,
             event: &PointerEvent,
         ) {
-            entries.iter().for_each(|entry| {
-                entry
-                    .with_position(event.common.physical_position)
-                    .query_interface_ref::<dyn TransformedPointerEventHandler>()
-                    .map(|handler| handler.handle_pointer_event(&event));
+            entries.iter().for_each(|(transform, handler)| {
+                handler.handle_pointer_event(
+                    transform.transform(&event.common.physical_position),
+                    &event,
+                )
             });
         }
         match &event.variant {
@@ -78,64 +78,65 @@ impl PointerGestureManager {
             Removed => { // TODO
             }
 
-            Signal(_) | Hover(_) => {
-                let hit_test_result =
-                    root.hit_test(&event.common.physical_position, &BoxOffset::default());
-                let entries = hit_test_result
-                    .map(|hit_test_result| {
-                        hit_test_result.find_interface::<dyn TransformedPointerEventHandler>(None)
+            Signal(_)
+            | Hover(_)
+            | Interaction {
+                variant: Down(_) | PanZoomStart,
+                ..
+            } => {
+                let mut results = HitTestResults::new(
+                    event.common.physical_position,
+                    TypeId::of::<dyn PointerEventHandler>(),
+                );
+                root.hit_test(&mut results);
+                let entries = results
+                    .targets
+                    .into_iter()
+                    .map(|(transform, render_object)| {
+                        let receiver = render_object
+                            .query_interface_arc::<dyn PointerEventHandler>()
+                            .ok()
+                            .expect(
+                                "Hit test should only return render objects \
+                                        with the requested interface",
+                            );
+                        (transform, receiver)
                     })
-                    .unwrap_or_default();
+                    .collect::<Vec<_>>();
 
                 dispatch_pointer_event(&entries, &event);
-            }
 
-            Interaction {
-                variant: Down(_) | PanZoomStart,
-                interaction_id,
-            } => {
-                let hit_test_result =
-                    root.hit_test(&event.common.physical_position, &BoxOffset::default());
-                let entries: Vec<Asc<dyn ChildHitTestEntry<Affine2dCanvas>>> = hit_test_result
-                    .map(|hit_test_result| {
-                        hit_test_result
-                            .find_interface::<dyn TransformedPointerEventHandler>(None)
-                            .into_iter()
-                            .map(Into::into)
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
+                if let Interaction {
+                    variant: Down(_) | PanZoomStart,
+                    interaction_id,
+                } = &event.variant
+                {
+                    // Register gesture recognizer and dipatch pointer events.
+                    // We only register gesture recognizer at this time without giving them events. The events will be delivered to gesture recognizers later
+                    let teams = entries
+                        .iter()
+                        .filter_map(|(transform, handler)| {
+                            // This is only for pointer event handler, not for gesture recognizers.
+                            GestureArenaTeam::try_from_entry(transform, handler)
+                        })
+                        .collect();
 
-                // Register gesture recognizer and dipatch pointer events.
-                // We only register gesture recognizer at this time without giving them events. The events will be delivered to gesture recognizers later
-                let teams = entries
-                    .iter()
-                    .filter_map(|entry| {
-                        let handler = entry
-                            .with_position(event.common.physical_position)
-                            .query_interface_box::<dyn TransformedPointerEventHandler>()
-                            .ok()?;
-                        // This is only for pointer event handler, not for gesture recognizers.
-                        handler.handle_pointer_event(&event);
-                        GestureArenaTeam::try_from_entry(entry.clone(), handler)
-                    })
-                    .collect();
-
-                self.pointers_in_contact
-                    .insert(*interaction_id, entries)
-                    .debug_assert_with(
-                        Option::is_none,
-                        "Interaction ID should be unique for every pointer down or pointer pan zoom start event",
-                    );
-                self.arenas
-                    .insert(
-                        *interaction_id,
-                        GestureArena::from_competing_teams(teams),
-                    )
-                    .debug_assert_with(
-                        Option::is_none,
-                        "Interaction ID should be unique for every pointer down or pointer pan zoom start event",
-                    );
+                    self.pointers_in_contact
+                        .insert(*interaction_id, entries)
+                        .debug_assert_with(
+                            Option::is_none,
+                            "Interaction ID should be unique for every pointer down or pointer pan zoom start event",
+                        );
+                    self.arenas
+                        .insert(
+                            *interaction_id,
+                            GestureArena::from_competing_teams(teams),
+                        )
+                        .debug_assert_with(
+                            Option::is_none,
+                            "Interaction ID should be unique for every pointer down or pointer pan zoom start event",
+                        );
+                }
             }
 
             Interaction {

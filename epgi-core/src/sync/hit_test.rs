@@ -1,10 +1,10 @@
 use crate::{
     foundation::{Arc, Protocol},
-    tree::{HitTestBehavior, HitTestContext, Render, RenderObject},
+    tree::{HitTestBehavior, HitTestResults, Render, RenderObject},
 };
 
 pub trait ChildRenderObjectHitTestExt<PP: Protocol> {
-    fn hit_test(self: Arc<Self>, context: &mut HitTestContext<PP::Canvas>) -> bool;
+    fn hit_test(self: Arc<Self>, results: &mut HitTestResults<PP::Canvas>) -> bool;
 }
 
 impl<R> ChildRenderObjectHitTestExt<R::ParentProtocol> for RenderObject<R>
@@ -13,7 +13,7 @@ where
 {
     fn hit_test(
         self: Arc<Self>,
-        context: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
         let inner = self.inner.lock();
         let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
@@ -28,7 +28,7 @@ where
         // let a = layout_cache.paint_cache;
 
         let hit_within_shape = inner.render.hit_test_self(
-            context.curr_position(),
+            results.curr_position(),
             &layout_cache.layout_results.size,
             offset,
             &layout_cache.layout_results.memo,
@@ -43,11 +43,11 @@ where
             offset,
             &layout_cache.layout_results.memo,
             &inner.children,
-            context,
+            results,
         );
         drop(inner);
 
-        let self_has_interface = context.interface_exist_on::<R>();
+        let self_has_interface = results.interface_exist_on::<R>();
         if self_has_interface {
             if hit_children
                 || matches!(
@@ -55,7 +55,7 @@ where
                     HitTestBehavior::Opaque | HitTestBehavior::Transparent
                 )
             {
-                context.push(self as _);
+                results.push(self as _);
             }
             return hit_children || matches!(behavior, HitTestBehavior::Opaque);
         } else {

@@ -1,15 +1,12 @@
-use std::{any::TypeId, time::Instant};
+use std::{any::TypeId, sync::Arc, time::Instant};
 
-use epgi_2d::Affine2dCanvas;
-use epgi_core::{
-    foundation::{Asc, PtrEq},
-    tree::{AweakAnyRenderObject, ChildHitTestEntry},
-};
+use epgi_2d::Affine2d;
+use epgi_core::foundation::{Asc, Aweak, PtrEq, TransformHitPosition};
 use smallvec::SmallVec;
 
-use crate::gesture::{
-    AnyTransformedGestureRecognizer, GestureRecognizerTeamPolicy, RecognizerResponse,
-    TransformedPointerEventHandler,
+use crate::{
+    gesture::{GestureRecognizerTeamPolicy, PointerEventHandler, RecognizerResponse},
+    GestureRecognizer,
 };
 
 use super::{PointerInteractionEvent, PointerInteractionId, RecognitionResult};
@@ -54,48 +51,102 @@ impl GestureArenaState {
 
 pub(super) struct GestureArenaTeam {
     policy: GestureRecognizerTeamPolicy,
-    entry: Asc<dyn ChildHitTestEntry<Affine2dCanvas>>,
-    last_transformed: Box<dyn TransformedPointerEventHandler>,
+    transform: Affine2d,
+    handler: Aweak<dyn PointerEventHandler>,
     members: SmallVec<[GestureArenaTeamMemberHandle; 1]>,
 }
 
 impl GestureArenaTeam {
     pub(super) fn try_from_entry(
-        entry: Asc<dyn ChildHitTestEntry<Affine2dCanvas>>,
-        last_transformed: Box<dyn TransformedPointerEventHandler>,
+        transform: &Affine2d,
+        handler: &Arc<dyn PointerEventHandler>,
     ) -> Option<Self> {
-        let (policy, recognizer_type_ids) = last_transformed.all_gesture_recognizers()?;
+        let (policy, recognizers) = handler.all_gesture_recognizers()?;
         Some(Self {
             policy,
-            entry,
-            last_transformed,
-            members: recognizer_type_ids
+            transform: transform.clone(),
+            handler: Arc::downgrade(handler),
+            members: recognizers
                 .into_iter()
-                .map(|recognizer_type_id| GestureArenaTeamMemberHandle {
-                    recognizer_type_id,
-                    last_result: RecognitionResult::Possible,
-                })
+                .map(GestureArenaTeamMemberHandle::new)
                 .collect(),
         })
     }
 }
 
-pub(super) struct GestureArenaTeamMemberHandle {
-    pub(super) recognizer_type_id: TypeId,
-    pub(super) last_result: RecognitionResult,
-}
-
 pub(super) struct GestureRecognizerHandle {
-    entry: Asc<dyn ChildHitTestEntry<Affine2dCanvas>>,
-    // TODO: Can we store Box<dyn AnyTransformedGestureRecognizerContainer> directly? This would require a query_interface_box which is hard to impl
-    last_transformed: Box<dyn TransformedPointerEventHandler>,
+    transform: Affine2d,
+    handler: Aweak<dyn PointerEventHandler>,
     member_handle: GestureArenaTeamMemberHandle,
 }
 
 #[derive(Clone)]
 pub(super) struct GestureRecognizerKey {
-    render_object: AweakAnyRenderObject,
+    handler: Aweak<dyn PointerEventHandler>,
     recognizer_type_id: TypeId,
+}
+
+pub(super) struct GestureArenaTeamMemberHandle {
+    recognizer_type_id: TypeId,
+    recognizer: Asc<dyn GestureRecognizer>,
+    last_result: RecognitionResult,
+}
+
+impl GestureArenaTeamMemberHandle {
+    fn new(recognizer: Asc<dyn GestureRecognizer>) -> Self {
+        Self {
+            recognizer_type_id: recognizer.recognizer_type_id(),
+            recognizer,
+            last_result: RecognitionResult::Possible,
+        }
+    }
+
+    fn recognizer_type_id(&self) -> &TypeId {
+        &self.recognizer_type_id
+    }
+
+    fn last_result(&self) -> &RecognitionResult {
+        &self.last_result
+    }
+
+    #[inline(always)]
+    fn with_recognizer(
+        &mut self,
+        handler: &Aweak<dyn PointerEventHandler>,
+        associated_updates: &mut AssociatedUpdates,
+        op: impl FnOnce(&dyn GestureRecognizer) -> RecognizerResponse,
+    ) {
+        let response = op(self.recognizer.as_ref());
+        self.last_result = response.primary_result;
+        associated_updates.extend(response.associated_arenas, || GestureRecognizerKey {
+            handler: handler.clone(),
+            recognizer_type_id: self.recognizer_type_id,
+        });
+    }
+}
+
+fn evict_recognizer(
+    handle: GestureRecognizerHandle,
+    interaction_id: PointerInteractionId,
+    associated_updates: &mut AssociatedUpdates,
+) {
+    evict_member(
+        &handle.handler,
+        handle.member_handle,
+        interaction_id,
+        associated_updates,
+    )
+}
+
+fn evict_member(
+    handler: &Aweak<dyn PointerEventHandler>,
+    mut member: GestureArenaTeamMemberHandle,
+    interaction_id: PointerInteractionId,
+    associated_updates: &mut AssociatedUpdates,
+) {
+    member.with_recognizer(handler, associated_updates, |recognizer| {
+        recognizer.handle_arena_evict(interaction_id)
+    });
 }
 
 pub(super) struct AssociatedUpdates {
@@ -134,11 +185,11 @@ impl AssociatedUpdates {
     pub(super) fn extend_from_member(
         &mut self,
         interaction_ids: impl IntoIterator<Item = PointerInteractionId>,
-        entry: &dyn ChildHitTestEntry<Affine2dCanvas>,
+        handler: &Aweak<dyn PointerEventHandler>,
         recognizer_type_id: TypeId,
     ) {
         self.extend(interaction_ids, || GestureRecognizerKey {
-            render_object: entry.render_object(),
+            handler: handler.clone(),
             recognizer_type_id,
         })
     }
@@ -161,15 +212,11 @@ impl GestureArena {
         self.update_arena_state(
             event.interaction_id,
             |_| true,
-            |last_transformed, entry| {
-                *last_transformed = entry
-                    .with_position(event.common.physical_position)
-                    .query_interface_box::<dyn TransformedPointerEventHandler>()
-                    .ok()
-                    .expect("The entry should be a pointer event handler");
-            },
             |_| true,
-            |recognizer| recognizer.handle_event(event),
+            |transform, recognizer| {
+                recognizer
+                    .handle_event(&transform.transform(&event.common.physical_position), event)
+            },
             associated_updates,
         );
     }
@@ -185,16 +232,10 @@ impl GestureArena {
         self.update_arena_state(
             event.interaction_id,
             |_| true,
-            |last_transformed, entry| {
-                *last_transformed = entry
-                    .with_position(event.common.physical_position)
-                    .query_interface_box::<dyn TransformedPointerEventHandler>()
-                    .ok()
-                    .expect("The entry should be a pointer event handler");
-            },
             |_| true,
-            |recognizer| {
-                let response = recognizer.handle_event(event);
+            |transform, recognizer| {
+                let response = recognizer
+                    .handle_event(&transform.transform(&event.common.physical_position), event);
                 if response.primary_result.is_inconclusive() {
                     has_inconclusive = true;
                 }
@@ -216,13 +257,12 @@ impl GestureArena {
         self.update_arena_state(
             interaction_id,
             |_| true,
-            |_, _| {},
             |member| {
                 matches!(member.last_result,
                     RecognitionResult::Inconclusive { revisit } if revisit <= current
                 )
             },
-            |recognizer| recognizer.query_recognition_state(interaction_id),
+            |_, recognizer| recognizer.query_recognition_state(interaction_id),
             associated_updates,
         );
         if self.pending_sweep {
@@ -240,10 +280,9 @@ impl GestureArena {
     ) {
         self.update_arena_state(
             interaction_id,
-            |entry| PtrEq(&entry.render_object()) == PtrEq(&key.render_object),
-            |_, _| {},
-            |member| member.recognizer_type_id == key.recognizer_type_id,
-            |recognizer| recognizer.query_recognition_state(interaction_id),
+            |handler| PtrEq(handler) == PtrEq(&key.handler),
+            |member| member.recognizer.recognizer_type_id() == key.recognizer_type_id,
+            |_, recognizer| recognizer.query_recognition_state(interaction_id),
             associated_updates,
         );
         if self.pending_sweep {
@@ -281,44 +320,31 @@ impl GestureArena {
         match std::mem::replace(&mut self.state, Closed) {
             Competing { teams } => {
                 teams.into_iter().for_each(|team| {
-                    team.members.into_iter().for_each(|member| {
+                    team.members.into_iter().for_each(|mut member| {
                         if !has_found_winner_by_swept {
-                            if let Some(recognizer) = team
-                                .last_transformed
-                                .get_gesture_recognizer(member.recognizer_type_id)
-                            {
-                                has_found_winner_by_swept = true;
-                                let response = recognizer.handle_arena_victory(interaction_id);
-                                associated_updates.extend_from_member(
-                                    response.associated_arenas,
-                                    team.entry.as_ref(),
-                                    member.recognizer_type_id,
-                                );
-                                if response.primary_result.is_impossible() {
-                                    // If the response is impossible, the recognizer has done the cleanup itself
-                                    // No need to evict it anymore
-                                    return;
-                                }
-                                let response = recognizer.handle_arena_evict(interaction_id);
-                                associated_updates.extend_from_member(
-                                    response.associated_arenas,
-                                    team.entry.as_ref(),
-                                    member.recognizer_type_id,
-                                );
-                            }
-                        } else {
-                            evict_member(
-                                team.last_transformed.as_ref(),
-                                team.entry.as_ref(),
-                                &member,
-                                interaction_id,
+                            has_found_winner_by_swept = true;
+                            member.with_recognizer(
+                                &team.handler,
                                 associated_updates,
-                            )
+                                |recognizer| recognizer.handle_arena_victory(interaction_id),
+                            );
+                            if member.last_result.is_impossible() {
+                                // If the response is impossible, the recognizer has done the cleanup itself
+                                // No need to evict it anymore
+                                return;
+                            }
+                            member.with_recognizer(
+                                &team.handler,
+                                associated_updates,
+                                |recognizer| recognizer.handle_arena_evict(interaction_id),
+                            );
+                        } else {
+                            evict_member(&team.handler, member, interaction_id, associated_updates)
                         }
                     })
                 });
             }
-            Resolved { winner } => evict_recognizer(&winner, interaction_id, associated_updates),
+            Resolved { winner } => evict_recognizer(winner, interaction_id, associated_updates),
             Closed => {}
         }
     }
@@ -350,15 +376,9 @@ impl GestureArena {
     fn update_arena_state(
         &mut self,
         interaction_id: PointerInteractionId,
-        mut should_visit_team: impl FnMut(&dyn ChildHitTestEntry<Affine2dCanvas>) -> bool,
-        mut update_position: impl FnMut(
-            &mut Box<dyn TransformedPointerEventHandler>,
-            &dyn ChildHitTestEntry<Affine2dCanvas>,
-        ),
+        mut should_visit_team: impl FnMut(&Aweak<dyn PointerEventHandler>) -> bool,
         mut should_visit_member: impl FnMut(&GestureArenaTeamMemberHandle) -> bool,
-        mut new_member_result: impl FnMut(
-            Box<dyn AnyTransformedGestureRecognizer>,
-        ) -> RecognizerResponse,
+        mut new_member_result: impl FnMut(&Affine2d, &dyn GestureRecognizer) -> RecognizerResponse,
         associated_updates: &mut AssociatedUpdates,
     ) {
         use GestureArenaState::*;
@@ -366,34 +386,22 @@ impl GestureArena {
             Competing { teams } => {
                 let mut has_requested_resolution = false;
                 for team in teams.iter_mut() {
-                    if !should_visit_team(team.entry.as_ref()) {
+                    if !should_visit_team(&team.handler) {
                         continue;
                     }
-                    update_position(&mut team.last_transformed, team.entry.as_ref());
                     for member in team.members.iter_mut() {
                         if !should_visit_member(member) {
                             continue;
                         }
-                        let recognizer = team
-                            .last_transformed
-                            .get_gesture_recognizer(member.recognizer_type_id);
-                        let Some(recognizer) = recognizer else {
-                            member.last_result = RecognitionResult::Impossible;
-                            continue;
-                        };
-                        let response = new_member_result(recognizer);
-                        member.last_result = response.primary_result;
-                        associated_updates.extend_from_member(
-                            response.associated_arenas,
-                            team.entry.as_ref(),
-                            member.recognizer_type_id,
-                        );
-                        if member.last_result.is_certain().is_some() {
+                        member.with_recognizer(&team.handler, associated_updates, |recognizer| {
+                            new_member_result(&team.transform, recognizer)
+                        });
+                        if member.last_result().is_certain().is_some() {
                             has_requested_resolution = true;
                         }
                     }
                     team.members
-                        .retain(|member| !member.last_result.is_impossible());
+                        .retain(|member| !member.last_result().is_impossible());
                 }
                 teams.retain(|team| !team.members.is_empty());
 
@@ -423,7 +431,6 @@ impl GestureArena {
             // Resolved branch is extracted into a separate method
             Resolved { .. } => self.update_arena_state_resolved(
                 should_visit_team,
-                update_position,
                 should_visit_member,
                 new_member_result,
                 associated_updates,
@@ -445,9 +452,8 @@ impl GestureArena {
     ) {
         self.update_arena_state_resolved(
             |_| true,
-            |_, _| {},
             |_| true,
-            |recognizer| recognizer.handle_arena_victory(interaction_id),
+            |_, recognizer| recognizer.handle_arena_victory(interaction_id),
             associated_updates,
         )
     }
@@ -456,40 +462,23 @@ impl GestureArena {
     #[inline]
     fn update_arena_state_resolved(
         &mut self,
-        mut should_visit_team: impl FnMut(&dyn ChildHitTestEntry<Affine2dCanvas>) -> bool,
-        mut update_position: impl FnMut(
-            &mut Box<dyn TransformedPointerEventHandler>,
-            &dyn ChildHitTestEntry<Affine2dCanvas>,
-        ),
+        mut should_visit_team: impl FnMut(&Aweak<dyn PointerEventHandler>) -> bool,
         mut should_visit_member: impl FnMut(&GestureArenaTeamMemberHandle) -> bool,
-        mut new_member_result: impl FnMut(
-            Box<dyn AnyTransformedGestureRecognizer>,
-        ) -> RecognizerResponse,
+        mut new_member_result: impl FnMut(&Affine2d, &dyn GestureRecognizer) -> RecognizerResponse,
         associated_updates: &mut AssociatedUpdates,
     ) {
         use GestureArenaState::*;
         let Resolved { winner } = &mut self.state else {
             panic!("Cannot invoke this method if you are not sure this arena is resolved")
         };
-        if !should_visit_team(winner.entry.as_ref()) || !should_visit_member(&winner.member_handle)
-        {
+        if !should_visit_team(&winner.handler) || !should_visit_member(&winner.member_handle) {
             return;
         }
-        update_position(&mut winner.last_transformed, winner.entry.as_ref());
-        let recognizer = winner
-            .last_transformed
-            .get_gesture_recognizer(winner.member_handle.recognizer_type_id);
-        let Some(recognizer) = recognizer else {
-            self.state = Closed;
-            return;
-        };
-        let response = new_member_result(recognizer);
-        winner.member_handle.last_result = response.primary_result;
-        associated_updates.extend_from_member(
-            response.associated_arenas,
-            winner.entry.as_ref(),
-            winner.member_handle.recognizer_type_id,
-        );
+        winner
+            .member_handle
+            .with_recognizer(&winner.handler, associated_updates, |recognizer| {
+                new_member_result(&winner.transform, recognizer)
+            });
         if let RecognitionResult::Impossible = winner.member_handle.last_result {
             self.state = Closed;
         }
@@ -513,9 +502,8 @@ impl GestureArena {
                                 highest_confidence = confidence;
                                 if let Some(old_winner_member) = candidate.replace(member) {
                                     evict_member(
-                                        team.last_transformed.as_ref(),
-                                        team.entry.as_ref(),
-                                        &old_winner_member,
+                                        &team.handler,
+                                        old_winner_member,
                                         interaction_id,
                                         associated_updates,
                                     );
@@ -523,13 +511,7 @@ impl GestureArena {
                                 continue;
                             }
                         }
-                        evict_member(
-                            team.last_transformed.as_ref(),
-                            team.entry.as_ref(),
-                            &member,
-                            interaction_id,
-                            associated_updates,
-                        );
+                        evict_member(&team.handler, member, interaction_id, associated_updates);
                     }
                     candidate
                 }
@@ -547,25 +529,19 @@ impl GestureArena {
                     let candidate = has_better_candidate
                         .then(|| members_iter.next().expect("Impossible to fail"));
                     for member in members_iter {
-                        evict_member(
-                            team.last_transformed.as_ref(),
-                            team.entry.as_ref(),
-                            &member,
-                            interaction_id,
-                            associated_updates,
-                        )
+                        evict_member(&team.handler, member, interaction_id, associated_updates)
                     }
                     candidate
                 }
             };
             if let Some(better_candidate) = better_candidate {
                 let old_candidate = winner.replace(GestureRecognizerHandle {
-                    entry: team.entry,
-                    last_transformed: team.last_transformed,
+                    transform: team.transform,
+                    handler: team.handler,
                     member_handle: better_candidate,
                 });
                 if let Some(old_candidate) = old_candidate {
-                    evict_recognizer(&old_candidate, interaction_id, associated_updates);
+                    evict_recognizer(old_candidate, interaction_id, associated_updates);
                 }
             }
         }
@@ -595,53 +571,13 @@ impl GestureArena {
             .next()
             .expect("Empty gesture teams should have already been deleted");
         for member in members_iter {
-            evict_member(
-                team.last_transformed.as_ref(),
-                team.entry.as_ref(),
-                &member,
-                interaction_id,
-                associated_updates,
-            )
+            evict_member(&team.handler, member, interaction_id, associated_updates)
         }
         let winner = GestureRecognizerHandle {
-            entry: team.entry,
-            last_transformed: team.last_transformed,
+            transform: team.transform,
+            handler: team.handler,
             member_handle: winner_member,
         };
         return Ok(winner);
     }
-}
-
-fn evict_recognizer(
-    handle: &GestureRecognizerHandle,
-    interaction_id: PointerInteractionId,
-    associated_updates: &mut AssociatedUpdates,
-) {
-    evict_member(
-        handle.last_transformed.as_ref(),
-        handle.entry.as_ref(),
-        &handle.member_handle,
-        interaction_id,
-        associated_updates,
-    )
-}
-
-fn evict_member(
-    last_transformed: &dyn TransformedPointerEventHandler,
-    entry: &dyn ChildHitTestEntry<Affine2dCanvas>,
-    member: &GestureArenaTeamMemberHandle,
-    interaction_id: PointerInteractionId,
-    associated_updates: &mut AssociatedUpdates,
-) {
-    last_transformed
-        .get_gesture_recognizer(member.recognizer_type_id)
-        .map(|recognizer| {
-            associated_updates.extend_from_member(
-                recognizer
-                    .handle_arena_evict(interaction_id)
-                    .associated_arenas,
-                entry,
-                member.recognizer_type_id,
-            )
-        });
 }

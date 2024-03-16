@@ -71,21 +71,6 @@ impl Canvas for Affine2dCanvas {
     fn new_encoding() -> Self::Encoding {
         Affine2dEncoding::new()
     }
-
-    fn transform_hit_position(
-        transform: &Self::Transform,
-        hit_position: &Self::HitPosition,
-    ) -> Self::HitPosition {
-        todo!()
-    }
-
-    fn identity_transform() -> Self::Transform {
-        Affine2d::IDENTITY
-    }
-
-    fn mul_transform_ref(a: &Self::Transform, b: &Self::Transform) -> Self::Transform {
-        todo!()
-    }
 }
 
 impl TransformHitPosition<Affine2dCanvas, Affine2dCanvas> for Affine2d {
@@ -97,5 +82,9 @@ impl TransformHitPosition<Affine2dCanvas, Affine2dCanvas> for Affine2d {
 impl Transform<Affine2dCanvas> for Affine2d {
     fn mul(&self, other: &Self) -> Self {
         todo!()
+    }
+
+    fn identity() -> Self {
+        Affine2d::IDENTITY
     }
 }
