@@ -76,6 +76,7 @@ where
 //     adopter_key: fn(&L) -> Option<&Arc<dyn Key>>,
 // }
 
+// Orphaned layer disrespect the parent protocol
 pub trait OrphanLayerRender: LayerRender
 where
     <Self as Render>::ParentProtocol: LayerProtocol,

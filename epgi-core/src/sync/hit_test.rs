@@ -15,6 +15,7 @@ where
         self: Arc<Self>,
         results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
+        // TODO: for detached layers, skip the hit test, since this method is called by its parent, not its adopter.
         let inner = self.inner.lock();
         let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
         let layout_cache = inner
@@ -61,5 +62,23 @@ where
         } else {
             return hit_children;
         }
+    }
+}
+
+pub trait ChildLayerRenderObjectHitTestExt<PP: Protocol> {
+    fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<PP::Canvas>) -> bool;
+}
+
+impl<R> ChildLayerRenderObjectHitTestExt<R::ParentProtocol> for RenderObject<R>
+where
+    R: Render,
+{
+    fn hit_test_layer(
+        self: Arc<Self>,
+        results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool {
+        // For most layers, just directly hit test
+        ChildRenderObjectHitTestExt::hit_test(self, results)
+        // TODO: for detached layers, impl the real hit test logic
     }
 }
