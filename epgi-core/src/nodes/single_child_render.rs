@@ -10,7 +10,7 @@ use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
     ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
     HitTestBehavior, HitTestResults, LayerOrUnit, Render, RenderAction, RenderElement,
-    RenderObject, Widget,
+    RenderObjectOld, Widget,
 };
 
 pub trait SingleChildRenderObjectWidget:
@@ -77,7 +77,7 @@ pub trait SingleChildRenderObjectWidget:
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
-        fn(*mut RenderObject<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+        fn(*mut RenderObjectOld<SingleChildRenderObject<Self>>) -> AnyRawPointer,
     )] {
         &[]
     }
@@ -275,8 +275,8 @@ where
         W::hit_test_self(&self.state, position, size, offset, memo)
     }
 
-    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
-    {
+    fn all_hit_test_interfaces(
+    ) -> &'static [(TypeId, fn(*mut RenderObjectOld<Self>) -> AnyRawPointer)] {
         W::all_hit_test_interfaces()
     }
 }

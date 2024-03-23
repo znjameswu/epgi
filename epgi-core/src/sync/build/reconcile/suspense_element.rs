@@ -7,13 +7,13 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ElementNode,
-        MainlineState, RenderAction, RenderObject,
+        MainlineState, RenderAction, RenderObjectOld,
     },
 };
 
 pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
     node: &ElementNode<SuspenseElement<P>>,
-    render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
+    render_object: Option<Arc<RenderObjectOld<RenderSuspense<P>>>>,
     render_object_changes: EitherParallel<
         [SubtreeRenderObjectChange<P>; 1],
         [SubtreeRenderObjectChange<P>; 2],
@@ -151,7 +151,7 @@ pub(crate) fn suspense_rebuild_success_commit<P: Protocol>(
     widget: &Asc<Suspense<P>>,
     _shuffle: Option<ChildRenderObjectsUpdateCallback<SuspenseElement<P>>>,
     children: &EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
-    render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
+    render_object: Option<Arc<RenderObjectOld<RenderSuspense<P>>>>,
     render_object_changes: EitherParallel<
         [SubtreeRenderObjectChange<P>; 1],
         [SubtreeRenderObjectChange<P>; 2],
@@ -159,7 +159,7 @@ pub(crate) fn suspense_rebuild_success_commit<P: Protocol>(
     element_context: &ArcElementContextNode,
     is_new_widget: bool,
 ) -> (
-    Option<Arc<RenderObject<RenderSuspense<P>>>>,
+    Option<Arc<RenderObjectOld<RenderSuspense<P>>>>,
     SubtreeRenderObjectChange<P>,
 ) {
     let render_object = render_object.expect("Suspense can never suspend");

@@ -2,12 +2,12 @@ use crate::{
     foundation::{Arc, Canvas, LayerProtocol, Protocol},
     scheduler::get_current_scheduler,
     tree::{
-        ArcAnyLayeredRenderObject, ArcChildLayerRenderObject, AweakAnyLayeredRenderObject,
+        ArcAnyLayerRenderObject, ArcChildLayerRenderObject, AweakAnyLayerRenderObject,
         LayerCache, LayerMark, LayerRender,
     },
 };
 
-use super::{Render, RenderAction, RenderObject};
+use super::{Render, RenderAction, RenderObjectOld};
 
 pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     const LAYER_RENDER_FUNCTION_TABLE: LayerRenderFunctionTable<R>;
@@ -19,14 +19,14 @@ pub trait LayerOrUnit<R: Render>: Send + Sync + 'static {
     fn create_layer_mark() -> Self::LayerMark;
 
     fn layer_mark_render_action(
-        render_object: &Arc<RenderObject<R>>,
+        render_object: &Arc<RenderObjectOld<R>>,
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction;
 
     fn downcast_arc_any_layer_render_object(
-        render_object: Arc<RenderObject<R>>,
-    ) -> Option<ArcAnyLayeredRenderObject>;
+        render_object: Arc<RenderObjectOld<R>>,
+    ) -> Option<ArcAnyLayerRenderObject>;
 
     // fn cast_hit_position_ref(
     //     hit_position: &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
@@ -59,13 +59,13 @@ where
     }
 
     fn downcast_arc_any_layer_render_object(
-        render_object: Arc<RenderObject<R>>,
-    ) -> Option<ArcAnyLayeredRenderObject> {
+        render_object: Arc<RenderObjectOld<R>>,
+    ) -> Option<ArcAnyLayerRenderObject> {
         Some(render_object as _)
     }
 
     fn layer_mark_render_action(
-        render_object: &Arc<RenderObject<R>>,
+        render_object: &Arc<RenderObjectOld<R>>,
         mut child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction {
@@ -99,13 +99,13 @@ where
     }
 
     fn downcast_arc_any_layer_render_object(
-        render_object: Arc<RenderObject<R>>,
-    ) -> Option<ArcAnyLayeredRenderObject> {
+        render_object: Arc<RenderObjectOld<R>>,
+    ) -> Option<ArcAnyLayerRenderObject> {
         None
     }
 
     fn layer_mark_render_action(
-        render_object: &Arc<RenderObject<R>>,
+        render_object: &Arc<RenderObjectOld<R>>,
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction {
@@ -115,10 +115,11 @@ where
 
 pub enum LayerRenderFunctionTable<R: Render> {
     LayerRender {
-        as_aweak_any_layer_render_object: fn(&Arc<RenderObject<R>>) -> AweakAnyLayeredRenderObject,
+        as_aweak_any_layer_render_object:
+            fn(&Arc<RenderObjectOld<R>>) -> AweakAnyLayerRenderObject,
         into_arc_child_layer_render_object:
             fn(
-                Arc<RenderObject<R>>,
+                Arc<RenderObjectOld<R>>,
             ) -> ArcChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas>,
         compute_canvas_transform:
             fn(

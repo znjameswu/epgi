@@ -25,8 +25,8 @@ pub type AweakLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 pub type ArcLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 // pub type ArcParentLayerNode<C> = Arc<dyn ParentLayerNode<C>>;
 pub type ArcAdoptedLayerRenderObject<C> = Arc<dyn AdoptedLayerRenderObject<C>>;
-pub type ArcAnyLayeredRenderObject = Arc<dyn AnyLayerRenderObject>;
-pub type AweakAnyLayeredRenderObject = Aweak<dyn AnyLayerRenderObject>;
+pub type ArcAnyLayerRenderObject = Arc<dyn AnyLayerRenderObject>;
+pub type AweakAnyLayerRenderObject = Aweak<dyn AnyLayerRenderObject>;
 
 pub trait LayerRender: Render<LayerOrUnit = Self> + Send + Sync + Sized + 'static
 where
@@ -154,7 +154,7 @@ pub enum ChildLayerOrFragmentRef<'a, C: Canvas> {
 pub trait ChildLayerRenderObject<PC: Canvas>:
     crate::sync::ChildLayerRenderObjectCompositeExt<PC> + Send + Sync
 {
-    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayeredRenderObject;
+    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject;
 }
 
 // pub trait ParentLayerNode<CC: Canvas>: Send + Sync {}
@@ -215,7 +215,7 @@ trait ArcAnyLayerRenderObjectExt {
     //     -> Result<ArcParentLayerNode<C>, ArcAnyLayerNode>;
 }
 
-impl ArcAnyLayerRenderObjectExt for ArcAnyLayeredRenderObject {
+impl ArcAnyLayerRenderObjectExt for ArcAnyLayerRenderObject {
     fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcAdoptedLayerRenderObject<C>> {
         self.as_any_arc_adopted_layer()
             .downcast::<Arc<dyn AdoptedLayerRenderObject<C>>>()

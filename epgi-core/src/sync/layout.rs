@@ -1,10 +1,10 @@
 use crate::{
-    foundation::{Container, Protocol},
+    foundation::{ConstBool, Container, Protocol},
     scheduler::get_current_scheduler,
     sync::BuildScheduler,
     tree::{
-        DryLayoutFunctionTable, LayoutCache, LayoutResults, Render, RenderMark, RenderObject,
-        RenderObjectInner,
+        DryLayoutFunctionTable, LayoutCache, LayoutResults, Render, RenderMark, RenderNew,
+        RenderObject, RenderObjectInnerOld, RenderObjectOld,
     },
 };
 
@@ -28,10 +28,57 @@ pub trait AnyRenderObjectLayoutExt {
 
 impl<R> AnyRenderObjectLayoutExt for RenderObject<R>
 where
+    R: RenderNew,
+{
+    fn visit_and_layout(&self) {
+        let is_relayout_boundary = R::DryLayout::VALUE || !self.mark.parent_use_size();
+        let needs_layout = self.mark.needs_layout();
+        let subtree_has_layout = self.mark.subtree_has_layout();
+        debug_assert!(
+            is_relayout_boundary || needs_layout.is_err(),
+            "A layout walk should not encounter a dirty non-boundary node. \
+            Such node should be already laied-out by an ancester layout sometime earlier in this walk."
+        );
+        debug_assert!(
+            subtree_has_layout || needs_layout.is_err(),
+            "A dirty node should always mark its subtree as dirty"
+        );
+        if !subtree_has_layout {
+            return;
+        }
+        let children = {
+            let mut inner = self.inner.lock();
+            let inner_reborrow = &mut *inner;
+            if is_relayout_boundary && needs_layout.is_ok() {
+                let layout_results = inner_reborrow.cache.last_layout_results_mut().expect(
+                    "Relayout should only be called on relayout boundaries \
+                    that has been laid out at least once",
+                );
+                // We not only keeps the orignial constraints, we also keep painting offset.
+                let memo = R::perform_layout_without_resize(
+                    &mut inner_reborrow.render,
+                    &layout_results.constraints,
+                    &mut layout_results.size,
+                    &inner_reborrow.children,
+                );
+                layout_results.memo = memo;
+                self.mark.clear_self_needs_layout();
+            }
+            inner.children.map_ref_collect(Clone::clone)
+        };
+        children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+            child.visit_and_layout()
+        });
+        self.mark.clear_subtree_has_layout();
+    }
+}
+
+impl<R> AnyRenderObjectLayoutExt for RenderObjectOld<R>
+where
     R: Render,
 {
     fn visit_and_layout(&self) {
-        let is_relayout_boundary = self.mark.is_relayout_boundary::<R>();
+        let is_relayout_boundary = self.mark.parent_not_use_size::<R>();
         let needs_layout = self.mark.needs_layout();
         let subtree_has_layout = self.mark.subtree_has_layout();
         debug_assert!(
@@ -69,6 +116,63 @@ pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
 
 impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObject<R>
 where
+    R: RenderNew,
+{
+    fn layout_use_size(
+        &self,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+    ) -> <R::ParentProtocol as Protocol>::Size {
+        let needs_layout = self.mark.needs_layout();
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        if let Err(token) = needs_layout {
+            if let Some(cache) = inner_reborrow.cache.layout_cache_ref(token) {
+                if constraints == &cache.layout_results.constraints {
+                    let size = cache.layout_results.size.clone();
+                    return size;
+                }
+            }
+        }
+        let (size, memo) = inner_reborrow
+            .render
+            .perform_wet_layout(&constraints, &inner_reborrow.children);
+        inner_reborrow.cache.insert_layout_cache(LayoutCache::new(
+            LayoutResults::new(constraints.clone(), size.clone(), memo),
+            None,
+            None,
+        ));
+
+        self.mark.clear_self_needs_layout();
+        self.mark.set_parent_use_size();
+        size
+    }
+
+    fn layout(&self, constraints: &<R::ParentProtocol as Protocol>::Constraints) {
+        let needs_layout = self.mark.needs_layout();
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        if let Err(token) = needs_layout {
+            if let Some(cache) = inner_reborrow.cache.layout_cache_ref(token) {
+                if constraints == &cache.layout_results.constraints {
+                    return;
+                }
+            }
+        }
+        let (size, memo) = inner_reborrow
+            .render
+            .perform_wet_layout(&constraints, &inner_reborrow.children);
+        inner_reborrow.cache.insert_layout_cache(LayoutCache::new(
+            LayoutResults::new(constraints.clone(), size, memo),
+            None,
+            None,
+        ));
+        self.mark.clear_self_needs_layout();
+        self.mark.clear_parent_use_size();
+    }
+}
+
+impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObjectOld<R>
+where
     R: Render,
 {
     fn layout(&self, constraints: &<R::ParentProtocol as Protocol>::Constraints) {
@@ -82,14 +186,14 @@ where
             }
         }
         inner.perform_wet_layout(constraints.clone(), &self.mark);
-        self.mark.set_is_relayout_boundary::<R>();
+        self.mark.set_parent_not_use_size::<R>();
     }
 
     fn layout_use_size(
         &self,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
     ) -> <R::ParentProtocol as Protocol>::Size {
-        self.mark.clear_is_relayout_boundary::<R>();
+        self.mark.clear_parent_not_use_size::<R>();
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         if let Err(token) = needs_layout {
@@ -106,7 +210,7 @@ where
     }
 }
 
-impl<R> RenderObjectInner<R>
+impl<R> RenderObjectInnerOld<R>
 where
     R: Render,
 {

@@ -2,12 +2,12 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 
 use crate::foundation::Arc;
 
-use super::{LayerOrUnit, Render, RenderAction, RenderObject};
+use super::{LayerOrUnit, Render, RenderAction, RenderObjectOld};
 
 pub(crate) struct RenderMark {
     needs_layout: AtomicBool,
     subtree_has_layout: AtomicBool,
-    is_relayout_boundary: AtomicBool,
+    parent_use_size: AtomicBool,
     is_detached: AtomicBool,
 }
 
@@ -23,7 +23,7 @@ impl RenderMark {
         Self {
             needs_layout: true.into(),
             subtree_has_layout: true.into(),
-            is_relayout_boundary: false.into(),
+            parent_use_size: true.into(),
             is_detached: false.into(),
         }
     }
@@ -48,20 +48,35 @@ impl RenderMark {
         self.is_detached.store(true, Relaxed)
     }
 
-    pub(crate) fn is_relayout_boundary<R: Render>(&self) -> bool {
-        R::DRY_LAYOUT_FUNCTION_TABLE.is_some() || self.is_relayout_boundary.load(Relaxed)
+    #[deprecated]
+    pub(crate) fn parent_not_use_size<R: Render>(&self) -> bool {
+        R::DRY_LAYOUT_FUNCTION_TABLE.is_some() || !self.parent_use_size.load(Relaxed)
     }
 
-    pub(crate) fn clear_is_relayout_boundary<R: Render>(&self) {
+    pub(crate) fn parent_use_size(&self) -> bool {
+        self.parent_use_size.load(Relaxed)
+    }
+
+    #[deprecated]
+    pub(crate) fn clear_parent_not_use_size<R: Render>(&self) {
         if R::DRY_LAYOUT_FUNCTION_TABLE.is_none() {
-            self.is_relayout_boundary.store(false, Relaxed)
+            self.parent_use_size.store(true, Relaxed)
         }
     }
 
-    pub(crate) fn set_is_relayout_boundary<R: Render>(&self) {
+    #[deprecated]
+    pub(crate) fn set_parent_not_use_size<R: Render>(&self) {
         if R::DRY_LAYOUT_FUNCTION_TABLE.is_none() {
-            self.is_relayout_boundary.store(true, Relaxed)
+            self.parent_use_size.store(false, Relaxed)
         }
+    }
+
+    pub(crate) fn clear_parent_use_size(&self) {
+        self.parent_use_size.store(false, Relaxed)
+    }
+
+    pub(crate) fn set_parent_use_size(&self) {
+        self.parent_use_size.store(true, Relaxed)
     }
 
     pub(crate) fn needs_layout(&self) -> Result<(), NoRelayoutToken> {
@@ -101,7 +116,7 @@ impl RenderMark {
     }
 }
 
-impl<R> RenderObject<R>
+impl<R> RenderObjectOld<R>
 where
     R: Render,
 {
@@ -115,7 +130,7 @@ where
     ) -> RenderAction {
         if child_render_action == RenderAction::Relayout {
             self.mark.set_self_needs_layout();
-            if self.mark.is_relayout_boundary::<R>() {
+            if self.mark.parent_not_use_size::<R>() {
                 child_render_action = RenderAction::Repaint;
             }
         }

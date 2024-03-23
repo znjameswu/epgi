@@ -5,8 +5,8 @@ use crate::{
     tree::{
         layer_render_function_table_of, ArcChildElementNode, ArcChildRenderObject,
         ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf, ElementNode,
-        LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement, RenderObject,
-        RenderObjectInner, RenderObjectSlots,
+        LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement,
+        RenderObjectInnerOld, RenderObjectOld, RenderObjectSlots,
     },
 };
 
@@ -18,7 +18,7 @@ where
     #[inline(always)]
     pub(crate) fn visit_commit(
         &self,
-        render_object: Option<Arc<RenderObject<E::Render>>>,
+        render_object: Option<Arc<RenderObjectOld<E::Render>>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
@@ -47,7 +47,7 @@ where
     #[inline(always)]
     pub(crate) fn visit_commit_attached(
         &self,
-        render_object: Arc<RenderObject<E::Render>>,
+        render_object: Arc<RenderObjectOld<E::Render>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
@@ -242,12 +242,12 @@ where
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: Option<Arc<RenderObject<E::Render>>>,
+        render_object: Option<Arc<RenderObjectOld<E::Render>>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         element_context: &ArcElementContextNode,
         is_new_widget: bool,
     ) -> (
-        Option<Arc<RenderObject<E::Render>>>,
+        Option<Arc<RenderObjectOld<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         if let Some(render_object) = render_object {
@@ -272,11 +272,11 @@ where
     pub(crate) fn rebuild_success_process_attached(
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        render_object: Arc<RenderObject<E::Render>>,
+        render_object: Arc<RenderObjectOld<E::Render>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         is_new_widget: bool,
     ) -> (
-        Option<Arc<RenderObject<E::Render>>>,
+        Option<Arc<RenderObjectOld<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -333,7 +333,7 @@ where
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
-        Option<Arc<RenderObject<E::Render>>>,
+        Option<Arc<RenderObjectOld<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -371,7 +371,7 @@ where
     }
 
     pub(crate) fn rebuild_suspend_commit(
-        render_object: Option<Arc<RenderObject<E::Render>>>,
+        render_object: Option<Arc<RenderObjectOld<E::Render>>>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         if let Some(render_object) = render_object {
             if !<E::Render as Render>::NOOP_DETACH {
@@ -394,7 +394,7 @@ where
         element_context: &ArcElementContextNode,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
-        Option<Arc<RenderObject<E::Render>>>,
+        Option<Arc<RenderObjectOld<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -419,7 +419,7 @@ where
             }
         });
 
-        let new_render_object = Arc::new(RenderObject::new(
+        let new_render_object = Arc::new(RenderObjectOld::new(
             E::create_render(&element, &widget), //TODO: This could panic
             child_render_objects,
             element_context.clone(),
@@ -453,7 +453,7 @@ where
         element_context: &ArcElementContextNode,
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-    ) -> Option<Arc<RenderObject<E::Render>>> {
+    ) -> Option<Arc<RenderObjectOld<E::Render>>> {
         let mut suspended = false;
         let option_child_render_objects =
             children.zip_ref_collect(render_object_changes, |child, change| {
@@ -479,7 +479,7 @@ where
         } else {
             let new_render_children =
                 option_child_render_objects.map_collect(|child| child.expect("Impossible to fail"));
-            let new_render_object = Arc::new(RenderObject::new(
+            let new_render_object = Arc::new(RenderObjectOld::new(
                 E::create_render(&element, &widget), //TODO: This could panic
                 new_render_children,
                 element_context.clone(),
@@ -489,7 +489,7 @@ where
     }
 }
 
-impl<R> RenderObjectInner<R>
+impl<R> RenderObjectInnerOld<R>
 where
     R: Render,
 {

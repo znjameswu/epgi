@@ -4,7 +4,7 @@ use crate::foundation::{AnyRawPointer, Canvas, PaintContext, Protocol};
 
 use crate::tree::{
     ArcChildRenderObject, ArcChildWidget, DryLayoutFunctionTable, HitTestBehavior, HitTestResults,
-    LayerOrUnit, RenderAction, RenderObject, Widget,
+    LayerOrUnit, RenderAction, RenderObjectOld, Widget,
 };
 
 use super::{
@@ -93,7 +93,7 @@ pub trait ProxyWidget:
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
-        fn(*mut RenderObject<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+        fn(*mut RenderObjectOld<SingleChildRenderObject<Self>>) -> AnyRawPointer,
     )] {
         &[]
     }
@@ -178,7 +178,7 @@ where
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
-        fn(*mut RenderObject<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+        fn(*mut RenderObjectOld<SingleChildRenderObject<Self>>) -> AnyRawPointer,
     )] {
         T::all_hit_test_interfaces()
     }

@@ -9,7 +9,8 @@ use epgi_core::{
         SingleChildRenderObjectElement,
     },
     tree::{
-        ArcChildWidget, BuildContext, Element, HitTestBehavior, RenderAction, RenderObject, Widget,
+        ArcChildWidget, BuildContext, Element, HitTestBehavior, RenderAction, RenderObjectOld,
+        Widget,
     },
 };
 use hashbrown::HashMap;
@@ -191,7 +192,7 @@ impl ProxyWidget for RawGestureDetector {
 
     fn all_hit_test_interfaces() -> &'static [(
         TypeId,
-        fn(*mut RenderObject<SingleChildRenderObject<Self>>) -> AnyRawPointer,
+        fn(*mut RenderObjectOld<SingleChildRenderObject<Self>>) -> AnyRawPointer,
     )] {
         RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE.as_slice()
     }
@@ -203,7 +204,7 @@ hit_test_interface_query_table!(
     dyn PointerEventHandler,
 );
 
-impl PointerEventHandler for RenderObject<SingleChildRenderObject<RawGestureDetector>> {
+impl PointerEventHandler for RenderObjectOld<SingleChildRenderObject<RawGestureDetector>> {
     fn handle_pointer_event(&self, transformed_position: Point2d, event: &PointerEvent) {}
 
     fn all_gesture_recognizers(

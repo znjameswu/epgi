@@ -1,17 +1,96 @@
 use crate::foundation::{HktContainer, Protocol, SyncMutex};
 
 use super::{
-    ArcChildRenderObject, ArcElementContextNode, LayerOrUnit, NoRelayoutToken, Render, RenderMark,
+    ArcChildRenderObject, ArcElementContextNode, Hkt, LayerOrUnit, NoRelayoutToken, Render,
+    RenderMark, RenderNew, SelectLayoutImpl, SelectPaintImpl,
 };
 
-pub struct RenderObject<R: Render> {
+pub struct RenderObject<R>
+where
+    R: RenderNew,
+{
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
-    pub(crate) layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::LayerMark,
+    pub(crate) layer_mark: R::LayerMark,
     pub(crate) inner: SyncMutex<RenderObjectInner<R>>,
 }
 
-impl<R> RenderObject<R>
+pub(crate) struct RenderObjectInner<R: RenderNew> {
+    // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
+    // boundaries: Option<RenderObjectBoundaries>,
+    pub(crate) cache: RenderCache<R, <R::HktLayerCache as Hkt>::T<R::CompositionCache>>,
+    pub(crate) render: R,
+    pub(crate) children:
+        <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
+}
+
+pub(crate) struct RenderCache<R, LC>(Option<LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>>)
+where
+    R: RenderNew;
+
+impl<R, LC> RenderCache<R, LC>
+where
+    R: RenderNew,
+{
+    // The ZST token guards against accidentally accessing staled layout results
+    #[inline(always)]
+    pub(crate) fn layout_cache_ref(
+        &self,
+        _token: NoRelayoutToken,
+    ) -> Option<&LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>> {
+        self.0.as_ref()
+    }
+
+    // The ZST token guards against accidentally accessing staled layout results
+    #[inline(always)]
+    pub(crate) fn layout_cache_mut(
+        &mut self,
+        _token: NoRelayoutToken,
+    ) -> Option<&mut LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>> {
+        self.0.as_mut()
+    }
+
+    pub(crate) fn insert_layout_cache(
+        &mut self,
+        cache: LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>,
+    ) -> &mut LayoutCache<R::ParentProtocol, R::LayoutMemo, LC> {
+        self.0.insert(cache)
+    }
+
+    #[inline(always)]
+    pub(crate) fn last_layout_constraints_ref(
+        &self,
+    ) -> Option<&<R::ParentProtocol as Protocol>::Constraints> {
+        self.0
+            .as_ref()
+            .map(|cache| &cache.layout_results.constraints)
+    }
+
+    #[inline(always)]
+    pub(crate) fn last_layout_constraints_mut(
+        &mut self,
+    ) -> Option<&mut <R::ParentProtocol as Protocol>::Constraints> {
+        self.0
+            .as_mut()
+            .map(|cache| &mut cache.layout_results.constraints)
+    }
+
+    #[inline(always)]
+    pub(crate) fn last_layout_results_mut(
+        &mut self,
+    ) -> Option<&mut LayoutResults<R::ParentProtocol, R::LayoutMemo>> {
+        self.0.as_mut().map(|cache| &mut cache.layout_results)
+    }
+}
+
+pub struct RenderObjectOld<R: Render, const DRY_LAYOUT: bool = false> {
+    pub(crate) element_context: ArcElementContextNode,
+    pub(crate) mark: RenderMark,
+    pub(crate) layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::LayerMark,
+    pub(crate) inner: SyncMutex<RenderObjectInnerOld<R>>,
+}
+
+impl<R, const HAS_LAYER: bool> RenderObjectOld<R, HAS_LAYER>
 where
     R: Render,
 {
@@ -30,8 +109,8 @@ where
             element_context,
             mark: RenderMark::new(),
             layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::create_layer_mark(),
-            inner: SyncMutex::new(RenderObjectInner {
-                cache: RenderCache(None),
+            inner: SyncMutex::new(RenderObjectInnerOld {
+                cache: RenderCacheOld(None),
                 render,
                 children,
             }),
@@ -43,17 +122,17 @@ where
     }
 }
 
-pub(crate) struct RenderObjectInner<R: Render> {
+pub(crate) struct RenderObjectInnerOld<R: Render> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
-    pub(crate) cache: RenderCache<R>,
+    pub(crate) cache: RenderCacheOld<R>,
     pub(crate) render: R,
     pub(crate) children:
         <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
 }
 
 // This helper type helps us to split borrow RenderObjectInner
-pub(crate) struct RenderCache<R: Render>(
+pub(crate) struct RenderCacheOld<R: Render>(
     Option<
         LayoutCache<
             R::ParentProtocol,
@@ -115,7 +194,7 @@ where
     }
 }
 
-impl<R> RenderCache<R>
+impl<R> RenderCacheOld<R>
 where
     R: Render,
 {

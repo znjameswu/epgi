@@ -1,6 +1,8 @@
 use std::{fmt::Debug, ops::Mul};
 
-use crate::tree::{ArcChildLayerRenderObject, ArcChildRenderObject, PaintResults};
+use crate::tree::{
+    ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject, PaintResults,
+};
 
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: PartialEq + Clone + Debug + Send + Sync;
@@ -135,6 +137,15 @@ pub trait PaintContext {
     fn add_layer(
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
+        transform: impl FnOnce(
+            &<Self::Canvas as Canvas>::Transform,
+        ) -> <Self::Canvas as Canvas>::Transform,
+    );
+
+    // Temporary signature
+    fn add_orphan_layer(
+        &mut self,
+        layer: ArcAnyLayerRenderObject,
         transform: impl FnOnce(
             &<Self::Canvas as Canvas>::Transform,
         ) -> <Self::Canvas as Canvas>::Transform,

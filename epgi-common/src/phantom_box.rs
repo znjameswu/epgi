@@ -6,7 +6,7 @@ use epgi_core::{
         ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Never, PaintContext, Provide,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayout, Element,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, DryLayoutOld, Element,
         HitTestResults, Render, RenderAction, RenderElement, Widget,
     },
 };
@@ -121,7 +121,7 @@ impl Render for RenderPhantomBox {
     }
 
     const DRY_LAYOUT_FUNCTION_TABLE: Option<epgi_core::tree::DryLayoutFunctionTable<Self>> =
-        <Self as DryLayout>::DRY_LAYOUT_FUNCTION_TABLE;
+        <Self as DryLayoutOld>::DRY_LAYOUT_FUNCTION_TABLE;
 
     fn perform_paint(
         &self,
@@ -147,7 +147,7 @@ impl Render for RenderPhantomBox {
     type LayerOrUnit = ();
 }
 
-impl DryLayout for RenderPhantomBox {
+impl DryLayoutOld for RenderPhantomBox {
     fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize {
         constraints.smallest()
     }

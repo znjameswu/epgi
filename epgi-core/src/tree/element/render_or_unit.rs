@@ -3,7 +3,7 @@ use crate::{
     nodes::{RenderSuspense, SuspenseElement},
     scheduler::BuildScheduler,
     sync::SubtreeRenderObjectChange,
-    tree::{ArcChildRenderObject, Render, RenderObject},
+    tree::{ArcChildRenderObject, Render, RenderObjectOld},
 };
 
 use super::{
@@ -94,7 +94,7 @@ where
         ChildContainer = E::ChildContainer,
     >,
 {
-    type ArcRenderObject = Arc<RenderObject<R>>;
+    type ArcRenderObject = Arc<RenderObjectOld<R>>;
 
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E> =
         RenderElementFunctionTable::RenderObject {
@@ -237,7 +237,7 @@ impl<P> RenderOrUnit<SuspenseElement<P>> for RenderSuspense<P>
 where
     P: Protocol,
 {
-    type ArcRenderObject = Arc<RenderObject<RenderSuspense<P>>>;
+    type ArcRenderObject = Arc<RenderObjectOld<RenderSuspense<P>>>;
 
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<SuspenseElement<P>> =
         RenderElementFunctionTable::RenderObject {

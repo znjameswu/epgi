@@ -1,18 +1,22 @@
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{Arc, AsIterator, Canvas, LayerProtocol, PaintContext, Protocol, PtrEq},
+    foundation::{
+        Arc, AsIterator, Canvas, ConstBool, False, LayerProtocol, PaintContext, Protocol, PtrEq,
+        True,
+    },
     sync::BuildScheduler,
     tree::{
-        layer_render_function_table_of, AweakAnyLayeredRenderObject, LayerCache, LayerRender,
-        LayerRenderFunctionTable, NotDetachedToken, Render, RenderObject,
+        layer_render_function_table_of, AweakAnyLayerRenderObject, HktLayerCache, LayerCache,
+        LayerPaint, LayerRender, LayerRenderFunctionTable, NotDetachedToken, Paint, Render,
+        RenderNew, RenderObject, RenderObjectOld, SelectPaintImpl,
     },
 };
 
 impl BuildScheduler {
     pub(crate) fn perform_paint(
         &self,
-        layer_render_objects: HashSet<PtrEq<AweakAnyLayeredRenderObject>>,
+        layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,
     ) {
         rayon::scope(|scope| {
             for PtrEq(layer_render_object) in layer_render_objects {
@@ -31,6 +35,29 @@ pub trait AnyLayerRenderObjectPaintExt {
 
 impl<R> AnyLayerRenderObjectPaintExt for RenderObject<R>
 where
+    R: RenderNew<LayerPaint = True>,
+    R: LayerPaint,
+    R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
+{
+    fn repaint_if_attached(&self) {
+        let Err(_token) = self.mark.is_detached() else {
+            return;
+        };
+        let no_relayout_token = self.mark.assume_not_needing_layout();
+        let mut inner = self.inner.lock();
+
+        let paint_results = R::paint_layer(&inner.render, &inner.children);
+        let layout_cache = inner
+            .cache
+            .layout_cache_mut(no_relayout_token)
+            .expect("Repaint can only be performed after layout has finished");
+        layout_cache.layer_cache = Some(LayerCache::new(paint_results, None));
+    }
+}
+
+impl<R> AnyLayerRenderObjectPaintExt for RenderObjectOld<R>
+where
     R: LayerRender,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
@@ -43,7 +70,7 @@ where
     }
 }
 
-impl<R> RenderObject<R>
+impl<R> RenderObjectOld<R>
 where
     R: LayerRender,
     R::ChildProtocol: LayerProtocol,
@@ -90,6 +117,56 @@ pub trait ChildRenderObjectPaintExt<PP: Protocol> {
 
 impl<R> ChildRenderObjectPaintExt<R::ParentProtocol> for RenderObject<R>
 where
+    R: RenderNew,
+{
+    fn paint(
+        self: Arc<Self>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
+    ) {
+        paint(self, offset.clone(), paint_ctx)
+    }
+
+    fn paint_scan(
+        self: Arc<Self>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
+    ) {
+        paint(self, offset.clone(), paint_ctx)
+    }
+}
+
+fn paint<R: RenderNew>(
+    render_object: Arc<RenderObject<R>>,
+    offset: <R::ParentProtocol as Protocol>::Offset,
+    paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
+) {
+    let mut inner = render_object.inner.lock();
+    let inner_reborrow = &mut *inner;
+    let token = render_object.mark.assume_not_needing_layout();
+    let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
+        panic!("Paint should only be called after layout has finished")
+    };
+    inner_reborrow.render.option_perform_paint(
+        &cache.layout_results.size,
+        &offset,
+        &cache.layout_results.memo,
+        &inner_reborrow.children,
+        paint_ctx,
+    );
+    // We need size and memo to determine clip, therefore we have to clone either the Arc or the size or memo.
+    R::option_paint_self_as_child_layer(
+        &render_object,
+        &cache.layout_results.size,
+        &offset,
+        &cache.layout_results.memo,
+        paint_ctx,
+    );
+    cache.paint_offset = Some(offset);
+}
+
+impl<R> ChildRenderObjectPaintExt<R::ParentProtocol> for RenderObjectOld<R>
+where
     R: Render,
 {
     fn paint(
@@ -109,7 +186,7 @@ where
     }
 }
 
-impl<R> RenderObject<R>
+impl<R> RenderObjectOld<R>
 where
     R: Render,
 {

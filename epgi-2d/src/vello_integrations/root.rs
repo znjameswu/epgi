@@ -1,15 +1,15 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Key, Never, OptionContainer,
-        PaintContext, Protocol, Provide,
+        Arc, Asc, BuildSuspendedError, Canvas, False, InlinableDwsizeVec, Key, Never,
+        OptionContainer, PaintContext, Protocol, Provide, True,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        DryLayoutFunctionTable, Element, ElementReconcileItem, HitTestResults,
-        LayerCompositionConfig, LayerRender, Render, RenderAction, RenderElement,
-        RenderObjectSlots, Widget,
+        DryLayoutFunctionTable, DryLayoutOld, Element, ElementReconcileItem, HasLayoutMemo,
+        HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, LayerRender, Render,
+        RenderAction, RenderElement, RenderNew, RenderObjectSlots, TreeNode, Widget,
     },
 };
 
@@ -134,6 +134,98 @@ pub struct RenderRoot {
     pub child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
+impl TreeNode for RenderRoot {
+    type ParentProtocol = BoxProtocol;
+
+    type ChildProtocol = BoxProtocol;
+
+    type ChildContainer = OptionContainer;
+}
+
+impl HasLayoutMemo for RenderRoot {
+    type LayoutMemo = ();
+}
+
+impl DryLayout for RenderRoot {
+    fn compute_dry_layout(
+        &self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> <Self::ParentProtocol as Protocol>::Size {
+        todo!()
+    }
+
+    fn compute_layout_memo(
+        &mut self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        children: &<Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<
+            ArcChildRenderObject<Self::ChildProtocol>,
+        >,
+    ) -> Self::LayoutMemo {
+        todo!()
+    }
+}
+
+impl LayerPaint for RenderRoot {
+    fn transform_config(
+        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
+        todo!()
+    }
+
+    fn transform_hit_test(
+        &self,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+    ) -> <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::HitPosition {
+        todo!()
+    }
+}
+
+impl CachedComposite for RenderRoot {
+    type CompositionCache = Arc<Affine2dEncoding>;
+
+    fn composite_into_cache(
+        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> <Self as CachedComposite>::CompositionCache {
+        todo!()
+    }
+
+    fn composite_from_cache_to(
+        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+        cache: &<Self as CachedComposite>::CompositionCache,
+        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) {
+        todo!()
+    }
+}
+
+impl HitTest for RenderRoot {
+    fn hit_test_children(
+        &self,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+        _memo: &Self::LayoutMemo,
+        children: &Option<ArcChildRenderObject<BoxProtocol>>,
+        results: &mut HitTestResults<Affine2dCanvas>,
+    ) -> bool {
+        children
+            .as_ref()
+            .map(|child| results.hit_test(child.clone()))
+            .unwrap_or_default()
+    }
+}
+
+impl RenderNew for RenderRoot {
+    type DryLayout = True;
+
+    type LayerPaint = True;
+
+    type CachedComposite = True;
+
+    type OrphanComposite = False;
+}
+
 impl Render for RenderRoot {
     type ParentProtocol = BoxProtocol;
 
@@ -152,7 +244,7 @@ impl Render for RenderRoot {
     }
 
     const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> =
-        <Self as DryLayout>::DRY_LAYOUT_FUNCTION_TABLE;
+        <Self as DryLayoutOld>::DRY_LAYOUT_FUNCTION_TABLE;
 
     fn perform_paint(
         &self,
@@ -182,7 +274,7 @@ impl Render for RenderRoot {
     type LayerOrUnit = RenderRoot;
 }
 
-impl DryLayout for RenderRoot {
+impl DryLayoutOld for RenderRoot {
     fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize {
         constraints.biggest()
     }
@@ -262,3 +354,5 @@ impl CachedLayer for RenderRoot {
         todo!()
     }
 }
+
+

@@ -27,7 +27,7 @@ use crate::{
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
     ChildElementWidgetPair, ElementWidgetPair, LayerRender, LayoutCache, LayoutResults, Render,
-    RenderObject,
+    RenderObjectOld,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -164,9 +164,9 @@ pub struct SuspenseElementFunctionTable<E: Element> {
     pub(crate) get_suspense_element_mut: fn(&mut E) -> &mut SuspenseElement<E::ChildProtocol>,
     pub(crate) get_suspense_widget_ref: fn(&E::ArcWidget) -> &Suspense<E::ParentProtocol>,
     pub(crate) get_suspense_render_object:
-        fn(ArcRenderObjectOf<E>) -> Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>,
+        fn(ArcRenderObjectOf<E>) -> Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>,
     pub(crate) into_arc_render_object:
-        fn(Arc<RenderObject<RenderSuspense<E::ParentProtocol>>>) -> ArcRenderObjectOf<E>,
+        fn(Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>) -> ArcRenderObjectOf<E>,
 }
 
 pub struct ElementNode<E: Element> {
@@ -350,7 +350,7 @@ pub fn create_root_element<E, R>(
     offset: <E::ParentProtocol as Protocol>::Offset,
     size: <E::ParentProtocol as Protocol>::Size,
     layout_memo: R::LayoutMemo,
-) -> (Arc<ElementNode<E>>, Arc<RenderObject<R>>)
+) -> (Arc<ElementNode<E>>, Arc<RenderObjectOld<R>>)
 where
     E: RenderElement<Render = R>,
     R: Render<
@@ -368,7 +368,7 @@ where
         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
         // let render = R::try_create_render_object_from_element(&element, &widget)
         //     .expect("Root render object creation should always be successfully");
-        let render_object = Arc::new(RenderObject::new(
+        let render_object = Arc::new(RenderObjectOld::new(
             render,
             render_children,
             element_context.clone(),
@@ -385,7 +385,7 @@ where
                     None,
                 ));
         }
-        render_object.mark.set_is_relayout_boundary::<R>();
+        render_object.mark.set_parent_not_use_size::<R>();
         ElementNode {
             context: element_context,
             snapshot: SyncMutex::new(ElementSnapshot {

@@ -15,6 +15,7 @@
 15. Pointer add/remove
 16. ~~Hit test transform design~~
 17. Optimize query interface probe failure cost
+18. Cache adopted layers in composition cache for hit test
 
 
 TODOs for other crates:
