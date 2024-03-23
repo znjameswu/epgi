@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "epgi-core",
+    "epgi-macro",
     "epgi-common",
     "epgi-2d",
     # # Glazier was broken due to wgpu updates
@@ -9,7 +10,7 @@ members = [
     # We have to manually expand each sub-item to exclude defunt glazier example https://github.com/rust-lang/cargo/issues/6745
     "examples/winit-simple",
     "optargs",
-    "epgi-winit",
+    "epgi-winit", "epgi-macro",
 ]
 resolver = "2"
 
