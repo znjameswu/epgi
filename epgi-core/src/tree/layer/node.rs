@@ -1,12 +1,15 @@
 use crate::{
     foundation::{Arc, Canvas, False, Key, LayerProtocol, Protocol, True},
-    tree::{LayerPaint, RenderNew, RenderObject, RenderObjectOld},
+    tree::{
+        AnyRenderObject, LayerPaint, RenderNew, RenderObject, RenderObjectOld,
+        SelectCachedComposite, SelectLayerPaint,
+    },
 };
 
 use super::{
     AnyLayerRenderObject, ArcAdoptedLayerRenderObject, ArcAnyLayerRenderObject,
     ArcChildLayerRenderObject, ChildLayerOrFragmentRef, ChildLayerRenderObject,
-    LayerCompositionConfig, LayerRender, NoRecompositeToken,
+    LayerCompositionConfig, LayerRender, NoRecompositeToken, LayerMark,
 };
 
 pub struct LayerCache<C: Canvas, T> {
@@ -93,14 +96,23 @@ pub struct ComposableAdoptedLayer<C: Canvas> {
     pub layer: ArcAdoptedLayerRenderObject<C>,
 }
 
-impl<R> AnyLayerRenderObject for RenderObject<R>
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > AnyLayerRenderObject
+    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<LayerPaint = True>,
-    R: LayerPaint,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
+    Self: AnyRenderObject
+        + crate::sync::AnyLayerRenderObjectPaintExt
+        + crate::sync::AnyLayerRenderObjectCompositeExt,
 {
-    fn mark(&self) -> &super::LayerMark {
+    fn mark(&self) -> &LayerMark {
         todo!()
     }
 
@@ -119,7 +131,7 @@ where
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
 {
-    fn mark(&self) -> &super::LayerMark {
+    fn mark(&self) -> &LayerMark {
         todo!()
     }
 
@@ -132,13 +144,19 @@ where
     }
 }
 
-impl<R> ChildLayerRenderObject<R::AdopterCanvas> for RenderObject<R>
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ChildLayerRenderObject<R::AdopterCanvas>
+    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<LayerPaint = True>,
-    R: LayerPaint,
-    R::ParentProtocol: LayerProtocol,
-    R::ChildProtocol: LayerProtocol,
-    // RenderObject<R>: crate::sync::ChildLayerRenderObjectCompositeExt<R::AdopterCanvas>,
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
+    Self: crate::sync::ChildLayerRenderObjectCompositeExt<R::AdopterCanvas>,
 {
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject {
         todo!()

@@ -118,6 +118,16 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             ));
     }
 
+    fn add_orphan_layer(
+        &mut self,
+        layer: epgi_core::tree::ArcAnyLayerRenderObject,
+        transform: impl FnOnce(
+            &<Self::Canvas as Canvas>::Transform,
+        ) -> <Self::Canvas as Canvas>::Transform,
+    ) {
+        todo!()
+    }
+
     fn with_transform(
         &mut self,
         transform: <Self::Canvas as Canvas>::Transform,
@@ -146,6 +156,16 @@ impl PaintContext for VelloPaintScanner {
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
         offset: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> <Self::Canvas as Canvas>::Transform,
+    ) {
+        todo!()
+    }
+
+    fn add_orphan_layer(
+        &mut self,
+        layer: epgi_core::tree::ArcAnyLayerRenderObject,
+        transform: impl FnOnce(
+            &<Self::Canvas as Canvas>::Transform,
+        ) -> <Self::Canvas as Canvas>::Transform,
     ) {
         todo!()
     }

@@ -9,7 +9,7 @@ use epgi_core::{
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
         DryLayoutFunctionTable, DryLayoutOld, Element, ElementReconcileItem, HasLayoutMemo,
         HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, LayerRender, Render,
-        RenderAction, RenderElement, RenderNew, RenderObjectSlots, TreeNode, Widget,
+        RenderAction, RenderElement, RenderNew, RenderObject, RenderObjectSlots, TreeNode, Widget,
     },
 };
 
@@ -174,24 +174,20 @@ impl LayerPaint for RenderRoot {
         todo!()
     }
 
-    fn transform_hit_test(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-    ) -> <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::HitPosition {
-        todo!()
-    }
 }
 
 impl CachedComposite for RenderRoot {
     type CompositionCache = Arc<Affine2dEncoding>;
 
     fn composite_into_cache(
+        &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
     ) -> <Self as CachedComposite>::CompositionCache {
         todo!()
     }
 
     fn composite_from_cache_to(
+        &self,
         encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         cache: &<Self as CachedComposite>::CompositionCache,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
@@ -214,16 +210,20 @@ impl HitTest for RenderRoot {
             .map(|child| results.hit_test(child.clone()))
             .unwrap_or_default()
     }
+
+    fn hit_test_self(
+        &self,
+        position: &<<Self as epgi_core::tree::SelectOrphanLayer<false>>::AdopterCanvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+    ) -> Option<epgi_core::tree::HitTestBehavior> {
+        todo!()
+    }
 }
 
 impl RenderNew for RenderRoot {
-    type DryLayout = True;
-
-    type LayerPaint = True;
-
-    type CachedComposite = True;
-
-    type OrphanComposite = False;
+    type RenderObject = RenderObject<Self, true, true, true, false>;
 }
 
 impl Render for RenderRoot {
@@ -354,5 +354,3 @@ impl CachedLayer for RenderRoot {
         todo!()
     }
 }
-
-

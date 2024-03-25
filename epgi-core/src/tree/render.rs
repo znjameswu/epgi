@@ -9,17 +9,11 @@ pub use node::*;
 
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{
-    foundation::{
-        default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
-        default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
-        AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, ConstBool, False,
-        HktContainer, Key, LayerProtocol, PaintContext, Protocol, Transform, TransformHitPosition,
-        True,
-    },
-    sync::{
-        SelectCompositeImpl, SelectCompositionCacheImpl, SelectHitTestImpl, SelectLayerAdoptImpl,
-    },
+use crate::foundation::{
+    default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
+    default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
+    AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, ConstBool, HktContainer,
+    Key, LayerProtocol, PaintContext, Protocol, Transform, TransformHitPosition,
 };
 
 use super::{
@@ -42,21 +36,20 @@ pub trait TreeNode: Send + Sync {
 pub trait RenderNew:
     TreeNode
     + HasLayoutMemo
-    + SelectLayoutImpl<Self::DryLayout>
-    + SelectPaintImpl<Self::LayerPaint, Self::OrphanComposite>
-    + SelectCompositeImpl<Self::CachedComposite, Self::OrphanComposite>
-    + SelectCompositionCacheImpl<Self::CachedComposite>
-    + SelectLayerAdoptImpl<Self::OrphanComposite>
-    + SelectHitTestImpl<Self::OrphanComposite>
-    + Sized
+    + SelectOrphanLayer<
+        false,
+        AdopterCanvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
+    > + Sized
     + 'static
 {
-    type DryLayout: ConstBool;
-    type LayerPaint: ConstBool;
-    type CachedComposite: ConstBool;
-    type OrphanComposite: ConstBool;
+    // type DryLayout: ConstBool;
+    // type LayerPaint: ConstBool;
+    // type CachedComposite: ConstBool;
+    // type OrphanLayer: ConstBool;
 
-    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    type RenderObject;
+
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut Self::RenderObject) -> AnyRawPointer)]
     {
         &[]
     }
@@ -66,7 +59,7 @@ pub trait HasLayoutMemo {
     type LayoutMemo: Send + Sync;
 }
 
-pub trait Layout: TreeNode + HasLayoutMemo + SelectLayoutImpl<False> {
+pub trait Layout: TreeNode + HasLayoutMemo {
     fn perform_layout(
         &mut self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
@@ -76,7 +69,7 @@ pub trait Layout: TreeNode + HasLayoutMemo + SelectLayoutImpl<False> {
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 }
 
-pub trait DryLayout: TreeNode + HasLayoutMemo + SelectLayoutImpl<True> {
+pub trait DryLayout: TreeNode + HasLayoutMemo {
     fn compute_dry_layout(
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
@@ -93,7 +86,7 @@ pub trait DryLayout: TreeNode + HasLayoutMemo + SelectLayoutImpl<True> {
 }
 
 pub trait Paint:
-    TreeNode + HasLayoutMemo + SelectPaintImpl<False, False,  LayerMark = (), HktLayerCache = HktUnit>
+    TreeNode + HasLayoutMemo + SelectLayerPaint<false, LayerMark = (), HktLayerCache = HktUnit>
 {
     fn perform_paint(
         &self,
@@ -132,10 +125,15 @@ pub trait Paint:
 
 pub trait LayerPaint:
     TreeNode
-    + SelectPaintImpl<
-        True,
+    + SelectLayerPaint<
+        true,
         LayerMark = LayerMark,
         HktLayerCache = HktLayerCache<<<Self as TreeNode>::ChildProtocol as Protocol>::Canvas>,
+    > + SelectCachedComposite<false, CompositionCache = ()>
+    + SelectCachedComposite<true>
+    + SelectOrphanLayer<
+        false,
+        AdopterCanvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
     >
 where
     Self::ParentProtocol: LayerProtocol,
@@ -157,62 +155,62 @@ where
         child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
     ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
 
-    fn transform_hit_test(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-    ) -> <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::HitPosition;
-
-    fn key(&self) -> Option<&Arc<dyn Key>> {
+    fn layer_key(&self) -> Option<&Arc<dyn Key>> {
         None
     }
 }
 
-pub trait Composite:
+pub trait Composite<const ORPHAN_LAYER: bool = false>:
     TreeNode
-    + SelectCompositeImpl<
-        False,
-        False,
+    + LayerPaint
+    + SelectOrphanLayer<
+        false,
         AdopterCanvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
-        CompositionCache = (),
-    >
+    > + SelectOrphanLayer<ORPHAN_LAYER>
+where
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
 {
     fn composite_to(
-        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+        &self,
+        encoding: &mut <<Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas as Canvas>::Encoding,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<
+            <Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
+        >,
     );
 }
 
-pub trait CachedComposite:
+pub trait CachedComposite<const ORPHAN_LAYER: bool = false>:
     TreeNode
-    + SelectCompositeImpl<
-        True,
-        False,
-        AdopterCanvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
-        CompositionCache = <Self as CachedComposite>::CompositionCache,
-    >
+    + LayerPaint
+    + SelectCachedComposite<
+        true,
+        CompositionCache = <Self as CachedComposite<ORPHAN_LAYER>>::CompositionCache,
+    > + SelectOrphanLayer<ORPHAN_LAYER>
+where
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
 {
     type CompositionCache: Send + Sync + Clone + 'static;
 
     fn composite_into_cache(
+        &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> <Self as CachedComposite>::CompositionCache;
+    ) -> <Self as CachedComposite<ORPHAN_LAYER>>::CompositionCache;
 
     fn composite_from_cache_to(
-        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        cache: &<Self as CachedComposite>::CompositionCache,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        &self,
+        encoding: &mut <<Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas as Canvas>::Encoding,
+        cache: &<Self as CachedComposite<ORPHAN_LAYER>>::CompositionCache,
+        composition_config: &LayerCompositionConfig<
+            <Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
+        >,
     );
 }
 
-pub trait HitTest:
-    TreeNode
-    + HasLayoutMemo
-    + SelectLayerAdoptImpl<
-        False,
-        AdopterCanvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
-    >
-{
+/// Orphan layers can skip this implementation
+pub trait HitTest: TreeNode + HasLayoutMemo {
     fn hit_test_children(
         &self,
         size: &<Self::ParentProtocol as Protocol>::Size,
@@ -241,21 +239,13 @@ pub trait HitTest:
 // but that would inevitably bake directly into library user's code an explicit AdopterCanvas type
 // either somewhere in an associated type or somewhere as a generic trait paramter.
 // As an unproven idea, I would like to make orphan layer mechanism optional and not bake into anything more than necessary.
-pub trait OrphanComposite:
-    TreeNode
-    + SelectCompositeImpl<
-        False,
-        True,
-        AdopterCanvas = <<Self as TreeNode>::ChildProtocol as Protocol>::Canvas,
-        CompositionCache = (),
-    >
+pub trait OrphanLayer: TreeNode
+    + LayerPaint
+    + SelectOrphanLayer<true, AdopterCanvas = <<Self as TreeNode>::ChildProtocol as Protocol>::Canvas>
+where
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
 {
-    fn composite_orphan_to(
-        encoding: &mut <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    );
-
     fn adopter_key(&self) -> Option<&Arc<dyn Key>>;
 
     // fn hit_test_children(
@@ -282,103 +272,9 @@ pub trait OrphanComposite:
     // }
 }
 
-pub trait SelectLayoutImpl<DryLayout: ConstBool>: TreeNode + HasLayoutMemo {
-    fn perform_layout_without_resize(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &mut <Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo;
-    fn perform_wet_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
-}
-
-impl<T> SelectLayoutImpl<False> for T
-where
-    T: Layout,
-{
-    fn perform_layout_without_resize(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &mut <Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo {
-        let (new_size, memo) = self.perform_layout(constraints, children);
-        *size = new_size;
-        memo
-    }
-
-    fn perform_wet_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        self.perform_layout(constraints, children)
-    }
-}
-
-impl<T> SelectLayoutImpl<True> for T
-where
-    T: DryLayout,
-{
-    fn perform_layout_without_resize(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &mut <Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo {
-        self.compute_layout_memo(constraints, size, children)
-    }
-
-    fn perform_wet_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        let size = self.compute_dry_layout(constraints);
-        let memo = self.compute_layout_memo(constraints, &size, children);
-        (size, memo)
-    }
-}
-
-pub trait SelectPaintImpl<LayerPaint: ConstBool, OrphanComposite: ConstBool>: TreeNode + HasLayoutMemo {
+pub trait SelectLayerPaint<const LAYER_PAINT: bool>: TreeNode + HasLayoutMemo {
     type LayerMark: Send + Sync;
     type HktLayerCache: Hkt;
-
-    fn option_perform_paint(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    );
-
-    fn option_paint_self_as_child_layer(
-        render_object: &Arc<RenderObject<Self>>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: RenderNew + Sized;
 }
 
 pub trait Hkt {
@@ -393,37 +289,12 @@ impl Hkt for HktUnit {
     type T<T> = ()  where T: Send + Sync;
 }
 
-impl<T> SelectPaintImpl<False, False> for T
+impl<T> SelectLayerPaint<false> for T
 where
     T: Paint,
 {
     type LayerMark = ();
     type HktLayerCache = HktUnit;
-
-    fn option_perform_paint(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) {
-        self.perform_paint(size, offset, memo, children, paint_ctx)
-    }
-
-    fn option_paint_self_as_child_layer(
-        render_object: &Arc<RenderObject<Self>>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: RenderNew + Sized,
-    {
-        // no-op
-    }
 }
 
 pub struct HktLayerCache<C>(PhantomData<C>);
@@ -432,41 +303,35 @@ impl<C: Canvas> Hkt for HktLayerCache<C> {
     type T<T> = LayerCache<C, T> where T: Send + Sync;
 }
 
-impl<R> SelectPaintImpl<True, False> for R
+impl<R> SelectLayerPaint<true> for R
 where
-    R: RenderNew<LayerPaint = True>,
+    R: RenderNew,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
     type LayerMark = LayerMark;
     type HktLayerCache = HktLayerCache<<R::ChildProtocol as Protocol>::Canvas>;
+}
 
-    fn option_perform_paint(
-        &self,
-        _size: &<Self::ParentProtocol as Protocol>::Size,
-        _offset: &<Self::ParentProtocol as Protocol>::Offset,
-        _memo: &Self::LayoutMemo,
-        _children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        _paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) {
-    }
+pub trait SelectOrphanLayer<const ORPHAN_LAYER: bool>: TreeNode {
+    type AdopterCanvas: Canvas;
+}
 
-    fn option_paint_self_as_child_layer(
-        render_object: &Arc<RenderObject<Self>>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: RenderNew + Sized,
-    {
-        paint_ctx.add_layer(render_object.clone(), |transform| {
-            <R::ParentProtocol as LayerProtocol>::compute_layer_transform(offset, transform)
-        })
-    }
+impl<R> SelectOrphanLayer<false> for R
+where
+    R: TreeNode,
+{
+    type AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas;
+}
+
+impl<R> SelectOrphanLayer<true> for R
+where
+    R: LayerPaint + OrphanLayer,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+{
+    type AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas;
 }
 
 pub trait Render: Sized + Send + Sync + 'static {
@@ -631,9 +496,18 @@ where
     }
 }
 
-impl<R> CastInterfaceByRawPtr for RenderObject<R>
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > CastInterfaceByRawPtr
+    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew,
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
 {
     fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
         default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
@@ -774,18 +648,18 @@ pub trait ChildRenderObject<PP: Protocol>:
     fn detach(&self);
 }
 
-impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
-where
-    R: RenderNew,
-{
-    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
-        todo!()
-    }
+// impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
+// where
+//     R: RenderNew,
+// {
+//     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
+//         todo!()
+//     }
 
-    fn detach(&self) {
-        todo!()
-    }
-}
+//     fn detach(&self) {
+//         todo!()
+//     }
+// }
 
 impl<R> ChildRenderObject<R::ParentProtocol> for RenderObjectOld<R>
 where
@@ -806,9 +680,35 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 }
 
-impl<R> AnyRenderObject for RenderObject<R>
+// impl<R> AnyRenderObject for RenderObject<R>
+// where
+//     R: RenderNew,
+// {
+//     fn element_context(&self) -> &ElementContextNode {
+//         todo!()
+//     }
+
+//     fn detach(&self) {
+//         todo!()
+//     }
+
+//     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
+//         todo!()
+//     }
+// }
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > AnyRenderObject for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew,
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
+    Self: crate::sync::AnyRenderObjectLayoutExt,
 {
     fn element_context(&self) -> &ElementContextNode {
         todo!()
@@ -847,8 +747,24 @@ pub trait ChildRenderObjectWithCanvas<C: Canvas>:
 {
 }
 
-impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R> where
-    R: RenderNew
+// impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R> where
+//     R: RenderNew
+// {
+// }
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ChildRenderObjectWithCanvas<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>
+    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
+    R: SelectOrphanLayer<ORPHAN_LAYER>,
 {
 }
 

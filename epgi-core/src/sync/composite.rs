@@ -1,13 +1,14 @@
 use std::any::Any;
 
 use crate::{
-    foundation::{Arc, Asc, Canvas, ConstBool, False, LayerProtocol, Protocol, True},
+    foundation::{Arc, Asc, Canvas, ConstBool, LayerProtocol, Protocol},
     tree::{
         CachedComposite, CachedCompositionFunctionTable, CachingChildLayerProducingIterator,
         ComposableUnadoptedLayer, Composite, CompositeResults, HktLayerCache,
         LayerCompositionConfig, LayerMark, LayerPaint, LayerRender,
-        NonCachingChildLayerProducingIterator, OrphanComposite, Paint, PaintResults, RenderNew,
-        RenderObject, RenderObjectOld, SelectPaintImpl, TreeNode,
+        NonCachingChildLayerProducingIterator, OrphanLayer, Paint, PaintResults, RenderNew,
+        RenderObject, RenderObjectOld, SelectCachedComposite, SelectLayerPaint, SelectOrphanLayer,
+        TreeNode,
     },
 };
 
@@ -23,12 +24,17 @@ pub trait AnyLayerRenderObjectCompositeExt {
     fn recomposite_into_cache(&self) -> Asc<dyn Any + Send + Sync>;
 }
 
-impl<R> AnyLayerRenderObjectCompositeExt for RenderObject<R>
+impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
+    AnyLayerRenderObjectCompositeExt
+    for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<true>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
     R: LayerPaint,
-    R: RenderNew<LayerPaint = True> + SelectCompositeImpl<R::CachedComposite, R::OrphanComposite>,
-    R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
+    R: SelectCompositeImpl<CACHED_COMPOSITE, ORPHAN_LAYER>,
 {
     fn recomposite_into_cache(&self) -> Asc<dyn Any + Send + Sync> {
         let no_relayout_token = self.mark.assume_not_needing_layout();
@@ -66,12 +72,10 @@ where
         let composition_results = inner_reborrow
             .render
             .regenerate_composite_cache(&layer_cache.paint_results);
-        let result = Asc::new(composition_results.cached_composition.clone());
+        let cached_composition = Asc::new(composition_results.cached_composition.clone());
         layer_cache.insert_composite_results(composition_results);
         self.layer_mark.clear_needs_composite();
-        return result;
-
-        todo!()
+        return cached_composition;
     }
 }
 
@@ -145,18 +149,26 @@ pub trait ChildLayerRenderObjectCompositeExt<PC: Canvas> {
     ) -> Vec<ComposableUnadoptedLayer<PC>>;
 }
 
-impl<R> ChildLayerRenderObjectCompositeExt<R::AdopterCanvas> for RenderObject<R>
+impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
+    ChildLayerRenderObjectCompositeExt<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>
+    for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<LayerPaint = True> + SelectCompositeImpl<R::CachedComposite, R::OrphanComposite>,
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<true>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
     R: LayerPaint,
+    R: SelectCompositeImpl<CACHED_COMPOSITE, ORPHAN_LAYER>,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
+    // R: SelectOrphanLayer<ORPHAN_LAYER>,
 {
     fn composite_to(
         &self,
-        encoding: &mut <R::AdopterCanvas as Canvas>::Encoding,
-        composition_config: &LayerCompositionConfig<R::AdopterCanvas>,
-    ) -> Vec<ComposableUnadoptedLayer<R::AdopterCanvas>> {
+        encoding: &mut <<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas as Canvas>::Encoding,
+        composition_config: &LayerCompositionConfig<
+            <R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
+        >,
+    ) -> Vec<ComposableUnadoptedLayer<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>> {
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
@@ -183,12 +195,12 @@ where
             );
             composite_results
         } else {
-            let result = inner_reborrow.render.composite_without_cache(
+            let composite_results = inner_reborrow.render.composite_without_cache(
                 encoding,
                 composition_config,
                 &layer_cache.paint_results,
             );
-            layer_cache.insert_composite_results(result)
+            layer_cache.insert_composite_results(composite_results)
         };
         // return composite_results.unadopted_layers.clone();
 
@@ -206,46 +218,8 @@ where
     }
 }
 
-pub trait SelectLayerAdoptImpl<OrphanComposite: ConstBool>: TreeNode {
-    type AdopterCanvas: Canvas;
-}
-
-impl<R> SelectLayerAdoptImpl<False> for R
-where
-    R: TreeNode,
-{
-    type AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas;
-}
-
-impl<R> SelectLayerAdoptImpl<True> for R
-where
-    R: LayerPaint + OrphanComposite,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
-{
-    type AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas;
-}
-
-pub trait SelectCompositionCacheImpl<CachedComposite: ConstBool>: TreeNode {
-    type CompositionCache: Send + Sync + Clone + 'static;
-}
-
-impl<R> SelectCompositionCacheImpl<False> for R
-where
-    R: TreeNode,
-{
-    type CompositionCache = ();
-}
-
-impl<R> SelectCompositionCacheImpl<True> for R
-where
-    R: CachedComposite,
-{
-    type CompositionCache = <R as CachedComposite>::CompositionCache;
-}
-
-pub trait SelectCompositeImpl<CachedComposite: ConstBool, OrphanComposite: ConstBool>:
-    TreeNode + SelectLayerAdoptImpl<OrphanComposite> + SelectCompositionCacheImpl<CachedComposite>
+pub trait SelectCompositeImpl<const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>:
+    TreeNode + SelectOrphanLayer<ORPHAN_LAYER> + SelectCachedComposite<CACHED_COMPOSITE>
 {
     fn regenerate_composite_cache(
         &self,
@@ -268,10 +242,9 @@ pub trait SelectCompositeImpl<CachedComposite: ConstBool, OrphanComposite: Const
     );
 }
 
-impl<R> SelectCompositeImpl<False, False> for R
+impl<R> SelectCompositeImpl<false, false> for R
 where
-    R: LayerPaint,
-    R: Composite,
+    R: Composite<false>,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
@@ -290,12 +263,12 @@ where
     ) -> CompositeResults<<Self::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
         let mut iter = NonCachingChildLayerProducingIterator {
             paint_results: &paint_results,
-            key: self.key().map(Arc::as_ref),
+            key: self.layer_key().map(Arc::as_ref),
             unadopted_layers: Vec::new(),
             composition_config,
             transform_config: R::transform_config,
         };
-        R::composite_to(encoding, &mut iter, composition_config);
+        self.composite_to(encoding, &mut iter, composition_config);
         CompositeResults {
             unadopted_layers: todo!(), //iter.unadopted_layers,
             cached_composition: (),
@@ -313,10 +286,10 @@ where
     }
 }
 
-impl<R> SelectCompositeImpl<False, True> for R
+impl<R> SelectCompositeImpl<false, true> for R
 where
     R: LayerPaint,
-    R: OrphanComposite,
+    R: OrphanLayer,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
@@ -347,7 +320,7 @@ where
     }
 }
 
-impl<R> SelectCompositeImpl<True, False> for R
+impl<R> SelectCompositeImpl<true, false> for R
 where
     R: LayerPaint,
     R: CachedComposite,
@@ -360,11 +333,11 @@ where
     ) -> CompositeResults<<Self::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
         let mut iter = CachingChildLayerProducingIterator {
             paint_results,
-            key: self.key().map(Arc::as_ref),
+            key: self.layer_key().map(Arc::as_ref),
             // key: inner_reborrow.layer.key().map(Arc::as_ref),
             unadopted_layers: Vec::new(),
         };
-        let cached_composition = R::composite_into_cache(&mut iter);
+        let cached_composition = self.composite_into_cache(&mut iter);
         CompositeResults {
             unadopted_layers: iter.unadopted_layers,
             cached_composition,
@@ -378,7 +351,7 @@ where
         paint_results: &PaintResults<<Self::ChildProtocol as Protocol>::Canvas>,
     ) -> CompositeResults<<Self::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
         let results = self.regenerate_composite_cache(paint_results);
-        R::composite_from_cache_to(encoding, &results.cached_composition, composition_config);
+        self.composite_from_cache_to(encoding, &results.cached_composition, composition_config);
         results
     }
 
@@ -389,7 +362,7 @@ where
         _paint_results: &PaintResults<<Self::ChildProtocol as Protocol>::Canvas>,
         cache: &Self::CompositionCache,
     ) {
-        R::composite_from_cache_to(encoding, &cache, composition_config);
+        self.composite_from_cache_to(encoding, &cache, composition_config);
     }
 }
 
