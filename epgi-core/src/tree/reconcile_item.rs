@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, Element, ElementNode, ElementReconcileItem, WorkContext, WorkHandle,
+    ArcWidget, Element, ElementNodeOld, ElementReconcileItem, WorkContext, WorkHandle,
 };
 
 pub enum ReconcileItem<CP: Protocol> {
@@ -18,7 +18,7 @@ where
     CP: Protocol,
 {
     pub fn new_rebuild<E: Element<ParentProtocol = CP>>(
-        element: Arc<ElementNode<E>>,
+        element: Arc<ElementNodeOld<E>>,
         widget: E::ArcWidget,
     ) -> Self {
         Self::Rebuild(Box::new(ElementWidgetPair { element, widget }))
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -104,7 +104,7 @@ where
 }
 
 pub struct ElementWidgetPair<E: Element> {
-    pub element: Arc<ElementNode<E>>,
+    pub element: Arc<ElementNodeOld<E>>,
     pub widget: E::ArcWidget,
 }
 

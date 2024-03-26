@@ -10,7 +10,7 @@ use crate::{
     sync::CommitBarrier,
     tree::{
         no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
-        ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks, Mainline,
+        ElementContextNode, ElementNodeOld, ElementSnapshotOld, ElementSnapshotInner, Hooks, Mainline,
         ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle,
     },
 };
@@ -39,7 +39,7 @@ pub(super) enum TryAsyncRebuild<E: Element> {
     Backqueued,
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -64,7 +64,7 @@ where
             );
             Self {
                 context: Arc::new(element_context),
-                snapshot: SyncMutex::new(ElementSnapshot {
+                snapshot: SyncMutex::new(ElementSnapshotOld {
                     widget,
                     inner: ElementSnapshotInner::AsyncInflating(AsyncInflating {
                         work_context,

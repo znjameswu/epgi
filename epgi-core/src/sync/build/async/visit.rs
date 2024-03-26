@@ -1,9 +1,9 @@
 use crate::{
     foundation::Arc,
-    tree::{Element, ElementNode},
+    tree::{Element, ElementNodeOld},
 };
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {

@@ -4,13 +4,13 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         layer_render_function_table_of, ArcChildElementNode, ArcChildRenderObject,
-        ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf, ElementNode,
+        ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf, ElementNodeOld,
         LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement,
         RenderObjectInnerOld, RenderObjectOld, RenderObjectSlots,
     },
 };
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: RenderElement,
     E::Render: Render<ChildContainer = E::ChildContainer>,
@@ -232,7 +232,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: RenderElement,
     E::Render: Render<ChildContainer = E::ChildContainer>,
@@ -383,7 +383,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: RenderElement,
     E::Render: Render<ChildContainer = E::ChildContainer>,
@@ -441,7 +441,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: RenderElement,
     E::Render: Render<ChildContainer = E::ChildContainer>,

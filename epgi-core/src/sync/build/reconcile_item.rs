@@ -3,7 +3,7 @@ use crate::{
     scheduler::{BuildScheduler, JobId},
     sync::SubtreeRenderObjectChange,
     tree::{
-        ArcChildElementNode, ArcElementContextNode, Element, ElementNode, ElementWidgetPair, Widget,
+        ArcChildElementNode, ArcElementContextNode, Element, ElementNodeOld, ElementWidgetPair, Widget,
     },
 };
 
@@ -75,7 +75,7 @@ where
         ArcChildElementNode<<<T as Widget>::Element as Element>::ParentProtocol>,
         SubtreeRenderObjectChange<<<T as Widget>::Element as Element>::ParentProtocol>,
     ) {
-        let (node, results) = ElementNode::<<T as Widget>::Element>::inflate_node_sync(
+        let (node, results) = ElementNodeOld::<<T as Widget>::Element>::inflate_node_sync(
             &self.into_arc_widget(),
             parent_context,
             build_scheduler,

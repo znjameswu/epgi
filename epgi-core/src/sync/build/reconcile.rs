@@ -13,15 +13,15 @@ use crate::{
     sync::{BuildScheduler, SubtreeRenderObjectChange},
     tree::{
         no_widget_update, ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf,
-        AsyncWorkQueue, BuildContext, ContainerOf, Element, ElementContextNode, ElementNode,
-        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline,
+        AsyncWorkQueue, BuildContext, ContainerOf, Element, ElementContextNode, ElementNodeOld,
+        ElementReconcileItem, ElementSnapshotOld, ElementSnapshotInner, HookContext, Hooks, Mainline,
         MainlineState, RenderOrUnit,
     },
 };
 
 use super::CancelAsync;
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -41,16 +41,16 @@ where
         parent_context: ArcElementContextNode,
         build_scheduler: &BuildScheduler,
     ) -> (
-        Arc<ElementNode<E>>,
+        Arc<ElementNodeOld<E>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        let node = Arc::new_cyclic(|weak| ElementNode {
+        let node = Arc::new_cyclic(|weak| ElementNodeOld {
             context: Arc::new(ElementContextNode::new_for::<E>(
                 weak.clone() as _,
                 parent_context,
                 widget,
             )),
-            snapshot: SyncMutex::new(ElementSnapshot {
+            snapshot: SyncMutex::new(ElementSnapshotOld {
                 widget: widget.clone(),
                 inner: ElementSnapshotInner::Mainline(Mainline {
                     state: None,
@@ -108,7 +108,7 @@ enum VisitAction<E: Element> {
     EndOfVisit,
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -684,7 +684,7 @@ pub(crate) mod sync_build_private {
         ) -> ArcAnyElementNode;
     }
 
-    impl<E> AnyElementSyncReconcileExt for ElementNode<E>
+    impl<E> AnyElementSyncReconcileExt for ElementNodeOld<E>
     where
         E: Element,
     {
@@ -708,7 +708,7 @@ pub(crate) mod sync_build_private {
         ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
     }
 
-    impl<E> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNode<E>
+    impl<E> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNodeOld<E>
     where
         E: Element,
     {

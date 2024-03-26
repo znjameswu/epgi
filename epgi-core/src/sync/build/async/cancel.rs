@@ -12,7 +12,7 @@ use crate::{
     sync::BuildScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, ContainerOf, Element, ElementNode, ElementSnapshot,
+        AsyncQueueCurrentEntry, AsyncStash, ContainerOf, Element, ElementNodeOld, ElementSnapshotOld,
         ElementSnapshotInner, Mainline, SubscriptionDiff,
     },
 };
@@ -32,7 +32,7 @@ pub(in super::super) struct RemoveAsync<E: Element> {
     start: Option<AsyncRebuild<E>>,
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -132,7 +132,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -170,7 +170,7 @@ where
 
     pub(super) fn prepare_remove_async_work(
         self: &Arc<Self>,
-        snapshot: &mut ElementSnapshot<E>,
+        snapshot: &mut ElementSnapshotOld<E>,
         lane_pos: LanePos,
     ) -> RemoveAsync<E> {
         match &mut snapshot.inner {
@@ -200,7 +200,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -229,7 +229,7 @@ where
     }
 
     pub(super) fn prepare_purge_async_work(
-        snapshot: &mut ElementSnapshot<E>,
+        snapshot: &mut ElementSnapshotOld<E>,
         lane_pos: LanePos,
     ) -> Result<
         CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
@@ -381,7 +381,7 @@ where
     }
 }
 
-impl<E> ElementNode<E>
+impl<E> ElementNodeOld<E>
 where
     E: Element,
 {
@@ -456,7 +456,7 @@ pub(crate) mod cancel_private {
         fn purge_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos);
     }
 
-    impl<E> AnyElementNodeAsyncCancelExt for ElementNode<E>
+    impl<E> AnyElementNodeAsyncCancelExt for ElementNodeOld<E>
     where
         E: Element,
     {

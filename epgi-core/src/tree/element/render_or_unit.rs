@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf,
-    Element, ElementNode, RenderElement,
+    Element, ElementNodeOld, RenderElement,
 };
 
 pub trait RenderOrUnit<E: Element> {
@@ -16,7 +16,7 @@ pub trait RenderOrUnit<E: Element> {
     const RENDER_ELEMENT_FUNCTION_TABLE: RenderElementFunctionTable<E>;
 
     fn visit_commit(
-        element_node: &ElementNode<E>,
+        element_node: &ElementNodeOld<E>,
         render_object: Option<Self::ArcRenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
@@ -103,7 +103,7 @@ where
 
     #[inline(always)]
     fn visit_commit(
-        element_node: &ElementNode<E>,
+        element_node: &ElementNodeOld<E>,
         render_object: Option<Self::ArcRenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
@@ -127,7 +127,7 @@ where
         Option<Self::ArcRenderObject>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        ElementNode::<E>::rebuild_success_commit(
+        ElementNodeOld::<E>::rebuild_success_commit(
             element,
             widget,
             shuffle,
@@ -142,7 +142,7 @@ where
     fn rebuild_suspend_commit(
         render_object: Option<Self::ArcRenderObject>,
     ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
-        ElementNode::<E>::rebuild_suspend_commit(render_object)
+        ElementNodeOld::<E>::rebuild_suspend_commit(render_object)
     }
 
     #[inline(always)]
@@ -155,7 +155,7 @@ where
         Option<Self::ArcRenderObject>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        ElementNode::<E>::inflate_success_commit(
+        ElementNodeOld::<E>::inflate_success_commit(
             element,
             widget,
             element_context,
@@ -185,7 +185,7 @@ where
 
     #[inline(always)]
     fn visit_commit(
-        _element_node: &ElementNode<E>,
+        _element_node: &ElementNodeOld<E>,
         _render_object: Option<Never>,
         [change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
         _self_rebuild_suspended: bool,
@@ -245,7 +245,7 @@ where
         };
 
     fn visit_commit(
-        element_node: &ElementNode<SuspenseElement<P>>,
+        element_node: &ElementNodeOld<SuspenseElement<P>>,
         render_object: Option<Self::ArcRenderObject>,
         render_object_changes: ContainerOf<SuspenseElement<P>, SubtreeRenderObjectChange<P>>,
         self_rebuild_suspended: bool,

@@ -2,7 +2,7 @@ use crate::{
     foundation::{Arc, Asc, Protocol},
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, ChildElementWidgetPair, Element, ElementNode, ElementWidgetPair,
+        ArcElementContextNode, ChildElementWidgetPair, Element, ElementNodeOld, ElementWidgetPair,
         Widget, Work, WorkContext, WorkHandle,
     },
 };
@@ -74,7 +74,7 @@ where
         barrier: CommitBarrier,
         handle: WorkHandle,
     ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as Element>::ParentProtocol>> {
-        let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
+        let node = ElementNodeOld::<<T as Widget>::Element>::new_async_uninflated(
             self.clone().into_arc_widget(),
             work_context,
             parent_context,

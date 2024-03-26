@@ -6,6 +6,9 @@ mod provider;
 mod render_or_unit;
 mod snapshot;
 
+mod snapshot_new;
+pub use snapshot_new::*;
+
 pub use async_queue::*;
 pub use context::*;
 pub use mark::*;
@@ -27,7 +30,7 @@ use crate::{
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
     ChildElementWidgetPair, ElementWidgetPair, LayerRender, LayoutCache, LayoutResults, Render,
-    RenderObjectOld,
+    RenderObjectOld, TreeNode,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -46,6 +49,15 @@ pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
     ) -> ContainerOf<E, RenderObjectSlots<E::ChildProtocol>>,
 >;
 
+#[allow(type_alias_bounds)]
+pub type ChildRenderObjectsUpdateCallbackNew<E: Element> = Box<
+    dyn FnOnce(
+        <E::ChildContainer as HktContainer>::Container<ArcChildRenderObject<E::ChildProtocol>>,
+    ) -> <E::ChildContainer as HktContainer>::Container<
+        RenderObjectSlots<E::ChildProtocol>,
+    >,
+>;
+
 pub enum ElementReconcileItem<P: Protocol> {
     Keep(ArcChildElementNode<P>),
     Update(Box<dyn ChildElementWidgetPair<P>>),
@@ -57,7 +69,7 @@ where
     CP: Protocol,
 {
     pub fn new_update<E: Element<ParentProtocol = CP>>(
-        element: Arc<ElementNode<E>>,
+        element: Arc<ElementNodeOld<E>>,
         widget: E::ArcWidget,
     ) -> Self {
         Self::Update(Box::new(ElementWidgetPair { element, widget }))
@@ -80,21 +92,18 @@ pub enum RenderObjectSlots<P: Protocol> {
 #[allow(type_alias_bounds)]
 pub type ContainerOf<E: Element, T> = <E::ChildContainer as HktContainer>::Container<T>;
 
-pub trait Element: Send + Sync + Clone + 'static {
-    type ArcWidget: ArcWidget<Element = Self>; //<Element = Self>;
-    type ParentProtocol: Protocol;
-    type ChildProtocol: Protocol;
+pub trait HasArcWidget {
+    type ArcWidget: ArcWidget;
+}
 
-    type ChildContainer: HktContainer;
+pub trait Element: TreeNode + HasArcWidget + Sized {
+    type ElementNode;
 
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
     fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
         &[]
     }
-
-    type Provided: Provide;
-    const GET_PROVIDED_VALUE: Option<fn(&Self::ArcWidget) -> Arc<Self::Provided>> = None;
 
     // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
     // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
@@ -105,15 +114,21 @@ pub trait Element: Send + Sync + Clone + 'static {
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        children: <Self::ChildContainer as HktContainer>::Container<
+            ArcChildElementNode<Self::ChildProtocol>,
+        >,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
     ) -> Result<
         (
-            ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
-            Option<ChildRenderObjectsUpdateCallback<Self>>,
+            <Self::ChildContainer as HktContainer>::Container<
+                ElementReconcileItem<Self::ChildProtocol>,
+            >,
+            Option<ChildRenderObjectsUpdateCallbackNew<Self>>,
         ),
         (
-            ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+            <Self::ChildContainer as HktContainer>::Container<
+                ArcChildElementNode<Self::ChildProtocol>,
+            >,
             BuildSuspendedError,
         ),
     >;
@@ -122,72 +137,143 @@ pub trait Element: Send + Sync + Clone + 'static {
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
-
-    // A workaround for specialization.
-    // This is designed in such a way that we do not need to lock the mutex to know whether a render object is present.
-    // Rust const is inlined, so we can safely expect that no actual function pointers will occur in binary causing indirection.
-    // const GET_RENDER_OBJECT: GetRenderObject<Self>;
-    type RenderOrUnit: RenderOrUnit<Self>;
+    ) -> Result<
+        (
+            Self,
+            <Self::ChildContainer as HktContainer>::Container<ArcChildWidget<Self::ChildProtocol>>,
+        ),
+        BuildSuspendedError,
+    >;
 }
 
-pub trait RenderElement: Element<RenderOrUnit = <Self as RenderElement>::Render> {
-    type Render: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>;
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
-    /// Update necessary properties of render object given by the widget
-    ///
-    /// Called during the commit phase, when the widget is updated.
-    /// Always called after [RenderElement::try_update_render_object_children].
-    /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(render_object: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
-
-    /// Whether [Render::update_render_object] is a no-op and always returns None
-    ///
-    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
-
-    fn element_render_children_mapping<T: Send + Sync>(
-        &self,
-        element_children: <Self::ChildContainer as HktContainer>::Container<T>,
-    ) -> <<Self::Render as Render>::ChildContainer as HktContainer>::Container<T>;
-
-    /// BUG: Somehow rustdoc breaks on this item
-    #[doc(hidden)]
-    const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> = None;
+pub trait ProvideElement: TreeNode + HasArcWidget {
+    type Provided: Provide;
+    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
 }
 
-pub struct SuspenseElementFunctionTable<E: Element> {
-    pub(crate) get_suspense_element_mut: fn(&mut E) -> &mut SuspenseElement<E::ChildProtocol>,
-    pub(crate) get_suspense_widget_ref: fn(&E::ArcWidget) -> &Suspense<E::ParentProtocol>,
-    pub(crate) get_suspense_render_object:
-        fn(ArcRenderObjectOf<E>) -> Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>,
-    pub(crate) into_arc_render_object:
-        fn(Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>) -> ArcRenderObjectOf<E>,
+pub trait RenderElement: TreeNode + HasArcWidget {
+    type Render: Render<
+        ParentProtocol = Self::ParentProtocol,
+        ChildProtocol = Self::ChildProtocol,
+        ChildContainer = Self::ChildContainer,
+    >;
 }
 
-pub struct ElementNode<E: Element> {
+// pub trait ElementOld: Send + Sync + Clone + 'static {
+//     type ArcWidget: ArcWidget<Element = Self>; //<Element = Self>;
+//     type ParentProtocol: Protocol;
+//     type ChildProtocol: Protocol;
+
+//     type ChildContainer: HktContainer;
+
+//     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
+//     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
+//     fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
+//         &[]
+//     }
+
+//     type Provided: Provide;
+//     const GET_PROVIDED_VALUE: Option<fn(&Self::ArcWidget) -> Arc<Self::Provided>> = None;
+
+//     // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
+//     // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
+//     /// If a hook suspended, then the untouched Self should be returned along with the suspended error
+//     /// If nothing suspended, then the new Self should be returned.
+//     fn perform_rebuild_element(
+//         &mut self,
+//         widget: &Self::ArcWidget,
+//         ctx: BuildContext<'_>,
+//         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+//         children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+//         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+//     ) -> Result<
+//         (
+//             ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
+//             Option<ChildRenderObjectsUpdateCallback<Self>>,
+//         ),
+//         (
+//             ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+//             BuildSuspendedError,
+//         ),
+//     >;
+
+//     fn perform_inflate_element(
+//         widget: &Self::ArcWidget,
+//         ctx: BuildContext<'_>,
+//         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+//     ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
+
+//     // A workaround for specialization.
+//     // This is designed in such a way that we do not need to lock the mutex to know whether a render object is present.
+//     // Rust const is inlined, so we can safely expect that no actual function pointers will occur in binary causing indirection.
+//     // const GET_RENDER_OBJECT: GetRenderObject<Self>;
+//     type RenderOrUnit: RenderOrUnit<Self>;
+// }
+
+// pub trait RenderElement: Element<RenderOrUnit = <Self as RenderElement>::Render> {
+//     type Render: Render<ParentProtocol = Self::ParentProtocol, ChildProtocol = Self::ChildProtocol>;
+//     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
+//     /// Update necessary properties of render object given by the widget
+//     ///
+//     /// Called during the commit phase, when the widget is updated.
+//     /// Always called after [RenderElement::try_update_render_object_children].
+//     /// If that call failed to update children (indicating suspense), then this call will be skipped.
+//     fn update_render(render_object: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
+
+//     /// Whether [Render::update_render_object] is a no-op and always returns None
+//     ///
+//     /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+//     /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+//     /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+//     ///
+//     /// Setting to false will always guarantee the correct behavior.
+//     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
+
+//     fn element_render_children_mapping<T: Send + Sync>(
+//         &self,
+//         element_children: <Self::ChildContainer as HktContainer>::Container<T>,
+//     ) -> <<Self::Render as Render>::ChildContainer as HktContainer>::Container<T>;
+
+//     /// BUG: Somehow rustdoc breaks on this item
+//     #[doc(hidden)]
+//     const SUSPENSE_ELEMENT_FUNCTION_TABLE: Option<SuspenseElementFunctionTable<Self>> = None;
+// }
+
+// pub struct SuspenseElementFunctionTable<E: Element> {
+//     pub(crate) get_suspense_element_mut: fn(&mut E) -> &mut SuspenseElement<E::ChildProtocol>,
+//     pub(crate) get_suspense_widget_ref: fn(&E::ArcWidget) -> &Suspense<E::ParentProtocol>,
+//     pub(crate) get_suspense_render_object:
+//         fn(ArcRenderObjectOf<E>) -> Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>,
+//     pub(crate) into_arc_render_object:
+//         fn(Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>) -> ArcRenderObjectOf<E>,
+// }
+
+pub trait SelectArcRenderObject<const RENDER_ELEMENT: bool> {
+    type OptionArcRenderObject;
+}
+
+pub struct ElementNode<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+where
+    E: Element + SelectArcRenderObject<RENDER_ELEMENT>,
+{
     pub context: ArcElementContextNode,
-    pub(crate) snapshot: SyncMutex<ElementSnapshot<E>>,
+    pub(crate) snapshot: SyncMutex<ElementSnapshot<E, E::OptionArcRenderObject>>,
 }
 
-pub(crate) struct ElementSnapshot<E: Element> {
+pub(crate) struct ElementSnapshot<E: Element, R> {
     pub(crate) widget: E::ArcWidget,
     // pub(super) subtree_suspended: bool,
-    pub(crate) inner: ElementSnapshotInner<E>,
+    pub(crate) inner: ElementSnapshotInner<E, R>,
 }
 
-impl<E> ElementNode<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ElementNode<E>
 where
-    E: Element,
+    E: Element + SelectArcRenderObject<RENDER_ELEMENT>,
 {
     pub(super) fn new(
         context: ArcElementContextNode,
         widget: E::ArcWidget,
-        inner: ElementSnapshotInner<E>,
+        inner: ElementSnapshotInner<E, E::OptionArcRenderObject>,
     ) -> Self {
         Self {
             context,
@@ -240,7 +326,7 @@ pub trait ChildElementNode<PP: Protocol>:
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
 }
 
-impl<E> ChildElementNode<E::ParentProtocol> for ElementNode<E>
+impl<E> ChildElementNode<E::ParentProtocol> for ElementNodeOld<E>
 where
     E: Element,
 {
@@ -262,7 +348,7 @@ where
             ArcChildWidget<E::ParentProtocol>,
         ),
     > {
-        ElementNode::<E>::can_rebuild_with(self, widget)
+        ElementNodeOld::<E>::can_rebuild_with(self, widget)
             .map_err(|(element, widget)| (element as _, widget))
     }
 
@@ -290,7 +376,7 @@ where
     }
 }
 
-impl<E> AnyElementNode for ElementNode<E>
+impl<E> AnyElementNode for ElementNodeOld<E>
 where
     E: Element,
 {
@@ -350,7 +436,7 @@ pub fn create_root_element<E, R>(
     offset: <E::ParentProtocol as Protocol>::Offset,
     size: <E::ParentProtocol as Protocol>::Size,
     layout_memo: R::LayoutMemo,
-) -> (Arc<ElementNode<E>>, Arc<RenderObjectOld<R>>)
+) -> (Arc<ElementNodeOld<E>>, Arc<RenderObjectOld<R>>)
 where
     E: RenderElement<Render = R>,
     R: Render<
@@ -386,9 +472,9 @@ where
                 ));
         }
         render_object.mark.set_parent_not_use_size::<R>();
-        ElementNode {
+        ElementNodeOld {
             context: element_context,
-            snapshot: SyncMutex::new(ElementSnapshot {
+            snapshot: SyncMutex::new(ElementSnapshotOld {
                 widget,
                 inner: ElementSnapshotInner::Mainline(Mainline {
                     state: Some(MainlineState::Ready {

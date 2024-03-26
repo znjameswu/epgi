@@ -10,7 +10,7 @@ use epgi_core::{
     scheduler::{
         get_current_scheduler, setup_scheduler, BuildScheduler, Scheduler, SchedulerHandle,
     },
-    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObjectOld},
+    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNodeOld, Hooks, RenderObjectOld},
 };
 use std::{
     num::NonZeroUsize,
@@ -304,7 +304,7 @@ impl<'a> MainState<'a> {
 }
 
 fn initialize_root() -> (
-    Arc<ElementNode<RootElement>>,
+    Arc<ElementNodeOld<RootElement>>,
     Arc<RenderObjectOld<RenderRoot>>,
     SetState<Option<Arc<dyn ChildWidget<BoxProtocol>>>>,
 ) {

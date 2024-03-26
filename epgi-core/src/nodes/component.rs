@@ -7,7 +7,7 @@ use crate::{
     },
     tree::{
         ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, Widget, WidgetExt,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, Widget, WidgetExt, ElementOld,
     },
 };
 
@@ -45,7 +45,7 @@ where
 #[derive(Default, Clone)]
 pub struct ComponentElement<P: Protocol>(PhantomData<P>);
 
-impl<P> Element for ComponentElement<P>
+impl<P> ElementOld for ComponentElement<P>
 where
     P: Protocol,
 {
@@ -126,7 +126,7 @@ where
 
     type Element = ComponentElement<P>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementOld>::ArcWidget {
         self
     }
 }
