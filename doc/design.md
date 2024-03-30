@@ -798,3 +798,6 @@ Decision: short-lived
 
 # Should paint really be a pure function without effects?
 Difficulties has been encountered during hit-test due to the lack of cached protocol transform received inside painting.
+
+Decision: let paint leave a offset cache.
+
