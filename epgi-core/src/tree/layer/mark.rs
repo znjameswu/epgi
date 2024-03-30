@@ -8,6 +8,12 @@ pub struct LayerMark {
     // pub(crate) subtree_has_composite: AtomicBool,
 }
 
+impl Default for LayerMark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LayerMark {
     pub(crate) fn new() -> Self {
         Self {

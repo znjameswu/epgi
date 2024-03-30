@@ -13,6 +13,6 @@ pub use vello_integrations::*;
 mod affine;
 pub use affine::*;
 
-use epgi_core::nodes::Provider;
+// use epgi_core::nodes::Provider;
 
-pub type BoxProvider<T> = Provider<T, BoxProtocol>;
+// pub type BoxProvider<T> = Provider<T, BoxProtocol>;

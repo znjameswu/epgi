@@ -6,13 +6,13 @@ use crate::{
     scheduler::BuildScheduler,
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
-        ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ElementNodeOld,
+        ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, ElementNode,
         MainlineState, RenderAction, RenderObjectOld,
     },
 };
 
 pub(crate) fn suspense_visit_commit<'a, 'batch, P: Protocol>(
-    node: &ElementNodeOld<SuspenseElement<P>>,
+    node: &ElementNode<SuspenseElement<P>>,
     render_object: Option<Arc<RenderObjectOld<RenderSuspense<P>>>>,
     render_object_changes: EitherParallel<
         [SubtreeRenderObjectChange<P>; 1],

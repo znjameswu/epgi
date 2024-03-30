@@ -1,9 +1,11 @@
 use crate::{
     foundation::{Arc, Inlinable64Vec, Protocol},
     scheduler::{BuildScheduler, JobId},
+    sync::build::reconcile::ImplElementNodeSyncReconcile,
     sync::SubtreeRenderObjectChange,
     tree::{
-        ArcChildElementNode, ArcElementContextNode, Element, ElementNodeOld, ElementWidgetPair, Widget,
+        ArcChildElementNode, ArcElementContextNode, Element, ElementNode, ElementWidgetPair,
+        TreeNode, Widget,
     },
 };
 
@@ -63,7 +65,7 @@ pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
     ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
 }
 
-impl<T> ChildWidgetSyncInflateExt<<<T as Widget>::Element as Element>::ParentProtocol> for T
+impl<T> ChildWidgetSyncInflateExt<<<T as Widget>::Element as TreeNode>::ParentProtocol> for T
 where
     T: Widget,
 {
@@ -72,10 +74,10 @@ where
         parent_context: ArcElementContextNode,
         build_scheduler: &BuildScheduler,
     ) -> (
-        ArcChildElementNode<<<T as Widget>::Element as Element>::ParentProtocol>,
-        SubtreeRenderObjectChange<<<T as Widget>::Element as Element>::ParentProtocol>,
+        ArcChildElementNode<<<T as Widget>::Element as TreeNode>::ParentProtocol>,
+        SubtreeRenderObjectChange<<<T as Widget>::Element as TreeNode>::ParentProtocol>,
     ) {
-        let (node, results) = ElementNodeOld::<<T as Widget>::Element>::inflate_node_sync(
+        let (node, results) = <<T as Widget>::Element as Element>::ElementNode::inflate_node_sync(
             &self.into_arc_widget(),
             parent_context,
             build_scheduler,

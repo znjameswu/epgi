@@ -19,18 +19,19 @@ pub use snapshot::*;
 
 use crate::{
     foundation::{
-        Arc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec, LayerProtocol, Protocol,
-        Provide, PtrEq, SyncMutex, TypeKey,
+        Arc, ArrayContainer, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec,
+        LayerProtocol, Protocol, Provide, PtrEq, SyncMutex, TypeKey,
     },
-    nodes::{RenderSuspense, Suspense, SuspenseElement},
+    // nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
+    sync::{ImplElementNodeSyncReconcile, SelectReconcileImpl},
     tree::RenderAction,
 };
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
     ChildElementWidgetPair, ElementWidgetPair, LayerRender, LayoutCache, LayoutResults, Render,
-    RenderObjectOld, TreeNode,
+    RenderNew, RenderObjectOld, TreeNode,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -43,7 +44,7 @@ pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
 /// However, we designate Suspense to be the only component to have different containers,
 /// which will be handled by Suspense's specialized function pointers.
 #[allow(type_alias_bounds)]
-pub type ChildRenderObjectsUpdateCallback<E: Element> = Box<
+pub type ChildRenderObjectsUpdateCallback<E: TreeNode> = Box<
     dyn FnOnce(
         ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
     ) -> ContainerOf<E, RenderObjectSlots<E::ChildProtocol>>,
@@ -69,10 +70,10 @@ where
     CP: Protocol,
 {
     pub fn new_update<E: Element<ParentProtocol = CP>>(
-        element: Arc<ElementNodeOld<E>>,
+        element: Arc<E::ElementNode>,
         widget: E::ArcWidget,
     ) -> Self {
-        Self::Update(Box::new(ElementWidgetPair { element, widget }))
+        Self::Update(Box::new(ElementWidgetPair::<E> { element, widget }))
     }
 
     pub fn new_inflate(widget: ArcChildWidget<CP>) -> Self {
@@ -90,14 +91,18 @@ pub enum RenderObjectSlots<P: Protocol> {
 }
 
 #[allow(type_alias_bounds)]
-pub type ContainerOf<E: Element, T> = <E::ChildContainer as HktContainer>::Container<T>;
+pub type ContainerOf<E: TreeNode, T> = <E::ChildContainer as HktContainer>::Container<T>;
 
 pub trait HasArcWidget {
-    type ArcWidget: ArcWidget;
+    type ArcWidget: ArcWidget<Element = Self>;
 }
 
-pub trait Element: TreeNode + HasArcWidget + Sized {
-    type ElementNode;
+pub trait Element: TreeNode + HasArcWidget + Clone + Sized + 'static {
+    type ElementNode: ChildElementNode<Self::ParentProtocol>
+        + ImplElementNodeSyncReconcile<Self>
+        + Send
+        + Sync
+        + 'static;
 
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
@@ -114,21 +119,15 @@ pub trait Element: TreeNode + HasArcWidget + Sized {
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: <Self::ChildContainer as HktContainer>::Container<
-            ArcChildElementNode<Self::ChildProtocol>,
-        >,
+        children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
     ) -> Result<
         (
-            <Self::ChildContainer as HktContainer>::Container<
-                ElementReconcileItem<Self::ChildProtocol>,
-            >,
+            ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
             Option<ChildRenderObjectsUpdateCallbackNew<Self>>,
         ),
         (
-            <Self::ChildContainer as HktContainer>::Container<
-                ArcChildElementNode<Self::ChildProtocol>,
-            >,
+            ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
             BuildSuspendedError,
         ),
     >;
@@ -137,13 +136,7 @@ pub trait Element: TreeNode + HasArcWidget + Sized {
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<
-        (
-            Self,
-            <Self::ChildContainer as HktContainer>::Container<ArcChildWidget<Self::ChildProtocol>>,
-        ),
-        BuildSuspendedError,
-    >;
+    ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
 }
 
 pub trait ProvideElement: TreeNode + HasArcWidget {
@@ -151,12 +144,36 @@ pub trait ProvideElement: TreeNode + HasArcWidget {
     fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
 }
 
-pub trait RenderElement: TreeNode + HasArcWidget {
-    type Render: Render<
+pub trait RenderElement:
+    TreeNode
+    + HasArcWidget
+    + SelectArcRenderObject<
+        true,
+        OptionArcRenderObject = Option<Arc<<Self::Render as RenderNew>::RenderObject>>,
+    >
+{
+    type Render: RenderNew<
         ParentProtocol = Self::ParentProtocol,
         ChildProtocol = Self::ChildProtocol,
         ChildContainer = Self::ChildContainer,
     >;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
+    /// Update necessary properties of render object given by the widget
+    ///
+    /// Called during the commit phase, when the widget is updated.
+    /// Always called after [RenderElement::try_update_render_object_children].
+    /// If that call failed to update children (indicating suspense), then this call will be skipped.
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
+
+    /// Whether [Render::update_render_object] is a no-op and always returns None
+    ///
+    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior.
+    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 }
 
 // pub trait ElementOld: Send + Sync + Clone + 'static {
@@ -248,13 +265,107 @@ pub trait RenderElement: TreeNode + HasArcWidget {
 //         fn(Arc<RenderObjectOld<RenderSuspense<E::ParentProtocol>>>) -> ArcRenderObjectOf<E>,
 // }
 
-pub trait SelectArcRenderObject<const RENDER_ELEMENT: bool> {
-    type OptionArcRenderObject;
+pub trait SelectArcRenderObject<const RENDER_ELEMENT: bool>: TreeNode {
+    type OptionArcRenderObject: Default + Clone + Send + Sync;
+
+    fn get_current_subtree_render_object(
+        render_object: &Self::OptionArcRenderObject,
+        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>>;
+}
+
+impl<E> SelectArcRenderObject<false> for E
+where
+    E: TreeNode<ChildContainer = ArrayContainer<1>, ChildProtocol = Self::ParentProtocol>,
+{
+    type OptionArcRenderObject = ();
+
+    fn get_current_subtree_render_object(
+        render_object: &Self::OptionArcRenderObject,
+        [child]: &[ArcChildElementNode<Self::ChildProtocol>; 1],
+    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
+        child.get_current_subtree_render_object()
+    }
+}
+
+impl<E> SelectArcRenderObject<true> for E
+where
+    E: RenderElement,
+{
+    type OptionArcRenderObject = Option<Arc<<E::Render as RenderNew>::RenderObject>>;
+
+    fn get_current_subtree_render_object(
+        render_object: &Self::OptionArcRenderObject,
+        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.clone() as _)
+    }
+}
+
+pub trait SelectProvideElement<const PROVIDE_ELEMENT: bool>: HasArcWidget {
+    fn option_get_provided_key_value_pair(
+        widget: &Self::ArcWidget,
+    ) -> Option<(Arc<dyn Provide>, TypeKey)>;
+
+    fn diff_provided_value(
+        old_widget: &Self::ArcWidget,
+        new_widget: &Self::ArcWidget,
+    ) -> Option<Arc<dyn Provide>>;
+}
+
+impl<E> SelectProvideElement<false> for E
+where
+    E: HasArcWidget,
+{
+    #[inline(always)]
+    fn option_get_provided_key_value_pair(
+        widget: &Self::ArcWidget,
+    ) -> Option<(Arc<dyn Provide>, TypeKey)> {
+        None
+    }
+
+    #[inline(always)]
+    fn diff_provided_value(
+        old_widget: &Self::ArcWidget,
+        new_widget: &Self::ArcWidget,
+    ) -> Option<Arc<dyn Provide>> {
+        None
+    }
+}
+
+impl<E> SelectProvideElement<true> for E
+where
+    E: ProvideElement,
+{
+    #[inline(always)]
+    fn option_get_provided_key_value_pair(
+        widget: &Self::ArcWidget,
+    ) -> Option<(Arc<dyn Provide>, TypeKey)> {
+        Some((E::get_provided_value(widget), TypeKey::of::<E::Provided>()))
+    }
+
+    #[inline(always)]
+    fn diff_provided_value(
+        old_widget: &Self::ArcWidget,
+        new_widget: &Self::ArcWidget,
+    ) -> Option<Arc<dyn Provide>> {
+        let old_provided_value = E::get_provided_value(&old_widget);
+        let new_provided_value = E::get_provided_value(new_widget);
+        if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
+            && !old_provided_value.eq_sized(new_provided_value.as_ref())
+        {
+            Some(new_provided_value)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct ElementNode<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
 where
-    E: Element + SelectArcRenderObject<RENDER_ELEMENT>,
+    E: Element<ElementNode = Self> + SelectArcRenderObject<RENDER_ELEMENT>,
 {
     pub context: ArcElementContextNode,
     pub(crate) snapshot: SyncMutex<ElementSnapshot<E, E::OptionArcRenderObject>>,
@@ -266,9 +377,10 @@ pub(crate) struct ElementSnapshot<E: Element, R> {
     pub(crate) inner: ElementSnapshotInner<E, R>,
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ElementNode<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element + SelectArcRenderObject<RENDER_ELEMENT>,
+    E: Element<ElementNode = Self> + SelectArcRenderObject<RENDER_ELEMENT>,
 {
     pub(super) fn new(
         context: ArcElementContextNode,
@@ -326,9 +438,13 @@ pub trait ChildElementNode<PP: Protocol>:
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
 }
 
-impl<E> ChildElementNode<E::ParentProtocol> for ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ChildElementNode<E::ParentProtocol>
+    for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
     fn context(&self) -> &ElementContextNode {
         self.context.as_ref()
@@ -348,8 +464,7 @@ where
             ArcChildWidget<E::ParentProtocol>,
         ),
     > {
-        ElementNodeOld::<E>::can_rebuild_with(self, widget)
-            .map_err(|(element, widget)| (element as _, widget))
+        Self::can_rebuild_with(self, widget).map_err(|(element, widget)| (element as _, widget))
     }
 
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
@@ -364,21 +479,17 @@ where
             return None;
         };
 
-        match render_element_function_table_of::<E>() {
-            RenderElementFunctionTable::RenderObject {
-                into_arc_child_render_object,
-                ..
-            } => render_object.clone().map(into_arc_child_render_object),
-            RenderElementFunctionTable::None { as_child, .. } => {
-                as_child(children).get_current_subtree_render_object()
-            }
-        }
+        E::get_current_subtree_render_object(render_object, children)
     }
 }
 
-impl<E> AnyElementNode for ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> AnyElementNode
+    for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode {
         self
@@ -389,26 +500,27 @@ where
     }
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
-        let RenderElementFunctionTable::RenderObject {
-            into_arc_child_render_object,
-            ..
-        } = render_element_function_table_of::<E>()
-        else {
-            return Err("Render object call should not be called on an Element type that does not associate with a render object");
-        };
-        let snapshot = self.snapshot.lock();
-        let Some(Mainline {
-            state:
-                Some(MainlineState::Ready {
-                    render_object: Some(render_object),
-                    ..
-                }),
-            ..
-        }) = snapshot.inner.mainline_ref()
-        else {
-            return Err("Render object call should only be called on element nodes that are ready and attached");
-        };
-        Ok(into_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
+        todo!()
+        // let RenderElementFunctionTable::RenderObject {
+        //     into_arc_child_render_object,
+        //     ..
+        // } = render_element_function_table_of::<E>()
+        // else {
+        //     return Err("Render object call should not be called on an Element type that does not associate with a render object");
+        // };
+        // let snapshot = self.snapshot.lock();
+        // let Some(Mainline {
+        //     state:
+        //         Some(MainlineState::Ready {
+        //             render_object: Some(render_object),
+        //             ..
+        //         }),
+        //     ..
+        // }) = snapshot.inner.mainline_ref()
+        // else {
+        //     return Err("Render object call should only be called on element nodes that are ready and attached");
+        // };
+        // Ok(into_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
     }
 }
 
@@ -423,73 +535,73 @@ pub(crate) fn no_widget_update<E: Element>(
     return true;
 }
 
-pub fn create_root_element<E, R>(
-    widget: E::ArcWidget,
-    element: E,
-    element_children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-    render: R,
-    render_children: <R::ChildContainer as HktContainer>::Container<
-        ArcChildRenderObject<E::ChildProtocol>,
-    >,
-    hooks: Hooks,
-    constraints: <E::ParentProtocol as Protocol>::Constraints,
-    offset: <E::ParentProtocol as Protocol>::Offset,
-    size: <E::ParentProtocol as Protocol>::Size,
-    layout_memo: R::LayoutMemo,
-) -> (Arc<ElementNodeOld<E>>, Arc<RenderObjectOld<R>>)
-where
-    E: RenderElement<Render = R>,
-    R: Render<
-        ChildContainer = E::ChildContainer,
-        ParentProtocol = E::ParentProtocol,
-        ChildProtocol = E::ChildProtocol,
-    >,
-    R: LayerRender,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
-{
-    let mut render_object_built = None;
-    let render_object_built_mut = &mut render_object_built;
-    let element_node = Arc::new_cyclic(move |node| {
-        let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
-        // let render = R::try_create_render_object_from_element(&element, &widget)
-        //     .expect("Root render object creation should always be successfully");
-        let render_object = Arc::new(RenderObjectOld::new(
-            render,
-            render_children,
-            element_context.clone(),
-        ));
-        *render_object_built_mut = Some(render_object.clone());
-        {
-            render_object
-                .inner
-                .lock()
-                .cache
-                .insert_layout_cache(LayoutCache::new(
-                    LayoutResults::new(constraints, size, layout_memo),
-                    Some(offset),
-                    None,
-                ));
-        }
-        render_object.mark.set_parent_not_use_size::<R>();
-        ElementNodeOld {
-            context: element_context,
-            snapshot: SyncMutex::new(ElementSnapshotOld {
-                widget,
-                inner: ElementSnapshotInner::Mainline(Mainline {
-                    state: Some(MainlineState::Ready {
-                        element,
-                        children: element_children,
-                        hooks,
-                        render_object: Some(render_object),
-                    }),
-                    async_queue: AsyncWorkQueue::new_empty(),
-                }),
-            }),
-        }
-    });
-    (
-        element_node,
-        render_object_built.expect("Impossible to fail"),
-    )
-}
+// pub fn create_root_element<E, R>(
+//     widget: E::ArcWidget,
+//     element: E,
+//     element_children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+//     render: R,
+//     render_children: <R::ChildContainer as HktContainer>::Container<
+//         ArcChildRenderObject<E::ChildProtocol>,
+//     >,
+//     hooks: Hooks,
+//     constraints: <E::ParentProtocol as Protocol>::Constraints,
+//     offset: <E::ParentProtocol as Protocol>::Offset,
+//     size: <E::ParentProtocol as Protocol>::Size,
+//     layout_memo: R::LayoutMemo,
+// ) -> (Arc<ElementNode<E>>, Arc<RenderObjectOld<R>>)
+// where
+//     E: RenderElement<Render = R>,
+//     R: Render<
+//         ChildContainer = E::ChildContainer,
+//         ParentProtocol = E::ParentProtocol,
+//         ChildProtocol = E::ChildProtocol,
+//     >,
+//     R: LayerRender,
+//     R::ChildProtocol: LayerProtocol,
+//     R::ParentProtocol: LayerProtocol,
+// {
+//     let mut render_object_built = None;
+//     let render_object_built_mut = &mut render_object_built;
+//     let element_node = Arc::new_cyclic(move |node| {
+//         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
+//         // let render = R::try_create_render_object_from_element(&element, &widget)
+//         //     .expect("Root render object creation should always be successfully");
+//         let render_object = Arc::new(RenderObjectOld::new(
+//             render,
+//             render_children,
+//             element_context.clone(),
+//         ));
+//         *render_object_built_mut = Some(render_object.clone());
+//         {
+//             render_object
+//                 .inner
+//                 .lock()
+//                 .cache
+//                 .insert_layout_cache(LayoutCache::new(
+//                     LayoutResults::new(constraints, size, layout_memo),
+//                     Some(offset),
+//                     None,
+//                 ));
+//         }
+//         render_object.mark.set_parent_not_use_size::<R>();
+//         ElementNode {
+//             context: element_context,
+//             snapshot: SyncMutex::new(ElementSnapshot {
+//                 widget,
+//                 inner: ElementSnapshotInner::Mainline(Mainline {
+//                     state: Some(MainlineState::Ready {
+//                         element,
+//                         children: element_children,
+//                         hooks,
+//                         render_object: Some(render_object),
+//                     }),
+//                     async_queue: AsyncWorkQueue::new_empty(),
+//                 }),
+//             }),
+//         }
+//     });
+//     (
+//         element_node,
+//         render_object_built.expect("Impossible to fail"),
+//     )
+// }

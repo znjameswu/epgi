@@ -23,7 +23,21 @@ struct ProviderObjectInner {
 }
 
 impl ProviderObject {
-    pub(crate) fn new<T: Provide>(value: Arc<T>) -> Self {
+    // pub(crate) fn new<T: Provide>(value: Arc<T>) -> Self {
+    //     Self {
+    //         value: SyncRwLock::new(value),
+    //         inner: SyncMutex::new(ProviderObjectInner {
+    //             consumers: Default::default(),
+    //             occupation: AsyncProviderOccupation::Reading {
+    //                 new_readers: Default::default(),
+    //                 backqueue_writer: None,
+    //             },
+    //         }),
+    //         type_key: TypeKey::of::<T>(),
+    //     }
+    // }
+
+    pub(crate) fn new(value: Arc<dyn Provide>, type_key: TypeKey) -> Self {
         Self {
             value: SyncRwLock::new(value),
             inner: SyncMutex::new(ProviderObjectInner {
@@ -33,7 +47,7 @@ impl ProviderObject {
                     backqueue_writer: None,
                 },
             }),
-            type_key: TypeKey::of::<T>(),
+            type_key,
         }
     }
     pub(crate) fn get_value(&self) -> Arc<dyn Provide> {

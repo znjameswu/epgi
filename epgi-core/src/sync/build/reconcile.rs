@@ -1,6 +1,6 @@
 pub(crate) mod component_element;
 pub(crate) mod render_element;
-pub(crate) mod suspense_element;
+// pub(crate) mod suspense_element;
 
 use linear_map::LinearMap;
 
@@ -12,20 +12,42 @@ use crate::{
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{BuildScheduler, SubtreeRenderObjectChange},
     tree::{
-        no_widget_update, ArcChildElementNode, ArcElementContextNode, ArcRenderObjectOf,
-        AsyncWorkQueue, BuildContext, ContainerOf, Element, ElementContextNode, ElementNodeOld,
-        ElementReconcileItem, ElementSnapshotOld, ElementSnapshotInner, HookContext, Hooks, Mainline,
-        MainlineState, RenderOrUnit,
+        no_widget_update, ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext,
+        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementContextNode, ElementNode,
+        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext, Hooks, Mainline,
+        MainlineState, SelectArcRenderObject, SelectProvideElement,
     },
 };
 
 use super::CancelAsync;
 
-impl<E> ElementNodeOld<E>
+pub trait ImplElementNodeSyncReconcile<E: Element<ElementNode = Self>>: Sized {
+    fn rebuild_node_sync(
+        self: &Arc<Self>,
+        widget: Option<E::ArcWidget>,
+        job_ids: &Inlinable64Vec<JobId>,
+        scope: &rayon::Scope<'_>,
+        build_scheduler: &BuildScheduler,
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
+
+    fn inflate_node_sync(
+        widget: &E::ArcWidget,
+        parent_context: ArcElementContextNode,
+        build_scheduler: &BuildScheduler,
+    ) -> (
+        Arc<E::ElementNode>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
+    );
+}
+
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElementNodeSyncReconcile<E>
+    for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
-    pub(in super::super) fn rebuild_node_sync(
+    fn rebuild_node_sync(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         job_ids: &Inlinable64Vec<JobId>,
@@ -36,21 +58,21 @@ where
         self.execute_visit(visit_action, job_ids, scope, build_scheduler)
     }
 
-    pub(in super::super) fn inflate_node_sync(
+    fn inflate_node_sync(
         widget: &E::ArcWidget,
         parent_context: ArcElementContextNode,
         build_scheduler: &BuildScheduler,
     ) -> (
-        Arc<ElementNodeOld<E>>,
+        Arc<E::ElementNode>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        let node = Arc::new_cyclic(|weak| ElementNodeOld {
-            context: Arc::new(ElementContextNode::new_for::<E>(
+        let node = Arc::new_cyclic(|weak| ElementNode {
+            context: Arc::new(ElementContextNode::new_for::<E, PROVIDE_ELEMENT>(
                 weak.clone() as _,
                 parent_context,
                 widget,
             )),
-            snapshot: SyncMutex::new(ElementSnapshotOld {
+            snapshot: SyncMutex::new(ElementSnapshot {
                 widget: widget.clone(),
                 inner: ElementSnapshotInner::Mainline(Mainline {
                     state: None,
@@ -77,12 +99,12 @@ where
     }
 }
 
-enum VisitAction<E: Element> {
+enum VisitAction<E: Element, R> {
     Rebuild {
         is_poll: bool,
         old_widget: E::ArcWidget,
         new_widget: Option<E::ArcWidget>,
-        state: MainlineState<E>,
+        state: MainlineState<E, R>,
         cancel_async: Option<CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>>,
     },
     /// Visit is needed when the node itself does not need reconcile, but
@@ -98,25 +120,30 @@ enum VisitAction<E: Element> {
         // we have to write it into the node anyway. Could just lock the mutex
         // We also do not store the widget, because everytime we need to access it, (create render object)
         // we have to write the render object into the node anyway
-        render_object: Option<
-            // This field is needed in case a new descendant render object pops up.
-            ArcRenderObjectOf<E>,
-        >,
+        render_object: R,
+        // render_object: Option<
+        //     // This field is needed in case a new descendant render object pops up.
+        //     ArcRenderObjectOf<E>,
+        // >,
         self_rebuild_suspended: bool,
     },
     /// End-of-visit is triggered when both the node and its descendants (i.e. entire subtree) does not need reconcile
     EndOfVisit,
 }
 
-impl<E> ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
     fn visit_inspect(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         build_scheduler: &BuildScheduler,
-    ) -> VisitAction<E> {
+    ) -> VisitAction<E, E::OptionArcRenderObject> {
         let no_new_widget = widget.is_none();
         let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::Sync);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(LanePos::Sync);
@@ -152,14 +179,14 @@ where
                     children,
                     render_object,
                     ..
-                } => VisitAction::Visit::<E> {
+                } => VisitAction::Visit::<E, E::OptionArcRenderObject> {
                     children: children.map_ref_collect(Clone::clone),
                     render_object: render_object.clone(),
                     self_rebuild_suspended: false,
                 },
                 RebuildSuspended { children, .. } => VisitAction::Visit {
                     children: children.map_ref_collect(Clone::clone),
-                    render_object: None,
+                    render_object: Default::default(),
                     self_rebuild_suspended: true,
                 },
                 InflateSuspended { .. } => {
@@ -218,7 +245,7 @@ where
     #[inline(always)]
     fn execute_visit(
         self: &Arc<Self>,
-        visit_action: VisitAction<E>,
+        visit_action: VisitAction<E, E::OptionArcRenderObject>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
@@ -235,7 +262,7 @@ where
                     });
                 let (_children, render_object_changes) = results.unzip_collect(|x| x);
 
-                return <E::RenderOrUnit as RenderOrUnit<E>>::visit_commit(
+                return E::visit_commit(
                     &self,
                     render_object,
                     render_object_changes,
@@ -308,7 +335,7 @@ where
                             element,
                             children,
                             HookContext::new_rebuild(suspended_hooks),
-                            None,
+                            Default::default(),
                             consumed_values,
                             job_ids,
                             scope,
@@ -346,7 +373,7 @@ where
         mut element: E,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         mut hook_context: HookContext,
-        old_render_object: Option<ArcRenderObjectOf<E>>,
+        old_render_object: E::OptionArcRenderObject,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
@@ -387,17 +414,16 @@ where
                     });
                 let (children, changes) = results.unzip_collect(|x| x);
 
-                let (render_object, change) =
-                    <E::RenderOrUnit as RenderOrUnit<E>>::rebuild_success_commit(
-                        &element,
-                        widget,
-                        shuffle,
-                        &children,
-                        old_render_object,
-                        changes,
-                        &self.context,
-                        is_new_widget,
-                    );
+                let (render_object, change) = E::rebuild_success_commit(
+                    &element,
+                    widget,
+                    shuffle,
+                    &children,
+                    old_render_object,
+                    changes,
+                    &self.context,
+                    is_new_widget,
+                );
                 (
                     MainlineState::Ready {
                         element,
@@ -421,7 +447,7 @@ where
                         children,
                         waker: err.waker,
                     },
-                    <E::RenderOrUnit as RenderOrUnit<E>>::rebuild_suspend_commit(old_render_object),
+                    E::rebuild_suspend_commit(old_render_object),
                 )
             }
         };
@@ -461,12 +487,7 @@ where
                 );
 
                 let (render_object, change) =
-                    <E::RenderOrUnit as RenderOrUnit<E>>::inflate_success_commit(
-                        &element,
-                        widget,
-                        &self.context,
-                        changes,
-                    );
+                    E::inflate_success_commit(&element, widget, &self.context, changes);
 
                 (
                     MainlineState::Ready {
@@ -520,7 +541,7 @@ where
         }
     }
 
-    fn commit_write_element(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_element(self: &Arc<Self>, state: MainlineState<E, E::OptionArcRenderObject>) {
         // Collecting async work is necessary, even if we are inflating!
         // Since it could be an InflateSuspended node and an async batch spawned a secondary root on this node.
         let async_work_needing_start = {
@@ -544,7 +565,10 @@ where
         }
     }
 
-    fn commit_write_element_first_inflate(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_element_first_inflate(
+        self: &Arc<Self>,
+        state: MainlineState<E, E::OptionArcRenderObject>,
+    ) {
         let mut snapshot = self.snapshot.lock();
         let snapshot_reborrow = &mut *snapshot;
         let mainline = snapshot_reborrow
@@ -564,33 +588,27 @@ where
         element_context: &ElementContextNode,
         build_scheduler: &BuildScheduler,
     ) {
-        if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
-            let old_provided_value = get_provided_value(&old_widget);
-            let new_provided_value = get_provided_value(new_widget);
-            if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
-                && !old_provided_value.eq_sized(new_provided_value.as_ref())
-            {
-                let contending_readers = element_context
-                    .provider
-                    .as_ref()
-                    .expect("Element with a provided value should have a provider")
-                    .write_sync(new_provided_value);
+        if let Some(new_provided_value) = E::diff_provided_value(old_widget, new_widget) {
+            let contending_readers = element_context
+                .provider
+                .as_ref()
+                .expect("Element with a provided value should have a provider")
+                .write_sync(new_provided_value);
 
-                contending_readers.non_mainline.par_for_each(
-                    &get_current_scheduler().sync_threadpool,
-                    |(lane_pos, node)| {
-                        let node = node.upgrade().expect("ElementNode should be alive");
-                        node.restart_async_work(lane_pos, build_scheduler)
-                    },
-                );
+            contending_readers.non_mainline.par_for_each(
+                &get_current_scheduler().sync_threadpool,
+                |(lane_pos, node)| {
+                    let node = node.upgrade().expect("ElementNode should be alive");
+                    node.restart_async_work(lane_pos, build_scheduler)
+                },
+            );
 
-                // This is the a operation, we do not fear any inconsistencies caused by cancellation.
-                for reader in contending_readers.mainline {
-                    reader
-                        .upgrade()
-                        .expect("Readers should be alive")
-                        .mark_consumer_root(LanePos::Sync);
-                }
+            // This is the a operation, we do not fear any inconsistencies caused by cancellation.
+            for reader in contending_readers.mainline {
+                reader
+                    .upgrade()
+                    .expect("Readers should be alive")
+                    .mark_consumer_root(LanePos::Sync);
             }
         }
     }
@@ -684,9 +702,13 @@ pub(crate) mod sync_build_private {
         ) -> ArcAnyElementNode;
     }
 
-    impl<E> AnyElementSyncReconcileExt for ElementNodeOld<E>
+    impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> AnyElementSyncReconcileExt
+        for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
     where
-        E: Element,
+        E: Element<ElementNode = Self>
+            + SelectArcRenderObject<RENDER_ELEMENT>
+            + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+            + SelectProvideElement<PROVIDE_ELEMENT>,
     {
         fn visit_and_work_sync_any(
             self: Arc<Self>,
@@ -708,9 +730,14 @@ pub(crate) mod sync_build_private {
         ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
     }
 
-    impl<E> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNodeOld<E>
+    impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+        ChildElementSyncReconcileExt<E::ParentProtocol>
+        for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
     where
-        E: Element,
+        E: Element<ElementNode = Self>
+            + SelectArcRenderObject<RENDER_ELEMENT>
+            + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+            + SelectProvideElement<PROVIDE_ELEMENT>,
     {
         fn visit_and_work_sync(
             self: Arc<Self>,
@@ -725,4 +752,45 @@ pub(crate) mod sync_build_private {
             (self, result)
         }
     }
+}
+
+pub trait SelectReconcileImpl<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>:
+    Element + SelectArcRenderObject<RENDER_ELEMENT>
+{
+    fn visit_commit(
+        element_node: &Self::ElementNode,
+        render_object: Self::OptionArcRenderObject,
+        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+        self_rebuild_suspended: bool,
+        scope: &rayon::Scope<'_>,
+        build_scheduler: &BuildScheduler,
+    ) -> SubtreeRenderObjectChange<Self::ParentProtocol>;
+
+    fn rebuild_success_commit(
+        element: &Self,
+        widget: &Self::ArcWidget,
+        shuffle: Option<ChildRenderObjectsUpdateCallback<Self>>,
+        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        render_object: Self::OptionArcRenderObject,
+        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+        element_context: &ArcElementContextNode,
+        is_new_widget: bool,
+    ) -> (
+        Self::OptionArcRenderObject,
+        SubtreeRenderObjectChange<Self::ParentProtocol>,
+    );
+
+    fn rebuild_suspend_commit(
+        render_object: Self::OptionArcRenderObject,
+    ) -> SubtreeRenderObjectChange<Self::ParentProtocol>;
+
+    fn inflate_success_commit(
+        element: &Self,
+        widget: &Self::ArcWidget,
+        element_context: &ArcElementContextNode,
+        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+    ) -> (
+        Self::OptionArcRenderObject,
+        SubtreeRenderObjectChange<Self::ParentProtocol>,
+    );
 }

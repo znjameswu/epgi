@@ -1,23 +1,36 @@
 use crate::{
     foundation::Arc,
-    tree::{Element, ElementNodeOld, SuspendWaker},
+    tree::{Element, ElementNode, SelectArcRenderObject, SelectProvideElement, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
+
+use super::SelectReconcileImpl;
 
 pub trait AnyElementNodeUnmountExt {
     fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
 }
 
-impl<E> AnyElementNodeUnmountExt for ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> AnyElementNodeUnmountExt
+    for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
     fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>) {
-        ElementNodeOld::unmount(&self, scope)
+        ElementNode::unmount(&self, scope)
     }
 }
 
-impl<E: Element> ElementNodeOld<E> {
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+where
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
+{
     // We could require a BuildScheduler in parameter to ensure the global lock
     // However, doing so on a virtual function incurs additional overhead.
     fn unmount(self: &Arc<Self>, scope: &rayon::Scope<'_>) {

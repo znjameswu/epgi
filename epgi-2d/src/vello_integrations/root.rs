@@ -7,9 +7,10 @@ use epgi_core::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
         CachedCompositionFunctionTable, CachedLayer, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer, ComposableChildLayer, DryLayout,
-        DryLayoutFunctionTable, DryLayoutOld, Element, ElementReconcileItem, HasLayoutMemo,
-        HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, LayerRender, Render,
-        RenderAction, RenderElement, RenderNew, RenderObject, RenderObjectSlots, TreeNode, Widget,
+        DryLayoutFunctionTable, DryLayoutOld, Element, ElementNode, ElementReconcileItem,
+        HasArcWidget, HasLayoutMemo, HitTest, HitTestResults, LayerCompositionConfig, LayerPaint,
+        LayerRender, Render, RenderAction, RenderElement, RenderNew, RenderObject,
+        RenderObjectSlots, TreeNode, Widget,
     },
 };
 
@@ -34,7 +35,7 @@ impl Widget for RootView {
 
     type Element = RootElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as HasArcWidget>::ArcWidget {
         self
     }
 }
@@ -42,17 +43,19 @@ impl Widget for RootView {
 #[derive(Clone)]
 pub struct RootElement {}
 
-impl Element for RootElement {
-    type ArcWidget = Asc<RootView>;
-
+impl TreeNode for RootElement {
     type ParentProtocol = BoxProtocol;
 
     type ChildProtocol = BoxProtocol;
 
     type ChildContainer = OptionContainer;
+}
 
-    type Provided = Never;
+impl HasArcWidget for RootElement {
+    type ArcWidget = Asc<RootView>;
+}
 
+impl Element for RootElement {
     fn perform_rebuild_element(
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         &mut self,
@@ -105,29 +108,37 @@ impl Element for RootElement {
         Ok((RootElement {}, child_widget))
     }
 
-    type RenderOrUnit = RenderRoot;
+    type ElementNode = ElementNode<Self, true, false>;
 }
 
 impl RenderElement for RootElement {
     type Render = RenderRoot;
 
-    fn create_render(&self, widget: &Self::ArcWidget) -> RenderRoot {
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         todo!()
     }
 
-    fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RenderAction {
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
         todo!()
     }
 
-    fn element_render_children_mapping<T: Send + Sync>(
-        &self,
-        element_children: <Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<
-            T,
-        >,
-    ) -> <<RenderRoot as Render>::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>
-    {
-        todo!()
-    }
+    // fn create_render(&self, widget: &Self::ArcWidget) -> RenderRoot {
+    //     todo!()
+    // }
+
+    // fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RenderAction {
+    //     todo!()
+    // }
+
+    // fn element_render_children_mapping<T: Send + Sync>(
+    //     &self,
+    //     element_children: <Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<
+    //         T,
+    //     >,
+    // ) -> <<RenderRoot as Render>::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>
+    // {
+    //     todo!()
+    // }
 }
 
 pub struct RenderRoot {
@@ -173,7 +184,6 @@ impl LayerPaint for RenderRoot {
     ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
         todo!()
     }
-
 }
 
 impl CachedComposite for RenderRoot {

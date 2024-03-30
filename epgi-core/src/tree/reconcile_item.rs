@@ -5,7 +5,8 @@ use crate::{
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, Element, ElementNodeOld, ElementReconcileItem, WorkContext, WorkHandle,
+    ArcWidget, Element, ElementNode, ElementReconcileItem, SelectArcRenderObject, WorkContext,
+    WorkHandle,
 };
 
 pub enum ReconcileItem<CP: Protocol> {
@@ -18,10 +19,10 @@ where
     CP: Protocol,
 {
     pub fn new_rebuild<E: Element<ParentProtocol = CP>>(
-        element: Arc<ElementNodeOld<E>>,
+        element: Arc<E::ElementNode>,
         widget: E::ArcWidget,
     ) -> Self {
-        Self::Rebuild(Box::new(ElementWidgetPair { element, widget }))
+        Self::Rebuild(Box::new(ElementWidgetPair::<E> { element, widget }))
     }
 
     pub fn new_inflate(widget: ArcChildWidget<CP>) -> Self {
@@ -81,9 +82,10 @@ where
     }
 }
 
-impl<E> ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self> + SelectArcRenderObject<RENDER_ELEMENT>,
 {
     pub(crate) fn can_rebuild_with(
         self: Arc<Self>,
@@ -97,14 +99,14 @@ where
             return Err((self, widget));
         }
         match try_convert_if_same_type(&old_widget, widget) {
-            Ok(widget) => Ok(ElementReconcileItem::new_update(self, widget)),
+            Ok(widget) => Ok(ElementReconcileItem::new_update::<E>(self, widget)),
             Err(widget) => Err((self, widget)),
         }
     }
 }
 
 pub struct ElementWidgetPair<E: Element> {
-    pub element: Arc<ElementNodeOld<E>>,
+    pub element: Arc<E::ElementNode>,
     pub widget: E::ArcWidget,
 }
 
@@ -135,7 +137,8 @@ where
     E: Element,
 {
     fn element(&self) -> ArcChildElementNode<E::ParentProtocol> {
-        self.element.clone() as _
+        todo!()
+        // self.element.clone() as _
     }
 }
 

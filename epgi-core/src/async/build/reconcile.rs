@@ -7,11 +7,12 @@ use crate::{
         EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, LanePos},
-    sync::CommitBarrier,
+    sync::{CommitBarrier, SelectReconcileImpl},
     tree::{
         no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
-        ElementContextNode, ElementNodeOld, ElementSnapshotOld, ElementSnapshotInner, Hooks, Mainline,
-        ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle,
+        ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks, Mainline,
+        ProviderElementMap, SelectArcRenderObject, SelectProvideElement, SubscriptionDiff, Work,
+        WorkContext, WorkHandle,
     },
 };
 
@@ -39,9 +40,13 @@ pub(super) enum TryAsyncRebuild<E: Element> {
     Backqueued,
 }
 
-impl<E> ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
     pub(super) fn new_async_uninflated(
         widget: E::ArcWidget,
@@ -54,8 +59,11 @@ where
         // Otherwise a contending async writing commit may find an uninstantiated node in its reservation list. Which is odd.
 
         Arc::new_cyclic(move |node| {
-            let element_context =
-                ElementContextNode::new_for::<E>(node.clone() as _, parent_context, &widget);
+            let element_context = ElementContextNode::new_for::<E, PROVIDE_ELEMENT>(
+                node.clone() as _,
+                parent_context,
+                &widget,
+            );
             let subscription_diff = Self::calc_subscription_diff(
                 E::get_consumed_types(&widget),
                 EMPTY_CONSUMED_TYPES,
@@ -64,7 +72,7 @@ where
             );
             Self {
                 context: Arc::new(element_context),
-                snapshot: SyncMutex::new(ElementSnapshotOld {
+                snapshot: SyncMutex::new(ElementSnapshot {
                     widget,
                     inner: ElementSnapshotInner::AsyncInflating(AsyncInflating {
                         work_context,
@@ -127,7 +135,7 @@ where
 
     pub(crate) fn prepare_rebuild_async(
         self: &Arc<Self>,
-        mainline: &mut Mainline<E>,
+        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
         old_widget: &E::ArcWidget,
         work: Work<E::ArcWidget>,
         barrier: CommitBarrier,
@@ -172,15 +180,16 @@ where
                 &self.context.provider_map,
             );
             let mut provider_value_to_write = None;
-            if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
-                let old_provided_value = get_provided_value(&old_widget);
-                let new_provided_value = get_provided_value(new_widget_ref);
-                if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
-                    && !old_provided_value.eq_sized(new_provided_value.as_ref())
-                {
-                    provider_value_to_write = Some(new_provided_value);
-                }
-            };
+            todo!();
+            // if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
+            //     let old_provided_value = get_provided_value(&old_widget);
+            //     let new_provided_value = get_provided_value(new_widget_ref);
+            //     if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
+            //         && !old_provided_value.eq_sized(new_provided_value.as_ref())
+            //     {
+            //         provider_value_to_write = Some(new_provided_value);
+            //     }
+            // };
             // Cannot use `TryReuslt::map` due to lifetime problems from the limited closure expressiveness.
             match async_queue.try_push_front(
                 &work,

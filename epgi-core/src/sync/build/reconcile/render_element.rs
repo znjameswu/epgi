@@ -1,27 +1,30 @@
 use crate::{
-    foundation::{Arc, AsIterator, Container, HktContainer},
-    scheduler::get_current_scheduler,
+    foundation::{Arc, AsIterator, Container},
+    scheduler::{get_current_scheduler, BuildScheduler},
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
-        layer_render_function_table_of, ArcChildElementNode, ArcChildRenderObject,
-        ArcElementContextNode, ChildRenderObjectsUpdateCallback, ContainerOf, ElementNodeOld,
-        LayerRenderFunctionTable, MainlineState, Render, RenderAction, RenderElement,
-        RenderObjectInnerOld, RenderObjectOld, RenderObjectSlots,
+        AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
+        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementNode, ImplRenderObject,
+        MainlineState, RenderAction, RenderElement, RenderNew, RenderObjectSlots,
+        SelectArcRenderObject, TreeNode,
     },
 };
 
-impl<E> ElementNodeOld<E>
+use super::SelectReconcileImpl;
+
+impl<E, const PROVIDE_ELEMENT: bool> SelectReconcileImpl<true, PROVIDE_ELEMENT> for E
 where
+    E: Element<ElementNode = ElementNode<E, true, PROVIDE_ELEMENT>> + SelectArcRenderObject<true>,
     E: RenderElement,
-    E::Render: Render<ChildContainer = E::ChildContainer>,
 {
-    #[inline(always)]
-    pub(crate) fn visit_commit(
-        &self,
-        render_object: Option<Arc<RenderObjectOld<E::Render>>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+    fn visit_commit(
+        element_node: &Self::ElementNode,
+        render_object: Option<Arc<<E::Render as RenderNew>::RenderObject>>,
+        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        scope: &rayon::Scope<'_>,
+        build_scheduler: &BuildScheduler,
+    ) -> SubtreeRenderObjectChange<Self::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
             "Logic error in parameters: \
@@ -30,13 +33,13 @@ where
         let render_object_change_summary =
             SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
         if let Some(render_object) = render_object {
-            self.visit_commit_attached(
+            element_node.visit_commit_attached(
                 render_object,
                 render_object_changes,
                 render_object_change_summary,
             )
         } else {
-            self.visit_commit_detached(
+            element_node.visit_commit_detached(
                 render_object_changes,
                 render_object_change_summary,
                 self_rebuild_suspended,
@@ -44,10 +47,105 @@ where
         }
     }
 
+    fn rebuild_success_commit(
+        element: &Self,
+        widget: &Self::ArcWidget,
+        shuffle: Option<ChildRenderObjectsUpdateCallback<Self>>,
+        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        render_object: Self::OptionArcRenderObject,
+        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+        element_context: &ArcElementContextNode,
+        is_new_widget: bool,
+    ) -> (
+        Self::OptionArcRenderObject,
+        SubtreeRenderObjectChange<Self::ParentProtocol>,
+    ) {
+        if let Some(render_object) = render_object {
+            Self::ElementNode::rebuild_success_process_attached(
+                widget,
+                shuffle,
+                render_object,
+                render_object_changes,
+                is_new_widget,
+            )
+        } else {
+            Self::ElementNode::rebuild_success_process_detached(
+                element,
+                widget,
+                element_context,
+                children,
+                render_object_changes,
+            )
+        }
+    }
+
+    fn rebuild_suspend_commit(
+        render_object: Self::OptionArcRenderObject,
+    ) -> SubtreeRenderObjectChange<Self::ParentProtocol> {
+        render_object.map(|render_object| render_object.detach());
+        SubtreeRenderObjectChange::Suspend
+    }
+
+    fn inflate_success_commit(
+        element: &Self,
+        widget: &Self::ArcWidget,
+        element_context: &ArcElementContextNode,
+        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+    ) -> (
+        Self::OptionArcRenderObject,
+        SubtreeRenderObjectChange<Self::ParentProtocol>,
+    ) {
+        let render_object_change_summary =
+            SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+
+        debug_assert!(
+            !render_object_changes
+                .as_iter()
+                .any(SubtreeRenderObjectChange::is_keep_render_object),
+            "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
+        );
+
+        if render_object_change_summary.is_suspended() {
+            return (None, SubtreeRenderObjectChange::Suspend);
+        }
+
+        use SubtreeRenderObjectChange::*;
+        let child_render_objects = render_object_changes.map_collect(|change| match change {
+            New(child) => child,
+            Suspend | Keep { .. } => {
+                panic!("Fatal logic bug in epgi-core reconcile logic. Please file issue report.")
+            }
+        });
+
+        let new_render_object = Arc::new(<E::Render as RenderNew>::RenderObject::new(
+            E::create_render(&element, &widget), //TODO: This could panic
+            child_render_objects,
+            element_context.clone(),
+        ));
+
+        if let Some(layer_render_object) =
+            <E::Render as RenderNew>::RenderObject::try_as_aweak_any_layer_render_object(
+                &new_render_object,
+            )
+        {
+            get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
+        }
+
+        let change = SubtreeRenderObjectChange::New(new_render_object.clone());
+
+        (Some(new_render_object), change)
+    }
+}
+
+impl<E, const PROVIDE_ELEMENT: bool> ElementNode<E, true, PROVIDE_ELEMENT>
+where
+    E: Element<ElementNode = Self> + SelectArcRenderObject<true>,
+    E: RenderElement,
+{
     #[inline(always)]
     pub(crate) fn visit_commit_attached(
         &self,
-        render_object: Arc<RenderObjectOld<E::Render>>,
+        render_object: Arc<<E::Render as RenderNew>::RenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
@@ -68,24 +166,21 @@ where
             HasNewNoSuspend => {
                 let render_action = render_object
                     .mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
-                {
-                    let mut inner = render_object.inner.lock();
-                    inner.update_children(
+                render_object.update(|render, children| {
+                    update_children::<E::Render>(
+                        children,
                         None,
                         render_object_changes,
                         render_object_change_summary,
-                    );
-                }
+                    )
+                });
                 return SubtreeRenderObjectChange::Keep {
                     child_render_action: render_action,
                     subtree_has_action: RenderAction::Relayout,
                 };
             }
             HasSuspended => {
-                if !<E::Render as Render>::NOOP_DETACH {
-                    let mut inner = render_object.inner.lock();
-                    inner.render.detach();
-                }
+                render_object.detach();
                 let mut snapshot = self.snapshot.lock();
                 let state = snapshot
                     .inner
@@ -216,67 +311,28 @@ where
         drop(snapshot);
 
         if let Some(new_attached_render_object) = new_attached_render_object {
-            if let LayerRenderFunctionTable::LayerRender {
-                as_aweak_any_layer_render_object,
-                ..
-            } = layer_render_function_table_of::<E::Render>()
-            {
-                get_current_scheduler().push_layer_render_objects_needing_paint(
-                    as_aweak_any_layer_render_object(&new_attached_render_object),
+            if let Some(layer_render_object) =
+                <E::Render as RenderNew>::RenderObject::try_as_aweak_any_layer_render_object(
+                    &new_attached_render_object,
                 )
+            {
+                get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
             }
             return SubtreeRenderObjectChange::New(new_attached_render_object);
         } else {
             return SubtreeRenderObjectChange::Suspend;
         }
     }
-}
 
-impl<E> ElementNodeOld<E>
-where
-    E: RenderElement,
-    E::Render: Render<ChildContainer = E::ChildContainer>,
-{
-    pub(crate) fn rebuild_success_commit(
-        element: &E,
-        widget: &E::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: Option<Arc<RenderObjectOld<E::Render>>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-        element_context: &ArcElementContextNode,
-        is_new_widget: bool,
-    ) -> (
-        Option<Arc<RenderObjectOld<E::Render>>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
-        if let Some(render_object) = render_object {
-            Self::rebuild_success_process_attached(
-                widget,
-                shuffle,
-                render_object,
-                render_object_changes,
-                is_new_widget,
-            )
-        } else {
-            Self::rebuild_success_process_detached(
-                element,
-                widget,
-                element_context,
-                children,
-                render_object_changes,
-            )
-        }
-    }
     #[inline(always)]
     pub(crate) fn rebuild_success_process_attached(
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        render_object: Arc<RenderObjectOld<E::Render>>,
+        render_object: Arc<<E::Render as RenderNew>::RenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         is_new_widget: bool,
     ) -> (
-        Option<Arc<RenderObjectOld<E::Render>>>,
+        Option<Arc<<E::Render as RenderNew>::RenderObject>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -285,10 +341,7 @@ where
         use SubtreeRenderObjectChangeSummary::*;
 
         if render_object_change_summary.is_suspended() {
-            if !<E::Render as Render>::NOOP_DETACH {
-                let mut inner = render_object.inner.lock();
-                inner.render.detach();
-            }
+            render_object.detach();
             return (None, SubtreeRenderObjectChange::Suspend);
         }
 
@@ -298,11 +351,17 @@ where
             || !render_object_change_summary.is_keep_all()
             || (is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT)
         {
-            let mut inner = render_object.inner.lock();
-            if is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT {
-                self_render_action = E::update_render(&mut inner.render, widget);
-            }
-            inner.update_children(shuffle, render_object_changes, render_object_change_summary);
+            render_object.update(|render, children| {
+                if is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT {
+                    self_render_action = E::update_render(render, widget);
+                }
+                update_children::<E::Render>(
+                    children,
+                    shuffle,
+                    render_object_changes,
+                    render_object_change_summary,
+                )
+            });
         }
 
         let (child_render_action, subtree_has_action) = if let KeepAll {
@@ -333,7 +392,7 @@ where
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
-        Option<Arc<RenderObjectOld<E::Render>>>,
+        Option<Arc<<E::Render as RenderNew>::RenderObject>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -354,14 +413,12 @@ where
         );
 
         if let Some(render_object) = render_object {
-            if let LayerRenderFunctionTable::LayerRender {
-                as_aweak_any_layer_render_object,
-                ..
-            } = layer_render_function_table_of::<E::Render>()
-            {
-                get_current_scheduler().push_layer_render_objects_needing_paint(
-                    as_aweak_any_layer_render_object(&render_object),
+            if let Some(layer_render_object) =
+                <E::Render as RenderNew>::RenderObject::try_as_aweak_any_layer_render_object(
+                    &render_object,
                 )
+            {
+                get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
             }
             let change = SubtreeRenderObjectChange::New(render_object.clone());
             (Some(render_object), change)
@@ -370,82 +427,6 @@ where
         }
     }
 
-    pub(crate) fn rebuild_suspend_commit(
-        render_object: Option<Arc<RenderObjectOld<E::Render>>>,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        if let Some(render_object) = render_object {
-            if !<E::Render as Render>::NOOP_DETACH {
-                let mut inner = render_object.inner.lock();
-                inner.render.detach();
-            }
-        }
-        SubtreeRenderObjectChange::Suspend
-    }
-}
-
-impl<E> ElementNodeOld<E>
-where
-    E: RenderElement,
-    E::Render: Render<ChildContainer = E::ChildContainer>,
-{
-    pub(crate) fn inflate_success_commit(
-        element: &E,
-        widget: &E::ArcWidget,
-        element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-    ) -> (
-        Option<Arc<RenderObjectOld<E::Render>>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
-        let render_object_change_summary =
-            SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
-
-        debug_assert!(
-            !render_object_changes
-                .as_iter()
-                .any(SubtreeRenderObjectChange::is_keep_render_object),
-            "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
-        );
-
-        if render_object_change_summary.is_suspended() {
-            return (None, SubtreeRenderObjectChange::Suspend);
-        }
-
-        use SubtreeRenderObjectChange::*;
-        let child_render_objects = render_object_changes.map_collect(|change| match change {
-            New(child) => child,
-            Suspend | Keep { .. } => {
-                panic!("Fatal logic bug in epgi-core reconcile logic. Please file issue report.")
-            }
-        });
-
-        let new_render_object = Arc::new(RenderObjectOld::new(
-            E::create_render(&element, &widget), //TODO: This could panic
-            child_render_objects,
-            element_context.clone(),
-        ));
-
-        if let LayerRenderFunctionTable::LayerRender {
-            as_aweak_any_layer_render_object,
-            ..
-        } = layer_render_function_table_of::<E::Render>()
-        {
-            get_current_scheduler().push_layer_render_objects_needing_paint(
-                as_aweak_any_layer_render_object(&new_render_object),
-            )
-        }
-
-        let change = SubtreeRenderObjectChange::New(new_render_object.clone());
-
-        (Some(new_render_object), change)
-    }
-}
-
-impl<E> ElementNodeOld<E>
-where
-    E: RenderElement,
-    E::Render: Render<ChildContainer = E::ChildContainer>,
-{
     #[inline(never)]
     pub(crate) fn try_create_render_object(
         element: &E,
@@ -453,7 +434,7 @@ where
         element_context: &ArcElementContextNode,
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-    ) -> Option<Arc<RenderObjectOld<E::Render>>> {
+    ) -> Option<Arc<<E::Render as RenderNew>::RenderObject>> {
         let mut suspended = false;
         let option_child_render_objects =
             children.zip_ref_collect(render_object_changes, |child, change| {
@@ -479,7 +460,7 @@ where
         } else {
             let new_render_children =
                 option_child_render_objects.map_collect(|child| child.expect("Impossible to fail"));
-            let new_render_object = Arc::new(RenderObjectOld::new(
+            let new_render_object = Arc::new(<E::Render as RenderNew>::RenderObject::new(
                 E::create_render(&element, &widget), //TODO: This could panic
                 new_render_children,
                 element_context.clone(),
@@ -489,123 +470,115 @@ where
     }
 }
 
-impl<R> RenderObjectInnerOld<R>
-where
-    R: Render,
-{
-    #[inline(always)]
-    pub(crate) fn update_children(
-        &mut self,
-        shuffle: Option<
-            Box<
-                dyn FnOnce(
-                    <R::ChildContainer as HktContainer>::Container<
-                        ArcChildRenderObject<R::ChildProtocol>,
-                    >,
-                ) -> <R::ChildContainer as HktContainer>::Container<
-                    RenderObjectSlots<R::ChildProtocol>,
-                >,
-            >,
+fn update_children<R: TreeNode>(
+    children: &mut ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
+    shuffle: Option<
+        Box<
+            dyn FnOnce(
+                ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
+            ) -> ContainerOf<R, RenderObjectSlots<R::ChildProtocol>>,
         >,
-        render_object_changes: <R::ChildContainer as HktContainer>::Container<
-            SubtreeRenderObjectChange<R::ChildProtocol>,
-        >,
-        render_object_change_summary: SubtreeRenderObjectChangeSummary,
-    ) {
-        if let Some(shuffle) = shuffle {
-            replace_with::replace_with_or_abort(&mut self.children, move |children| {
-                let slots = (shuffle)(children);
-                slots.zip_collect(render_object_changes, |slot, change| {
-                    use RenderObjectSlots::*;
-                    use SubtreeRenderObjectChange::*;
-                    match (slot, change) {
-                        (Reuse(render_object), Keep { .. }) => render_object,
-                        (_, New(render_object)) => render_object,
-                        (_, Suspend) => panic!(
-                            "Fatal logic bug in epgi-core reconcile logic. \
+    >,
+    render_object_changes: ContainerOf<R, SubtreeRenderObjectChange<R::ChildProtocol>>,
+    render_object_change_summary: SubtreeRenderObjectChangeSummary,
+) {
+    if let Some(shuffle) = shuffle {
+        replace_with::replace_with_or_abort(children, move |children| {
+            let slots = (shuffle)(children);
+            slots.zip_collect(render_object_changes, |slot, change| {
+                use RenderObjectSlots::*;
+                use SubtreeRenderObjectChange::*;
+                match (slot, change) {
+                    (Reuse(render_object), Keep { .. }) => render_object,
+                    (_, New(render_object)) => render_object,
+                    (_, Suspend) => panic!(
+                        "Fatal logic bug in epgi-core reconcile logic. \
                             Please file issue report."
-                        ),
-                        (Inflate, Keep { .. }) => panic!(
-                            "Render object update callback bug: \
+                    ),
+                    (Inflate, Keep { .. }) => panic!(
+                        "Render object update callback bug: \
                             Slot requested for a new render object \
                             but the child is not producing one"
-                        ),
-                    }
-                })
+                    ),
+                }
             })
-        } else if !render_object_change_summary.is_keep_all() {
-            replace_with::replace_with_or_abort(&mut self.children, move |children| {
-                children.zip_collect(render_object_changes, |child, change| {
-                    use SubtreeRenderObjectChange::*;
-                    match change {
-                        Keep { .. } => child,
-                        New(render_object) => render_object,
-                        Suspend => panic!(
-                            "Fatal logic bug in epgi-core reconcile logic. \
+        })
+    } else if !render_object_change_summary.is_keep_all() {
+        replace_with::replace_with_or_abort(children, move |children| {
+            children.zip_collect(render_object_changes, |child, change| {
+                use SubtreeRenderObjectChange::*;
+                match change {
+                    Keep { .. } => child,
+                    New(render_object) => render_object,
+                    Suspend => panic!(
+                        "Fatal logic bug in epgi-core reconcile logic. \
                                 Please file issue report."
-                        ),
-                    }
-                })
+                    ),
+                }
             })
-        }
+        })
     }
-
-    // //https://users.rust-lang.org/t/compiler-hint-for-unlikely-likely-for-if-branches/62102/4
-    // #[inline(always)]
-    // fn detach_and_cache_children(
-    //     &mut self,
-    //     shuffle: Option<
-    //         Box<
-    //             dyn FnOnce(
-    //                 <R::ChildContainer as HktContainer>::Container<
-    //                     ArcChildRenderObject<R::ChildProtocol>,
-    //                 >,
-    //             ) -> <R::ChildContainer as HktContainer>::Container<
-    //                 RenderObjectSlots<R::ChildProtocol>,
-    //             >,
-    //         >,
-    //     >,
-    //     render_object_changes: <R::ChildContainer as HktContainer>::Container<
-    //         SubtreeRenderObjectChange<R::ChildProtocol>,
-    //     >,
-    // ) -> <R::ChildContainer as HktContainer>::Container<
-    //     MaybeSuspendChildRenderObject<R::ChildProtocol>,
-    // > {
-    //     self.render.detach();
-
-    //     let maybe_suspend_child_render_object = if let Some(shuffle) = shuffle {
-    //         let slots = (shuffle)(self.children.map_ref_collect(Clone::clone));
-    //         slots.zip_collect(render_object_changes, |slot, change| {
-    //             use MaybeSuspendChildRenderObject::*;
-    //             use RenderObjectSlots::*;
-    //             use SubtreeRenderObjectChange::*;
-    //             match (slot, change) {
-    //                 (Reuse(render_object), Keep { .. }) => Ready(render_object),
-    //                 (_, New(render_object)) => Ready(render_object),
-    //                 (_, SuspendNew(render_object)) => ElementSuspended(render_object),
-    //                 (Reuse(render_object), SuspendKeep) => ElementSuspended(render_object),
-    //                 (_, Detach) => Detached,
-    //                 (Inflate, Keep { .. } | SuspendKeep) => panic!(
-    //                     "Render object update callback bug: \
-    //                     Slot requested for a new render object \
-    //                     but the child is not producing one"
-    //                 ),
-    //             }
-    //         })
-    //     } else {
-    //         self.children
-    //             .zip_ref_collect(render_object_changes, |child, change| {
-    //                 use MaybeSuspendChildRenderObject::*;
-    //                 use SubtreeRenderObjectChange::*;
-    //                 match change {
-    //                     Keep { .. } => Ready(child.clone()),
-    //                     New(render_object) => Ready(render_object),
-    //                     SuspendKeep => ElementSuspended(child.clone()),
-    //                     SuspendNew(render_object) => ElementSuspended(render_object),
-    //                     Detach => Detached,
-    //                 }
-    //             })
-    //     };
-    //     maybe_suspend_child_render_object
-    // }
 }
+// impl<R> RenderObjectInnerOld<R>
+// where
+//     R: Render,
+// {
+//     // //https://users.rust-lang.org/t/compiler-hint-for-unlikely-likely-for-if-branches/62102/4
+//     // #[inline(always)]
+//     // fn detach_and_cache_children(
+//     //     &mut self,
+//     //     shuffle: Option<
+//     //         Box<
+//     //             dyn FnOnce(
+//     //                 <R::ChildContainer as HktContainer>::Container<
+//     //                     ArcChildRenderObject<R::ChildProtocol>,
+//     //                 >,
+//     //             ) -> <R::ChildContainer as HktContainer>::Container<
+//     //                 RenderObjectSlots<R::ChildProtocol>,
+//     //             >,
+//     //         >,
+//     //     >,
+//     //     render_object_changes: <R::ChildContainer as HktContainer>::Container<
+//     //         SubtreeRenderObjectChange<R::ChildProtocol>,
+//     //     >,
+//     // ) -> <R::ChildContainer as HktContainer>::Container<
+//     //     MaybeSuspendChildRenderObject<R::ChildProtocol>,
+//     // > {
+//     //     self.render.detach();
+
+//     //     let maybe_suspend_child_render_object = if let Some(shuffle) = shuffle {
+//     //         let slots = (shuffle)(self.children.map_ref_collect(Clone::clone));
+//     //         slots.zip_collect(render_object_changes, |slot, change| {
+//     //             use MaybeSuspendChildRenderObject::*;
+//     //             use RenderObjectSlots::*;
+//     //             use SubtreeRenderObjectChange::*;
+//     //             match (slot, change) {
+//     //                 (Reuse(render_object), Keep { .. }) => Ready(render_object),
+//     //                 (_, New(render_object)) => Ready(render_object),
+//     //                 (_, SuspendNew(render_object)) => ElementSuspended(render_object),
+//     //                 (Reuse(render_object), SuspendKeep) => ElementSuspended(render_object),
+//     //                 (_, Detach) => Detached,
+//     //                 (Inflate, Keep { .. } | SuspendKeep) => panic!(
+//     //                     "Render object update callback bug: \
+//     //                     Slot requested for a new render object \
+//     //                     but the child is not producing one"
+//     //                 ),
+//     //             }
+//     //         })
+//     //     } else {
+//     //         self.children
+//     //             .zip_ref_collect(render_object_changes, |child, change| {
+//     //                 use MaybeSuspendChildRenderObject::*;
+//     //                 use SubtreeRenderObjectChange::*;
+//     //                 match change {
+//     //                     Keep { .. } => Ready(child.clone()),
+//     //                     New(render_object) => Ready(render_object),
+//     //                     SuspendKeep => ElementSuspended(child.clone()),
+//     //                     SuspendNew(render_object) => ElementSuspended(render_object),
+//     //                     Detach => Detached,
+//     //                 }
+//     //             })
+//     //     };
+//     //     maybe_suspend_child_render_object
+//     // }
+// }

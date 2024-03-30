@@ -9,16 +9,24 @@ pub use node::*;
 
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::foundation::{
-    default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
-    default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
-    AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, ConstBool, HktContainer,
-    Key, LayerProtocol, PaintContext, Protocol, Transform, TransformHitPosition,
+use crate::{
+    foundation::{
+        default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
+        default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
+        AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, ConstBool,
+        HktContainer, Key, LayerProtocol, PaintContext, Protocol, SyncMutex, Transform,
+        TransformHitPosition,
+    },
+    sync::{
+        SelectCompositeImpl, SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl,
+        SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary,
+    },
 };
 
 use super::{
-    ArcAnyLayerRenderObject, ArcElementContextNode, ChildLayerProducingIterator,
-    ElementContextNode, LayerCache, LayerCompositionConfig, LayerMark, PaintResults,
+    ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject,
+    ChildLayerProducingIterator, ContainerOf, ElementContextNode, LayerCache,
+    LayerCompositionConfig, LayerMark, PaintResults, RenderObjectSlots,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -47,12 +55,15 @@ pub trait RenderNew:
     // type CachedComposite: ConstBool;
     // type OrphanLayer: ConstBool;
 
-    type RenderObject;
+    type RenderObject: ImplRenderObject<Self>;
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut Self::RenderObject) -> AnyRawPointer)]
     {
         &[]
     }
+
+    fn detach(&mut self) {}
+    const NOOP_DETACH: bool = false;
 }
 
 pub trait HasLayoutMemo {
@@ -273,7 +284,7 @@ where
 }
 
 pub trait SelectLayerPaint<const LAYER_PAINT: bool>: TreeNode + HasLayoutMemo {
-    type LayerMark: Send + Sync;
+    type LayerMark: Default + Send + Sync;
     type HktLayerCache: Hkt;
 }
 
@@ -636,6 +647,65 @@ impl RenderAction {
     }
 }
 
+pub trait ImplRenderObject<R: TreeNode>:
+    ChildRenderObject<R::ParentProtocol> + Send + Sync + Sized
+{
+    fn new(
+        render: R,
+        children: ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
+        context: ArcElementContextNode,
+    ) -> Self;
+
+    fn update<T>(
+        &self,
+        op: impl FnOnce(&mut R, &mut ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>) -> T,
+    ) -> T;
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ImplRenderObject<R>
+    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
+    R: SelectLayoutImpl<DRY_LAYOUT>,
+    R: SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>,
+    R: SelectHitTestImpl<ORPHAN_LAYER>,
+{
+    fn new(
+        render: R,
+        children: ContainerOf<R, ArcChildRenderObject<<R>::ChildProtocol>>,
+        context: ArcElementContextNode,
+    ) -> Self {
+        Self {
+            element_context: context,
+            mark: RenderMark::new(),
+            layer_mark: Default::default(),
+            inner: SyncMutex::new(RenderObjectInner {
+                cache: RenderCache::new(),
+                render,
+                children,
+            }),
+        }
+    }
+
+    fn update<T>(
+        &self,
+        op: impl FnOnce(&mut R, &mut ContainerOf<R, ArcChildRenderObject<<R>::ChildProtocol>>) -> T,
+    ) -> T {
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        op(&mut inner_reborrow.render, &mut inner_reborrow.children)
+    }
+}
+
+
 pub trait ChildRenderObject<PP: Protocol>:
     AnyRenderObject
     + crate::sync::ChildRenderObjectLayoutExt<PP>
@@ -645,21 +715,28 @@ pub trait ChildRenderObject<PP: Protocol>:
     + Sync
 {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
-    fn detach(&self);
 }
 
-// impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
-// where
-//     R: RenderNew,
-// {
-//     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
-//         todo!()
-//     }
-
-//     fn detach(&self) {
-//         todo!()
-//     }
-// }
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ChildRenderObject<R::ParentProtocol>
+    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: RenderNew<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
+    R: SelectLayoutImpl<DRY_LAYOUT>,
+    R: SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>,
+    R: SelectHitTestImpl<ORPHAN_LAYER>,
+{
+    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
+        self
+    }
+}
 
 impl<R> ChildRenderObject<R::ParentProtocol> for RenderObjectOld<R>
 where
@@ -668,16 +745,24 @@ where
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
         self
     }
-
-    fn detach(&self) {
-        todo!()
-    }
 }
 
 pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
     fn element_context(&self) -> &ElementContextNode;
     fn detach(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
+
+    fn mark_render_action(
+        &self,
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction;
+
+    fn try_as_aweak_any_layer_render_object(
+        render_object: &Arc<Self>,
+    ) -> Option<AweakAnyLayerRenderObject>
+    where
+        Self: Sized;
 }
 
 // impl<R> AnyRenderObject for RenderObject<R>
@@ -721,6 +806,23 @@ where
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
         todo!()
     }
+
+    fn mark_render_action(
+        &self,
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction {
+        todo!()
+    }
+
+    fn try_as_aweak_any_layer_render_object(
+        render_object: &Arc<Self>,
+    ) -> Option<AweakAnyLayerRenderObject>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
 }
 
 impl<R> AnyRenderObject for RenderObjectOld<R>
@@ -737,6 +839,23 @@ where
 
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
         <R::LayerOrUnit as LayerOrUnit<R>>::downcast_arc_any_layer_render_object(self)
+    }
+
+    fn mark_render_action(
+        &self,
+        child_render_action: RenderAction,
+        subtree_has_action: RenderAction,
+    ) -> RenderAction {
+        todo!()
+    }
+
+    fn try_as_aweak_any_layer_render_object(
+        render_object: &Arc<Self>,
+    ) -> Option<AweakAnyLayerRenderObject>
+    where
+        Self: Sized,
+    {
+        todo!()
     }
 }
 

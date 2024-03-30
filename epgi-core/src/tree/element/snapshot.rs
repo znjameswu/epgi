@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    ArcChildElementNode, ArcRenderObjectOf, AsyncWorkQueue, AweakAnyElementNode, ContainerOf,
+    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, ContainerOf,
     Element, HasArcWidget,
 };
 

@@ -1,15 +1,19 @@
 use crate::{
     foundation::Arc,
     scheduler::LanePos,
-    sync::BuildScheduler,
-    tree::{Element, ElementNodeOld},
+    sync::{BuildScheduler, SelectReconcileImpl},
+    tree::{Element, ElementNode, SelectArcRenderObject, SelectProvideElement},
 };
 
 use super::reorder_work::ReorderAsync;
 
-impl<E> ElementNodeOld<E>
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
+    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: Element<ElementNode = Self>
+        + SelectArcRenderObject<RENDER_ELEMENT>
+        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+        + SelectProvideElement<PROVIDE_ELEMENT>,
 {
     fn restart_async_work(
         self: &Arc<Self>,
@@ -50,16 +54,19 @@ pub(crate) mod restart_private {
         fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, build_scheduler: &BuildScheduler);
     }
 
-    impl<E> AnyElementNodeRestartAsyncExt for ElementNodeOld<E>
+    impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> AnyElementNodeRestartAsyncExt
+        for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
     where
-        E: Element,
+        E: Element<ElementNode = Self>
+            + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
+            + SelectProvideElement<PROVIDE_ELEMENT>,
     {
         fn restart_async_work(
             self: Arc<Self>,
             lane_pos: LanePos,
             build_scheduler: &BuildScheduler,
         ) {
-            ElementNodeOld::restart_async_work(&self, lane_pos, build_scheduler)
+            ElementNode::restart_async_work(&self, lane_pos, build_scheduler)
         }
     }
 }

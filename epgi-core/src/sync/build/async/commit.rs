@@ -1,3 +1,3 @@
-use crate::tree::{Element, ElementNodeOld};
+use crate::tree::{Element, ElementNode};
 
-impl<E> ElementNodeOld<E> where E: Element {}
+// impl<E> ElementNode<E> where E: Element {}

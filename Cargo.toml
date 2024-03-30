@@ -2,15 +2,14 @@
 members = [
     "epgi-core",
     "epgi-macro",
-    "epgi-common",
+    # "epgi-common",
     "epgi-2d",
     # # Glazier was broken due to wgpu updates
     # "epgi-glazier",
-    "epgi-winit",
+    # "epgi-winit",
     # We have to manually expand each sub-item to exclude defunt glazier example https://github.com/rust-lang/cargo/issues/6745
-    "examples/winit-simple",
+    # "examples/winit-simple",
     "optargs",
-    "epgi-winit", "epgi-macro",
 ]
 resolver = "2"
 

@@ -1,12 +1,12 @@
 use crate::{
-    foundation::{Canvas, ConstBool, False, HktContainer, LayerProtocol, Protocol, SyncMutex},
-    tree::{LayerCache, LayerMark}, sync::{SelectLayoutImpl, SelectPaintImpl, SelectHitTestImpl},
+    foundation::{HktContainer, LayerProtocol, Protocol, SyncMutex},
+    sync::{SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl},
+    tree::ContainerOf,
 };
 
 use super::{
-    ArcChildRenderObject, ArcElementContextNode, CachedComposite, Composite, Hkt, LayerOrUnit,
-    LayerPaint, NoRelayoutToken, OrphanLayer, Paint, Render, RenderMark, RenderNew,
-    SelectLayerPaint, TreeNode,
+    ArcChildRenderObject, ArcElementContextNode, CachedComposite, Hkt, ImplRenderObject,
+    LayerOrUnit, LayerPaint, NoRelayoutToken, Render, RenderMark, RenderNew, SelectLayerPaint,
 };
 
 pub struct RenderObject<
@@ -18,10 +18,9 @@ pub struct RenderObject<
 > where
     R: RenderNew<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>
-        // + SelectLayoutImpl<DRY_LAYOUT>
-        // + SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>
-        // + SelectHitTestImpl<ORPHAN_LAYER>, // + SelectOrphanLayer<ORPHAN_LAYER>,
+        + SelectCachedComposite<CACHED_COMPOSITE>, // + SelectLayoutImpl<DRY_LAYOUT>
+                                                   // + SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>
+                                                   // + SelectHitTestImpl<ORPHAN_LAYER>, // + SelectOrphanLayer<ORPHAN_LAYER>,
                                                    // + SelectLayoutImpl<DRY_LAYOUT>
                                                    // + SelectCompositeImpl<CACHED_COMPOSITE, ORPHAN_LAYER>
                                                    // + SelectHitTestImpl<ORPHAN_LAYER>,
@@ -64,6 +63,7 @@ pub(crate) struct RenderObjectInner<R: RenderNew, C> {
         <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
 }
 
+#[derive(Default)]
 pub(crate) struct RenderCache<R, LC>(Option<LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>>)
 where
     R: RenderNew;
@@ -72,6 +72,10 @@ impl<R, LC> RenderCache<R, LC>
 where
     R: RenderNew,
 {
+    pub(crate) fn new() -> Self {
+        Self(None)
+    }
+
     // The ZST token guards against accidentally accessing staled layout results
     #[inline(always)]
     pub(crate) fn layout_cache_ref(

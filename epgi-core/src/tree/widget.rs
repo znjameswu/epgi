@@ -8,7 +8,7 @@ use std::{
 
 use crate::foundation::{AsAny, AsHeapPtr, Asc, Key, Protocol};
 
-use super::{ArcAnyElementNode, Element};
+use super::{ArcAnyElementNode, Element, HasArcWidget, TreeNode};
 
 pub type ArcChildWidget<P> = Asc<dyn ChildWidget<P>>;
 pub type ArcParentWidget<P> = Asc<dyn ParentWidget<ChildProtocol = P>>;
@@ -26,7 +26,7 @@ pub trait Widget: AsAny + std::fmt::Debug + 'static + Send + Sync {
         None
     }
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget;
+    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as HasArcWidget>::ArcWidget;
 }
 
 pub trait WidgetExt: Widget {
@@ -76,7 +76,7 @@ pub trait ChildWidget<PP: Protocol>:
     fn widget_type_id(&self) -> TypeId;
 }
 
-impl<T> ChildWidget<<T::Element as Element>::ParentProtocol> for T
+impl<T> ChildWidget<<T::Element as TreeNode>::ParentProtocol> for T
 where
     T: Widget,
 {
@@ -135,7 +135,7 @@ impl<T> ParentWidget for T
 where
     T: Widget,
 {
-    type ChildProtocol = <T::Element as Element>::ChildProtocol;
+    type ChildProtocol = <T::Element as TreeNode>::ChildProtocol;
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -178,24 +178,24 @@ where
     }
 
     fn as_any_child(&self) -> Box<dyn Any> {
-        let res: &dyn ChildWidget<<<Self as Widget>::Element as Element>::ParentProtocol> = self;
+        let res: &dyn ChildWidget<<<Self as Widget>::Element as TreeNode>::ParentProtocol> = self;
         Box::new(res as *const _)
     }
 
     fn as_any_parent(&self) -> Box<dyn Any> {
         let res: &dyn ParentWidget<
-            ChildProtocol = <<Self as Widget>::Element as Element>::ChildProtocol,
+            ChildProtocol = <<Self as Widget>::Element as TreeNode>::ChildProtocol,
         > = self;
         Box::new(res as *const _)
     }
 
     fn as_any_child_arc(self: Arc<Self>) -> Box<dyn Any> {
-        let res: ArcChildWidget<<<Self as Widget>::Element as Element>::ParentProtocol> = self;
+        let res: ArcChildWidget<<<Self as Widget>::Element as TreeNode>::ParentProtocol> = self;
         Box::new(res)
     }
 
     fn as_any_parent_arc(self: Arc<Self>) -> Box<dyn Any> {
-        let res: ArcParentWidget<<<Self as Widget>::Element as Element>::ChildProtocol> = self;
+        let res: ArcParentWidget<<<Self as Widget>::Element as TreeNode>::ChildProtocol> = self;
         Box::new(res)
     }
 
@@ -248,7 +248,7 @@ pub trait ArcWidget: ArcRaw + AsHeapPtr + Clone + Send + Sync + 'static {
 
     fn into_any_widget(self) -> ArcAnyWidget;
 
-    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol>;
+    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as TreeNode>::ParentProtocol>;
 
     fn widget_type_id(&self) -> TypeId;
 
@@ -257,8 +257,8 @@ pub trait ArcWidget: ArcRaw + AsHeapPtr + Clone + Send + Sync + 'static {
 
 pub fn try_convert_if_same_type<T: ArcWidget>(
     this: &T,
-    other: ArcChildWidget<<T::Element as Element>::ParentProtocol>,
-) -> Result<T, ArcChildWidget<<T::Element as Element>::ParentProtocol>> {
+    other: ArcChildWidget<<T::Element as TreeNode>::ParentProtocol>,
+) -> Result<T, ArcChildWidget<<T::Element as TreeNode>::ParentProtocol>> {
     if this.widget_type_id() == other.widget_type_id() {
         let raw = unsafe {
             let mut this_ptr_repr = PtrRepr::new_null();
@@ -353,7 +353,7 @@ where
         self
     }
 
-    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as Element>::ParentProtocol> {
+    fn into_child_widget(self) -> ArcChildWidget<<Self::Element as TreeNode>::ParentProtocol> {
         self
     }
 
