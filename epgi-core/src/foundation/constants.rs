@@ -1,3 +1,3 @@
 use super::TypeKey;
 
-pub static EMPTY_CONSUMED_TYPES: &[TypeKey] = &[];
+pub const EMPTY_CONSUMED_TYPES: &[TypeKey] = &[];

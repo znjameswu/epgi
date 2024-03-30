@@ -1,9 +1,8 @@
 use crate::{
-    foundation::{Arc, Canvas, ConstBool, False, LayerProtocol, Protocol, True},
+    foundation::{Arc, Canvas, LayerProtocol, Protocol},
     tree::{
-        HitTest, HitTestBehavior, HitTestResults, OrphanLayer, Paint, Render, RenderNew,
-        RenderObject, RenderObjectOld, SelectCachedComposite, SelectLayerPaint, SelectOrphanLayer,
-        TreeNode,
+        HitTest, HitTestBehavior, HitTestResults, OrphanLayer, Paint, Render, RenderObject,
+        SelectCachedComposite, SelectLayerPaint, SelectOrphanLayer, TreeNode,
     },
 };
 
@@ -20,7 +19,7 @@ impl<
     > ChildRenderObjectHitTestExt<R::ParentProtocol>
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectHitTestImpl<ORPHAN_LAYER>,
@@ -41,23 +40,23 @@ pub trait SelectHitTestImpl<const ORPHAN_LAYER: bool>:
         results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool
     where
-        Self: RenderNew + Sized;
+        Self: Render + Sized;
 }
 
 impl<R, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
     SelectHitTestImpl<false> for R
 where
-    R: RenderNew<RenderObject = RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>>
+    R: Render<RenderObject = RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: HitTest,
 {
     fn hit_test(
-        render_object: Arc<<Self as RenderNew>::RenderObject>,
+        render_object: Arc<<Self as Render>::RenderObject>,
         results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool
     where
-        Self: RenderNew + Sized,
+        Self: Render + Sized,
     {
         let inner = render_object.inner.lock();
         let no_relayout_token = render_object.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
@@ -110,7 +109,7 @@ where
 impl<R, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
     SelectHitTestImpl<true> for R
 where
-    R: RenderNew<RenderObject = RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>>
+    R: Render<RenderObject = RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: OrphanLayer,
@@ -118,11 +117,11 @@ where
     R::ChildProtocol: LayerProtocol,
 {
     fn hit_test(
-        render_object: Arc<<Self as RenderNew>::RenderObject>,
+        render_object: Arc<<Self as Render>::RenderObject>,
         results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
     ) -> bool
     where
-        Self: RenderNew + Sized,
+        Self: Render + Sized,
     {
         false
     }
@@ -240,64 +239,6 @@ where
 //     }
 // }
 
-impl<R> ChildRenderObjectHitTestExt<R::ParentProtocol> for RenderObjectOld<R>
-where
-    R: Render,
-{
-    fn hit_test(
-        self: Arc<Self>,
-        results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool {
-        // TODO: for detached layers, skip the hit test, since this method is called by its parent, not its adopter.
-        let inner = self.inner.lock();
-        let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
-        let layout_cache = inner
-            .cache
-            .layout_cache_ref(no_relayout_token)
-            .expect("Hit test should not occur before layout");
-        let offset = layout_cache
-            .paint_offset
-            .as_ref()
-            .expect("Hit test should not occur before paint");
-        // let a = layout_cache.paint_cache;
-
-        let hit_within_shape = inner.render.hit_test_self(
-            results.curr_position(),
-            &layout_cache.layout_results.size,
-            offset,
-            &layout_cache.layout_results.memo,
-        );
-
-        let Some(behavior) = hit_within_shape else {
-            return false;
-        };
-
-        let hit_children = inner.render.hit_test_children(
-            &layout_cache.layout_results.size,
-            offset,
-            &layout_cache.layout_results.memo,
-            &inner.children,
-            results,
-        );
-        drop(inner);
-
-        let self_has_interface = results.interface_exist_on_old::<R>();
-        if self_has_interface {
-            if hit_children
-                || matches!(
-                    behavior,
-                    HitTestBehavior::Opaque | HitTestBehavior::Transparent
-                )
-            {
-                results.push(self as _);
-            }
-            return hit_children || matches!(behavior, HitTestBehavior::Opaque);
-        } else {
-            return hit_children;
-        }
-    }
-}
-
 pub trait ChildLayerRenderObjectHitTestExt<C: Canvas> {
     // fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<C>) -> bool;
 }
@@ -320,7 +261,7 @@ impl<
     > ChildLayerRenderObjectHitTestExt<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>
     for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<true>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectHitTestImpl<ORPHAN_LAYER>,
@@ -330,20 +271,5 @@ where
     //     results: &mut HitTestResults<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>,
     // ) -> bool {
     //     R::hit_test_from_adopter(self, results)
-    // }
-}
-
-impl<R> ChildLayerRenderObjectHitTestExt<<R::ParentProtocol as Protocol>::Canvas>
-    for RenderObjectOld<R>
-where
-    R: Render,
-{
-    // fn hit_test_layer(
-    //     self: Arc<Self>,
-    //     results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
-    // ) -> bool {
-    //     // For most layers, just directly hit test
-    //     ChildRenderObjectHitTestExt::hit_test(self, results)
-    //     // TODO: for detached layers, impl the real hit test logic
     // }
 }

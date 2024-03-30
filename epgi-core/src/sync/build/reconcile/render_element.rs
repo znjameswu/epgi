@@ -4,8 +4,8 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementNode, ImplRenderObject,
-        MainlineState, RenderAction, RenderElement, RenderNew, RenderObjectSlots,
+        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementNode, ImplRenderObjectReconcile,
+        MainlineState, RenderAction, RenderElement, Render, RenderObjectSlots,
         SelectArcRenderObject, TreeNode,
     },
 };
@@ -19,7 +19,7 @@ where
 {
     fn visit_commit(
         element_node: &Self::ElementNode,
-        render_object: Option<Arc<<E::Render as RenderNew>::RenderObject>>,
+        render_object: Option<Arc<<E::Render as Render>::RenderObject>>,
         render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
@@ -117,14 +117,14 @@ where
             }
         });
 
-        let new_render_object = Arc::new(<E::Render as RenderNew>::RenderObject::new(
+        let new_render_object = Arc::new(<E::Render as Render>::RenderObject::new(
             E::create_render(&element, &widget), //TODO: This could panic
             child_render_objects,
             element_context.clone(),
         ));
 
         if let Some(layer_render_object) =
-            <E::Render as RenderNew>::RenderObject::try_as_aweak_any_layer_render_object(
+            <E::Render as Render>::RenderObject::try_as_aweak_any_layer_render_object(
                 &new_render_object,
             )
         {
@@ -145,7 +145,7 @@ where
     #[inline(always)]
     pub(crate) fn visit_commit_attached(
         &self,
-        render_object: Arc<<E::Render as RenderNew>::RenderObject>,
+        render_object: Arc<<E::Render as Render>::RenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
@@ -312,7 +312,7 @@ where
 
         if let Some(new_attached_render_object) = new_attached_render_object {
             if let Some(layer_render_object) =
-                <E::Render as RenderNew>::RenderObject::try_as_aweak_any_layer_render_object(
+                <E::Render as Render>::RenderObject::try_as_aweak_any_layer_render_object(
                     &new_attached_render_object,
                 )
             {
@@ -328,11 +328,11 @@ where
     pub(crate) fn rebuild_success_process_attached(
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        render_object: Arc<<E::Render as RenderNew>::RenderObject>,
+        render_object: Arc<<E::Render as Render>::RenderObject>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         is_new_widget: bool,
     ) -> (
-        Option<Arc<<E::Render as RenderNew>::RenderObject>>,
+        Option<Arc<<E::Render as Render>::RenderObject>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -392,7 +392,7 @@ where
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
-        Option<Arc<<E::Render as RenderNew>::RenderObject>>,
+        Option<Arc<<E::Render as Render>::RenderObject>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -414,7 +414,7 @@ where
 
         if let Some(render_object) = render_object {
             if let Some(layer_render_object) =
-                <E::Render as RenderNew>::RenderObject::try_as_aweak_any_layer_render_object(
+                <E::Render as Render>::RenderObject::try_as_aweak_any_layer_render_object(
                     &render_object,
                 )
             {
@@ -434,7 +434,7 @@ where
         element_context: &ArcElementContextNode,
         children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-    ) -> Option<Arc<<E::Render as RenderNew>::RenderObject>> {
+    ) -> Option<Arc<<E::Render as Render>::RenderObject>> {
         let mut suspended = false;
         let option_child_render_objects =
             children.zip_ref_collect(render_object_changes, |child, change| {
@@ -460,7 +460,7 @@ where
         } else {
             let new_render_children =
                 option_child_render_objects.map_collect(|child| child.expect("Impossible to fail"));
-            let new_render_object = Arc::new(<E::Render as RenderNew>::RenderObject::new(
+            let new_render_object = Arc::new(<E::Render as Render>::RenderObject::new(
                 E::create_render(&element, &widget), //TODO: This could panic
                 new_render_children,
                 element_context.clone(),

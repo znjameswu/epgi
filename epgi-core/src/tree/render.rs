@@ -1,6 +1,3 @@
-mod layer_or_unit;
-pub use layer_or_unit::*;
-
 mod mark;
 pub use mark::*;
 
@@ -13,20 +10,16 @@ use crate::{
     foundation::{
         default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
-        AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, ConstBool,
-        HktContainer, Key, LayerProtocol, PaintContext, Protocol, SyncMutex, Transform,
-        TransformHitPosition,
+        AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, HktContainer, Key,
+        LayerProtocol, PaintContext, Protocol, SyncMutex, Transform, TransformHitPosition,
     },
-    sync::{
-        SelectCompositeImpl, SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl,
-        SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary,
-    },
+    sync::{SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl},
 };
 
 use super::{
     ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject,
     ChildLayerProducingIterator, ContainerOf, ElementContextNode, LayerCache,
-    LayerCompositionConfig, LayerMark, PaintResults, RenderObjectSlots,
+    LayerCompositionConfig, LayerMark, PaintResults,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -41,7 +34,7 @@ pub trait TreeNode: Send + Sync {
     type ChildContainer: HktContainer;
 }
 
-pub trait RenderNew:
+pub trait Render:
     TreeNode
     + HasLayoutMemo
     + SelectOrphanLayer<
@@ -55,7 +48,7 @@ pub trait RenderNew:
     // type CachedComposite: ConstBool;
     // type OrphanLayer: ConstBool;
 
-    type RenderObject: ImplRenderObject<Self>;
+    type RenderObject: ImplRenderObjectReconcile<Self> + ChildRenderObject<Self::ParentProtocol>;
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut Self::RenderObject) -> AnyRawPointer)]
     {
@@ -70,6 +63,16 @@ pub trait HasLayoutMemo {
     type LayoutMemo: Send + Sync;
 }
 
+/// Dry layout means that under all circumstances, this render object's size is solely determined
+/// by the constraints given by its parents.
+///
+/// Since the size of its children does not affect its own size,
+/// this render object will always serves as a relayout boundary.
+///
+/// Contrary to what you may assume, dry-layout itself does not bring
+/// any additional optimization during the actual layout visit.
+/// It still needs to layout its children if dirty or receiving a new constraints.
+/// It merely serves a boundary to halt relayout propagation.
 pub trait Layout: TreeNode + HasLayoutMemo {
     fn perform_layout(
         &mut self,
@@ -316,7 +319,7 @@ impl<C: Canvas> Hkt for HktLayerCache<C> {
 
 impl<R> SelectLayerPaint<true> for R
 where
-    R: RenderNew,
+    R: Render,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
@@ -343,89 +346,6 @@ where
     R::ParentProtocol: LayerProtocol,
 {
     type AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas;
-}
-
-pub trait Render: Sized + Send + Sync + 'static {
-    // type Element: Element<ArcRenderObject = Arc<RenderObject<Self>>>;
-
-    type ParentProtocol: Protocol;
-    type ChildProtocol: Protocol;
-
-    // type RenderObject: ChildRenderObject<Self::ParentProtocol>
-    //     + ParentRenderObject<Self::ChildProtocol>
-    //     + ChildRenderObjectWithCanvas<<Self::ParentProtocol as Protocol>::Canvas>;
-
-    type ChildContainer: HktContainer;
-
-    fn detach(&mut self) {}
-
-    /// Whether [Render::detach] is a no-op
-    ///
-    /// When set to true, [Render::detach]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::detach] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior. And this is why it's left as false.
-    /// Render objects that do not manage any external resources may consider setting this to true.
-    const NOOP_DETACH: bool = false;
-
-    type LayoutMemo: Send + Sync + 'static;
-
-    fn perform_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
-
-    /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
-    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> = None;
-
-    // We don't make perform paint into an associated constant because it has an generic paramter
-    // Then we have to go to associated generic type, which makes the boilerplate explodes.
-    fn perform_paint(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    );
-
-    fn hit_test_children(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool;
-
-    fn hit_test_self(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
-        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
-    }
-
-    type LayerOrUnit: LayerOrUnit<Self>;
-
-    // Use RenderObject<R> as receiver instead of a self receiver.
-    // Because the receiver type must be at least no lower than the last polymorphic boundary,
-    // if we wish to extend interface from external code.
-    fn all_hit_test_interfaces(
-    ) -> &'static [(TypeId, fn(*mut RenderObjectOld<Self>) -> AnyRawPointer)] {
-        &[]
-    }
 }
 
 pub enum HitTestBehavior {
@@ -459,13 +379,7 @@ where
         &self.curr_position
     }
 
-    pub fn interface_exist_on<R: RenderNew>(&self) -> bool {
-        R::all_hit_test_interfaces()
-            .iter()
-            .any(|(type_id, _)| self.trait_type_id == *type_id)
-    }
-
-    pub fn interface_exist_on_old<R: Render>(&self) -> bool {
+    pub fn interface_exist_on<R: Render>(&self) -> bool {
         R::all_hit_test_interfaces()
             .iter()
             .any(|(type_id, _)| self.trait_type_id == *type_id)
@@ -516,22 +430,9 @@ impl<
     > CastInterfaceByRawPtr
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
-{
-    fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
-        default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
-    }
-
-    fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
-        default_cast_interface_by_table_raw_mut(self, trait_type_id, R::all_hit_test_interfaces())
-    }
-}
-
-impl<R> CastInterfaceByRawPtr for RenderObjectOld<R>
-where
-    R: Render,
 {
     fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
         default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
@@ -550,52 +451,6 @@ macro_rules! hit_test_interface_query_table {
 }
 
 pub use hit_test_interface_query_table;
-
-/// Dry layout means that under all circumstances, this render object's size is solely determined
-/// by the constraints given by its parents.
-///
-/// Since the size of its children does not affect its own size,
-/// this render object will always serves as a relayout boundary.
-///
-/// Contrary to what you may assume, dry-layout itself does not bring
-/// any additional optimization during the actual layout visit.
-/// It still needs to layout its children if dirty or receiving a new constraints.
-/// It merely serves a boundary to halt relayout propagation.
-pub trait DryLayoutOld: Render {
-    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> =
-        Some(DryLayoutFunctionTable {
-            compute_dry_layout: Self::compute_dry_layout,
-            compute_layout_memo: Self::compute_layout_memo,
-        });
-
-    fn compute_dry_layout(
-        &self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-    ) -> <Self::ParentProtocol as Protocol>::Size;
-
-    fn compute_layout_memo(
-        &self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo;
-}
-
-pub struct DryLayoutFunctionTable<R: Render> {
-    pub compute_dry_layout: fn(
-        &R,
-        &<R::ParentProtocol as Protocol>::Constraints,
-    ) -> <R::ParentProtocol as Protocol>::Size,
-
-    pub compute_layout_memo: fn(
-        &R,
-        &<R::ParentProtocol as Protocol>::Constraints,
-        &<R::ParentProtocol as Protocol>::Size,
-        &<R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
-    ) -> R::LayoutMemo,
-}
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum RenderAction {
@@ -647,9 +502,7 @@ impl RenderAction {
     }
 }
 
-pub trait ImplRenderObject<R: TreeNode>:
-    ChildRenderObject<R::ParentProtocol> + Send + Sync + Sized
-{
+pub trait ImplRenderObjectReconcile<R: TreeNode>: Send + Sync + Sized {
     fn new(
         render: R,
         children: ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
@@ -668,15 +521,12 @@ impl<
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplRenderObject<R>
+    > ImplRenderObjectReconcile<R>
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
-    R: SelectLayoutImpl<DRY_LAYOUT>,
-    R: SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>,
-    R: SelectHitTestImpl<ORPHAN_LAYER>,
 {
     fn new(
         render: R,
@@ -705,7 +555,6 @@ where
     }
 }
 
-
 pub trait ChildRenderObject<PP: Protocol>:
     AnyRenderObject
     + crate::sync::ChildRenderObjectLayoutExt<PP>
@@ -726,21 +575,12 @@ impl<
     > ChildRenderObject<R::ParentProtocol>
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectLayoutImpl<DRY_LAYOUT>,
     R: SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>,
     R: SelectHitTestImpl<ORPHAN_LAYER>,
-{
-    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
-        self
-    }
-}
-
-impl<R> ChildRenderObject<R::ParentProtocol> for RenderObjectOld<R>
-where
-    R: Render,
 {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
         self
@@ -790,7 +630,7 @@ impl<
         const ORPHAN_LAYER: bool,
     > AnyRenderObject for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     Self: crate::sync::AnyRenderObjectLayoutExt,
@@ -805,40 +645,6 @@ where
 
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
         todo!()
-    }
-
-    fn mark_render_action(
-        &self,
-        child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction {
-        todo!()
-    }
-
-    fn try_as_aweak_any_layer_render_object(
-        render_object: &Arc<Self>,
-    ) -> Option<AweakAnyLayerRenderObject>
-    where
-        Self: Sized,
-    {
-        todo!()
-    }
-}
-
-impl<R> AnyRenderObject for RenderObjectOld<R>
-where
-    R: Render,
-{
-    fn element_context(&self) -> &ElementContextNode {
-        &self.element_context
-    }
-
-    fn detach(&self) {
-        todo!()
-    }
-
-    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
-        <R::LayerOrUnit as LayerOrUnit<R>>::downcast_arc_any_layer_render_object(self)
     }
 
     fn mark_render_action(
@@ -880,15 +686,10 @@ impl<
     > ChildRenderObjectWithCanvas<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectOrphanLayer<ORPHAN_LAYER>,
-{
-}
-
-impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObjectOld<R> where
-    R: Render
 {
 }
 

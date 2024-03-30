@@ -1,12 +1,8 @@
-use crate::{
-    foundation::{HktContainer, LayerProtocol, Protocol, SyncMutex},
-    sync::{SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl},
-    tree::ContainerOf,
-};
+use crate::foundation::{HktContainer, LayerProtocol, Protocol, SyncMutex};
 
 use super::{
-    ArcChildRenderObject, ArcElementContextNode, CachedComposite, Hkt, ImplRenderObject,
-    LayerOrUnit, LayerPaint, NoRelayoutToken, Render, RenderMark, RenderNew, SelectLayerPaint,
+    ArcChildRenderObject, ArcElementContextNode, CachedComposite, Hkt, LayerPaint, NoRelayoutToken,
+    RenderMark, Render, SelectLayerPaint,
 };
 
 pub struct RenderObject<
@@ -16,7 +12,7 @@ pub struct RenderObject<
     const CACHED_COMPOSITE: bool = false,
     const ORPHAN_LAYER: bool = false,
 > where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>, // + SelectLayoutImpl<DRY_LAYOUT>
                                                    // + SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>
@@ -54,7 +50,7 @@ where
     type CompositionCache = <R as CachedComposite>::CompositionCache;
 }
 
-pub(crate) struct RenderObjectInner<R: RenderNew, C> {
+pub(crate) struct RenderObjectInner<R: Render, C> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
     pub(crate) cache: RenderCache<R, C>,
@@ -66,11 +62,11 @@ pub(crate) struct RenderObjectInner<R: RenderNew, C> {
 #[derive(Default)]
 pub(crate) struct RenderCache<R, LC>(Option<LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>>)
 where
-    R: RenderNew;
+    R: Render;
 
 impl<R, LC> RenderCache<R, LC>
 where
-    R: RenderNew,
+    R: Render,
 {
     pub(crate) fn new() -> Self {
         Self(None)
@@ -127,65 +123,6 @@ where
     }
 }
 
-pub struct RenderObjectOld<R: Render, const DRY_LAYOUT: bool = false> {
-    pub(crate) element_context: ArcElementContextNode,
-    pub(crate) mark: RenderMark,
-    pub(crate) layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::LayerMark,
-    pub(crate) inner: SyncMutex<RenderObjectInnerOld<R>>,
-}
-
-impl<R, const HAS_LAYER: bool> RenderObjectOld<R, HAS_LAYER>
-where
-    R: Render,
-{
-    pub fn new(
-        render: R,
-        children: <R::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<R::ChildProtocol>,
-        >,
-        element_context: ArcElementContextNode,
-    ) -> Self {
-        // debug_assert!(
-        //     element_context.has_render,
-        //     "A render object node must have a render context node in its element context node"
-        // );
-        Self {
-            element_context,
-            mark: RenderMark::new(),
-            layer_mark: <R::LayerOrUnit as LayerOrUnit<R>>::create_layer_mark(),
-            inner: SyncMutex::new(RenderObjectInnerOld {
-                cache: RenderCacheOld(None),
-                render,
-                children,
-            }),
-        }
-    }
-
-    pub fn modify_render_with<T>(&self, f: impl Fn(&mut R) -> T) -> T {
-        f(&mut self.inner.lock().render)
-    }
-}
-
-pub(crate) struct RenderObjectInnerOld<R: Render> {
-    // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
-    // boundaries: Option<RenderObjectBoundaries>,
-    pub(crate) cache: RenderCacheOld<R>,
-    pub(crate) render: R,
-    pub(crate) children:
-        <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
-}
-
-// This helper type helps us to split borrow RenderObjectInner
-pub(crate) struct RenderCacheOld<R: Render>(
-    Option<
-        LayoutCache<
-            R::ParentProtocol,
-            R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
-        >,
-    >,
-);
-
 pub(crate) struct LayoutCache<P: Protocol, M, LC> {
     pub(crate) layout_results: LayoutResults<P, M>,
     // Because the layer paint is designed to be parallel over dirty render object
@@ -235,81 +172,6 @@ where
             size,
             memo,
         }
-    }
-}
-
-impl<R> RenderCacheOld<R>
-where
-    R: Render,
-{
-    // The ZST token guards against accidentally accessing staled layout results
-    #[inline(always)]
-    pub(crate) fn layout_cache_ref(
-        &self,
-        _token: NoRelayoutToken,
-    ) -> Option<
-        &LayoutCache<
-            R::ParentProtocol,
-            R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
-        >,
-    > {
-        self.0.as_ref()
-    }
-
-    // The ZST token guards against accidentally accessing staled layout results
-    #[inline(always)]
-    pub(crate) fn layout_cache_mut(
-        &mut self,
-        _token: NoRelayoutToken,
-    ) -> Option<
-        &mut LayoutCache<
-            R::ParentProtocol,
-            R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
-        >,
-    > {
-        self.0.as_mut()
-    }
-
-    pub(crate) fn insert_layout_cache(
-        &mut self,
-        cache: LayoutCache<
-            R::ParentProtocol,
-            R::LayoutMemo,
-            <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
-        >,
-    ) -> &mut LayoutCache<
-        R::ParentProtocol,
-        R::LayoutMemo,
-        <R::LayerOrUnit as LayerOrUnit<R>>::LayerCache,
-    > {
-        self.0.insert(cache)
-    }
-
-    #[inline(always)]
-    pub(crate) fn last_layout_constraints_ref(
-        &self,
-    ) -> Option<&<R::ParentProtocol as Protocol>::Constraints> {
-        self.0
-            .as_ref()
-            .map(|cache| &cache.layout_results.constraints)
-    }
-
-    #[inline(always)]
-    pub(crate) fn last_layout_constraints_mut(
-        &mut self,
-    ) -> Option<&mut <R::ParentProtocol as Protocol>::Constraints> {
-        self.0
-            .as_mut()
-            .map(|cache| &mut cache.layout_results.constraints)
-    }
-
-    #[inline(always)]
-    pub(crate) fn last_layout_results_mut(
-        &mut self,
-    ) -> Option<&mut LayoutResults<R::ParentProtocol, R::LayoutMemo>> {
-        self.0.as_mut().map(|cache| &mut cache.layout_results)
     }
 }
 

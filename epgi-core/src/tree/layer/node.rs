@@ -1,15 +1,15 @@
 use crate::{
     foundation::{Arc, Canvas, False, Key, LayerProtocol, Protocol, True},
     tree::{
-        AnyRenderObject, LayerPaint, RenderNew, RenderObject, RenderObjectOld,
-        SelectCachedComposite, SelectLayerPaint,
+        AnyRenderObject, LayerPaint, Render, RenderObject, SelectCachedComposite,
+        SelectLayerPaint,
     },
 };
 
 use super::{
     AnyLayerRenderObject, ArcAdoptedLayerRenderObject, ArcAnyLayerRenderObject,
     ArcChildLayerRenderObject, ChildLayerOrFragmentRef, ChildLayerRenderObject,
-    LayerCompositionConfig, LayerRender, NoRecompositeToken, LayerMark,
+    LayerCompositionConfig, LayerMark, NoRecompositeToken,
 };
 
 pub struct LayerCache<C: Canvas, T> {
@@ -105,31 +105,12 @@ impl<
     > AnyLayerRenderObject
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     Self: AnyRenderObject
         + crate::sync::AnyLayerRenderObjectPaintExt
         + crate::sync::AnyLayerRenderObjectCompositeExt,
-{
-    fn mark(&self) -> &LayerMark {
-        todo!()
-    }
-
-    fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn std::any::Any> {
-        todo!()
-    }
-
-    fn get_composited_cache_box(&self) -> Option<Box<dyn std::any::Any + Send + Sync>> {
-        todo!()
-    }
-}
-
-impl<R> AnyLayerRenderObject for RenderObjectOld<R>
-where
-    R: LayerRender,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
 {
     fn mark(&self) -> &LayerMark {
         todo!()
@@ -153,21 +134,10 @@ impl<
     > ChildLayerRenderObject<R::AdopterCanvas>
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<LAYER_PAINT>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     Self: crate::sync::ChildLayerRenderObjectCompositeExt<R::AdopterCanvas>,
-{
-    fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject {
-        todo!()
-    }
-}
-
-impl<R> ChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas> for RenderObjectOld<R>
-where
-    R: LayerRender,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
 {
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject {
         todo!()

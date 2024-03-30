@@ -10,9 +10,9 @@ pub use node::*;
 
 use std::{any::Any, ops::Mul};
 
-use crate::foundation::{Arc, Aweak, Canvas, Key, LayerProtocol, Protocol, Transform};
+use crate::foundation::{Arc, Aweak, Canvas, Transform};
 
-use super::{AnyRenderObject, Render};
+use super::AnyRenderObject;
 
 // pub type ArcChildLayer<C> = Arc<dyn ChildLayer<ParentCanvas = C>>;
 // pub type ArcParentLayer<C> = Arc<dyn ParentLayer<ChildCanvas = C>>;
@@ -27,116 +27,6 @@ pub type ArcLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 pub type ArcAdoptedLayerRenderObject<C> = Arc<dyn AdoptedLayerRenderObject<C>>;
 pub type ArcAnyLayerRenderObject = Arc<dyn AnyLayerRenderObject>;
 pub type AweakAnyLayerRenderObject = Aweak<dyn AnyLayerRenderObject>;
-
-pub trait LayerRender: Render<LayerOrUnit = Self> + Send + Sync + Sized + 'static
-where
-    <Self as Render>::ParentProtocol: LayerProtocol,
-    <Self as Render>::ChildProtocol: LayerProtocol,
-{
-    fn composite_to(
-        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-    );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
-
-    fn transform_hit_test(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-    ) -> <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::HitPosition;
-
-    fn key(&self) -> Option<&Arc<dyn Key>>;
-
-    // const PERFORM_ORPHAN_COMPOSITION: Option<PerformOrphanComposition<Self>> = None;
-
-    /// Should default to the unit type `()` or [Never].
-    type CachedComposition: Clone + Send + Sync;
-    const CACHED_COMPOSITION_FUNCTION_TABLE: Option<CachedCompositionFunctionTable<Self>> = None;
-}
-
-// pub struct PerformOrphanComposition<L>
-// where
-//     L: Layer,
-// {
-//     composite_orphan_to: fn(
-//         encoding: &mut <L::ChildCanvas as Canvas>::Encoding,
-//         child_iterator: &mut NonCachingOrphanChildLayerProducingIterator<'_, L>,
-//         composition_config: &LayerCompositionConfig<L::ChildCanvas>,
-//     ),
-
-//     transform_orphan_config: fn(
-//         self_config: &LayerCompositionConfig<L::ChildCanvas>,
-//         child_config: &LayerCompositionConfig<L::ChildCanvas>,
-//     ) -> LayerCompositionConfig<L::ChildCanvas>,
-
-//     adopter_key: fn(&L) -> Option<&Arc<dyn Key>>,
-// }
-
-// Orphaned layer disrespect the parent protocol
-pub trait OrphanLayerRender: LayerRender
-where
-    <Self as Render>::ParentProtocol: LayerProtocol,
-    <Self as Render>::ChildProtocol: LayerProtocol,
-{
-    fn composite_orphan_to(
-        encoding: &mut <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    );
-
-    fn transform_orphan_config(
-        self_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>;
-
-    fn adopter_key(&self) -> Option<&Arc<dyn Key>>;
-}
-
-pub struct CachedCompositionFunctionTable<R: LayerRender>
-where
-    R::ParentProtocol: LayerProtocol,
-    R::ChildProtocol: LayerProtocol,
-{
-    pub composite_into_cache: fn(
-        child_iterator: &mut CachingChildLayerProducingIterator<
-            '_,
-            <R::ChildProtocol as Protocol>::Canvas,
-        >,
-    ) -> R::CachedComposition,
-
-    pub composite_from_cache_to: fn(
-        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        cache: &R::CachedComposition,
-        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
-    ),
-}
-
-pub trait CachedLayer: LayerRender
-where
-    <Self as Render>::ParentProtocol: LayerProtocol,
-    <Self as Render>::ChildProtocol: LayerProtocol,
-{
-    const PERFORM_CACHED_COMPOSITION: Option<CachedCompositionFunctionTable<Self>> =
-        Some(CachedCompositionFunctionTable {
-            composite_into_cache: |child_iterator| {
-                <Self as CachedLayer>::composite_into_cache(child_iterator)
-            },
-            composite_from_cache_to: Self::composite_from_cache_to,
-        });
-    fn composite_into_cache(
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> Self::CachedComposition;
-
-    fn composite_from_cache_to(
-        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        cache: &Self::CachedComposition,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-    );
-}
 
 pub trait ChildLayerProducingIterator<CC: Canvas> {
     fn for_each(

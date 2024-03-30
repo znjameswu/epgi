@@ -1,16 +1,11 @@
 use hashbrown::HashSet;
 
 use crate::{
-    foundation::{
-        Arc, AsIterator, Canvas, ConstBool, False, HktContainer, LayerProtocol, PaintContext,
-        Protocol, PtrEq, True,
-    },
+    foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        layer_render_function_table_of, ArcChildRenderObject, AweakAnyLayerRenderObject,
-        HasLayoutMemo, HktLayerCache, LayerCache, LayerPaint, LayerRender,
-        LayerRenderFunctionTable, NotDetachedToken, OrphanLayer, Paint, Render, RenderNew,
-        RenderObject, RenderObjectOld, SelectCachedComposite, SelectLayerPaint, TreeNode,
+        ArcChildRenderObject, AweakAnyLayerRenderObject, HasLayoutMemo, LayerCache, LayerPaint,
+        Paint, Render, RenderObject, SelectCachedComposite, SelectLayerPaint, TreeNode,
     },
 };
 
@@ -40,7 +35,7 @@ impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER
     AnyLayerRenderObjectPaintExt
     for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self>
+    R: Render<RenderObject = Self>
         + SelectLayerPaint<true>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: LayerPaint,
@@ -55,41 +50,6 @@ where
         let mut inner = self.inner.lock();
 
         let paint_results = R::paint_layer(&inner.render, &inner.children);
-        let layout_cache = inner
-            .cache
-            .layout_cache_mut(no_relayout_token)
-            .expect("Repaint can only be performed after layout has finished");
-        layout_cache.layer_cache = Some(LayerCache::new(paint_results, None));
-    }
-}
-
-impl<R> AnyLayerRenderObjectPaintExt for RenderObjectOld<R>
-where
-    R: LayerRender,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
-{
-    fn repaint_if_attached(&self) {
-        let Err(token) = self.mark.is_detached() else {
-            return;
-        };
-        self.repaint(token);
-    }
-}
-
-impl<R> RenderObjectOld<R>
-where
-    R: LayerRender,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
-{
-    fn repaint(&self, _not_detached_token: NotDetachedToken) {
-        let no_relayout_token = self.mark.assume_not_needing_layout();
-        let mut inner = self.inner.lock();
-        let paint_results =
-            <<R::ChildProtocol as Protocol>::Canvas as Canvas>::paint_render_objects(
-                inner.children.as_iter().cloned(),
-            );
         let layout_cache = inner
             .cache
             .layout_cache_mut(no_relayout_token)
@@ -155,13 +115,15 @@ where
 impl<
         R,
         const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool, 
+        const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > ChildRenderObjectPaintExtImpl<R::ParentProtocol>
     for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: RenderNew<RenderObject = Self> + SelectLayerPaint<LAYER_PAINT> + SelectCachedComposite<CACHED_COMPOSITE>,
+    R: Render<RenderObject = Self>
+        + SelectLayerPaint<LAYER_PAINT>
+        + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>,
 {
     fn paint_impl(
@@ -175,7 +137,7 @@ where
         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
             panic!("Paint should only be called after layout has finished")
         };
-        inner_reborrow.render.perform_paint(
+        inner_reborrow.render.paint_into_context(
             &self,
             &cache.layout_results.size,
             &offset,
@@ -187,141 +149,10 @@ where
     }
 }
 
-// impl<
-//         R,
-//         const DRY_LAYOUT: bool,
-//         // const CACHED_COMPOSITE: bool,
-//         // const ORPHAN_LAYER: bool,
-//     > ChildRenderObjectPaintExtImpl<R::ParentProtocol>
-//     for RenderObject<R, DRY_LAYOUT, false, false, false>
-// where
-//     R: RenderNew<RenderObject = Self> + SelectLayerPaint<false> + SelectCachedComposite<false>,
-//     R: Paint,
-// {
-//     fn paint_impl(
-//         self: Arc<Self>,
-//         offset: <R::ParentProtocol as Protocol>::Offset,
-//         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
-//     ) {
-//         let mut inner = self.inner.lock();
-//         let inner_reborrow = &mut *inner;
-//         let token = self.mark.assume_not_needing_layout();
-//         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
-//             panic!("Paint should only be called after layout has finished")
-//         };
-//         inner_reborrow.render.perform_paint(
-//             &cache.layout_results.size,
-//             &offset,
-//             &cache.layout_results.memo,
-//             &inner_reborrow.children,
-//             paint_ctx,
-//         );
-//         cache.paint_offset = Some(offset);
-//     }
-// }
-
-// impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool>
-//     ChildRenderObjectPaintExtImpl<R::ParentProtocol>
-//     for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>
-// where
-//     R: RenderNew<RenderObject = Self>
-//         + SelectLayerPaint<true>
-//         + SelectCachedComposite<CACHED_COMPOSITE>,
-//     R: LayerPaint,
-//     R::ParentProtocol: LayerProtocol,
-//     R::ChildProtocol: LayerProtocol,
-//     R: SelectCompositeImpl<CACHED_COMPOSITE, false>,
-// {
-//     fn paint_impl(
-//         self: Arc<Self>,
-//         offset: <R::ParentProtocol as Protocol>::Offset,
-//         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
-//     ) {
-//         let mut inner = self.inner.lock();
-//         let inner_reborrow = &mut *inner;
-//         let token = self.mark.assume_not_needing_layout();
-//         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
-//             panic!("Paint should only be called after layout has finished")
-//         };
-//         paint_ctx.add_layer(self.clone(), |transform| {
-//             <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
-//         });
-//         cache.paint_offset = Some(offset);
-//     }
-// }
-
-// impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool>
-//     ChildRenderObjectPaintExtImpl<R::ParentProtocol>
-//     for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>
-// where
-//     R: RenderNew<RenderObject = Self>
-//         + SelectLayerPaint<true>
-//         + SelectCachedComposite<CACHED_COMPOSITE>,
-//     R: OrphanLayer,
-//     R::ParentProtocol: LayerProtocol,
-//     R::ChildProtocol: LayerProtocol,
-//     R: SelectCompositeImpl<CACHED_COMPOSITE, true>,
-// {
-//     fn paint_impl(
-//         self: Arc<Self>,
-//         offset: <R::ParentProtocol as Protocol>::Offset,
-//         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
-//     ) {
-//         let mut inner = self.inner.lock();
-//         let inner_reborrow = &mut *inner;
-//         let token = self.mark.assume_not_needing_layout();
-//         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
-//             panic!("Paint should only be called after layout has finished")
-//         };
-//         // paint_ctx.add_orphan_layer(self.clone(), |transform| {
-//         //     <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
-//         // });
-//         cache.paint_offset = Some(offset);
-//     }
-// }
-
-impl<R> ChildRenderObjectPaintExtImpl<R::ParentProtocol> for RenderObjectOld<R>
-where
-    R: Render,
+pub trait SelectPaintImpl<const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>:
+    TreeNode + HasLayoutMemo
 {
-    fn paint_impl(
-        self: Arc<Self>,
-        offset: <R::ParentProtocol as Protocol>::Offset,
-        paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
-    ) {
-        let mut inner = self.inner.lock();
-        let inner_reborrow = &mut *inner;
-        let token = self.mark.assume_not_needing_layout();
-        let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
-            panic!("Paint should only be called after layout has finished")
-        };
-
-        cache.paint_offset = Some(offset.clone());
-
-        if let LayerRenderFunctionTable::LayerRender {
-            into_arc_child_layer_render_object,
-            compute_canvas_transform,
-            ..
-        } = layer_render_function_table_of::<R>()
-        {
-            drop(inner);
-            paint_ctx.add_layer(into_arc_child_layer_render_object(self), |transform| {
-                compute_canvas_transform(&offset, transform)
-            })
-        } else {
-            inner_reborrow.render.perform_paint(
-                &cache.layout_results.size,
-                &offset,
-                &cache.layout_results.memo,
-                &inner_reborrow.children,
-                paint_ctx,
-            );
-        }
-    }
-}
-
-pub trait SelectPaintImpl<const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>: TreeNode + HasLayoutMemo {
-    fn perform_paint(
+    fn paint_into_context(
         &self,
         render_object: &Arc<Self::RenderObject>,
         size: &<Self::ParentProtocol as Protocol>::Size,
@@ -332,16 +163,16 @@ pub trait SelectPaintImpl<const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>: Tr
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) where
-        Self: RenderNew;
+        Self: Render;
 }
 
 impl<R> SelectPaintImpl<false, false> for R
 where
     R: Paint,
 {
-    fn perform_paint(
+    fn paint_into_context(
         &self,
-        render_object: &Arc<<Self as RenderNew>::RenderObject>,
+        render_object: &Arc<<Self as Render>::RenderObject>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
@@ -350,41 +181,15 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) where
-        Self: RenderNew,
+        Self: Render,
     {
         self.perform_paint(size, offset, memo, children, paint_ctx)
     }
 }
 
-// impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
-//     SelectPaintImpl<true> for R
-// where
-//     R: RenderNew<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>>
-//         + SelectLayerPaint<true>
-//         + SelectCachedComposite<CACHED_COMPOSITE>,
-//     R: SelectCompositeImpl<CACHED_COMPOSITE, ORPHAN_LAYER>,
-//     R: Paint,
-// {
-//     fn perform_paint(
-//         &self,
-//         render_object: &Arc<<Self as RenderNew>::RenderObject>,
-//         size: &<Self::ParentProtocol as Protocol>::Size,
-//         offset: &<Self::ParentProtocol as Protocol>::Offset,
-//         memo: &Self::LayoutMemo,
-//         children: &<Self::ChildContainer as HktContainer>::Container<
-//             ArcChildRenderObject<Self::ChildProtocol>,
-//         >,
-//         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-//     ) where
-//         Self: RenderNew,
-//     {
-//         todo!()
-//     }
-// }
-impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool>
-    SelectPaintImpl<true, false> for R
+impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> SelectPaintImpl<true, false> for R
 where
-    R: RenderNew<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>>
+    R: Render<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>>
         + SelectLayerPaint<true>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectCompositeImpl<CACHED_COMPOSITE, false>,
@@ -392,9 +197,9 @@ where
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
-    fn perform_paint(
+    fn paint_into_context(
         &self,
-        render_object: &Arc<<Self as RenderNew>::RenderObject>,
+        render_object: &Arc<<Self as Render>::RenderObject>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
@@ -403,7 +208,7 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) where
-        Self: RenderNew,
+        Self: Render,
     {
         paint_ctx.add_layer(render_object.clone(), |transform| {
             <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
@@ -411,10 +216,9 @@ where
     }
 }
 
-impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool>
-    SelectPaintImpl<true, true> for R
+impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> SelectPaintImpl<true, true> for R
 where
-    R: RenderNew<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>>
+    R: Render<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>>
         + SelectLayerPaint<true>
         + SelectCachedComposite<CACHED_COMPOSITE>,
     R: SelectCompositeImpl<CACHED_COMPOSITE, true>,
@@ -423,9 +227,9 @@ where
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
-    fn perform_paint(
+    fn paint_into_context(
         &self,
-        render_object: &Arc<<Self as RenderNew>::RenderObject>,
+        render_object: &Arc<<Self as Render>::RenderObject>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
@@ -434,7 +238,7 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     ) where
-        Self: RenderNew,
+        Self: Render,
     {
         paint_ctx.add_orphan_layer(render_object.clone(), |transform| {
             <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
