@@ -1,5 +1,4 @@
-
-Element & Render Specialization Design
+Specialization and Inheritance
 ==============
 
 # Problem Statement
@@ -82,4 +81,105 @@ impl<R> IsLayerRender<R> for False where R: Render {
 Creates
 
 
-    
+TODO
+
+# Inheritance emulation
+
+Inheritance is very useful tool in UI tools. It is very natural to abstract away the base trait which is often too verbose and too hard to impl, and let users impl a more specific trait, and "inherit" the all the behaviors available on the base trait.
+
+Indeed, rust allows "impl trait on trait" pattern to allow this behavior, but only in a very limited way. Rust's type system enforces a strict orphan rule. Generally speaking, Rust only allows for one child trait for one base trait. So the inheritance relation is strictly a linear list (rather than a tree), if you can't prove the disjointness between child traits. 
+
+Linear inheritance is of little use for UI library which can create a vast number of child traits based on different aspects of assumptions. We need a inheritance tree rather than a linear inheritance list.
+
+Now we can construct disjoint generic traits by using different associated types, it is natural to extend it to emulate a inheritance tree.
+
+Three fundamental elements for a minimal inheritance tree:
+1. Disjointness of child traits. We need to prove no child trait under a common parent trait can overlap. This can be achieved by the associated type trick.
+2. Recursive resolution. When implementing a descendant trait, the compiler have to recursively trace upward to at least know which base trait is targeted, and generate implementation for the base trait.
+    1. Recursion requires a recursive type relations. 
+    2. Recursion requires a base case, or a stop point to stop the recursion when you reached the base trait.
+
+Rust's type system actually has a provision in its orphan rule that enables such recursion with a stop point.
+```rust
+// Impl target
+trait ImplBaseBySuperOrSelf {
+    fn foo_impl(&self); // The signature is notional. The Self receiver type actually has no use. The next code snippet shows a correct signature.
+}
+
+trait ImplBaseBySuper {
+    type Impl: ImplBaseBySuperOrSelf;
+}
+
+// Recursion
+impl<T: ImplBaseBySuper> ImplBaseBySuperOrSelf for T {
+    fn foo_impl(&self) {
+        T::Impl::foo_impl(self)
+    }
+}
+
+struct BaseImpl;
+
+// Stop point
+impl ImplBaseBySuperOrSelf for BaseImpl { // Note this does not conflict with the previous impl block
+    fn foo_impl(&self) {
+        // Base logic
+    }
+}
+```
+
+Note how the two impl blocks does not conflict with each other, since we can prove `ImplBaseBySuper` is not implemented for `BaseImpl`. And `BaseImpl` becomes the stop point.
+
+This technique, when combined with disjointness techniques from our specialization experiment, however, no longer works.
+
+```rust
+// Target
+trait Base {
+    fn foo(&self);
+}
+
+// Marker trait for disjoint associated types
+trait ImplBase: Sized {
+    type Impl: ImplBaseBySuperOrSelf<Self>;
+}
+
+// Connect target with helper trait
+impl<T:ImplBase> Base for T {
+    fn foo(&self) {
+        T::Impl::foo_impl(self)
+    }
+}
+
+// Target trait's helper trait, exist on associated types.
+trait ImplBaseBySuperOrSelf<T> {
+    fn foo_impl(value: &T);
+}
+
+trait ImplBaseBySuper<T> {
+    type Impl: ImplBaseBySuperOrSelf<T>;
+}
+
+// Recursion
+impl<I: ImplBaseBySuper<T>, T> ImplBaseBySuperOrSelf<T> for I {
+    fn foo_impl(value: &T) {
+        I::Impl::foo_impl(value)
+    }
+}
+
+struct BaseImpl;
+
+// Error: conflicting implementations of trait `ImplBaseBySuperOrSelf<_>` for type `BaseImpl`
+// downstream crates may implement trait `ImplBaseBySuper<_>` for type `BaseImpl
+impl<T> ImplBaseBySuperOrSelf<T> for BaseImpl { 
+    fn foo_impl(value: &T) {
+        // Base logic
+    }
+}
+```
+The stop point no longer works, because we cannot prove that `ImplBaseBySuper<T>` is not impl-ed for `BaseImpl` for every possible `T`, since `T` could be a user-defined type, even though `ImplBaseBySuper` is a private trait. The problem is caused by using generic trait to associate target types with associated types.
+
+Because we need to convey the self type into the helper trait, given that using generic trait is not possible, we can either use generic trait method or a generic struct.
+
+Generic trait: doesn't seem possible?
+
+Generic struct: Looks more and more resembling the Select\* trait pattern
+
