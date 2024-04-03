@@ -1,7 +1,7 @@
 use crate::foundation::{HktContainer, LayerProtocol, Protocol, SyncMutex};
 
 use super::{
-    ArcChildRenderObject, ArcElementContextNode, CachedComposite, Hkt, LayerPaint, NoRelayoutToken,
+    ArcChildRenderObject, ArcElementContextNode, CachedCompositeOld, Hkt, LayerPaint, NoRelayoutToken,
     RenderMark, Render, SelectLayerPaint,
 };
 
@@ -43,11 +43,11 @@ where
 
 impl<R> SelectCachedComposite<true> for R
 where
-    R: CachedComposite,
+    R: CachedCompositeOld,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
 {
-    type CompositionCache = <R as CachedComposite>::CompositionCache;
+    type CompositionCache = <R as CachedCompositeOld>::CompositionCache;
 }
 
 pub(crate) struct RenderObjectInner<R: Render, C> {

@@ -4,7 +4,7 @@ use epgi_core::{
         OptionContainer, PaintContext, Protocol, Provide, True,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedCompositeOld,
         ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer,
         ComposableChildLayer, DryLayout, Element, ElementNode, ElementReconcileItem, HasArcWidget,
         HasLayoutMemo, HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, RenderAction,
@@ -184,20 +184,20 @@ impl LayerPaint for RenderRoot {
     }
 }
 
-impl CachedComposite for RenderRoot {
+impl CachedCompositeOld for RenderRoot {
     type CompositionCache = Arc<Affine2dEncoding>;
 
     fn composite_into_cache(
         &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> <Self as CachedComposite>::CompositionCache {
+    ) -> <Self as CachedCompositeOld>::CompositionCache {
         todo!()
     }
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        cache: &<Self as CachedComposite>::CompositionCache,
+        cache: &<Self as CachedCompositeOld>::CompositionCache,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     ) {
         todo!()

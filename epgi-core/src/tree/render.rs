@@ -13,7 +13,9 @@ use crate::{
         AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, HktContainer, Key,
         LayerProtocol, PaintContext, Protocol, SyncMutex, Transform, TransformHitPosition,
     },
-    sync::{SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl},
+    sync::{
+        ImplComposite, ImplLayout, ImplPaint, SelectHitTestImpl, SelectLayoutImpl, SelectPaintImpl,
+    },
 };
 
 use super::{
@@ -48,6 +50,8 @@ pub trait Render:
     // type CachedComposite: ConstBool;
     // type OrphanLayer: ConstBool;
 
+    type RenderImpl: ImplRender;
+
     type RenderObject: ImplRenderObjectReconcile<Self> + ChildRenderObject<Self::ParentProtocol>;
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut Self::RenderObject) -> AnyRawPointer)]
@@ -57,6 +61,44 @@ pub trait Render:
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
+}
+
+pub trait ImplRender: ImplLayout<Self::Render> + ImplPaint<Self::Render> {
+    type Render: Render;
+}
+
+pub struct RenderImpl<
+    R: Render,
+    const DRY_LAYOUT: bool,
+    const LAYER_PAINT: bool,
+    const CACHED_COMPOSITE: bool,
+    const ORPHAN_LAYER: bool,
+>(PhantomData<R>);
+
+impl<
+        R: Render,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ImplRender for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    Self: ImplLayout<R>,
+    Self: ImplPaint<R>,
+{
+    type Render = R;
+}
+
+pub trait ImplRenderBySuper: ImplLayout<Self::Render> + ImplPaint<Self::Render> {
+    type Render: Render;
+    type Super: ImplRender<Render = Self::Render>;
+}
+
+impl<T> ImplRender for T
+where
+    T: ImplRenderBySuper,
+{
+    type Render = T::Render;
 }
 
 pub trait HasLayoutMemo {
@@ -164,17 +206,34 @@ where
         )
     }
 
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
+    // fn transform_config(
+    //     self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+    //     child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    // ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
 
     fn layer_key(&self) -> Option<&Arc<dyn Key>> {
         None
     }
 }
 
-pub trait Composite<const ORPHAN_LAYER: bool = false>:
+pub trait Composite<
+    AdopterCanvas: Canvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
+>: TreeNode
+{
+    fn composite_to(
+        &self,
+        encoding: &mut AdopterCanvas::Encoding,
+        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<AdopterCanvas>,
+    );
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<AdopterCanvas>,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<AdopterCanvas>;
+}
+
+pub trait CompositeOld<const ORPHAN_LAYER: bool>:
     TreeNode
     + LayerPaint
     + SelectOrphanLayer<
@@ -193,14 +252,44 @@ where
             <Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
         >,
     );
+    fn transform_config(
+        self_config: &LayerCompositionConfig<
+            <Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
+        >,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>;
 }
 
-pub trait CachedComposite<const ORPHAN_LAYER: bool = false>:
+pub trait CachedComposite<
+    AdopterCanvas: Canvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
+>: TreeNode
+{
+    type CompositionCache: Send + Sync + Clone + 'static;
+
+    fn composite_into_cache(
+        &self,
+        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> Self::CompositionCache;
+
+    fn composite_from_cache_to(
+        &self,
+        encoding: &mut AdopterCanvas::Encoding,
+        cache: &Self::CompositionCache,
+        composition_config: &LayerCompositionConfig<AdopterCanvas>,
+    );
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<AdopterCanvas>,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<AdopterCanvas>;
+}
+
+pub trait CachedCompositeOld<const ORPHAN_LAYER: bool = false>:
     TreeNode
     + LayerPaint
     + SelectCachedComposite<
         true,
-        CompositionCache = <Self as CachedComposite<ORPHAN_LAYER>>::CompositionCache,
+        CompositionCache = <Self as CachedCompositeOld<ORPHAN_LAYER>>::CompositionCache,
     > + SelectOrphanLayer<ORPHAN_LAYER>
 where
     Self::ParentProtocol: LayerProtocol,
@@ -211,16 +300,23 @@ where
     fn composite_into_cache(
         &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> <Self as CachedComposite<ORPHAN_LAYER>>::CompositionCache;
+    ) -> <Self as CachedCompositeOld<ORPHAN_LAYER>>::CompositionCache;
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut <<Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas as Canvas>::Encoding,
-        cache: &<Self as CachedComposite<ORPHAN_LAYER>>::CompositionCache,
+        cache: &<Self as CachedCompositeOld<ORPHAN_LAYER>>::CompositionCache,
         composition_config: &LayerCompositionConfig<
             <Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
         >,
     );
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<
+            <Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas,
+        >,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<Self as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>;
 }
 
 /// Orphan layers can skip this implementation
