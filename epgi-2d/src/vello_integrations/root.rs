@@ -4,15 +4,17 @@ use epgi_core::{
         OptionContainer, PaintContext, Protocol, Provide, True,
     },
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedCompositeOld,
-        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableAdoptedLayer,
-        ComposableChildLayer, DryLayout, Element, ElementNode, ElementReconcileItem, HasArcWidget,
-        HasLayoutMemo, HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, RenderAction,
-        RenderElement, Render, RenderObject, RenderObjectSlots, TreeNode, Widget,
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
+        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableChildLayer,
+        DryLayout, Element, ElementNode, ElementReconcileItem, HasArcWidget, HasLayoutMemo,
+        HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, Render, RenderAction,
+        RenderElement, RenderImpl, RenderObject, RenderObjectSlots, TreeNode, Widget,
     },
 };
 
-use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize};
+use crate::{
+    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
+};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -175,31 +177,33 @@ impl DryLayout for RenderRoot {
     }
 }
 
-impl LayerPaint for RenderRoot {
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
-        todo!()
-    }
-}
+impl LayerPaint for RenderRoot {}
 
-impl CachedCompositeOld for RenderRoot {
+impl CachedComposite for RenderRoot {
     type CompositionCache = Arc<Affine2dEncoding>;
 
     fn composite_into_cache(
         &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> <Self as CachedCompositeOld>::CompositionCache {
+    ) -> Self::CompositionCache {
         todo!()
     }
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        cache: &<Self as CachedCompositeOld>::CompositionCache,
+        cache: &Self::CompositionCache,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     ) {
+        todo!()
+    }
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<
+            <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
+        >,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<<Self as TreeNode>::ParentProtocol as Protocol>::Canvas> {
         todo!()
     }
 }
@@ -221,17 +225,17 @@ impl HitTest for RenderRoot {
 
     fn hit_test_self(
         &self,
-        position: &<<Self as epgi_core::tree::SelectOrphanLayer<false>>::AdopterCanvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
+        position: &Point2d,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+        _memo: &Self::LayoutMemo,
     ) -> Option<epgi_core::tree::HitTestBehavior> {
         todo!()
     }
 }
 
 impl Render for RenderRoot {
-    type RenderObject = RenderObject<Self, true, true, true, false>;
+    type RenderImpl = RenderImpl<Self, true, true, true, false>;
 }
 
 // impl Render for RenderRoot {

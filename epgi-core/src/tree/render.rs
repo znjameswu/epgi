@@ -47,7 +47,8 @@ pub trait Render: TreeNode + HasLayoutMemo + Sized + 'static {
 }
 
 pub trait ImplRender:
-    ImplLayout<Self::Render>
+    ImplRenderObject<Self::Render>
+    + ImplLayout<Self::Render>
     + ImplPaint<Self::Render>
     + ImplHitTest<Self::Render>
     + ImplAdopterLayer<Self::Render>
@@ -75,12 +76,14 @@ where
     Self: ImplPaint<R>,
     Self: ImplHitTest<R>,
     Self: ImplAdopterLayer<R>,
+    Self: ImplRenderObject<R>,
 {
     type Render = R;
 }
 
 pub trait ImplRenderBySuper:
-    ImplLayout<Self::Render>
+    ImplRenderObject<Self::Render>
+    + ImplLayout<Self::Render>
     + ImplPaint<Self::Render>
     + ImplHitTest<Self::Render>
     + ImplAdopterLayer<Self::Render>

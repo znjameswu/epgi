@@ -4,8 +4,8 @@ use crate::{
     foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, AweakAnyLayerRenderObject, LayerCache, LayerMark, LayerPaint, Paint,
-        Render, RenderImpl, RenderObject,
+        ArcChildRenderObject, AweakAnyLayerRenderObject, LayerCache, LayerPaint, Paint, Render,
+        RenderImpl, RenderObject,
     },
 };
 
@@ -139,8 +139,6 @@ where
 }
 
 pub trait ImplPaint<R: Render> {
-    type LayerMark: Default + Send + Sync;
-    type LayerCache: Send + Sync;
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
@@ -159,10 +157,6 @@ impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPH
 where
     R: Paint,
 {
-    type LayerMark = ();
-
-    type LayerCache = ();
-
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
@@ -181,7 +175,6 @@ where
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
     for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>
 where
-    Self: ImplComposite<R>,
     // Will this cause inductive cycles? We'll see
     R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
         + ImplComposite<R>,
@@ -189,13 +182,6 @@ where
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
-    type LayerMark = LayerMark;
-
-    type LayerCache = LayerCache<
-        <R::ChildProtocol as Protocol>::Canvas,
-        <Self as ImplComposite<R>>::CompositionCache,
-    >;
-
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
@@ -216,19 +202,11 @@ where
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
     for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>
 where
-    Self: ImplComposite<R>,
     R::RenderImpl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
-    type LayerMark = LayerMark;
-
-    type LayerCache = LayerCache<
-        <R::ChildProtocol as Protocol>::Canvas,
-        <Self as ImplComposite<R>>::CompositionCache,
-    >;
-
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,

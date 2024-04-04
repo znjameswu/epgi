@@ -1,9 +1,12 @@
 use crate::{
     foundation::{HktContainer, Protocol, SyncMutex},
-    sync::{ImplComposite, ImplPaint},
+    tree::{LayerCache, LayerMark},
 };
 
-use super::{ArcChildRenderObject, ArcElementContextNode, NoRelayoutToken, Render, RenderMark};
+use super::{
+    ArcChildRenderObject, ArcElementContextNode, CachedComposite, NoRelayoutToken, Render,
+    RenderImpl, RenderMark,
+};
 
 pub struct RenderObject<R>
 where
@@ -11,8 +14,9 @@ where
 {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
-    pub(crate) layer_mark: <R::RenderImpl as ImplPaint<R>>::LayerMark,
-    pub(crate) inner: SyncMutex<RenderObjectInner<R, <R::RenderImpl as ImplPaint<R>>::LayerCache>>,
+    pub(crate) layer_mark: <R::RenderImpl as ImplRenderObject<R>>::LayerMark,
+    pub(crate) inner:
+        SyncMutex<RenderObjectInner<R, <R::RenderImpl as ImplRenderObject<R>>::LayerCache>>,
 }
 
 pub(crate) struct RenderObjectInner<R, C>
@@ -25,6 +29,34 @@ where
     pub(crate) render: R,
     pub(crate) children:
         <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
+}
+
+pub trait ImplRenderObject<R: Render> {
+    type LayerMark: Default + Send + Sync;
+    type LayerCache: Send + Sync;
+}
+
+impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
+    ImplRenderObject<R> for RenderImpl<R, DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+{
+    type LayerMark = ();
+    type LayerCache = ();
+}
+
+impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
+    for RenderImpl<R, DRY_LAYOUT, true, false, ORPHAN_LAYER>
+{
+    type LayerMark = LayerMark;
+    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>;
+}
+
+impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
+    for RenderImpl<R, DRY_LAYOUT, true, true, ORPHAN_LAYER>
+where
+    R: CachedComposite,
+{
+    type LayerMark = LayerMark;
+    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, R::CompositionCache>;
 }
 
 #[derive(Default)]

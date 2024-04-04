@@ -4,13 +4,13 @@ use crate::{
     foundation::{Arc, Asc, Canvas, LayerProtocol, Protocol},
     tree::{
         CachedComposite, CachingChildLayerProducingIterator, ComposableUnadoptedLayer, Composite,
-        CompositeResults, ImplRenderBySuper, LayerCache, LayerCompositionConfig, LayerMark,
-        LayerPaint, NonCachingChildLayerProducingIterator, PaintResults, Render, RenderImpl,
-        RenderObject,
+        CompositeResults, ImplRenderBySuper, ImplRenderObject, LayerCache, LayerCompositionConfig,
+        LayerMark, LayerPaint, NonCachingChildLayerProducingIterator, PaintResults, Render,
+        RenderImpl, RenderObject,
     },
 };
 
-use super::{BuildScheduler, ImplPaint};
+use super::BuildScheduler;
 
 impl BuildScheduler {
     pub(crate) fn perform_composite(&self) -> Asc<dyn Any + Send + Sync> {
@@ -175,7 +175,7 @@ where
 
 pub trait ImplComposite<R: Render>:
     ImplAdopterLayer<R>
-    + ImplPaint<
+    + ImplRenderObject<
         R,
         LayerMark = LayerMark,
         LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
@@ -216,7 +216,7 @@ impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LA
     ImplComposite<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
-        + ImplPaint<
+        + ImplRenderObject<
             R,
             LayerMark = LayerMark,
             LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>,
@@ -270,7 +270,7 @@ impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LA
     ImplComposite<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
-        + ImplPaint<
+        + ImplRenderObject<
             R,
             LayerMark = LayerMark,
             LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, R::CompositionCache>,
