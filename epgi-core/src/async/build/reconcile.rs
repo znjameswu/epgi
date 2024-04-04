@@ -7,12 +7,11 @@ use crate::{
         EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, LanePos},
-    sync::{CommitBarrier, SelectReconcileImpl},
+    sync::CommitBarrier,
     tree::{
         no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
         ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks, Mainline,
-        ProviderElementMap, SelectArcRenderObject, SelectProvideElement, SubscriptionDiff, Work,
-        WorkContext, WorkHandle,
+        ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle,
     },
 };
 
@@ -40,14 +39,7 @@ pub(super) enum TryAsyncRebuild<E: Element> {
     Backqueued,
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     pub(super) fn new_async_uninflated(
         widget: E::ArcWidget,
         work_context: Asc<WorkContext>,
@@ -59,11 +51,8 @@ where
         // Otherwise a contending async writing commit may find an uninstantiated node in its reservation list. Which is odd.
 
         Arc::new_cyclic(move |node| {
-            let element_context = ElementContextNode::new_for::<E, PROVIDE_ELEMENT>(
-                node.clone() as _,
-                parent_context,
-                &widget,
-            );
+            let element_context =
+                ElementContextNode::new_for::<E>(node.clone() as _, parent_context, &widget);
             let subscription_diff = Self::calc_subscription_diff(
                 E::get_consumed_types(&widget),
                 EMPTY_CONSUMED_TYPES,
@@ -135,7 +124,7 @@ where
 
     pub(crate) fn prepare_rebuild_async(
         self: &Arc<Self>,
-        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
+        mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
         work: Work<E::ArcWidget>,
         barrier: CommitBarrier,

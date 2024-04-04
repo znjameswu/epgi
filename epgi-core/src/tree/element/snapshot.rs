@@ -8,24 +8,26 @@ use crate::{
     tree::{AsyncInflating, Hook, HookContext},
 };
 
-use super::{ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, ContainerOf, Element};
+use super::{
+    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, ContainerOf, Element, ImplElementNode,
+};
 
-pub(crate) enum ElementSnapshotInner<E: Element, R> {
+pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
     // Uninitialized,
     AsyncInflating(AsyncInflating<E>),
-    Mainline(Mainline<E, R>),
+    Mainline(Mainline<E>),
 }
 
-impl<E: Element, R> ElementSnapshotInner<E, R> {
-    pub(crate) fn mainline_ref(&self) -> Option<&Mainline<E, R>> {
+impl<E: Element> ElementSnapshotInner<E> {
+    pub(crate) fn mainline_ref(&self) -> Option<&Mainline<E>> {
         match self {
             ElementSnapshotInner::Mainline(mainline) => Some(mainline),
             ElementSnapshotInner::AsyncInflating(_) => None,
         }
     }
 
-    pub(crate) fn mainline_mut(&mut self) -> Option<&mut Mainline<E, R>> {
+    pub(crate) fn mainline_mut(&mut self) -> Option<&mut Mainline<E>> {
         match self {
             ElementSnapshotInner::Mainline(mainline) => Some(mainline),
             ElementSnapshotInner::AsyncInflating(_) => None,
@@ -47,17 +49,17 @@ impl<E: Element, R> ElementSnapshotInner<E, R> {
     }
 }
 
-pub(crate) struct Mainline<E: Element, R> {
-    pub(crate) state: Option<MainlineState<E, R>>,
+pub(crate) struct Mainline<E: Element> {
+    pub(crate) state: Option<MainlineState<E>>,
     pub(crate) async_queue: AsyncWorkQueue<E>,
 }
 
-pub(crate) enum MainlineState<E: Element, R> {
+pub(crate) enum MainlineState<E: Element> {
     Ready {
         element: E,
         hooks: Hooks,
         children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: R,
+        render_object: <E::ElementImpl as ImplElementNode<E>>::OptionArcRenderObject,
     },
     InflateSuspended {
         suspended_hooks: Hooks,
@@ -76,7 +78,7 @@ pub struct Hooks {
     pub array_hooks: Vec<Box<dyn Hook>>,
 }
 
-impl<E: Element, R> MainlineState<E, R> {
+impl<E: Element> MainlineState<E> {
     pub(crate) fn is_suspended(&self) -> bool {
         match self {
             MainlineState::Ready { .. } => false,

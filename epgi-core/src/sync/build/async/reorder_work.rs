@@ -1,11 +1,8 @@
 use crate::{
     foundation::Arc,
     r#async::AsyncRebuild,
-    sync::{BuildScheduler, SelectReconcileImpl},
-    tree::{
-        ArcChildElementNode, ContainerOf, Element, ElementNode, Mainline, SelectArcRenderObject,
-        SelectProvideElement,
-    },
+    sync::BuildScheduler,
+    tree::{ArcChildElementNode, ContainerOf, Element, ElementNode, Mainline},
 };
 
 use super::cancel::CancelAsync;
@@ -16,14 +13,7 @@ pub(in super::super) struct ReorderAsync<E: Element> {
     pub(in super::super) start: AsyncRebuild<E>,
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     fn reorder_async_work(self: &Arc<Self>, build_scheduler: &BuildScheduler) {
         let try_reorder_result = {
             let mut snapshot = self.snapshot.lock();
@@ -42,7 +32,7 @@ where
 
     pub(in super::super) fn prepare_reorder_async_work(
         self: &Arc<Self>,
-        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
+        mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
         build_scheduler: &BuildScheduler,
     ) -> Option<ReorderAsync<E>> {
@@ -105,7 +95,7 @@ where
 
     pub(in super::super) fn prepare_execute_backqueue(
         self: &Arc<Self>,
-        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
+        mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
     ) -> Option<AsyncRebuild<E>> {
         let async_queue = &mut mainline.async_queue;
@@ -145,14 +135,7 @@ pub(crate) mod reorder_work_private {
         fn reorder_async_work(self: Arc<Self>, build_scheduler: &BuildScheduler);
     }
 
-    impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-        AnyElementNodeReorderAsyncWorkExt for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-    where
-        E: Element<ElementNode = Self>
-            + SelectArcRenderObject<RENDER_ELEMENT>
-            + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-            + SelectProvideElement<PROVIDE_ELEMENT>,
-    {
+    impl<E: Element> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
         fn reorder_async_work(self: Arc<Self>, build_scheduler: &BuildScheduler) {
             ElementNode::reorder_async_work(&self, build_scheduler)
         }

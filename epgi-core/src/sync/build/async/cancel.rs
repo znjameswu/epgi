@@ -9,12 +9,11 @@ use crate::{
     foundation::{Arc, Container},
     r#async::AsyncRebuild,
     scheduler::{get_current_scheduler, LanePos},
-    sync::{BuildScheduler, SelectReconcileImpl},
+    sync::BuildScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, ContainerOf, Element, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, Mainline, SelectArcRenderObject, SelectProvideElement,
-        SubscriptionDiff,
+        ElementSnapshotInner, ImplProvide, Mainline, SubscriptionDiff,
     },
 };
 
@@ -33,14 +32,7 @@ pub(in super::super) struct RemoveAsync<E: Element> {
     start: Option<AsyncRebuild<E>>,
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     // // This functions serves as an example function on how to invoke the kit
     // pub(super) fn cancel_async_work(
     //     self: &Arc<Self>,
@@ -68,7 +60,7 @@ where
     // }
 
     pub(in super::super) fn prepare_cancel_async_work(
-        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
+        mainline: &mut Mainline<E>,
         lane_pos: LanePos,
         build_scheduler: &BuildScheduler,
     ) -> Result<
@@ -137,14 +129,7 @@ where
     }
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     fn remove_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
@@ -179,7 +164,7 @@ where
 
     pub(super) fn prepare_remove_async_work(
         self: &Arc<Self>,
-        snapshot: &mut ElementSnapshot<E, E::OptionArcRenderObject>,
+        snapshot: &mut ElementSnapshot<E>,
         lane_pos: LanePos,
     ) -> RemoveAsync<E> {
         match &mut snapshot.inner {
@@ -196,7 +181,7 @@ where
 
     pub(super) fn prepare_remove_async_work_mainline(
         self: &Arc<Self>,
-        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
+        mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
         lane_pos: LanePos,
     ) -> RemoveAsync<E> {
@@ -209,14 +194,7 @@ where
     }
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     fn purge_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
@@ -242,7 +220,7 @@ where
     }
 
     pub(super) fn prepare_purge_async_work(
-        snapshot: &mut ElementSnapshot<E, E::OptionArcRenderObject>,
+        snapshot: &mut ElementSnapshot<E>,
         lane_pos: LanePos,
     ) -> Result<
         CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
@@ -302,7 +280,7 @@ where
     }
 
     pub(in super::super) fn prepare_purge_async_work_mainline(
-        mainline: &mut Mainline<E, E::OptionArcRenderObject>,
+        mainline: &mut Mainline<E>,
         lane_pos: LanePos,
     ) -> Result<
         CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
@@ -347,7 +325,7 @@ where
         subscription_diff: SubscriptionDiff,
         lane_pos: LanePos,
     ) {
-        if PROVIDE_ELEMENT {
+        if E::ElementImpl::PROVIDE_ELEMENT {
             if reserved_provider_write {
                 self.context.unreserve_write_async(lane_pos);
                 // // We choose relaxed lane marking without unmarking
@@ -394,14 +372,7 @@ where
     }
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     pub fn remove_async_work_and_lane_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
@@ -473,14 +444,7 @@ pub(crate) mod cancel_private {
         fn purge_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos);
     }
 
-    impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> AnyElementNodeAsyncCancelExt
-        for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-    where
-        E: Element<ElementNode = Self>
-            + SelectArcRenderObject<RENDER_ELEMENT>
-            + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-            + SelectProvideElement<PROVIDE_ELEMENT>,
-    {
+    impl<E: Element> AnyElementNodeAsyncCancelExt for ElementNode<E> {
         fn remove_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
             Self::remove_async_work_in_subtree(&self, lane_pos)
         }

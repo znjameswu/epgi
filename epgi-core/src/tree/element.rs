@@ -6,8 +6,7 @@ mod provider;
 mod render_or_unit;
 mod snapshot;
 
-mod snapshot_new;
-pub use snapshot_new::*;
+use std::marker::PhantomData;
 
 pub use async_queue::*;
 pub use context::*;
@@ -22,9 +21,8 @@ use crate::{
         Arc, ArrayContainer, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec,
         Protocol, Provide, PtrEq, SyncMutex, TypeKey,
     },
-    // nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
-    sync::{ImplElementNodeSyncReconcile, SelectReconcileImpl},
+    sync::ImplReconcileCommit,
     tree::RenderAction,
 };
 
@@ -69,7 +67,7 @@ where
     CP: Protocol,
 {
     pub fn new_update<E: Element<ParentProtocol = CP>>(
-        element: Arc<E::ElementNode>,
+        element: Arc<ElementNode<E>>,
         widget: E::ArcWidget,
     ) -> Self {
         Self::Update(Box::new(ElementWidgetPair::<E> { element, widget }))
@@ -97,11 +95,13 @@ pub trait HasArcWidget {
 }
 
 pub trait Element: TreeNode + HasArcWidget + Clone + Sized + 'static {
-    type ElementNode: ChildElementNode<Self::ParentProtocol>
-        + ImplElementNodeSyncReconcile<Self>
-        + Send
-        + Sync
-        + 'static;
+    // type ElementNode: ChildElementNode<Self::ParentProtocol>
+    //     + ImplElementNodeSyncReconcile<Self>
+    //     + Send
+    //     + Sync
+    //     + 'static;
+
+    type ElementImpl: ImplElement<Element = Self>;
 
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
@@ -138,16 +138,32 @@ pub trait Element: TreeNode + HasArcWidget + Clone + Sized + 'static {
     ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
 }
 
+pub trait ImplElement:
+    ImplElementNode<Self::Element> + ImplProvide<Self::Element> + ImplReconcileCommit<Self::Element>
+{
+    type Element: Element;
+}
+
+pub struct ElementImpl<E: Element, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
+    PhantomData<E>,
+);
+
+impl<E: Element, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElement
+    for ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+where
+    Self: ImplElementNode<E>,
+    Self: ImplProvide<E>,
+    Self: ImplReconcileCommit<E>,
+{
+    type Element = E;
+}
+
 pub trait ProvideElement: TreeNode + HasArcWidget {
     type Provided: Provide;
     fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
 }
 
-pub trait RenderElement:
-    TreeNode
-    + HasArcWidget
-    + SelectArcRenderObject<true, OptionArcRenderObject = Option<Arc<RenderObject<Self::Render>>>>
-{
+pub trait RenderElement: TreeNode + HasArcWidget {
     type Render: Render<
         ParentProtocol = Self::ParentProtocol,
         ChildProtocol = Self::ChildProtocol,
@@ -172,30 +188,34 @@ pub trait RenderElement:
     const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 }
 
-pub trait SelectArcRenderObject<const RENDER_ELEMENT: bool>: TreeNode {
+pub trait ImplElementNode<E: Element> {
     type OptionArcRenderObject: Default + Clone + Send + Sync;
-
     fn get_current_subtree_render_object(
         render_object: &Self::OptionArcRenderObject,
-        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
-    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>>;
+        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+    ) -> Option<ArcChildRenderObject<E::ParentProtocol>>;
 }
 
-impl<E> SelectArcRenderObject<false> for E
+impl<E: Element, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
+    for ElementImpl<E, false, PROVIDE_ELEMENT>
 where
-    E: TreeNode<ChildContainer = ArrayContainer<1>, ChildProtocol = Self::ParentProtocol>,
+    E: TreeNode<
+        ChildContainer = ArrayContainer<1>,
+        ChildProtocol = <E as TreeNode>::ParentProtocol,
+    >,
 {
     type OptionArcRenderObject = ();
 
     fn get_current_subtree_render_object(
-        render_object: &Self::OptionArcRenderObject,
-        [child]: &[ArcChildElementNode<Self::ChildProtocol>; 1],
-    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
+        _render_object: &(),
+        [child]: &[ArcChildElementNode<E::ChildProtocol>; 1],
+    ) -> Option<ArcChildRenderObject<<E>::ParentProtocol>> {
         child.get_current_subtree_render_object()
     }
 }
 
-impl<E> SelectArcRenderObject<true> for E
+impl<E: Element, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
+    for ElementImpl<E, true, PROVIDE_ELEMENT>
 where
     E: RenderElement,
 {
@@ -203,60 +223,60 @@ where
 
     fn get_current_subtree_render_object(
         render_object: &Self::OptionArcRenderObject,
-        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
-    ) -> Option<ArcChildRenderObject<Self::ParentProtocol>> {
+        _children: &ContainerOf<E, ArcChildElementNode<<E>::ChildProtocol>>,
+    ) -> Option<ArcChildRenderObject<<E>::ParentProtocol>> {
         render_object
             .as_ref()
             .map(|render_object| render_object.clone() as _)
     }
 }
 
-pub trait SelectProvideElement<const PROVIDE_ELEMENT: bool>: HasArcWidget {
+pub trait ImplProvide<E: Element> {
+    const PROVIDE_ELEMENT: bool;
     fn option_get_provided_key_value_pair(
-        widget: &Self::ArcWidget,
+        widget: &E::ArcWidget,
     ) -> Option<(Arc<dyn Provide>, TypeKey)>;
 
     fn diff_provided_value(
-        old_widget: &Self::ArcWidget,
-        new_widget: &Self::ArcWidget,
+        old_widget: &E::ArcWidget,
+        new_widget: &E::ArcWidget,
     ) -> Option<Arc<dyn Provide>>;
 }
 
-impl<E> SelectProvideElement<false> for E
-where
-    E: HasArcWidget,
+impl<E: Element, const RENDER_ELEMENT: bool> ImplProvide<E>
+    for ElementImpl<E, RENDER_ELEMENT, false>
 {
-    #[inline(always)]
+    const PROVIDE_ELEMENT: bool = false;
+
     fn option_get_provided_key_value_pair(
-        widget: &Self::ArcWidget,
+        widget: &<E>::ArcWidget,
     ) -> Option<(Arc<dyn Provide>, TypeKey)> {
         None
     }
 
-    #[inline(always)]
     fn diff_provided_value(
-        old_widget: &Self::ArcWidget,
-        new_widget: &Self::ArcWidget,
+        old_widget: &<E>::ArcWidget,
+        new_widget: &<E>::ArcWidget,
     ) -> Option<Arc<dyn Provide>> {
         None
     }
 }
 
-impl<E> SelectProvideElement<true> for E
+impl<E: Element, const RENDER_ELEMENT: bool> ImplProvide<E> for ElementImpl<E, RENDER_ELEMENT, true>
 where
     E: ProvideElement,
 {
-    #[inline(always)]
+    const PROVIDE_ELEMENT: bool = true;
+
     fn option_get_provided_key_value_pair(
-        widget: &Self::ArcWidget,
+        widget: &<E>::ArcWidget,
     ) -> Option<(Arc<dyn Provide>, TypeKey)> {
         Some((E::get_provided_value(widget), TypeKey::of::<E::Provided>()))
     }
 
-    #[inline(always)]
     fn diff_provided_value(
-        old_widget: &Self::ArcWidget,
-        new_widget: &Self::ArcWidget,
+        old_widget: &<E>::ArcWidget,
+        new_widget: &<E>::ArcWidget,
     ) -> Option<Arc<dyn Provide>> {
         let old_provided_value = E::get_provided_value(&old_widget);
         let new_provided_value = E::get_provided_value(new_widget);
@@ -270,29 +290,22 @@ where
     }
 }
 
-pub struct ElementNode<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-where
-    E: Element<ElementNode = Self> + SelectArcRenderObject<RENDER_ELEMENT>,
-{
+pub struct ElementNode<E: Element> {
     pub context: ArcElementContextNode,
-    pub(crate) snapshot: SyncMutex<ElementSnapshot<E, E::OptionArcRenderObject>>,
+    pub(crate) snapshot: SyncMutex<ElementSnapshot<E>>,
 }
 
-pub(crate) struct ElementSnapshot<E: Element, R> {
+pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
     // pub(super) subtree_suspended: bool,
-    pub(crate) inner: ElementSnapshotInner<E, R>,
+    pub(crate) inner: ElementSnapshotInner<E>,
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>
-    ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self> + SelectArcRenderObject<RENDER_ELEMENT>,
-{
+impl<E: Element> ElementNode<E> {
     pub(super) fn new(
         context: ArcElementContextNode,
         widget: E::ArcWidget,
-        inner: ElementSnapshotInner<E, E::OptionArcRenderObject>,
+        inner: ElementSnapshotInner<E>,
     ) -> Self {
         Self {
             context,
@@ -345,14 +358,7 @@ pub trait ChildElementNode<PP: Protocol>:
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ChildElementNode<E::ParentProtocol>
-    for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
     fn context(&self) -> &ElementContextNode {
         self.context.as_ref()
     }
@@ -386,18 +392,11 @@ where
             return None;
         };
 
-        E::get_current_subtree_render_object(render_object, children)
+        E::ElementImpl::get_current_subtree_render_object(render_object, children)
     }
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> AnyElementNode
-    for ElementNode<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: Element<ElementNode = Self>
-        + SelectArcRenderObject<RENDER_ELEMENT>
-        + SelectReconcileImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-        + SelectProvideElement<PROVIDE_ELEMENT>,
-{
+impl<E: Element> AnyElementNode for ElementNode<E> {
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode {
         self
     }

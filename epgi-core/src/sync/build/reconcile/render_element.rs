@@ -4,27 +4,30 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementNode,
-        ImplRenderObjectReconcile, MainlineState, RenderAction, RenderElement, RenderObject,
-        RenderObjectSlots, SelectArcRenderObject, TreeNode,
+        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementImpl, ElementNode,
+        ImplElementNode, ImplRenderObjectReconcile, MainlineState, RenderAction, RenderElement,
+        RenderObject, RenderObjectSlots, TreeNode,
     },
 };
 
-use super::SelectReconcileImpl;
+use super::ImplReconcileCommit;
 
-impl<E, const PROVIDE_ELEMENT: bool> SelectReconcileImpl<true, PROVIDE_ELEMENT> for E
+impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E>
+    for ElementImpl<E, true, PROVIDE_ELEMENT>
 where
-    E: Element<ElementNode = ElementNode<E, true, PROVIDE_ELEMENT>> + SelectArcRenderObject<true>,
+    E::ElementImpl:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+    E: Element,
     E: RenderElement,
 {
     fn visit_commit(
-        element_node: &Self::ElementNode,
+        element_node: &ElementNode<E>,
         render_object: Option<Arc<RenderObject<E::Render>>>,
-        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<Self::ParentProtocol> {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
             "Logic error in parameters: \
@@ -33,13 +36,15 @@ where
         let render_object_change_summary =
             SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
         if let Some(render_object) = render_object {
-            element_node.visit_commit_attached(
+            Self::visit_commit_attached(
+                element_node,
                 render_object,
                 render_object_changes,
                 render_object_change_summary,
             )
         } else {
-            element_node.visit_commit_detached(
+            Self::visit_commit_detached(
+                element_node,
                 render_object_changes,
                 render_object_change_summary,
                 self_rebuild_suspended,
@@ -48,20 +53,20 @@ where
     }
 
     fn rebuild_success_commit(
-        element: &Self,
-        widget: &Self::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<Self>>,
-        children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
+        element: &E,
+        widget: &E::ArcWidget,
+        shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
+        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
         render_object: Self::OptionArcRenderObject,
-        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         element_context: &ArcElementContextNode,
         is_new_widget: bool,
     ) -> (
         Self::OptionArcRenderObject,
-        SubtreeRenderObjectChange<Self::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         if let Some(render_object) = render_object {
-            Self::ElementNode::rebuild_success_process_attached(
+            Self::rebuild_success_process_attached(
                 widget,
                 shuffle,
                 render_object,
@@ -69,7 +74,7 @@ where
                 is_new_widget,
             )
         } else {
-            Self::ElementNode::rebuild_success_process_detached(
+            Self::rebuild_success_process_detached(
                 element,
                 widget,
                 element_context,
@@ -81,19 +86,19 @@ where
 
     fn rebuild_suspend_commit(
         render_object: Self::OptionArcRenderObject,
-    ) -> SubtreeRenderObjectChange<Self::ParentProtocol> {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         render_object.map(|render_object| render_object.detach());
         SubtreeRenderObjectChange::Suspend
     }
 
     fn inflate_success_commit(
-        element: &Self,
-        widget: &Self::ArcWidget,
+        element: &E,
+        widget: &E::ArcWidget,
         element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
+        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
     ) -> (
         Self::OptionArcRenderObject,
-        SubtreeRenderObjectChange<Self::ParentProtocol>,
+        SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
             SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
@@ -135,14 +140,16 @@ where
     }
 }
 
-impl<E, const PROVIDE_ELEMENT: bool> ElementNode<E, true, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> ElementImpl<E, true, PROVIDE_ELEMENT>
 where
-    E: Element<ElementNode = Self> + SelectArcRenderObject<true>,
+    E::ElementImpl:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+    E: Element,
     E: RenderElement,
 {
     #[inline(always)]
     pub(crate) fn visit_commit_attached(
-        &self,
+        element_node: &ElementNode<E>,
         render_object: Arc<RenderObject<E::Render>>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
@@ -179,7 +186,7 @@ where
             }
             HasSuspended => {
                 render_object.detach();
-                let mut snapshot = self.snapshot.lock();
+                let mut snapshot = element_node.snapshot.lock();
                 let state = snapshot
                     .inner
                     .mainline_mut()
@@ -214,7 +221,7 @@ where
     }
 
     pub(crate) fn visit_commit_detached(
-        &self,
+        element_node: &ElementNode<E>,
         render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
         self_rebuild_suspended: bool,
@@ -229,7 +236,7 @@ where
             return SubtreeRenderObjectChange::Suspend;
         }
 
-        let mut snapshot = self.snapshot.lock();
+        let mut snapshot = element_node.snapshot.lock();
         let snapshot_reborrow = &mut *snapshot;
         let state = &mut snapshot_reborrow
             .inner
@@ -267,7 +274,7 @@ where
                 let render_object = Self::try_create_render_object(
                     &element,
                     &snapshot_reborrow.widget,
-                    &self.context,
+                    &element_node.context,
                     &children,
                     render_object_changes,
                 );

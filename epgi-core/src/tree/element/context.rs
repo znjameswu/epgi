@@ -8,7 +8,7 @@ use crate::{
     tree::Update,
 };
 
-use super::{AweakAnyElementNode, Element, ElementMark, ProviderObject, SelectProvideElement};
+use super::{AweakAnyElementNode, Element, ElementMark, ImplProvide, ProviderObject};
 
 pub type ArcElementContextNode = Arc<ElementContextNode>;
 pub type AweakElementContextNode = Aweak<ElementContextNode>;
@@ -89,15 +89,12 @@ impl ElementContextNode {
         }
     }
 
-    pub(crate) fn new_for<
-        E: Element + SelectProvideElement<PROVIDE_ELEMENT>,
-        const PROVIDE_ELEMENT: bool,
-    >(
+    pub(crate) fn new_for<E: Element>(
         node: AweakAnyElementNode,
         parent_context: ArcElementContextNode,
         widget: &E::ArcWidget,
     ) -> Self {
-        let provider = E::option_get_provided_key_value_pair(widget)
+        let provider = E::ElementImpl::option_get_provided_key_value_pair(widget)
             .map(|(provided, type_key)| Box::new(ProviderObject::new(provided, type_key)));
         Self::new(node, Some(parent_context), provider)
     }
