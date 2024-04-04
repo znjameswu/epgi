@@ -20,7 +20,7 @@ pub use snapshot::*;
 use crate::{
     foundation::{
         Arc, ArrayContainer, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec,
-        LayerProtocol, Protocol, Provide, PtrEq, SyncMutex, TypeKey,
+        Protocol, Provide, PtrEq, SyncMutex, TypeKey,
     },
     // nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::JobId,
@@ -30,7 +30,7 @@ use crate::{
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, LayoutCache, LayoutResults, Render, TreeNode,
+    ChildElementWidgetPair, ElementWidgetPair, Render, RenderObject, TreeNode,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -146,10 +146,7 @@ pub trait ProvideElement: TreeNode + HasArcWidget {
 pub trait RenderElement:
     TreeNode
     + HasArcWidget
-    + SelectArcRenderObject<
-        true,
-        OptionArcRenderObject = Option<Arc<<Self::Render as Render>::RenderObject>>,
-    >
+    + SelectArcRenderObject<true, OptionArcRenderObject = Option<Arc<RenderObject<Self::Render>>>>
 {
     type Render: Render<
         ParentProtocol = Self::ParentProtocol,
@@ -202,7 +199,7 @@ impl<E> SelectArcRenderObject<true> for E
 where
     E: RenderElement,
 {
-    type OptionArcRenderObject = Option<Arc<<E::Render as Render>::RenderObject>>;
+    type OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>;
 
     fn get_current_subtree_render_object(
         render_object: &Self::OptionArcRenderObject,

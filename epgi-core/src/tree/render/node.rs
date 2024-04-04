@@ -1,56 +1,24 @@
-use crate::foundation::{HktContainer, LayerProtocol, Protocol, SyncMutex};
-
-use super::{
-    ArcChildRenderObject, ArcElementContextNode, CachedCompositeOld, Hkt, LayerPaint, NoRelayoutToken,
-    RenderMark, Render, SelectLayerPaint,
+use crate::{
+    foundation::{HktContainer, Protocol, SyncMutex},
+    sync::{ImplComposite, ImplPaint},
 };
 
-pub struct RenderObject<
-    R,
-    const DRY_LAYOUT: bool = false,
-    const LAYER_PAINT: bool = false,
-    const CACHED_COMPOSITE: bool = false,
-    const ORPHAN_LAYER: bool = false,
-> where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>, // + SelectLayoutImpl<DRY_LAYOUT>
-                                                   // + SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>
-                                                   // + SelectHitTestImpl<ORPHAN_LAYER>, // + SelectOrphanLayer<ORPHAN_LAYER>,
-                                                   // + SelectLayoutImpl<DRY_LAYOUT>
-                                                   // + SelectCompositeImpl<CACHED_COMPOSITE, ORPHAN_LAYER>
-                                                   // + SelectHitTestImpl<ORPHAN_LAYER>,
+use super::{ArcChildRenderObject, ArcElementContextNode, NoRelayoutToken, Render, RenderMark};
+
+pub struct RenderObject<R>
+where
+    R: Render,
 {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
-    pub(crate) layer_mark: R::LayerMark,
-    pub(crate) inner:
-        SyncMutex<RenderObjectInner<R, <R::HktLayerCache as Hkt>::T<R::CompositionCache>>>,
+    pub(crate) layer_mark: <R::RenderImpl as ImplPaint<R>>::LayerMark,
+    pub(crate) inner: SyncMutex<RenderObjectInner<R, <R::RenderImpl as ImplPaint<R>>::LayerCache>>,
 }
 
-pub trait SelectCachedComposite<const CACHED_COMPOSITE: bool>: Sized {
-    type CompositionCache: Clone + Send + Sync + 'static;
-}
-
-impl<R> SelectCachedComposite<false> for R
+pub(crate) struct RenderObjectInner<R, C>
 where
-    R: LayerPaint,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
+    R: Render,
 {
-    type CompositionCache = ();
-}
-
-impl<R> SelectCachedComposite<true> for R
-where
-    R: CachedCompositeOld,
-    R::ChildProtocol: LayerProtocol,
-    R::ParentProtocol: LayerProtocol,
-{
-    type CompositionCache = <R as CachedCompositeOld>::CompositionCache;
-}
-
-pub(crate) struct RenderObjectInner<R: Render, C> {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
     pub(crate) cache: RenderCache<R, C>,

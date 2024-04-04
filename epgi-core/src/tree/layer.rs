@@ -23,8 +23,6 @@ pub type ArcChildLayerRenderObject<C> = Arc<dyn ChildLayerRenderObject<C>>;
 pub type AweakChildLayerRenderObject<C> = Aweak<dyn ChildLayerRenderObject<C>>;
 pub type AweakLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
 pub type ArcLayeredRenderObject<PC, CC> = Arc<dyn LayerRenderObject<PC, CC>>;
-// pub type ArcParentLayerNode<C> = Arc<dyn ParentLayerNode<C>>;
-pub type ArcAdoptedLayerRenderObject<C> = Arc<dyn AdoptedLayerRenderObject<C>>;
 pub type ArcAnyLayerRenderObject = Arc<dyn AnyLayerRenderObject>;
 pub type AweakAnyLayerRenderObject = Aweak<dyn AnyLayerRenderObject>;
 
@@ -38,7 +36,7 @@ pub trait ChildLayerProducingIterator<CC: Canvas> {
 pub enum ChildLayerOrFragmentRef<'a, C: Canvas> {
     Fragment(&'a C::Encoding),
     StructuredChild(&'a ComposableChildLayer<C>),
-    AdoptedChild(&'a ComposableAdoptedLayer<C>),
+    AdoptedChild(&'a ComposableChildLayer<C>),
 }
 
 pub trait ChildLayerRenderObject<PC: Canvas>:
@@ -46,42 +44,6 @@ pub trait ChildLayerRenderObject<PC: Canvas>:
 {
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject;
 }
-
-// pub trait ParentLayerNode<CC: Canvas>: Send + Sync {}
-
-pub trait AdoptedLayerRenderObject<PC: Canvas>: Send + Sync {
-    fn composite_to(
-        &self,
-        encoding: &mut PC::Encoding,
-        composition_config: &LayerCompositionConfig<PC>,
-    ) -> Vec<ComposableUnadoptedLayer<PC>>;
-}
-
-// impl<L> AdoptedLayerNode<L::ChildCanvas> for LayerNode<L>
-// where
-//     L: OrphanLayer,
-// {
-//     fn composite_to(
-//         &self,
-//         encoding: &mut <L::ChildCanvas as Canvas>::Encoding,
-//         composition_config: &LayerCompositionConfig<L::ChildCanvas>,
-//     ) -> Vec<ComposableUnadoptedLayer<L::ChildCanvas>> {
-//         // let inner = self.inner.lock();
-//         // let cache = inner
-//         //     .cache
-//         //     .as_ref()
-//         //     .expect("Layer should only be composited after they are painted");
-//         // let mut iter = NonCachingOrphanChildLayerProducingIterator::<'_, L> {
-//         //     painting_results: &cache.paint_results,
-//         //     key: inner.layer.key().map(Arc::as_ref),
-//         //     unadopted_layers: Vec::new(),
-//         //     composition_config,
-//         // };
-//         // <L as OrphanLayer>::composite_orphan_to(encoding, &mut iter, composition_config);
-//         // return iter.unadopted_layers;
-//         todo!()
-//     }
-// }
 
 pub trait LayerRenderObject<PC: Canvas, CC: Canvas>: Send + Sync {}
 
@@ -94,21 +56,21 @@ pub trait AnyLayerRenderObject:
 {
     fn mark(&self) -> &LayerMark;
 
-    fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn Any>;
+    fn as_any_arc_child_layer(self: Arc<Self>) -> Box<dyn Any>;
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>>;
 }
 
 trait ArcAnyLayerRenderObjectExt {
-    fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcAdoptedLayerRenderObject<C>>;
+    fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcChildLayerRenderObject<C>>;
     // fn downcast_arc_parent_layer<C: Canvas>(self)
     //     -> Result<ArcParentLayerNode<C>, ArcAnyLayerNode>;
 }
 
 impl ArcAnyLayerRenderObjectExt for ArcAnyLayerRenderObject {
-    fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcAdoptedLayerRenderObject<C>> {
-        self.as_any_arc_adopted_layer()
-            .downcast::<Arc<dyn AdoptedLayerRenderObject<C>>>()
+    fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcChildLayerRenderObject<C>> {
+        self.as_any_arc_child_layer()
+            .downcast::<Arc<dyn ChildLayerRenderObject<C>>>()
             .ok()
             .map(|x| *x)
     }

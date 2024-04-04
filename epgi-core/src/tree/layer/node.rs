@@ -1,15 +1,13 @@
 use crate::{
-    foundation::{Arc, Canvas, False, Key, LayerProtocol, Protocol, True},
-    tree::{
-        AnyRenderObject, LayerPaint, Render, RenderObject, SelectCachedComposite,
-        SelectLayerPaint,
-    },
+    foundation::{Arc, Canvas, Key, LayerProtocol},
+    sync::{ImplAdopterLayer, ImplComposite},
+    tree::{LayerPaint, Render, RenderObject},
 };
 
 use super::{
-    AnyLayerRenderObject, ArcAdoptedLayerRenderObject, ArcAnyLayerRenderObject,
-    ArcChildLayerRenderObject, ChildLayerOrFragmentRef, ChildLayerRenderObject,
-    LayerCompositionConfig, LayerMark, NoRecompositeToken,
+    AnyLayerRenderObject, ArcAnyLayerRenderObject, ArcChildLayerRenderObject,
+    ChildLayerOrFragmentRef, ChildLayerRenderObject, LayerCompositionConfig, LayerMark,
+    NoRecompositeToken,
 };
 
 pub struct LayerCache<C: Canvas, T> {
@@ -91,33 +89,24 @@ pub struct ComposableUnadoptedLayer<C: Canvas> {
     pub layer: ArcAnyLayerRenderObject,
 }
 
-pub struct ComposableAdoptedLayer<C: Canvas> {
-    pub config: LayerCompositionConfig<C>,
-    pub layer: ArcAdoptedLayerRenderObject<C>,
-}
-
-impl<
-        R,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > AnyLayerRenderObject
-    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R> AnyLayerRenderObject for RenderObject<R>
 where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    Self: AnyRenderObject
-        + crate::sync::AnyLayerRenderObjectPaintExt
-        + crate::sync::AnyLayerRenderObjectCompositeExt,
+    R: Render,
+    R::RenderImpl: ImplComposite<R>,
+    R: LayerPaint,
+    R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
 {
     fn mark(&self) -> &LayerMark {
-        todo!()
+        &self.layer_mark
     }
 
-    fn as_any_arc_adopted_layer(self: Arc<Self>) -> Box<dyn std::any::Any> {
-        todo!()
+    fn as_any_arc_child_layer(self: Arc<Self>) -> Box<dyn std::any::Any> {
+        Box::new(
+            self as ArcChildLayerRenderObject<
+                <R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas,
+            >,
+        )
     }
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn std::any::Any + Send + Sync>> {
@@ -125,22 +114,17 @@ where
     }
 }
 
-impl<
-        R,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > ChildLayerRenderObject<R::AdopterCanvas>
-    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R> ChildLayerRenderObject<<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas>
+    for RenderObject<R>
 where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    Self: crate::sync::ChildLayerRenderObjectCompositeExt<R::AdopterCanvas>,
+    R: Render,
+    R::RenderImpl: ImplComposite<R>,
+    R: LayerPaint,
+    R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
 {
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject {
-        todo!()
+        self
     }
 }
 

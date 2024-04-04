@@ -25,6 +25,8 @@ Code-style hazard
     3. Effect: Unable to use associated const for Select\*Impl. The trait has to be generic.
 - Unable to specific equality contraints for higher-kinded types https://users.rust-lang.org/t/how-to-express-type-equality-constraints-on-a-generic-associate-type/
     1. Effect: In the bilateral impl-supertrait binding pattern between trait pairs of \* and Select\*Impl, sometimes the supertrait bound need to constrain associated type, and sometimes the associated type is generic, such as SelectLayoutImpl::LayerCache. We have to use a cumbersome solution of explicit Hkt types.
+- Rust type solver default false when encountering inductive cycles. For a demonstration, see https://users.rust-lang.org/t/how-does-rust-type-solver-handle-a-self-depending-cyclic-type-bounds
+    1. Effect: paint implementation 
 
 
 
@@ -33,3 +35,4 @@ Architectural hazard
 
 Workflow hazard
 1. RenderElement::SUSPENSE_FUNCTION_TABLE will break rustdoc. Hence its doc was hidden. Reason unknown. Repulsive enough.
+    1. The relevant code has been nuked since we completely changed specialization approach

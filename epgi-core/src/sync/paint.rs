@@ -4,13 +4,12 @@ use crate::{
     foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, AweakAnyLayerRenderObject, HasLayoutMemo, Hkt, HktLayerCache,
-        HktUnit, LayerCache, LayerMark, LayerPaint, Paint, Render, RenderImpl, RenderObject,
-        SelectCachedComposite, SelectLayerPaint, TreeNode,
+        ArcChildRenderObject, AweakAnyLayerRenderObject, LayerCache, LayerMark, LayerPaint, Paint,
+        Render, RenderImpl, RenderObject,
     },
 };
 
-use super::{SelectCompositeImpl, SelectLayoutImpl};
+use super::{ImplAdopterLayer, ImplComposite};
 
 impl BuildScheduler {
     pub(crate) fn perform_paint(
@@ -32,13 +31,10 @@ pub trait AnyLayerRenderObjectPaintExt {
     fn repaint_if_attached(&self);
 }
 
-impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
-    AnyLayerRenderObjectPaintExt
-    for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R> AnyLayerRenderObjectPaintExt for RenderObject<R>
 where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<true>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
+    R: Render,
+    R::RenderImpl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
@@ -113,19 +109,10 @@ where
     }
 }
 
-impl<
-        R,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > ChildRenderObjectPaintExtImpl<R::ParentProtocol>
-    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R> ChildRenderObjectPaintExtImpl<R::ParentProtocol> for RenderObject<R>
 where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    R: SelectPaintImpl<LAYER_PAINT, ORPHAN_LAYER>,
+    R: Render,
+    R::RenderImpl: ImplPaint<R>,
 {
     fn paint_impl(
         self: Arc<Self>,
@@ -138,7 +125,8 @@ where
         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
             panic!("Paint should only be called after layout has finished")
         };
-        inner_reborrow.render.paint_into_context(
+        R::RenderImpl::paint_into_context(
+            &mut inner_reborrow.render,
             &self,
             &cache.layout_results.size,
             &offset,
@@ -150,109 +138,12 @@ where
     }
 }
 
-pub trait SelectPaintImpl<const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>:
-    TreeNode + HasLayoutMemo
-{
-    fn paint_into_context(
-        &self,
-        render_object: &Arc<Self::RenderObject>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: Render;
-}
-
-impl<R> SelectPaintImpl<false, false> for R
-where
-    R: Paint,
-{
-    fn paint_into_context(
-        &self,
-        render_object: &Arc<<Self as Render>::RenderObject>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: Render,
-    {
-        self.perform_paint(size, offset, memo, children, paint_ctx)
-    }
-}
-
-impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> SelectPaintImpl<true, false> for R
-where
-    R: Render<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>>
-        + SelectLayerPaint<true>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    R: SelectCompositeImpl<CACHED_COMPOSITE, false>,
-    R: LayerPaint,
-    R::ParentProtocol: LayerProtocol,
-    R::ChildProtocol: LayerProtocol,
-{
-    fn paint_into_context(
-        &self,
-        render_object: &Arc<<Self as Render>::RenderObject>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: Render,
-    {
-        paint_ctx.add_layer(render_object.clone(), |transform| {
-            <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
-        });
-    }
-}
-
-impl<R, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> SelectPaintImpl<true, true> for R
-where
-    R: Render<RenderObject = RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>>
-        + SelectLayerPaint<true>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    R: SelectCompositeImpl<CACHED_COMPOSITE, true>,
-    R: SelectLayoutImpl<DRY_LAYOUT>,
-    R: LayerPaint,
-    R::ParentProtocol: LayerProtocol,
-    R::ChildProtocol: LayerProtocol,
-{
-    fn paint_into_context(
-        &self,
-        render_object: &Arc<<Self as Render>::RenderObject>,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        Self: Render,
-    {
-        paint_ctx.add_orphan_layer(render_object.clone(), |transform| {
-            <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
-        });
-    }
-}
-
 pub trait ImplPaint<R: Render> {
     type LayerMark: Default + Send + Sync;
-    type HktLayerCache: Hkt;
+    type LayerCache: Send + Sync;
     fn paint_into_context(
         render: &R,
-        render_object: &Arc<R::RenderObject>,
+        render_object: &Arc<RenderObject<R>>,
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
@@ -270,11 +161,11 @@ where
 {
     type LayerMark = ();
 
-    type HktLayerCache = HktUnit;
+    type LayerCache = ();
 
     fn paint_into_context(
         render: &R,
-        render_object: &Arc<<R as Render>::RenderObject>,
+        render_object: &Arc<RenderObject<R>>,
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
@@ -287,20 +178,27 @@ where
     }
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
-    ImplPaint<R> for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
+    for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>
 where
+    Self: ImplComposite<R>,
+    // Will this cause inductive cycles? We'll see
+    R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
+        + ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
     type LayerMark = LayerMark;
 
-    type HktLayerCache = HktLayerCache<<R::ChildProtocol as Protocol>::Canvas>;
+    type LayerCache = LayerCache<
+        <R::ChildProtocol as Protocol>::Canvas,
+        <Self as ImplComposite<R>>::CompositionCache,
+    >;
 
     fn paint_into_context(
         render: &R,
-        render_object: &Arc<<R as Render>::RenderObject>,
+        render_object: &Arc<RenderObject<R>>,
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
@@ -309,6 +207,41 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
-        todo!()
+        paint_ctx.add_layer(render_object.clone(), |transform| {
+            <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
+        });
+    }
+}
+
+impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
+    for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>
+where
+    Self: ImplComposite<R>,
+    R::RenderImpl: ImplComposite<R>,
+    R: LayerPaint,
+    R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
+{
+    type LayerMark = LayerMark;
+
+    type LayerCache = LayerCache<
+        <R::ChildProtocol as Protocol>::Canvas,
+        <Self as ImplComposite<R>>::CompositionCache,
+    >;
+
+    fn paint_into_context(
+        render: &R,
+        render_object: &Arc<RenderObject<R>>,
+        size: &<R::ParentProtocol as Protocol>::Size,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        memo: &R::LayoutMemo,
+        children: &<R::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<R::ChildProtocol>,
+        >,
+        paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
+    ) {
+        paint_ctx.add_orphan_layer(render_object.clone(), |transform| {
+            <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
+        });
     }
 }

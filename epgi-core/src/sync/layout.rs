@@ -4,8 +4,7 @@ use crate::{
     sync::BuildScheduler,
     tree::{
         ArcChildRenderObject, DryLayout, HasLayoutMemo, ImplRenderBySuper, Layout, LayoutCache,
-        LayoutResults, Render, RenderImpl, RenderObject, SelectCachedComposite, SelectLayerPaint,
-        TreeNode,
+        LayoutResults, Render, RenderImpl, RenderObject, TreeNode,
     },
 };
 
@@ -27,22 +26,13 @@ pub trait AnyRenderObjectLayoutExt {
     fn visit_and_layout(&self);
 }
 
-impl<
-        R,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > AnyRenderObjectLayoutExt
-    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R> AnyRenderObjectLayoutExt for RenderObject<R>
 where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    R: SelectLayoutImpl<DRY_LAYOUT>,
+    R: Render,
+    R::RenderImpl: ImplLayout<R>,
 {
     fn visit_and_layout(&self) {
-        let is_relayout_boundary = DRY_LAYOUT || !self.mark.parent_use_size();
+        let is_relayout_boundary = R::RenderImpl::DRY_LAYOUT || !self.mark.parent_use_size();
         let needs_layout = self.mark.needs_layout();
         let subtree_has_layout = self.mark.subtree_has_layout();
         debug_assert!(
@@ -66,7 +56,7 @@ where
                     that has been laid out at least once",
                 );
                 // We not only keeps the orignial constraints, we also keep painting offset.
-                let memo = R::perform_layout_without_resize(
+                let memo = R::RenderImpl::perform_layout_without_resize(
                     &mut inner_reborrow.render,
                     &layout_results.constraints,
                     &mut layout_results.size,
@@ -90,19 +80,10 @@ pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
     fn layout(&self, constraints: &PP::Constraints);
 }
 
-impl<
-        R,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > ChildRenderObjectLayoutExt<R::ParentProtocol>
-    for RenderObject<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObject<R>
 where
-    R: Render<RenderObject = Self>
-        + SelectLayerPaint<LAYER_PAINT>
-        + SelectCachedComposite<CACHED_COMPOSITE>,
-    R: SelectLayoutImpl<DRY_LAYOUT>,
+    R: Render,
+    R::RenderImpl: ImplLayout<R>,
 {
     fn layout_use_size(
         &self,
@@ -119,9 +100,11 @@ where
                 }
             }
         }
-        let (size, memo) = inner_reborrow
-            .render
-            .perform_wet_layout(&constraints, &inner_reborrow.children);
+        let (size, memo) = R::RenderImpl::perform_wet_layout(
+            &mut inner_reborrow.render,
+            &constraints,
+            &inner_reborrow.children,
+        );
         inner_reborrow.cache.insert_layout_cache(LayoutCache::new(
             LayoutResults::new(constraints.clone(), size.clone(), memo),
             None,
@@ -144,9 +127,11 @@ where
                 }
             }
         }
-        let (size, memo) = inner_reborrow
-            .render
-            .perform_wet_layout(&constraints, &inner_reborrow.children);
+        let (size, memo) = R::RenderImpl::perform_wet_layout(
+            &mut inner_reborrow.render,
+            &constraints,
+            &inner_reborrow.children,
+        );
         inner_reborrow.cache.insert_layout_cache(LayoutCache::new(
             LayoutResults::new(constraints.clone(), size, memo),
             None,
@@ -157,81 +142,8 @@ where
     }
 }
 
-pub trait SelectLayoutImpl<const DRY_LAYOUT: bool>: TreeNode + HasLayoutMemo {
-    fn perform_layout_without_resize(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &mut <Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo;
-    fn perform_wet_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
-}
-
-impl<T> SelectLayoutImpl<false> for T
-where
-    T: Layout,
-{
-    fn perform_layout_without_resize(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &mut <Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo {
-        let (new_size, memo) = self.perform_layout(constraints, children);
-        *size = new_size;
-        memo
-    }
-
-    fn perform_wet_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        self.perform_layout(constraints, children)
-    }
-}
-
-impl<T> SelectLayoutImpl<true> for T
-where
-    T: DryLayout,
-{
-    fn perform_layout_without_resize(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &mut <Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo {
-        self.compute_layout_memo(constraints, size, children)
-    }
-
-    fn perform_wet_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        let size = self.compute_dry_layout(constraints);
-        let memo = self.compute_layout_memo(constraints, &size, children);
-        (size, memo)
-    }
-}
-
 pub trait ImplLayout<R: Render> {
+    const DRY_LAYOUT: bool;
     fn perform_layout_without_resize(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
@@ -258,6 +170,7 @@ impl<
 where
     R: Layout,
 {
+    const DRY_LAYOUT: bool = false;
     fn perform_layout_without_resize(
         render: &mut R,
         constraints: &<<R>::ParentProtocol as Protocol>::Constraints,
@@ -291,6 +204,7 @@ impl<
 where
     R: DryLayout,
 {
+    const DRY_LAYOUT: bool = true;
     fn perform_layout_without_resize(
         render: &mut R,
         constraints: &<<R>::ParentProtocol as Protocol>::Constraints,
@@ -319,6 +233,7 @@ impl<T> ImplLayout<T::Render> for T
 where
     T: ImplRenderBySuper,
 {
+    const DRY_LAYOUT: bool = T::Super::DRY_LAYOUT;
     fn perform_layout_without_resize(
         render: &mut T::Render,
         constraints: &<<T::Render as TreeNode>::ParentProtocol as Protocol>::Constraints,

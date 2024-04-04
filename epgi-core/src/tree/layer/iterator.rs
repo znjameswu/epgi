@@ -1,8 +1,8 @@
-use crate::foundation::{Canvas, Key, LayerProtocol, Protocol};
+use crate::foundation::{Canvas, Key};
 
 use super::{
     ArcAnyLayerRenderObjectExt, ChildLayerOrFragmentRef, ChildLayerProducingIterator,
-    ComposableAdoptedLayer, ComposableUnadoptedLayer, LayerCompositionConfig, PaintResults,
+    ComposableChildLayer, ComposableUnadoptedLayer, LayerCompositionConfig, PaintResults,
 };
 
 pub struct NonCachingChildLayerProducingIterator<'a, PC, CC, F>
@@ -47,7 +47,7 @@ where
                 })
             {
                 if let Some(layer) = child.layer.clone().downcast_arc_adopted_layer::<CC>() {
-                    let adopted_child_layer = ComposableAdoptedLayer {
+                    let adopted_child_layer = ComposableChildLayer {
                         config: child.config,
                         layer,
                     };
@@ -142,7 +142,7 @@ where
                 })
             {
                 if let Some(layer) = child.layer.clone().downcast_arc_adopted_layer::<CC>() {
-                    let adopted_child_layer = ComposableAdoptedLayer {
+                    let adopted_child_layer = ComposableChildLayer {
                         config: child.config,
                         layer,
                     };

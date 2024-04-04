@@ -4,8 +4,7 @@ use crate::{
     sync::build::reconcile::ImplElementNodeSyncReconcile,
     sync::SubtreeRenderObjectChange,
     tree::{
-        ArcChildElementNode, ArcElementContextNode, Element, ElementNode, ElementWidgetPair,
-        TreeNode, Widget,
+        ArcChildElementNode, ArcElementContextNode, Element, ElementWidgetPair, TreeNode, Widget,
     },
 };
 

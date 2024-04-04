@@ -5,13 +5,10 @@ use futures::task::ArcWake;
 use crate::{
     foundation::{Asc, Container, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
-    tree::{AsyncInflating, Hook, HookContext, TreeNode},
+    tree::{AsyncInflating, Hook, HookContext},
 };
 
-use super::{
-    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, ContainerOf,
-    Element, HasArcWidget,
-};
+use super::{ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, ContainerOf, Element};
 
 pub(crate) enum ElementSnapshotInner<E: Element, R> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
