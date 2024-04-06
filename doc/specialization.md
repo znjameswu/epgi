@@ -93,43 +93,164 @@ Linear inheritance is of little use for UI library which can create a vast numbe
 
 Now we can construct disjoint generic traits by using different associated types, it is natural to extend it to emulate a inheritance tree.
 
-Three fundamental elements for a minimal inheritance tree:
-1. Disjointness of child traits. We need to prove no child trait under a common parent trait can overlap. This can be achieved by the associated type trick.
-2. Recursive resolution. When implementing a descendant trait, the compiler have to recursively trace upward to at least know which base trait is targeted, and generate implementation for the base trait.
-    1. Recursion requires a recursive type relations. 
-    2. Recursion requires a base case, or a stop point to stop the recursion when you reached the base trait.
+Three fundamental elements for a minimal inheritance tree, or the process that happens when you use an abstract class in java:
+1. Superclass Reification. You fill in several required abstract method required by a subclass, the subclass pass it upwards to fill in all abstract method in the superclass, thus the superclass may actually become complete and operable.
+    1. The reification needs to prove the disjointness between subclasses. Any ambiguity will not be allowed in Rust. This can be achieved by the disjointness by associated type trick.
+2. Subclass Induction. The subclass acquires all the implementation and interface from the superclass.
+3. Recursion in both of the above process (Optional). This allows the tree to be multi-layered, instead of just two layer.
 
-Rust's type system actually has a provision in its orphan rule that enables such recursion with a stop point.
+We then check to see if they are possible to emulate in Rust
+
+## Compile-time recursion in Rust
+Fundamental elements for a recursion:
+1. Recursion requires a recursive type relations. 
+2. Recursion requires a base case, or a stop point to stop the recursion when you reached the base trait.
+
+This would instantly causes conflicting implementation problem, because stop point and normal case has two recursion behavior.
+
+### Basic recursion emulation
+Luckily, Rust's type system actually has a negative-reasoning provision in its orphan rule that enables such recursion with a stop point.
+
+Related: https://aturon.github.io/blog/2017/04/24/negative-chalk/
+
+Related: https://github.com/rust-lang/rfcs/blob/master/text/1023-rebalancing-coherence.md
 ```rust
 // Impl target
-trait ImplBaseBySuperOrSelf {
+trait ImplBase {
     fn foo_impl(&self); // The signature is notional. The Self receiver type actually has no use. The next code snippet shows a correct signature.
 }
 
 trait ImplBaseBySuper {
-    type Impl: ImplBaseBySuperOrSelf;
+    type Super: ImplBase;
 }
 
 // Recursion
-impl<T: ImplBaseBySuper> ImplBaseBySuperOrSelf for T {
+impl<I: ImplBaseBySuper> ImplBase for I {
     fn foo_impl(&self) {
-        T::Impl::foo_impl(self)
+        I::Super::foo_impl(self)
     }
 }
 
 struct BaseImpl;
 
 // Stop point
-impl ImplBaseBySuperOrSelf for BaseImpl { // Note this does not conflict with the previous impl block
+impl ImplBase for BaseImpl { // Note this does not conflict with the previous impl block
     fn foo_impl(&self) {
         // Base logic
     }
 }
 ```
 
-Note how the two impl blocks does not conflict with each other, since we can prove `ImplBaseBySuper` is not implemented for `BaseImpl`. And `BaseImpl` becomes the stop point.
+Note how the two impl blocks does not conflict with each other, since the orphan rule restricts the only possible impl between `ImplBaseBySuper` and `BaseImpl` can only be present in the current crate, and thus the negative reasoning works. And `BaseImpl` becomes the stop point.
 
-This technique, when combined with disjointness techniques from our specialization experiment, however, no longer works.
+Note, however, this recursion is *one-way*. That is, given the superclass, derive the subclass. To achieve recursion usable in inheritance, we need *two-way*. We need a way to derive superclass from subclass recursively (previously called "reification").
+
+### Recursion for reification
+Reification is the process of taking a `SubTrait` impl and translate it into `SuperTrait` impl. We can already write out what such reification process would look like in a impl
+
+```rust
+// Prototype, not working
+impl<ISub> SuperTrait for ISup
+where
+    ISub: ImplBaseBySuper<Super = ISup>,
+    ISub: SubTrait,
+{
+    // .....
+}
+```
+This has several implications.
+1. `SubTrait` can only appear in downstream crate.
+2. In downstream crate, `ISup` can never be a local type, even if it is a generic type (because the type constructor is not local).
+    1. (FATAL) By orphan rule, if `ISup` is generic, because `ISup` is not local type constructor, then no free type parameters may appear in `ISup`
+    2. In downstream crate, `SuperTrait` has to be generic and contain at least one local type as its parameter before any type parameters appear.
+3. Since reification needs to be invoked somewhere, and we certainly want to retain the very basic ability to directly reify the root superclass. Then, we have a contending impl, also in the definition crate:
+```rust
+impl SuperTrait for ISup 
+where
+    ISup: ExtraSuperTrait
+{
+}
+```
+
+This conflict, with the orphan rule's restriction on how `ISup` could be designed, blocks any attempt at making reification recursive.
+
+We preserve other failed approaches at the end of this article.
+
+## What happens to inheritance if we cannot recurse
+We have a two-layer inheritance structure.
+
+This is identical to what an interface/trait system would look like. Inheritance is dead.
+
+### Other failed approaches (for record only, ignore explanation)
+
+```rust
+// In downstream crate
+impl<ISub> SuperTrait for ISup
+where
+    ISub: ImplBaseBySuper<Super = ISup>,
+    ISub: SubTrait,
+{
+    // .....
+}
+```
+```rust
+impl SuperTrait for ISup 
+where
+    ISup: ExtraSuperTrait
+{
+}
+```
+We can see a conflict since disjointness during reification cannot be proved.
+
+We can resort to our disjointness by associated types trick. We need to make `SuperTrait` and `ISup` both generic and associate with a type as discriminant, suppose `Element`. And `Element` happens to be able constrain our `ISub` parameter.
+
+After a bit of renaming and accomodating the newly-introduced generics, we have
+```rust
+trait Element {
+    type Impl: ImplElement<Element = Self>;
+}
+trait ImplElement {
+    type Element: Element;
+}
+trait ImplElementBySuper {
+    type Super: ImplElement;
+}
+impl<I: ImplElementBySuper> ImplElement for I {
+    type Element = <I::Super as ImplElement>::Element;
+}
+
+trait SuperTraitFor<E> {}
+struct ISup<E>(PhantomData<E>);
+impl<E: Element> ImplElement for ISup<E> {
+    type Element = E;
+}
+trait ExtraTraitForSuper {}
+struct LocalE;
+
+trait SubTrait {}
+
+impl<E: Element<Impl = ISub>, ISub> SuperTraitFor<E> for ISup<E>
+where
+    ISub: ImplElementBySuper<Super = ISup<E>>,
+    ISub: SubTrait,
+{
+    // .....
+}
+
+impl<E: Element<Impl = ISup<E>>> SuperTraitFor<E> for ISup<E> where E: ExtraTraitForSuper {}
+```
+In theory, we proposed the disjointness by the negative reasoning that `ISup<E>` does not implement `ImplElementBySuper`. This should be supported by orphan rules, since:
+1. In downstream crate, `ISup` is not local, therefore `ISup<E>` is not `LT` type. Therefore the whole `ISup<E>: ImplElementBySuper` is forbidden no matter what the `E` is
+2. In upstream crate, there is simply no `ISup`
+3. In the current crate, we did not write any relevant impl.
+
+But rust's type solver failed to prove this and we have a conflicting implementation. A disappointment since chalk does not strictly conform to RFC 1023. We conclude that chalk cannot perform negative reasoning on associated types (as evidenced by various other failed approaches).
+
+Even if chalk can perform the negative reasoning of `ISup<E>: !ImplElementBySuper`. A more challenging scenario follows, where `ISup` is not the "most" super supertrait, and instead do have `ISup<E>: ImplElementBySuper<Super = ISupsup<E>>`, and we need a more enhanced version of negative reasoning of `ISup<E>: !ImplElementBySuper<Super = ISup<E>>`. Whoaaa, this extra layer of associated type reasoning maybe too much for chalk.
+
+
+
+
 
 ```rust
 // Target
@@ -183,3 +304,36 @@ Generic trait: doesn't seem possible?
 
 Generic struct: Looks more and more resembling the Select\* trait pattern
 
+Works
+
+
+
+Failure: Inheritance emulation, where the discriminating associated type is shared with specialization emulation, cannot be achieved due to Rustc's inability to prove disjointness by orphan rules in certain cases. https://github.com/rust-lang/rust/issues/123450.
+```rust 
+pub trait Foo {}
+
+pub trait ImplBy {
+    type Impl;
+}
+
+pub trait FooBy<I> {}
+
+impl<T> Foo for T
+where
+    T: ImplBy,
+    T: FooBy<T::Impl>,
+{
+}
+
+struct Bar;
+impl ImplBy for Bar {
+    type Impl = ();
+}
+impl Foo for Bar {}
+// conflicting implementations of trait `Foo` for type `Bar`
+// downstream crates may implement trait `FooBy<_>` for type `Bar`
+```
+
+Explanation: Inheritance emulation's exploit on orphan rule depends on the root type to not implementing discriminating trait (`Impl\*BySuper`), while specialization requires
+
+Another attempt

@@ -27,7 +27,8 @@ Code-style hazard
     1. Effect: In the bilateral impl-supertrait binding pattern between trait pairs of \* and Select\*Impl, sometimes the supertrait bound need to constrain associated type, and sometimes the associated type is generic, such as SelectLayoutImpl::LayerCache. We have to use a cumbersome solution of explicit Hkt types.
 - Rust type solver default false when encountering inductive cycles. For a demonstration, see https://users.rust-lang.org/t/how-does-rust-type-solver-handle-a-self-depending-cyclic-type-bounds
     1. Effect: paint implementation and composite implementation could create inductive cycles.
-    2. Not seems to affect us in our particular case
+    2. ~~Not seems to affect us in our particular case~~
+- Rustc's inability to prove certain disjointness based on orphan rules breaks our inheritance emulation https://github.com/rust-lang/rust/issues/123450
 
 
 
