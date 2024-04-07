@@ -1,8 +1,7 @@
 use epgi_core::{
-    foundation::{Canvas, PaintContext, Protocol, Transform},
+    foundation::{Asc, Canvas, Key, PaintContext, Protocol, Transform},
     tree::{
-        ArcChildLayerRenderObject, ArcChildRenderObject, ComposableChildLayer,
-        LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
+        ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject, ComposableChildLayer, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment
     },
 };
 use peniko::{kurbo::Stroke, BrushRef};
@@ -120,7 +119,8 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
 
     fn add_orphan_layer(
         &mut self,
-        layer: epgi_core::tree::ArcAnyLayerRenderObject,
+        layer: ArcAnyLayerRenderObject,
+        adopter_key: Asc<dyn Key>,
         transform: impl FnOnce(
             &<Self::Canvas as Canvas>::Transform,
         ) -> <Self::Canvas as Canvas>::Transform,
@@ -162,7 +162,8 @@ impl PaintContext for VelloPaintScanner {
 
     fn add_orphan_layer(
         &mut self,
-        layer: epgi_core::tree::ArcAnyLayerRenderObject,
+        layer: ArcAnyLayerRenderObject,
+        adopter_key: Asc<dyn Key>,
         transform: impl FnOnce(
             &<Self::Canvas as Canvas>::Transform,
         ) -> <Self::Canvas as Canvas>::Transform,

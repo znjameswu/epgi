@@ -4,22 +4,24 @@ pub use mark::*;
 mod node;
 pub use node::*;
 
-use std::{any::TypeId, marker::PhantomData};
+mod r#impl;
+pub use r#impl::*;
+
+use std::any::TypeId;
 
 use crate::{
     foundation::{
         default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
-        AnyRawPointer, Arc, AsIterator, Aweak, Canvas, CastInterfaceByRawPtr, HktContainer, Key,
-        LayerProtocol, PaintContext, Protocol, SyncMutex, Transform, TransformHitPosition,
+        AnyRawPointer, Arc, Aweak, Canvas, CastInterfaceByRawPtr, Protocol, SyncMutex, Transform,
+        TransformHitPosition,
     },
-    sync::{ImplAdopterLayer, ImplHitTest, ImplLayout, ImplPaint},
+    sync::ImplAdopterLayer,
 };
 
 use super::{
-    ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject,
-    ChildLayerProducingIterator, ContainerOf, ElementContextNode, LayerCompositionConfig,
-    PaintResults, TreeNode,
+    ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject, ContainerOf,
+    ElementContextNode, TreeNode,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -28,7 +30,8 @@ pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<P>>;
 pub type ArcChildRenderObjectWithCanvas<C> = Arc<dyn ChildRenderObjectWithCanvas<C>>;
 
-pub trait Render: TreeNode + HasLayoutMemo + Sized + 'static {
+pub trait Render: TreeNode + Sized + 'static {
+    type LayoutMemo: Send + Sync;
     type RenderImpl: ImplRender<Render = Self>;
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -38,247 +41,6 @@ pub trait Render: TreeNode + HasLayoutMemo + Sized + 'static {
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
-}
-
-pub trait ImplRender:
-    ImplRenderObject<Self::Render>
-    + ImplLayout<Self::Render>
-    + ImplPaint<Self::Render>
-    + ImplHitTest<Self::Render>
-    + ImplAdopterLayer<Self::Render>
-{
-    type Render: Render;
-}
-
-pub struct RenderImpl<
-    R: Render,
-    const DRY_LAYOUT: bool,
-    const LAYER_PAINT: bool,
-    const CACHED_COMPOSITE: bool,
-    const ORPHAN_LAYER: bool,
->(PhantomData<R>);
-
-impl<
-        R: Render,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > ImplRender for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
-where
-    Self: ImplLayout<R>,
-    Self: ImplPaint<R>,
-    Self: ImplHitTest<R>,
-    Self: ImplAdopterLayer<R>,
-    Self: ImplRenderObject<R>,
-{
-    type Render = R;
-}
-
-pub trait ImplRenderBySuper:
-    ImplRenderObject<Self::Render>
-    + ImplLayout<Self::Render>
-    + ImplPaint<Self::Render>
-    + ImplHitTest<Self::Render>
-    + ImplAdopterLayer<Self::Render>
-{
-    type Render: Render;
-    type Super: ImplRender<Render = Self::Render>;
-}
-
-impl<T> ImplRender for T
-where
-    T: ImplRenderBySuper,
-{
-    type Render = T::Render;
-}
-
-pub trait HasLayoutMemo {
-    type LayoutMemo: Send + Sync;
-}
-
-/// Dry layout means that under all circumstances, this render object's size is solely determined
-/// by the constraints given by its parents.
-///
-/// Since the size of its children does not affect its own size,
-/// this render object will always serves as a relayout boundary.
-///
-/// Contrary to what you may assume, dry-layout itself does not bring
-/// any additional optimization during the actual layout visit.
-/// It still needs to layout its children if dirty or receiving a new constraints.
-/// It merely serves a boundary to halt relayout propagation.
-pub trait Layout: TreeNode + HasLayoutMemo {
-    fn perform_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
-}
-
-pub trait DryLayout: TreeNode + HasLayoutMemo {
-    fn compute_dry_layout(
-        &self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-    ) -> <Self::ParentProtocol as Protocol>::Size;
-
-    fn compute_layout_memo(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> Self::LayoutMemo;
-}
-
-pub trait Paint: TreeNode + HasLayoutMemo {
-    fn perform_paint(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    );
-
-    fn hit_test_children(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool;
-
-    #[allow(unused_variables)]
-    fn hit_test_self(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
-        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
-    }
-}
-
-pub trait LayerPaint: TreeNode
-where
-    Self::ParentProtocol: LayerProtocol,
-    Self::ChildProtocol: LayerProtocol,
-{
-    fn paint_layer(
-        &self,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-    ) -> PaintResults<<Self::ChildProtocol as Protocol>::Canvas> {
-        <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::paint_render_objects(
-            children.as_iter().cloned(),
-        )
-    }
-
-    // fn transform_config(
-    //     self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-    //     child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    // ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
-
-    fn layer_key(&self) -> Option<&Arc<dyn Key>> {
-        None
-    }
-}
-
-pub trait Composite<
-    AdopterCanvas: Canvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
->: TreeNode
-{
-    fn composite_to(
-        &self,
-        encoding: &mut AdopterCanvas::Encoding,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<AdopterCanvas>,
-    );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<AdopterCanvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<AdopterCanvas>;
-}
-
-pub trait CachedComposite<
-    AdopterCanvas: Canvas = <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
->: TreeNode
-{
-    type CompositionCache: Send + Sync + Clone + 'static;
-
-    fn composite_into_cache(
-        &self,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> Self::CompositionCache;
-
-    fn composite_from_cache_to(
-        &self,
-        encoding: &mut AdopterCanvas::Encoding,
-        cache: &Self::CompositionCache,
-        composition_config: &LayerCompositionConfig<AdopterCanvas>,
-    );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<AdopterCanvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<AdopterCanvas>;
-}
-
-/// Orphan layers can skip this implementation
-pub trait HitTest: TreeNode + HasLayoutMemo {
-    fn hit_test_children(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &<Self::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool;
-
-    #[allow(unused_variables)]
-    fn hit_test_self(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
-        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
-    }
-}
-
-// We COULD orthogonalize the Orphan/Structured vs Noncached/cached trait set,
-// but that would inevitably bake directly into library user's code an explicit AdopterCanvas type
-// either somewhere in an associated type or somewhere as a generic trait paramter.
-// As an unproven idea, I would like to make orphan layer mechanism optional and not bake into anything more than necessary.
-// Edit: We actually did orthogonalize these traits.
-pub trait OrphanLayer: TreeNode + LayerPaint
-where
-    Self::ParentProtocol: LayerProtocol,
-    Self::ChildProtocol: LayerProtocol,
-{
-    fn adopter_key(&self) -> Option<&Arc<dyn Key>>;
-}
-
-pub enum HitTestBehavior {
-    Transparent,
-    DeferToChild,
-    Opaque,
 }
 
 pub struct HitTestResults<C: Canvas> {

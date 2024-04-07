@@ -6,9 +6,9 @@ use epgi_core::{
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
         ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
-        ElementImpl, ElementReconcileItem, HasLayoutMemo, HitTest, HitTestResults,
-        LayerCompositionConfig, LayerPaint, Reconcile, Render, RenderAction, RenderElement,
-        RenderImpl, RenderObjectSlots, TreeNode, Widget,
+        ElementImpl, ElementReconcileItem, HitTest, HitTestResults, LayerCompositionConfig,
+        LayerPaint, Reconcile, Render, RenderAction, RenderElement, RenderImpl, RenderObjectSlots,
+        TreeNode, Widget,
     },
 };
 
@@ -150,10 +150,6 @@ impl TreeNode for RenderRoot {
     type ChildContainer = OptionContainer;
 }
 
-impl HasLayoutMemo for RenderRoot {
-    type LayoutMemo = ();
-}
-
 impl DryLayout for RenderRoot {
     fn compute_dry_layout(
         &self,
@@ -232,6 +228,7 @@ impl HitTest for RenderRoot {
 }
 
 impl Render for RenderRoot {
+    type LayoutMemo = ();
     type RenderImpl = RenderImpl<Self, true, true, true, false>;
 }
 

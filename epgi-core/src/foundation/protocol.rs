@@ -4,6 +4,8 @@ use crate::tree::{
     ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject, PaintResults,
 };
 
+use super::{Asc, Key};
+
 pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
     type Constraints: PartialEq + Clone + Debug + Send + Sync;
     type Offset: Clone + Debug + Send + Sync + 'static;
@@ -146,6 +148,7 @@ pub trait PaintContext {
     fn add_orphan_layer(
         &mut self,
         layer: ArcAnyLayerRenderObject,
+        adopter_key: Asc<dyn Key>,
         transform: impl FnOnce(
             &<Self::Canvas as Canvas>::Transform,
         ) -> <Self::Canvas as Canvas>::Transform,

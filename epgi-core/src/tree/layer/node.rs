@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Canvas, Key, LayerProtocol},
     sync::{ImplAdopterLayer, ImplComposite},
-    tree::{LayerPaint, Render, RenderObject},
+    tree::{HasLayerPaintImpl, Render, RenderObject},
 };
 
 use super::{
@@ -93,7 +93,7 @@ impl<R> AnyLayerRenderObject for RenderObject<R>
 where
     R: Render,
     R::RenderImpl: ImplComposite<R>,
-    R: LayerPaint,
+    R::RenderImpl: HasLayerPaintImpl<R>,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
@@ -119,7 +119,7 @@ impl<R> ChildLayerRenderObject<<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCa
 where
     R: Render,
     R::RenderImpl: ImplComposite<R>,
-    R: LayerPaint,
+    R::RenderImpl: HasLayerPaintImpl<R>,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {

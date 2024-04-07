@@ -1,10 +1,11 @@
 use crate::{
     foundation::{HktContainer, Protocol, SyncMutex},
+    sync::ImplAdopterLayer,
     tree::{LayerCache, LayerMark},
 };
 
 use super::{
-    ArcChildRenderObject, ArcElementContextNode, CachedComposite, NoRelayoutToken, Render,
+    ArcChildRenderObject, ArcElementContextNode, HasCachedCompositeImpl, NoRelayoutToken, Render,
     RenderImpl, RenderMark,
 };
 
@@ -50,13 +51,19 @@ impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObje
     type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>;
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
+impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CC> ImplRenderObject<R>
     for RenderImpl<R, DRY_LAYOUT, true, true, ORPHAN_LAYER>
 where
-    R: CachedComposite,
+    Self: ImplAdopterLayer<R>,
+    R::RenderImpl: HasCachedCompositeImpl<
+        R,
+        <Self as ImplAdopterLayer<R>>::AdopterCanvas,
+        CompositionCache = CC,
+    >,
+    CC: Clone + Send + Sync,
 {
     type LayerMark = LayerMark;
-    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, R::CompositionCache>;
+    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, CC>;
 }
 
 #[derive(Default)]

@@ -1,6 +1,6 @@
 use crate::{
     foundation::{Arc, Canvas, Protocol},
-    tree::{HitTest, HitTestBehavior, HitTestResults, Render, RenderImpl, RenderObject},
+    tree::{HasHitTestImpl, HitTestBehavior, HitTestResults, Render, RenderImpl, RenderObject},
 };
 
 use super::ImplAdopterLayer;
@@ -37,7 +37,7 @@ impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_CO
     ImplHitTest<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
 where
     R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
-    R: HitTest,
+    R::RenderImpl: HasHitTestImpl<R>,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
@@ -54,7 +54,8 @@ where
             .as_ref()
             .expect("Hit test should not occur before paint");
 
-        let hit_within_shape = inner.render.hit_test_self(
+        let hit_within_shape = R::RenderImpl::hit_test_self(
+            &inner.render,
             results.curr_position(),
             &layout_cache.layout_results.size,
             offset,
@@ -65,7 +66,8 @@ where
             return false;
         };
 
-        let hit_children = inner.render.hit_test_children(
+        let hit_children = R::RenderImpl::hit_test_children(
+            &inner.render,
             &layout_cache.layout_results.size,
             offset,
             &layout_cache.layout_results.memo,
@@ -94,7 +96,7 @@ where
 impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
     ImplHitTest<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
 where
-    R: HitTest,
+    R::RenderImpl: HasHitTestImpl<R>,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
