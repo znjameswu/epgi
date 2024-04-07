@@ -114,7 +114,7 @@
 //         Option<Self::ArcRenderObject>,
 //         SubtreeRenderObjectChange<E::ParentProtocol>,
 //     ) {
-//         ElementNode::<E>::rebuild_success_commit(
+//         ElementNode::E::rebuild_success_commit(
 //             element,
 //             widget,
 //             shuffle,
@@ -129,7 +129,7 @@
 //     fn rebuild_suspend_commit(
 //         render_object: Option<Self::ArcRenderObject>,
 //     ) -> SubtreeRenderObjectChange<<E as Element>::ParentProtocol> {
-//         ElementNode::<E>::rebuild_suspend_commit(render_object)
+//         ElementNode::E::rebuild_suspend_commit(render_object)
 //     }
 
 //     #[inline(always)]
@@ -142,7 +142,7 @@
 //         Option<Self::ArcRenderObject>,
 //         SubtreeRenderObjectChange<E::ParentProtocol>,
 //     ) {
-//         ElementNode::<E>::inflate_success_commit(
+//         ElementNode::E::inflate_success_commit(
 //             element,
 //             widget,
 //             element_context,

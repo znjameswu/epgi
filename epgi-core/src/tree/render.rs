@@ -19,7 +19,7 @@ use crate::{
 use super::{
     ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject,
     ChildLayerProducingIterator, ContainerOf, ElementContextNode, LayerCompositionConfig,
-    PaintResults,
+    PaintResults, TreeNode,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -27,12 +27,6 @@ pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
 pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<P>>;
 pub type ArcChildRenderObjectWithCanvas<C> = Arc<dyn ChildRenderObjectWithCanvas<C>>;
-
-pub trait TreeNode: Send + Sync {
-    type ParentProtocol: Protocol;
-    type ChildProtocol: Protocol;
-    type ChildContainer: HktContainer;
-}
 
 pub trait Render: TreeNode + HasLayoutMemo + Sized + 'static {
     type RenderImpl: ImplRender<Render = Self>;
@@ -356,8 +350,7 @@ where
 
 impl<R> CastInterfaceByRawPtr for RenderObject<R>
 where
-    R: Render, // + SelectLayerPaint<LAYER_PAINT>
-               // + SelectCachedComposite<CACHED_COMPOSITE>,
+    R: Render,
 {
     fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
         default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
@@ -446,7 +439,7 @@ where
 {
     fn new(
         render: R,
-        children: ContainerOf<R, ArcChildRenderObject<<R>::ChildProtocol>>,
+        children: ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
         context: ArcElementContextNode,
     ) -> Self {
         Self {
@@ -463,7 +456,7 @@ where
 
     fn update<T>(
         &self,
-        op: impl FnOnce(&mut R, &mut ContainerOf<R, ArcChildRenderObject<<R>::ChildProtocol>>) -> T,
+        op: impl FnOnce(&mut R, &mut ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>) -> T,
     ) -> T {
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;

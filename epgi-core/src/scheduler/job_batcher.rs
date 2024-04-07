@@ -208,7 +208,7 @@ impl JobBatcher {
             }
             fn merge_sets<T: Clone + Hash + Eq>(mut sets: Vec<HashSet<T>>) -> HashSet<T> {
                 if sets.is_empty() {
-                    return HashSet::<T>::default();
+                    return HashSet::default();
                 }
                 sets.sort_unstable_by_key(|set| set.len());
                 // Clone the largest set to save us from repeated insertion

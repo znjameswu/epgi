@@ -26,37 +26,6 @@ pub trait ChildLayerRenderObjectHitTestExt<C: Canvas> {
     // fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<C>) -> bool;
 }
 
-// impl<R> ChildLayerRenderObjectHitTestExt<R::AdopterCanvas> for RenderObject<R>
-// where
-//     R: RenderNew + SelectHitTestImpl<R::OrphanLayer>,
-// {
-//     fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<R::AdopterCanvas>) -> bool {
-//         R::hit_test_from_adopter(self, results)
-//     }
-// }
-
-// impl<
-//         R,
-//         const DRY_LAYOUT: bool,
-//         // const LAYER_PAINT: bool,
-//         const CACHED_COMPOSITE: bool,
-//         const ORPHAN_LAYER: bool,
-//     > ChildLayerRenderObjectHitTestExt<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>
-//     for RenderObject<R, DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
-// where
-//     R: Render<RenderObject = Self>
-//         + SelectLayerPaint<true>
-//         + SelectCachedComposite<CACHED_COMPOSITE>,
-//     R: SelectHitTestImpl<ORPHAN_LAYER>,
-// {
-//     // fn hit_test_layer(
-//     //     self: Arc<Self>,
-//     //     results: &mut HitTestResults<<R as SelectOrphanLayer<ORPHAN_LAYER>>::AdopterCanvas>,
-//     // ) -> bool {
-//     //     R::hit_test_from_adopter(self, results)
-//     // }
-// }
-
 pub trait ImplHitTest<R: Render> {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
@@ -72,7 +41,7 @@ where
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
-        results: &mut HitTestResults<<<R>::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
         let inner = render_object.inner.lock();
         let no_relayout_token = render_object.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
@@ -129,7 +98,7 @@ where
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
-        results: &mut HitTestResults<<<R>::ParentProtocol as Protocol>::Canvas>,
+        results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
         false
     }

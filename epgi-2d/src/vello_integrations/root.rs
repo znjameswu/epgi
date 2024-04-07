@@ -1,20 +1,18 @@
 use epgi_core::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, False, InlinableDwsizeVec, Key, Never,
-        OptionContainer, PaintContext, Protocol, Provide, True,
+        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, OptionContainer, Protocol,
+        Provide,
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
-        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableChildLayer,
-        DryLayout, Element, ElementImpl, ElementNode, ElementReconcileItem, HasArcWidget,
-        HasLayoutMemo, HitTest, HitTestResults, LayerCompositionConfig, LayerPaint, Render,
-        RenderAction, RenderElement, RenderImpl, RenderObject, RenderObjectSlots, TreeNode, Widget,
+        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
+        ElementImpl, ElementReconcileItem, HasArcWidget, HasLayoutMemo, HitTest, HitTestResults,
+        LayerCompositionConfig, LayerPaint, Reconcile, Render, RenderAction, RenderElement,
+        RenderImpl, RenderObjectSlots, TreeNode, Widget,
     },
 };
 
-use crate::{
-    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
-};
+use crate::{Affine2dCanvas, Affine2dEncoding, BoxOffset, BoxProtocol, BoxSize, Point2d};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -35,7 +33,7 @@ impl Widget for RootView {
 
     type Element = RootElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as HasArcWidget>::ArcWidget {
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> Asc<RootView> {
         self
     }
 }
@@ -56,6 +54,10 @@ impl HasArcWidget for RootElement {
 }
 
 impl Element for RootElement {
+    type ElementImpl = ElementImpl<Self, true, false>;
+}
+
+impl Reconcile for RootElement {
     fn perform_rebuild_element(
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         &mut self,
@@ -107,8 +109,6 @@ impl Element for RootElement {
         let child_widget = (widget.build)(ctx);
         Ok((RootElement {}, child_widget))
     }
-
-    type ElementImpl = ElementImpl<Self, true, false>;
 }
 
 impl RenderElement for RootElement {

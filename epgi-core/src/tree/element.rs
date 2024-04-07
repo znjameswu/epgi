@@ -1,34 +1,35 @@
 mod async_queue;
+pub use async_queue::*;
+
 mod context;
+pub use context::*;
+
 mod mark;
+pub use mark::*;
+
 mod node;
+pub use node::*;
+
 mod provider;
+pub use provider::*;
+
 mod render_or_unit;
+pub use render_or_unit::*;
 mod snapshot;
 
-use std::marker::PhantomData;
-
-pub use async_queue::*;
-pub use context::*;
-pub use mark::*;
-pub use node::*;
-pub use provider::*;
-pub use render_or_unit::*;
 pub use snapshot::*;
 
+mod r#impl;
+pub use r#impl::*;
+
 use crate::{
-    foundation::{
-        Arc, ArrayContainer, Asc, Aweak, BuildSuspendedError, HktContainer, InlinableDwsizeVec,
-        Protocol, Provide, PtrEq, SyncMutex, TypeKey,
-    },
+    foundation::{Arc, Aweak, Protocol, PtrEq, SyncMutex},
     scheduler::JobId,
-    sync::ImplReconcileCommit,
-    tree::RenderAction,
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, Render, RenderObject, TreeNode,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair,
+    ContainerOf, ElementWidgetPair, TreeNode,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -45,15 +46,6 @@ pub type ChildRenderObjectsUpdateCallback<E: TreeNode> = Box<
     dyn FnOnce(
         ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
     ) -> ContainerOf<E, RenderObjectSlots<E::ChildProtocol>>,
->;
-
-#[allow(type_alias_bounds)]
-pub type ChildRenderObjectsUpdateCallbackNew<E: Element> = Box<
-    dyn FnOnce(
-        <E::ChildContainer as HktContainer>::Container<ArcChildRenderObject<E::ChildProtocol>>,
-    ) -> <E::ChildContainer as HktContainer>::Container<
-        RenderObjectSlots<E::ChildProtocol>,
-    >,
 >;
 
 pub enum ElementReconcileItem<P: Protocol> {
@@ -87,207 +79,12 @@ pub enum RenderObjectSlots<P: Protocol> {
     Reuse(ArcChildRenderObject<P>),
 }
 
-#[allow(type_alias_bounds)]
-pub type ContainerOf<E: TreeNode, T> = <E::ChildContainer as HktContainer>::Container<T>;
-
 pub trait HasArcWidget {
     type ArcWidget: ArcWidget<Element = Self>;
 }
 
 pub trait Element: TreeNode + HasArcWidget + Clone + Sized + 'static {
-    // type ElementNode: ChildElementNode<Self::ParentProtocol>
-    //     + ImplElementNodeSyncReconcile<Self>
-    //     + Send
-    //     + Sync
-    //     + 'static;
-
-    type ElementImpl: ImplElement<Element = Self>;
-
-    // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
-    // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
-    fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
-        &[]
-    }
-
-    // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
-    // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
-    /// If a hook suspended, then the untouched Self should be returned along with the suspended error
-    /// If nothing suspended, then the new Self should be returned.
-    fn perform_rebuild_element(
-        &mut self,
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
-    ) -> Result<
-        (
-            ContainerOf<Self, ElementReconcileItem<Self::ChildProtocol>>,
-            Option<ChildRenderObjectsUpdateCallbackNew<Self>>,
-        ),
-        (
-            ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
-            BuildSuspendedError,
-        ),
-    >;
-
-    fn perform_inflate_element(
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, ContainerOf<Self, ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError>;
-}
-
-pub trait ImplElement:
-    ImplElementNode<Self::Element> + ImplProvide<Self::Element> + ImplReconcileCommit<Self::Element>
-{
-    type Element: Element;
-}
-
-pub struct ElementImpl<E: Element, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
-    PhantomData<E>,
-);
-
-impl<E: Element, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElement
-    for ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    Self: ImplElementNode<E>,
-    Self: ImplProvide<E>,
-    Self: ImplReconcileCommit<E>,
-{
-    type Element = E;
-}
-
-pub trait ProvideElement: TreeNode + HasArcWidget {
-    type Provided: Provide;
-    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
-}
-
-pub trait RenderElement: TreeNode + HasArcWidget {
-    type Render: Render<
-        ParentProtocol = Self::ParentProtocol,
-        ChildProtocol = Self::ChildProtocol,
-        ChildContainer = Self::ChildContainer,
-    >;
-
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
-    /// Update necessary properties of render object given by the widget
-    ///
-    /// Called during the commit phase, when the widget is updated.
-    /// Always called after [RenderElement::try_update_render_object_children].
-    /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
-
-    /// Whether [Render::update_render_object] is a no-op and always returns None
-    ///
-    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
-}
-
-pub trait ImplElementNode<E: Element> {
-    type OptionArcRenderObject: Default + Clone + Send + Sync;
-    fn get_current_subtree_render_object(
-        render_object: &Self::OptionArcRenderObject,
-        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-    ) -> Option<ArcChildRenderObject<E::ParentProtocol>>;
-}
-
-impl<E: Element, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
-    for ElementImpl<E, false, PROVIDE_ELEMENT>
-where
-    E: TreeNode<
-        ChildContainer = ArrayContainer<1>,
-        ChildProtocol = <E as TreeNode>::ParentProtocol,
-    >,
-{
-    type OptionArcRenderObject = ();
-
-    fn get_current_subtree_render_object(
-        _render_object: &(),
-        [child]: &[ArcChildElementNode<E::ChildProtocol>; 1],
-    ) -> Option<ArcChildRenderObject<<E>::ParentProtocol>> {
-        child.get_current_subtree_render_object()
-    }
-}
-
-impl<E: Element, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
-    for ElementImpl<E, true, PROVIDE_ELEMENT>
-where
-    E: RenderElement,
-{
-    type OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>;
-
-    fn get_current_subtree_render_object(
-        render_object: &Self::OptionArcRenderObject,
-        _children: &ContainerOf<E, ArcChildElementNode<<E>::ChildProtocol>>,
-    ) -> Option<ArcChildRenderObject<<E>::ParentProtocol>> {
-        render_object
-            .as_ref()
-            .map(|render_object| render_object.clone() as _)
-    }
-}
-
-pub trait ImplProvide<E: Element> {
-    const PROVIDE_ELEMENT: bool;
-    fn option_get_provided_key_value_pair(
-        widget: &E::ArcWidget,
-    ) -> Option<(Arc<dyn Provide>, TypeKey)>;
-
-    fn diff_provided_value(
-        old_widget: &E::ArcWidget,
-        new_widget: &E::ArcWidget,
-    ) -> Option<Arc<dyn Provide>>;
-}
-
-impl<E: Element, const RENDER_ELEMENT: bool> ImplProvide<E>
-    for ElementImpl<E, RENDER_ELEMENT, false>
-{
-    const PROVIDE_ELEMENT: bool = false;
-
-    fn option_get_provided_key_value_pair(
-        widget: &<E>::ArcWidget,
-    ) -> Option<(Arc<dyn Provide>, TypeKey)> {
-        None
-    }
-
-    fn diff_provided_value(
-        old_widget: &<E>::ArcWidget,
-        new_widget: &<E>::ArcWidget,
-    ) -> Option<Arc<dyn Provide>> {
-        None
-    }
-}
-
-impl<E: Element, const RENDER_ELEMENT: bool> ImplProvide<E> for ElementImpl<E, RENDER_ELEMENT, true>
-where
-    E: ProvideElement,
-{
-    const PROVIDE_ELEMENT: bool = true;
-
-    fn option_get_provided_key_value_pair(
-        widget: &<E>::ArcWidget,
-    ) -> Option<(Arc<dyn Provide>, TypeKey)> {
-        Some((E::get_provided_value(widget), TypeKey::of::<E::Provided>()))
-    }
-
-    fn diff_provided_value(
-        old_widget: &<E>::ArcWidget,
-        new_widget: &<E>::ArcWidget,
-    ) -> Option<Arc<dyn Provide>> {
-        let old_provided_value = E::get_provided_value(&old_widget);
-        let new_provided_value = E::get_provided_value(new_widget);
-        if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
-            && !old_provided_value.eq_sized(new_provided_value.as_ref())
-        {
-            Some(new_provided_value)
-        } else {
-            None
-        }
-    }
+    type ElementImpl: ImplElement<Element = Self> + HasReconcileImpl<Self>;
 }
 
 pub struct ElementNode<E: Element> {

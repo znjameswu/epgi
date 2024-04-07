@@ -173,10 +173,10 @@ where
     const DRY_LAYOUT: bool = false;
     fn perform_layout_without_resize(
         render: &mut R,
-        constraints: &<<R>::ParentProtocol as Protocol>::Constraints,
-        size: &mut <<R>::ParentProtocol as Protocol>::Size,
-        children: &<<R>::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<<R>::ChildProtocol>,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        size: &mut <R::ParentProtocol as Protocol>::Size,
+        children: &<R::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> R::LayoutMemo {
         let (new_size, memo) = render.perform_layout(constraints, children);
@@ -186,11 +186,11 @@ where
 
     fn perform_wet_layout(
         render: &mut R,
-        constraints: &<<R>::ParentProtocol as Protocol>::Constraints,
-        children: &<<R>::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<<R>::ChildProtocol>,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        children: &<R::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<R::ChildProtocol>,
         >,
-    ) -> (<<R>::ParentProtocol as Protocol>::Size, <R>::LayoutMemo) {
+    ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
         render.perform_layout(constraints, children)
     }
 }
@@ -207,10 +207,10 @@ where
     const DRY_LAYOUT: bool = true;
     fn perform_layout_without_resize(
         render: &mut R,
-        constraints: &<<R>::ParentProtocol as Protocol>::Constraints,
-        size: &mut <<R>::ParentProtocol as Protocol>::Size,
-        children: &<<R>::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<<R>::ChildProtocol>,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        size: &mut <R::ParentProtocol as Protocol>::Size,
+        children: &<R::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> R::LayoutMemo {
         render.compute_layout_memo(constraints, size, children)
@@ -218,11 +218,11 @@ where
 
     fn perform_wet_layout(
         render: &mut R,
-        constraints: &<<R>::ParentProtocol as Protocol>::Constraints,
-        children: &<<R>::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<<R>::ChildProtocol>,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        children: &<R::ChildContainer as HktContainer>::Container<
+            ArcChildRenderObject<R::ChildProtocol>,
         >,
-    ) -> (<<R>::ParentProtocol as Protocol>::Size, <R>::LayoutMemo) {
+    ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
         let size = render.compute_dry_layout(constraints);
         let memo = render.compute_layout_memo(constraints, &size, children);
         (size, memo)

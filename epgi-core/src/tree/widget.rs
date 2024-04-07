@@ -8,7 +8,7 @@ use std::{
 
 use crate::foundation::{AsAny, AsHeapPtr, Asc, Key, Protocol};
 
-use super::{ArcAnyElementNode, Element, HasArcWidget, TreeNode};
+use super::{ArcAnyElementNode, Element, HasArcWidget, Reconcile, TreeNode};
 
 pub type ArcChildWidget<P> = Asc<dyn ChildWidget<P>>;
 pub type ArcParentWidget<P> = Asc<dyn ParentWidget<ChildProtocol = P>>;

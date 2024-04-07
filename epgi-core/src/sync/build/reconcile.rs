@@ -14,8 +14,8 @@ use crate::{
     tree::{
         no_widget_update, ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext,
         ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementContextNode, ElementNode,
-        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext, Hooks,
-        ImplElementNode, ImplProvide, Mainline, MainlineState,
+        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HasArcWidget, HookContext,
+        Hooks, ImplElementNode, ImplProvide, HasReconcileImpl, Mainline, MainlineState, TreeNode,
     },
 };
 
@@ -57,7 +57,7 @@ impl<E: Element> ElementNode<E> {
         });
 
         let consumed_values = Self::read_and_update_subscriptions_sync(
-            E::get_consumed_types(widget),
+            E::ElementImpl::get_consumed_types(widget),
             EMPTY_CONSUMED_TYPES,
             &node.context,
             build_scheduler,
@@ -251,8 +251,8 @@ impl<E: Element> ElementNode<E> {
                 }
                 let new_widget_ref = new_widget.as_ref().unwrap_or(&old_widget);
                 let consumed_values = Self::read_and_update_subscriptions_sync(
-                    E::get_consumed_types(new_widget_ref),
-                    E::get_consumed_types(&old_widget),
+                    E::ElementImpl::get_consumed_types(new_widget_ref),
+                    E::ElementImpl::get_consumed_types(&old_widget),
                     &self.context,
                     build_scheduler,
                 );
@@ -349,7 +349,8 @@ impl<E: Element> ElementNode<E> {
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let mut nodes_needing_unmount = Default::default();
-        let results = element.perform_rebuild_element(
+        let results = E::ElementImpl::perform_rebuild_element(
+            &mut element,
             &widget,
             BuildContext {
                 hooks: &mut hook_context,
@@ -430,7 +431,7 @@ impl<E: Element> ElementNode<E> {
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         build_scheduler: &BuildScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        let result = E::perform_inflate_element(
+        let result = E::ElementImpl::perform_inflate_element(
             &widget,
             BuildContext {
                 hooks: &mut hook_context,
@@ -709,47 +710,6 @@ pub(crate) mod sync_build_private {
         }
     }
 }
-
-// pub trait SelectReconcileImpl<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>:
-//     Element + SelectArcRenderObject<RENDER_ELEMENT>
-// {
-//     fn visit_commit(
-//         element_node: &Self::ElementNode,
-//         render_object: Self::OptionArcRenderObject,
-//         render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
-//         self_rebuild_suspended: bool,
-//         scope: &rayon::Scope<'_>,
-//         build_scheduler: &BuildScheduler,
-//     ) -> SubtreeRenderObjectChange<Self::ParentProtocol>;
-
-//     fn rebuild_success_commit(
-//         element: &Self,
-//         widget: &Self::ArcWidget,
-//         shuffle: Option<ChildRenderObjectsUpdateCallback<Self>>,
-//         children: &ContainerOf<Self, ArcChildElementNode<Self::ChildProtocol>>,
-//         render_object: Self::OptionArcRenderObject,
-//         render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
-//         element_context: &ArcElementContextNode,
-//         is_new_widget: bool,
-//     ) -> (
-//         Self::OptionArcRenderObject,
-//         SubtreeRenderObjectChange<Self::ParentProtocol>,
-//     );
-
-//     fn rebuild_suspend_commit(
-//         render_object: Self::OptionArcRenderObject,
-//     ) -> SubtreeRenderObjectChange<Self::ParentProtocol>;
-
-//     fn inflate_success_commit(
-//         element: &Self,
-//         widget: &Self::ArcWidget,
-//         element_context: &ArcElementContextNode,
-//         render_object_changes: ContainerOf<Self, SubtreeRenderObjectChange<Self::ChildProtocol>>,
-//     ) -> (
-//         Self::OptionArcRenderObject,
-//         SubtreeRenderObjectChange<Self::ParentProtocol>,
-//     );
-// }
 
 pub trait ImplReconcileCommit<E: Element>: ImplElementNode<E> {
     fn visit_commit(
