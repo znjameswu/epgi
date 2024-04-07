@@ -79,11 +79,8 @@ pub enum RenderObjectSlots<P: Protocol> {
     Reuse(ArcChildRenderObject<P>),
 }
 
-pub trait HasArcWidget {
+pub trait Element: TreeNode + Clone + Sized + 'static {
     type ArcWidget: ArcWidget<Element = Self>;
-}
-
-pub trait Element: TreeNode + HasArcWidget + Clone + Sized + 'static {
     type ElementImpl: ImplElement<Element = Self> + HasReconcileImpl<Self>;
 }
 

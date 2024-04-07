@@ -5,8 +5,7 @@ use crate::{
     sync::ImplReconcileCommit,
     tree::{
         ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObjectsUpdateCallback,
-        ContainerOf, Element, ElementReconcileItem, HasArcWidget, ImplElement, Render,
-        RenderAction, TreeNode,
+        ContainerOf, Element, ElementReconcileItem, ImplElement, Render, RenderAction,
     },
 };
 
@@ -27,7 +26,7 @@ where
     type Element = E;
 }
 
-pub trait Reconcile: TreeNode + HasArcWidget + Clone + Sized + 'static {
+pub trait Reconcile: Element {
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
     #[allow(unused_variables)]
@@ -108,7 +107,7 @@ where
     }
 }
 
-pub trait RenderElement: TreeNode + HasArcWidget {
+pub trait RenderElement: Element {
     type Render: Render<
         ParentProtocol = Self::ParentProtocol,
         ChildProtocol = Self::ChildProtocol,
@@ -149,7 +148,7 @@ where
     }
 }
 
-pub trait ProvideElement: TreeNode + HasArcWidget {
+pub trait ProvideElement: Element {
     type Provided: Provide;
     fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
 }

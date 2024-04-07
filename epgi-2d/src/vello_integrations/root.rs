@@ -6,7 +6,7 @@ use epgi_core::{
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
         ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
-        ElementImpl, ElementReconcileItem, HasArcWidget, HasLayoutMemo, HitTest, HitTestResults,
+        ElementImpl, ElementReconcileItem, HasLayoutMemo, HitTest, HitTestResults,
         LayerCompositionConfig, LayerPaint, Reconcile, Render, RenderAction, RenderElement,
         RenderImpl, RenderObjectSlots, TreeNode, Widget,
     },
@@ -49,11 +49,8 @@ impl TreeNode for RootElement {
     type ChildContainer = OptionContainer;
 }
 
-impl HasArcWidget for RootElement {
-    type ArcWidget = Asc<RootView>;
-}
-
 impl Element for RootElement {
+    type ArcWidget = Asc<RootView>;
     type ElementImpl = ElementImpl<Self, true, false>;
 }
 
