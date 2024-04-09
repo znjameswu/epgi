@@ -79,9 +79,7 @@ where
     R: ProxyRender,
 {
     type ParentProtocol = R::Protocol;
-
     type ChildProtocol = R::Protocol;
-
     type ChildContainer = ArrayContainer<1>;
 
     type LayoutMemo = ();
@@ -133,7 +131,7 @@ where
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
         memo: &(),
-        [child]: &[ArcChildRenderObject<<R as RenderBase>::ChildProtocol>; 1],
+        [child]: &[ArcChildRenderObject<R::Protocol>; 1],
         paint_ctx: &mut impl PaintContext<Canvas = <R::Protocol as Protocol>::Canvas>,
     ) {
         R::perform_paint(render, size, offset, child, paint_ctx)
@@ -149,8 +147,8 @@ where
         render: &R,
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
-        memo: &<R as RenderBase>::LayoutMemo,
-        [child]: &[ArcChildRenderObject<<R as RenderBase>::ChildProtocol>; 1],
+        memo: &(),
+        [child]: &[ArcChildRenderObject<R::Protocol>; 1],
         results: &mut HitTestResults<<R::Protocol as Protocol>::Canvas>,
     ) -> bool {
         R::hit_test_children(render, size, offset, child, results)
@@ -161,7 +159,7 @@ where
         position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
-        memo: &<R as RenderBase>::LayoutMemo,
+        memo: &(),
     ) -> Option<HitTestBehavior> {
         R::hit_test_self(render, position, size, offset)
     }

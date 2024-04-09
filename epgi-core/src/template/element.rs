@@ -145,7 +145,7 @@ pub trait TemplateRenderElement<E: ElementBase> {
     /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
     ///
     /// Setting to false will always guarantee the correct behavior.
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
+    const NOOP_UPDATE_RENDER_OBJECT: bool;
 }
 
 impl<E> RenderElement for E
