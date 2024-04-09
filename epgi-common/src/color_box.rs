@@ -1,11 +1,12 @@
 use epgi_2d::{
-    Affine2dCanvas, Affine2dPaintContextExt, BoxOffset, BoxProtocol, BoxSize, Color, FillPainter,
-    Painter, Rect,
+    Affine2dCanvas, Affine2dPaintContextExt, BoxOffset, BoxProtocol, BoxSingleChildElement,
+    BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize, Brush, Color, Fill,
+    FillPainter, Painter, Rect,
 };
 use epgi_core::{
-    foundation::{Asc, PaintContext},
-    nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{ArcChildRenderObject, ArcChildWidget, RenderAction, Widget},
+    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
+    template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
+    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
 };
 
 #[derive(Debug, optargs::OptStructArc)]
@@ -19,61 +20,136 @@ impl Widget for ColorBox {
 
     type ChildProtocol = BoxProtocol;
 
-    type Element = SingleChildRenderObjectElement<Self>;
+    type Element = ColorBoxElement;
 
     fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }
 
-impl ProxyWidget for ColorBox {
-    type Protocol = BoxProtocol;
+#[derive(Clone)]
+pub struct ColorBoxElement;
 
-    type RenderState = Color;
+impl ImplByTemplate for ColorBoxElement {
+    type Template = BoxSingleChildElementTemplate<true, false>;
+}
 
-    fn child(&self) -> &ArcChildWidget<Self::Protocol> {
-        &self.child
+impl BoxSingleChildElement for ColorBoxElement {
+    type ArcWidget = Asc<ColorBox>;
+
+    fn get_child_widget(
+        element: Option<&mut Self>,
+        widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+        Ok(widget.child.clone())
     }
 
-    fn create_render_state(&self) -> Self::RenderState {
-        self.color.clone()
+    fn create_element(widget: &Self::ArcWidget) -> Self {
+        Self
+    }
+}
+
+impl BoxSingleChildRenderElement for ColorBoxElement {
+    type Render = RenderColorBox;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
+        RenderColorBox {
+            color: widget.color.clone(),
+        }
     }
 
-    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction {
-        if &self.color != render_state {
-            *render_state = self.color;
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
+        if render.color != widget.color {
+            *render.color = widget.color;
             RenderAction::Repaint
         } else {
             RenderAction::None
         }
     }
+}
 
-    fn detach_render_state(_render_state: &mut Self::RenderState) {}
+pub struct RenderColorBox {
+    color: Color,
+}
 
-    const NOOP_DETACH: bool = true;
+impl ImplByTemplate for RenderColorBox {
+    type Template = ProxyRenderTemplate;
+}
 
-    type LayoutMemo = ();
+impl ProxyRender for RenderColorBox {
+    type Protocol = BoxProtocol;
 
-    #[inline(never)]
     fn perform_paint(
-        state: &Self::RenderState,
+        &self,
         size: &BoxSize,
         offset: &BoxOffset,
-        _memo: &Self::LayoutMemo,
-        child: &ArcChildRenderObject<Self::Protocol>,
+        child: &ArcChildRenderObject<BoxProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
-        let color = state;
         paint_ctx.draw_rect(
             Rect::new_point_size(*offset, *size),
             Painter::Fill(FillPainter {
-                fill: epgi_2d::Fill::EvenOdd,
-                brush: epgi_2d::Brush::Solid(*color),
+                fill: Fill::EvenOdd,
+                brush: Brush::Solid(self.color),
                 transform: None,
             }),
         );
         paint_ctx.paint(child, offset);
     }
 
-    type LayerOrUnit = ();
+    const NOOP_DETACH: bool = true;
 }
+
+// impl ProxyWidget for ColorBox {
+//     type Protocol = BoxProtocol;
+
+//     type RenderState = Color;
+
+//     fn child(&self) -> &ArcChildWidget<Self::Protocol> {
+//         &self.child
+//     }
+
+//     fn create_render_state(&self) -> Self::RenderState {
+//         self.color.clone()
+//     }
+
+//     fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction {
+//         if &self.color != render_state {
+//             *render_state = self.color;
+//             RenderAction::Repaint
+//         } else {
+//             RenderAction::None
+//         }
+//     }
+
+//     fn detach_render_state(_render_state: &mut Self::RenderState) {}
+
+//     const NOOP_DETACH: bool = true;
+
+//     type LayoutMemo = ();
+
+//     #[inline(never)]
+//     fn perform_paint(
+//         state: &Self::RenderState,
+//         size: &BoxSize,
+//         offset: &BoxOffset,
+//         _memo: &Self::LayoutMemo,
+//         child: &ArcChildRenderObject<Self::Protocol>,
+//         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+//     ) {
+//         let color = state;
+//         paint_ctx.draw_rect(
+//             Rect::new_point_size(*offset, *size),
+//             Painter::Fill(FillPainter {
+//                 fill: epgi_2d::Fill::EvenOdd,
+//                 brush: epgi_2d::Brush::Solid(*color),
+//                 transform: None,
+//             }),
+//         );
+//         paint_ctx.paint(child, offset);
+//     }
+
+//     type LayerOrUnit = ();
+// }

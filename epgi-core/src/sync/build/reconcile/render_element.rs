@@ -4,9 +4,9 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElementNode,
-        ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase, RenderElement,
-        RenderObject, RenderObjectSlots,
+        ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementImpl, ElementNode,
+        ImplElementNode, ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase,
+        RenderElement, RenderObject, RenderObjectSlots,
     },
 };
 
@@ -15,9 +15,9 @@ use super::ImplReconcileCommit;
 impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E>
     for ElementImpl<E, true, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: ElementBase,
     E: RenderElement,
-    E::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+    Self: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     fn visit_commit(
         element_node: &ElementNode<E>,
@@ -29,7 +29,10 @@ where
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
+    where
+        E: Element,
+    {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
             "Logic error in parameters: \
@@ -150,9 +153,9 @@ where
 
 impl<E, const PROVIDE_ELEMENT: bool> ElementImpl<E, true, PROVIDE_ELEMENT>
 where
-    E: Element,
+    E: ElementBase,
     E: RenderElement,
-    E::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+    Self: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     #[inline(always)]
     pub(crate) fn visit_commit_attached(
@@ -163,7 +166,7 @@ where
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> where E: Element {
         use SubtreeRenderObjectChangeSummary::*;
         match render_object_change_summary {
             KeepAll {
@@ -238,7 +241,7 @@ where
         >,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> where E: Element {
         if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
         | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
         {

@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
-use epgi_2d::{BoxConstraints, BoxProtocol, BoxSize};
+use epgi_2d::{
+    BoxConstraints, BoxProtocol, BoxSingleChildElement, BoxSingleChildElementTemplate,
+    BoxSingleChildRenderElement,
+};
 use epgi_core::{
-    nodes::{ProxyWidget, SingleChildRenderObjectElement},
-    tree::{ArcChildRenderObject, ArcChildWidget, Element, RenderAction, Widget},
+    foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
+    template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
+    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 
 #[derive(Debug, optargs::OptStructArc)]
@@ -17,54 +21,110 @@ impl Widget for ConstrainedBox {
 
     type ChildProtocol = BoxProtocol;
 
-    type Element = SingleChildRenderObjectElement<Self>;
+    type Element = ConstrainedBoxElement;
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
 
-impl ProxyWidget for ConstrainedBox {
-    type Protocol = BoxProtocol;
+#[derive(Clone)]
+pub struct ConstrainedBoxElement;
 
-    type RenderState = BoxConstraints;
+impl ImplByTemplate for ConstrainedBoxElement {
+    type Template = BoxSingleChildElementTemplate<true, false>;
+}
 
-    fn child(&self) -> &ArcChildWidget<BoxProtocol> {
-        &self.child
+impl BoxSingleChildElement for ConstrainedBoxElement {
+    type ArcWidget = Asc<ConstrainedBox>;
+
+    fn get_child_widget(
+        element: Option<&mut Self>,
+        widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+        Ok(widget.child.clone())
     }
 
-    fn create_render_state(&self) -> BoxConstraints {
-        self.constraints.clone()
+    fn create_element(widget: &Self::ArcWidget) -> Self {
+        Self
+    }
+}
+
+impl BoxSingleChildRenderElement for ConstrainedBoxElement {
+    type Render = RenderConstrainedBox;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
+        RenderConstrainedBox {
+            constraints: widget.constraints.clone(),
+        }
     }
 
-    fn update_render_state(&self, render_state: &mut BoxConstraints) -> RenderAction {
-        if render_state != &self.constraints {
-            *render_state = self.constraints.clone();
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
+        if render.constraints != &widget.constraints {
+            *render.constraints = widget.constraints.clone();
             return RenderAction::Relayout;
         }
         return RenderAction::None;
     }
+}
 
-    fn detach_render_state(_render_state: &mut Self::RenderState) {}
+pub struct RenderConstrainedBox {
+    constraints: BoxConstraints,
+}
+
+impl ImplByTemplate for RenderConstrainedBox {
+    type Template = ProxyRenderTemplate;
+}
+
+impl ProxyRender for RenderConstrainedBox {
+    type Protocol = BoxProtocol;
 
     const NOOP_DETACH: bool = true;
-
-    type LayoutMemo = ();
-
-    fn perform_layout(
-        state: &BoxConstraints,
-        constraints: &BoxConstraints,
-        child: &ArcChildRenderObject<BoxProtocol>,
-    ) -> (BoxSize, ()) {
-        let child_constraints = state.enforce(constraints);
-        if let Some(size) = child_constraints.is_tight() {
-            child.layout(&child_constraints);
-            return (size, ());
-        } else {
-            let size = child.layout_use_size(&child_constraints);
-            return (size, ());
-        }
-    }
-
-    type LayerOrUnit = ();
 }
+
+// impl ProxyWidget for ConstrainedBox {
+//     type Protocol = BoxProtocol;
+
+//     type RenderState = BoxConstraints;
+
+//     fn child(&self) -> &ArcChildWidget<BoxProtocol> {
+//         &self.child
+//     }
+
+//     fn create_render_state(&self) -> BoxConstraints {
+//         self.constraints.clone()
+//     }
+
+//     fn update_render_state(&self, render_state: &mut BoxConstraints) -> RenderAction {
+//         if render_state != &self.constraints {
+//             *render_state = self.constraints.clone();
+//             return RenderAction::Relayout;
+//         }
+//         return RenderAction::None;
+//     }
+
+//     fn detach_render_state(_render_state: &mut Self::RenderState) {}
+
+//     const NOOP_DETACH: bool = true;
+
+//     type LayoutMemo = ();
+
+//     fn perform_layout(
+//         state: &BoxConstraints,
+//         constraints: &BoxConstraints,
+//         child: &ArcChildRenderObject<BoxProtocol>,
+//     ) -> (BoxSize, ()) {
+//         let child_constraints = state.enforce(constraints);
+//         if let Some(size) = child_constraints.is_tight() {
+//             child.layout(&child_constraints);
+//             return (size, ());
+//         } else {
+//             let size = child.layout_use_size(&child_constraints);
+//             return (size, ());
+//         }
+//     }
+
+//     type LayerOrUnit = ();
+// }

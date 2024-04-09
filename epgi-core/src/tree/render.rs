@@ -311,7 +311,7 @@ where
 #[macro_export]
 macro_rules! hit_test_interface_query_table {
     ($name: ident, $type: ty, $($trait: ty),* $(,)?) => {
-        epgi_core::interface_query_table!($name, RenderObjectOld<$type>, $($trait,)*);
+        epgi_core::interface_query_table!($name, RenderObject<$type>, $($trait,)*);
     };
 }
 

@@ -1,16 +1,17 @@
 use std::{any::TypeId, sync::Arc};
 
-use epgi_2d::{BoxOffset, BoxProtocol, BoxSize, Point2d};
+use epgi_2d::{
+    BoxOffset, BoxProtocol, BoxSingleChildElement, BoxSingleChildElementTemplate,
+    BoxSingleChildRenderElement, BoxSize, Point2d,
+};
 use epgi_core::{
-    foundation::{AnyRawPointer, Asc, Protocol},
+    foundation::{AnyRawPointer, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
     hit_test_interface_query_table,
-    nodes::{
-        ComponentElement, ComponentWidget, ProxyWidget, SingleChildRenderObject,
-        SingleChildRenderObjectElement,
-    },
+    nodes::{ComponentElement, ComponentWidget},
+    template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{
-        ArcChildWidget, BuildContext, Element, HitTestBehavior, RenderAction, RenderObjectOld,
-        Widget,
+        ArcChildWidget, BuildContext, Element, ElementBase, HitTestBehavior, RenderAction,
+        RenderObject, Widget,
     },
 };
 use hashbrown::HashMap;
@@ -41,7 +42,7 @@ impl Widget for GestureDetector {
 
     type Element = ComponentElement<BoxProtocol>;
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as Element>::ArcWidget {
+    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self as _
     }
 }
@@ -112,36 +113,48 @@ impl std::fmt::Debug for GestureRecognizerFactory {
     }
 }
 
-pub struct RawGestureDetectorState {
-    recognizers: HashMap<TypeId, Asc<dyn GestureRecognizer>>,
-}
-
 impl Widget for RawGestureDetector {
     type ParentProtocol = BoxProtocol;
 
     type ChildProtocol = BoxProtocol;
 
-    type Element = SingleChildRenderObjectElement<RawGestureDetector>;
+    type Element = RawGestureDetectorElement;
 
-    fn into_arc_widget(
-        self: std::sync::Arc<Self>,
-    ) -> <Self::Element as epgi_core::tree::Element>::ArcWidget {
+    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
 
-impl ProxyWidget for RawGestureDetector {
-    type Protocol = BoxProtocol;
+#[derive(Clone)]
+pub struct RawGestureDetectorElement;
 
-    type RenderState = RawGestureDetectorState;
+impl ImplByTemplate for RawGestureDetectorElement {
+    type Template = BoxSingleChildElementTemplate<true, false>;
+}
 
-    fn child(&self) -> &ArcChildWidget<Self::Protocol> {
-        &self.child
+impl BoxSingleChildElement for RawGestureDetectorElement {
+    type ArcWidget = Asc<RawGestureDetector>;
+
+    fn get_child_widget(
+        element: Option<&mut Self>,
+        widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+        Ok(widget.child.clone())
     }
 
-    fn create_render_state(&self) -> Self::RenderState {
-        RawGestureDetectorState {
-            recognizers: self
+    fn create_element(widget: &Self::ArcWidget) -> Self {
+        Self
+    }
+}
+
+impl BoxSingleChildRenderElement for RawGestureDetectorElement {
+    type Render = RenderRawGestureDetector;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
+        RenderRawGestureDetector {
+            recognizers: widget
                 .recognizer_factories
                 .iter()
                 .map(|factory| (factory.type_id, (factory.create)()))
@@ -149,12 +162,12 @@ impl ProxyWidget for RawGestureDetector {
         }
     }
 
-    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction {
-        let new_recognizers = self
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
+        let new_recognizers = widget
             .recognizer_factories
             .iter()
             .map(|factory| {
-                if let Some(recognizer) = render_state.recognizers.remove(&factory.type_id) {
+                if let Some(recognizer) = render.recognizers.remove(&factory.type_id) {
                     (factory.update)(recognizer.as_ref());
                     (factory.type_id, recognizer)
                 } else {
@@ -162,49 +175,94 @@ impl ProxyWidget for RawGestureDetector {
                 }
             })
             .collect();
-        let old_recognizers = std::mem::replace(&mut render_state.recognizers, new_recognizers);
+        let old_recognizers = std::mem::replace(&mut render.recognizers, new_recognizers);
         old_recognizers
             .values()
             .for_each(|recognizer| recognizer.on_detach());
         RenderAction::None
     }
+}
 
-    fn detach_render_state(render_state: &mut Self::RenderState) {
-        render_state
-            .recognizers
-            .values()
-            .for_each(|recognizer| recognizer.on_detach());
-    }
+pub struct RenderRawGestureDetector {
+    recognizers: HashMap<TypeId, Asc<dyn GestureRecognizer>>,
+}
 
-    type LayoutMemo = ();
+impl ImplByTemplate for RenderRawGestureDetector {
+    type Template = ProxyRenderTemplate;
+}
 
-    type LayerOrUnit = ();
+impl ProxyRender for RenderRawGestureDetector {
+    type Protocol = BoxProtocol;
 
     fn hit_test_self(
-        state: &Self::RenderState,
+        &self,
         position: &Point2d,
         size: &BoxSize,
         offset: &BoxOffset,
-        memo: &Self::LayoutMemo,
     ) -> Option<HitTestBehavior> {
         BoxProtocol::position_in_shape(position, offset, size).then_some(HitTestBehavior::Opaque)
     }
 
-    fn all_hit_test_interfaces() -> &'static [(
-        TypeId,
-        fn(*mut RenderObjectOld<SingleChildRenderObject<Self>>) -> AnyRawPointer,
-    )] {
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    {
         RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE.as_slice()
     }
 }
 
+// impl ProxyWidget for RawGestureDetector {
+//     type Protocol = BoxProtocol;
+
+//     type RenderState = RawGestureDetectorState;
+
+//     fn child(&self) -> &ArcChildWidget<Self::Protocol> {
+//         &self.child
+//     }
+
+//     fn create_render_state(&self) -> Self::RenderState {
+//         RawGestureDetectorState {
+//             recognizers: self
+//                 .recognizer_factories
+//                 .iter()
+//                 .map(|factory| (factory.type_id, (factory.create)()))
+//                 .collect(),
+//         }
+//     }
+
+//     fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction {
+//         let new_recognizers = self
+//             .recognizer_factories
+//             .iter()
+//             .map(|factory| {
+//                 if let Some(recognizer) = render_state.recognizers.remove(&factory.type_id) {
+//                     (factory.update)(recognizer.as_ref());
+//                     (factory.type_id, recognizer)
+//                 } else {
+//                     (factory.type_id, (factory.create)())
+//                 }
+//             })
+//             .collect();
+//         let old_recognizers = std::mem::replace(&mut render_state.recognizers, new_recognizers);
+//         old_recognizers
+//             .values()
+//             .for_each(|recognizer| recognizer.on_detach());
+//         RenderAction::None
+//     }
+
+//     fn detach_render_state(render_state: &mut Self::RenderState) {
+//         render_state
+//             .recognizers
+//             .values()
+//             .for_each(|recognizer| recognizer.on_detach());
+//     }
+// }
+
 hit_test_interface_query_table!(
     RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE,
-    SingleChildRenderObject<RawGestureDetector>,
+    RenderRawGestureDetector,
     dyn PointerEventHandler,
 );
 
-impl PointerEventHandler for RenderObjectOld<SingleChildRenderObject<RawGestureDetector>> {
+impl PointerEventHandler for RenderObject<RenderRawGestureDetector> {
     fn handle_pointer_event(&self, transformed_position: Point2d, event: &PointerEvent) {}
 
     fn all_gesture_recognizers(
