@@ -1,5 +1,5 @@
-//mod component;
-//pub use component::*;
+mod component;
+pub use component::*;
 //
 //mod provider;
 //pub use provider::*;

@@ -1,18 +1,13 @@
 use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
-    foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Never, Protocol,
-        Provide,
-    },
+    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Protocol, Provide},
+    template::{ImplByTemplate, ProxyElement, ProxyElementTemplate},
     tree::{
-        ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, TreeNode, Widget,
-        WidgetExt,
+        ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, ElementBase,
+        ElementReconcileItem, Widget, WidgetExt,
     },
 };
-
-use super::SingleChildElementImpl;
 
 // ComponentWidget and Consumer are separated due to the virtual call overhead in get_consumed_types
 // ComponentWidget and Provider are separated due to type inconsistencies in Element::Provided
@@ -22,10 +17,7 @@ pub trait ComponentWidget<P: Protocol>:
     fn build(&self, ctx: BuildContext) -> ArcChildWidget<P>;
 }
 
-impl<P> ArcWidget for Asc<dyn ComponentWidget<P>>
-where
-    P: Protocol,
-{
+impl<P: Protocol> ArcWidget for Asc<dyn ComponentWidget<P>> {
     type Element = ComponentElement<P>;
 
     fn into_any_widget(self) -> ArcAnyWidget {
@@ -48,65 +40,45 @@ where
 #[derive(Default, Clone)]
 pub struct ComponentElement<P: Protocol>(PhantomData<P>);
 
-impl<P> TreeNode for ComponentElement<P>
-where
-    P: Protocol,
-{
-    type ParentProtocol = P;
-
-    type ChildProtocol = P;
-
-    type ChildContainer = ArrayContainer<1>;
+impl<P: Protocol> ImplByTemplate for ComponentElement<P> {
+    type Template = ProxyElementTemplate<Self, false, false>;
 }
 
-impl<P> Element for ComponentElement<P>
-where
-    P: Protocol,
-{
+impl<P: Protocol> ProxyElement for ComponentElement<P> {
+    type Protocol = P;
+
     type ArcWidget = Asc<dyn ComponentWidget<P>>;
 
-    type ElementImpl = SingleChildElementImpl<Self, false, false>;
-
-    #[inline(always)]
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: [ArcChildElementNode<Self::ChildProtocol>; 1],
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+        child: ArcChildElementNode<Self::Protocol>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::Protocol>>,
     ) -> Result<
-        (
-            [ElementReconcileItem<Self::ChildProtocol>; 1],
-            Option<ChildRenderObjectsUpdateCallback<Self>>,
-        ),
-        (
-            [ArcChildElementNode<Self::ChildProtocol>; 1],
-            BuildSuspendedError,
-        ),
+        ElementReconcileItem<Self::Protocol>,
+        (ArcChildElementNode<Self::Protocol>, BuildSuspendedError),
     > {
         let child_widget = widget.build(ctx);
-        let [child] = children;
-        match child.can_rebuild_with(child_widget) {
-            Ok(item) => Ok(([item], None)),
+        let item = match child.can_rebuild_with(child_widget) {
+            Ok(item) => item,
             Err((child, child_widget)) => {
                 nodes_needing_unmount.push(child);
-                Ok(([ElementReconcileItem::new_inflate(child_widget)], None))
+                ElementReconcileItem::new_inflate(child_widget)
             }
-        }
+        };
+        Ok(item)
     }
 
-    #[inline(always)]
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
+    ) -> Result<(Self, ArcChildWidget<Self::Protocol>), BuildSuspendedError> {
         let child_widget = widget.build(ctx);
-        Ok((Self(PhantomData), [child_widget]))
+        Ok((Self(PhantomData), child_widget))
     }
-
-    type RenderOrUnit = ();
 }
 
 pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol>(
@@ -134,7 +106,7 @@ where
 
     type Element = ComponentElement<P>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementOld>::ArcWidget {
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
