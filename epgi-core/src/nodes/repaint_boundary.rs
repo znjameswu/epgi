@@ -1,13 +1,13 @@
 // use crate::foundation::{
-//     Arc, Aweak, BuildSuspendedError, Canvas, Identity, InlinableDwsizeVec, LayerProtocol, Never,
+//     Arc, Aweak, BuildSuspendedError, Canvas, InlinableDwsizeVec, LayerProtocol, Never,
 //     PaintContext, Protocol, Provide, SyncMutex,
 // };
 
+// use crate::template::{ImplByTemplate, ProxyElement, ProxyElementTemplate};
 // use crate::tree::{
-//     AnyLayer, ArcAnyLayer, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
-//     ArcElementContextNode, ArcLayerOf, AscLayerContextNode, AscRenderContextNode, ChildLayer,
-//     ChildLayerOrFragment, ComposableChildLayer, Element, Layer, LayerCompositionConfig, LayerPaint,
-//     PaintResults, ParentLayer, Reconciler, Render, RenderObject, RenderObjectUpdateResult, Widget,
+//     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcElementContextNode, BuildContext,
+//     ComposableChildLayer, Element, ElementReconcileItem, LayerCompositionConfig, LayerPaint,
+//     PaintResults, Render, RenderObject, Widget,
 // };
 
 // #[derive(Debug)]
@@ -15,10 +15,9 @@
 //     child: ArcChildWidget<P>,
 // }
 
-// impl<P> Widget for RepaintBoundary<P>
-// where
-//     P: LayerProtocol,
-// {
+// impl<P: LayerProtocol> Widget for RepaintBoundary<P> {
+//     type ParentProtocol = P;
+//     type ChildProtocol = P;
 //     type Element = RepaintBoundaryElement<P>;
 
 //     fn into_arc_widget(self: Arc<Self>) -> Self::ArcWidget {
@@ -31,47 +30,42 @@
 //     child: ArcChildElementNode<P>,
 // }
 
-// impl<P> Element for RepaintBoundaryElement<P>
-// where
-//     P: LayerProtocol,
-// {
+// impl<P: LayerProtocol> ImplByTemplate for RepaintBoundaryElement<P> {
+//     type Template = ProxyElementTemplate<Self, true, false>;
+// }
+
+// impl<P: LayerProtocol> ProxyElement for RepaintBoundaryElement<P> {
+//     type Protocol = P;
+
 //     type ArcWidget = Arc<RepaintBoundary<P>>;
 
-//     type ParentProtocol = P;
-
-//     type ChildProtocol = P;
-
-//     type Provided = Never;
-
 //     fn perform_rebuild_element(
-//         self,
+//         &mut self,
 //         widget: &Self::ArcWidget,
+//         ctx: BuildContext<'_>,
 //         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-//         reconciler: impl Reconciler<Self::ChildProtocol>,
-//     ) -> Result<Self, (Self, BuildSuspendedError)> {
+//         child: ArcChildElementNode<P>,
+//         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<P>>,
+//     ) -> Result<ElementReconcileItem<P>, (ArcChildElementNode<P>, BuildSuspendedError)> {
 //         todo!()
 //     }
 
 //     fn perform_inflate_element(
 //         widget: &Self::ArcWidget,
+//         ctx: BuildContext<'_>,
 //         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-//         reconciler: impl Reconciler<Self::ChildProtocol>,
-//     ) -> Result<Self, BuildSuspendedError> {
+//     ) -> Result<(Self, ArcChildWidget<P>), BuildSuspendedError> {
 //         todo!()
 //     }
-
-//     type ChildIter = [ArcChildElementNode<P>; 1];
-
-//     fn children(&self) -> Self::ChildIter {
-//         [self.child.clone()]
-//     }
-
-//     type ArcRenderObject = Arc<RenderObject<RenderRepaintBoundary<P>>>;
 // }
 
 // pub struct RenderRepaintBoundary<P: LayerProtocol> {
 //     layer: Arc<RepaintBoundaryLayer<P>>,
 //     pub(crate) child: ArcChildRenderObject<P>,
+// }
+
+// impl<P: LayerProtocol> ImplByTemplate for RenderRepaintBoundary<P> {
+//     type Template = Proxy;
 // }
 
 // impl<P> Render for RenderRepaintBoundary<P>
@@ -106,16 +100,13 @@
 //         Some(Self { layer, child })
 //     }
 
-//     fn update_render_object(
-//         &mut self,
-//         _widget: &Self::ArcWidget,
-//     ) -> RenderObjectUpdateResult {
+//     fn update_render_object(&mut self, _widget: &Self::ArcWidget) -> RenderObjectUpdateResult {
 //         RenderObjectUpdateResult::None
 //     }
 
 //     fn try_update_render_object_children(&mut self, element: &Self::Element) -> Result<(), ()> {
 //         let Some(child) = element.child.get_current_subtree_render_object() else {
-//             return Err(())
+//             return Err(());
 //         };
 //         self.layer.update_child_render_object(child.clone());
 //         self.child = child;
@@ -129,10 +120,7 @@
 //     fn perform_layout<'a, 'layout>(
 //         &'a self,
 //         constraints: &'a <Self::ParentProtocol as Protocol>::Constraints,
-//     ) -> (
-//         <Self::ParentProtocol as Protocol>::Size,
-//         Self::LayoutMemo,
-//     ) {
+//     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
 //         todo!()
 //     }
 
@@ -141,9 +129,7 @@
 //         size: &<Self::ParentProtocol as Protocol>::Size,
 //         transform: &<Self::ParentProtocol as Protocol>::Transform,
 //         memo: &Self::LayoutMemo,
-//         paint_ctx: &mut impl PaintContext<
-//             Canvas = <Self::ParentProtocol as Protocol>::Canvas,
-//         >,
+//         paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
 //     ) {
 //         todo!()
 //     }
@@ -177,15 +163,13 @@
 
 //     fn get_canvas_transform_ref(
 //         transform: &<Self::ParentProtocol as Protocol>::Transform,
-//     ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
-//     {
+//     ) -> &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
 //         transform
 //     }
 
 //     fn get_canvas_transform(
 //         transform: <Self::ParentProtocol as Protocol>::Transform,
-//     ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform
-//     {
+//     ) -> <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Transform {
 //         transform
 //     }
 // }
@@ -289,9 +273,7 @@
 //             .iter()
 //             .filter_map(|child| match child {
 //                 ChildLayerOrFragment::Fragment(_) => None,
-//                 ChildLayerOrFragment::Layer(layer) => {
-//                     Some(layer.clone().as_arc_any_layer())
-//                 }
+//                 ChildLayerOrFragment::Layer(layer) => Some(layer.clone().as_arc_any_layer()),
 //             })
 //             .chain(
 //                 paint_cache
