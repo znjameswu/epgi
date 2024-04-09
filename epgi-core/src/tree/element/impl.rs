@@ -4,7 +4,7 @@ use crate::{
     foundation::{Arc, ArrayContainer, Asc, ContainerOf, Protocol, Provide, TypeKey},
     nodes::{RenderSuspense, SuspenseElement},
     sync::ImplReconcileCommit,
-    tree::{ArcChildRenderObject, RenderObject},
+    tree::{ArcAnyRenderObject, ArcChildRenderObject, RenderObject},
 };
 
 use super::{ArcChildElementNode, ElementBase, ProvideElement, RenderElement};
@@ -96,6 +96,10 @@ pub trait ImplElementNode<E: ElementBase> {
         render_object: &Self::OptionArcRenderObject,
         children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     ) -> Option<ArcChildRenderObject<E::ParentProtocol>>;
+
+    const GET_RENDER_OBJECT_AS_ANY: Option<
+        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
+    >;
 }
 
 impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
@@ -114,6 +118,10 @@ where
     ) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
         child.get_current_subtree_render_object()
     }
+
+    const GET_RENDER_OBJECT_AS_ANY: Option<
+        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
+    > = None;
 }
 
 impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
@@ -131,6 +139,14 @@ where
             .as_ref()
             .map(|render_object| render_object.clone() as _)
     }
+
+    const GET_RENDER_OBJECT_AS_ANY: Option<
+        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
+    > = Some(|render_object| {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.clone() as _)
+    });
 }
 
 impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplElementNode<SuspenseElement<P>>
@@ -149,4 +165,12 @@ impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplElementNode<SuspenseElement<P
             .as_ref()
             .map(|render_object| render_object.clone() as _)
     }
+
+    const GET_RENDER_OBJECT_AS_ANY: Option<
+        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
+    > = Some(|render_object| {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.clone() as _)
+    });
 }

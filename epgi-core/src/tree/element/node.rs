@@ -6,7 +6,7 @@ use crate::{
 use super::{
     ArcAnyElementNode, ArcAnyRenderObject, ArcChildElementNode, ArcChildRenderObject,
     ArcChildWidget, ArcElementContextNode, Element, ElementContextNode, ElementReconcileItem,
-    ElementSnapshot, ElementSnapshotInner, ImplElementNode, MainlineState,
+    ElementSnapshot, ElementSnapshotInner, ImplElementNode, Mainline, MainlineState,
 };
 
 pub struct ElementNode<E: Element> {
@@ -119,26 +119,18 @@ impl<E: Element> AnyElementNode for ElementNode<E> {
     }
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
-        todo!()
-        // let RenderElementFunctionTable::RenderObject {
-        //     into_arc_child_render_object,
-        //     ..
-        // } = render_element_function_table_of::<E>()
-        // else {
-        //     return Err("Render object call should not be called on an Element type that does not associate with a render object");
-        // };
-        // let snapshot = self.snapshot.lock();
-        // let Some(Mainline {
-        //     state:
-        //         Some(MainlineState::Ready {
-        //             render_object: Some(render_object),
-        //             ..
-        //         }),
-        //     ..
-        // }) = snapshot.inner.mainline_ref()
-        // else {
-        //     return Err("Render object call should only be called on element nodes that are ready and attached");
-        // };
-        // Ok(into_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
+        let Some(get_render_object) = E::Impl::GET_RENDER_OBJECT_AS_ANY else {
+            return Err("Render object call should not be called on a non-RenderElement");
+        };
+        let snapshot = self.snapshot.lock();
+        let Some(Mainline {
+            state: Some(MainlineState::Ready { render_object, .. }),
+            ..
+        }) = snapshot.inner.mainline_ref()
+        else {
+            return Err("Render object call should only be called on element nodes that are ready and attached");
+        };
+        get_render_object(render_object)
+            .ok_or("Render object call should only be called on after render object is attached")
     }
 }
