@@ -110,8 +110,8 @@ where
     }
 }
 
-pub trait TemplateElement<E> {
-    type ElementImpl: ImplElement<Element = E>;
+pub trait TemplateElement<E: ElementBase> {
+    type ElementImpl: ImplElement<E>;
 }
 
 impl<E> Element for E

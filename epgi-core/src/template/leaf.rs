@@ -115,7 +115,7 @@ where
     E: LeafElement,
 {
     // Must have a render. Pointless to provide
-    type ElementImpl = ElementImpl<E, true, false>;
+    type ElementImpl = ElementImpl<true, false>;
 }
 
 impl<E> TemplateRenderElement<E> for LeafElementTemplate
@@ -210,7 +210,7 @@ where
     R: LeafRender,
 {
     // Pointeless to dry-layout
-    type RenderImpl = RenderImpl<R, false, false, false, false>;
+    type RenderImpl = RenderImpl<false, false, false, false>;
 }
 
 impl<R> TemplateLayout<R> for LeafRenderTemplate

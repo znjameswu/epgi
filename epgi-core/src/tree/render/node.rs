@@ -42,21 +42,21 @@ impl<
         const DRY_LAYOUT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplRenderObject<R> for RenderImpl<R, DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplRenderObject<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 {
     type LayerMark = ();
     type LayerCache = ();
 }
 
 impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
-    for RenderImpl<R, DRY_LAYOUT, true, false, ORPHAN_LAYER>
+    for RenderImpl<DRY_LAYOUT, true, false, ORPHAN_LAYER>
 {
     type LayerMark = LayerMark;
     type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>;
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CC> ImplRenderObject<R>
-    for RenderImpl<R, DRY_LAYOUT, true, true, ORPHAN_LAYER>
+    for RenderImpl<DRY_LAYOUT, true, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>,
     R: CachedComposite<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CompositionCache = CC>,

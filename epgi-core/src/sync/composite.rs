@@ -158,7 +158,7 @@ impl<
         const DRY_LAYOUT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
-    > ImplAdopterLayer<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
+    > ImplAdopterLayer<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
 {
     type AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas;
 }
@@ -168,7 +168,7 @@ impl<
         const DRY_LAYOUT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
-    > ImplAdopterLayer<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
+    > ImplAdopterLayer<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
 {
     type AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas;
 }
@@ -213,7 +213,7 @@ where
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>
-    ImplComposite<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
+    ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
         + ImplRenderObject<
@@ -267,7 +267,7 @@ where
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LAYER: bool, CC>
-    ImplComposite<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
+    ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
         + ImplRenderObject<

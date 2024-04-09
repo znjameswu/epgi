@@ -101,9 +101,9 @@ impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElement
     for SingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ElementBase,
-    ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Element = E>,
+    ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<E>,
 {
-    type ElementImpl = ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>;
+    type ElementImpl = ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>;
 }
 
 pub trait SingleChildRenderElement: SingleChildElement {

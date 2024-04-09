@@ -12,8 +12,7 @@ use crate::{
 
 use super::ImplReconcileCommit;
 
-impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E>
-    for ElementImpl<E, true, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E> for ElementImpl<true, PROVIDE_ELEMENT>
 where
     E: ElementBase,
     E: RenderElement,
@@ -41,14 +40,14 @@ where
         let render_object_change_summary =
             SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
         if let Some(render_object) = render_object {
-            Self::visit_commit_attached(
+            visit_commit_attached(
                 element_node,
                 render_object,
                 render_object_changes,
                 render_object_change_summary,
             )
         } else {
-            Self::visit_commit_detached(
+            visit_commit_detached(
                 element_node,
                 render_object_changes,
                 render_object_change_summary,
@@ -74,7 +73,7 @@ where
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         if let Some(render_object) = render_object {
-            Self::rebuild_success_process_attached(
+            rebuild_success_process_attached(
                 widget,
                 shuffle,
                 render_object,
@@ -82,7 +81,7 @@ where
                 is_new_widget,
             )
         } else {
-            Self::rebuild_success_process_detached(
+            rebuild_success_process_detached(
                 element,
                 widget,
                 element_context,
@@ -95,7 +94,7 @@ where
     fn rebuild_suspend_commit(
         render_object: Option<Arc<RenderObject<E::Render>>>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        render_object.map(|render_object| render_object.as_ref().detach()); // use as_ref() to avoid rust-analyzer hazard
+        render_object.map(|render_object| render_object.detach_render_object());
         SubtreeRenderObjectChange::Suspend
     }
 
@@ -151,72 +150,69 @@ where
     }
 }
 
-impl<E, const PROVIDE_ELEMENT: bool> ElementImpl<E, true, PROVIDE_ELEMENT>
+#[inline(always)]
+fn visit_commit_attached<E, const PROVIDE_ELEMENT: bool>(
+    element_node: &ElementNode<E>,
+    render_object: Arc<RenderObject<E::Render>>,
+    render_object_changes: ContainerOf<
+        E::ChildContainer,
+        SubtreeRenderObjectChange<E::ChildProtocol>,
+    >,
+    render_object_change_summary: SubtreeRenderObjectChangeSummary,
+) -> SubtreeRenderObjectChange<E::ParentProtocol>
 where
-    E: ElementBase,
     E: RenderElement,
-    Self: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+    E: Element<Impl = ElementImpl<true, PROVIDE_ELEMENT>>,
+    ElementImpl<true, PROVIDE_ELEMENT>:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
-    #[inline(always)]
-    pub(crate) fn visit_commit_attached(
-        element_node: &ElementNode<E>,
-        render_object: Arc<RenderObject<E::Render>>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-        render_object_change_summary: SubtreeRenderObjectChangeSummary,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
-    where
-        E: Element<Impl = Self>,
-    {
-        use SubtreeRenderObjectChangeSummary::*;
-        match render_object_change_summary {
-            KeepAll {
-                child_render_action,
+    use SubtreeRenderObjectChangeSummary::*;
+    match render_object_change_summary {
+        KeepAll {
+            child_render_action,
+            subtree_has_action,
+        } => {
+            let render_action =
+                render_object.mark_render_action(child_render_action, subtree_has_action);
+            return SubtreeRenderObjectChange::Keep {
+                // Absorb on boundaries.
+                child_render_action: render_action,
                 subtree_has_action,
-            } => {
-                let render_action =
-                    render_object.mark_render_action(child_render_action, subtree_has_action);
-                return SubtreeRenderObjectChange::Keep {
-                    // Absorb on boundaries.
-                    child_render_action: render_action,
-                    subtree_has_action,
-                };
-            }
-            HasNewNoSuspend => {
-                let render_action = render_object
-                    .mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
-                render_object.update(|render, children| {
-                    update_children::<E::Render>(
-                        children,
-                        None,
-                        render_object_changes,
-                        render_object_change_summary,
-                    )
-                });
-                return SubtreeRenderObjectChange::Keep {
-                    child_render_action: render_action,
-                    subtree_has_action: RenderAction::Relayout,
-                };
-            }
-            HasSuspended => {
-                render_object.as_ref().detach(); // use as_ref() to avoid rust-analyzer hazard
-                let mut snapshot = element_node.snapshot.lock();
-                let state = snapshot
-                    .inner
-                    .mainline_mut()
-                    .expect("An unmounted element node should not be reachable by a rebuild!")
-                    .state
-                    .as_mut()
-                    .expect(
-                        "State corrupted. \
+            };
+        }
+        HasNewNoSuspend => {
+            let render_action =
+                render_object.mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
+            render_object.update(|render, children| {
+                update_children::<E::Render>(
+                    children,
+                    None,
+                    render_object_changes,
+                    render_object_change_summary,
+                )
+            });
+            return SubtreeRenderObjectChange::Keep {
+                child_render_action: render_action,
+                subtree_has_action: RenderAction::Relayout,
+            };
+        }
+        HasSuspended => {
+            render_object.detach_render_object();
+            let mut snapshot = element_node.snapshot.lock();
+            let state = snapshot
+                .inner
+                .mainline_mut()
+                .expect("An unmounted element node should not be reachable by a rebuild!")
+                .state
+                .as_mut()
+                .expect(
+                    "State corrupted. \
                         This node has been previously designated to visit by a sync batch. \
                         However, when the visit returns, \
                         it found the sync state has been occupied.",
-                    );
-                use MainlineState::*;
-                match state {
+                );
+            use MainlineState::*;
+            match state {
                     Ready { render_object, .. } => *render_object = None,
                     RebuildSuspended { .. } => panic!(
                         "State corrupted. \
@@ -231,276 +227,293 @@ where
                         it found the node to be in an suspended inflated state."
                     ),
                 }
-                return SubtreeRenderObjectChange::Suspend;
-            }
+            return SubtreeRenderObjectChange::Suspend;
         }
     }
+}
 
-    pub(crate) fn visit_commit_detached(
-        element_node: &ElementNode<E>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-        render_object_change_summary: SubtreeRenderObjectChangeSummary,
-        self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
-    where
-        E: Element<Impl = Self>,
+pub(crate) fn visit_commit_detached<E, const PROVIDE_ELEMENT: bool>(
+    element_node: &ElementNode<E>,
+    render_object_changes: ContainerOf<
+        E::ChildContainer,
+        SubtreeRenderObjectChange<E::ChildProtocol>,
+    >,
+    render_object_change_summary: SubtreeRenderObjectChangeSummary,
+    self_rebuild_suspended: bool,
+) -> SubtreeRenderObjectChange<E::ParentProtocol>
+where
+    E: RenderElement,
+    E: Element<Impl = ElementImpl<true, PROVIDE_ELEMENT>>,
+    ElementImpl<true, PROVIDE_ELEMENT>:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+{
+    if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
+    | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
     {
-        if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
-        | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
-        {
-            return SubtreeRenderObjectChange::Suspend;
-        };
+        return SubtreeRenderObjectChange::Suspend;
+    };
 
-        if self_rebuild_suspended {
-            return SubtreeRenderObjectChange::Suspend;
-        }
+    if self_rebuild_suspended {
+        return SubtreeRenderObjectChange::Suspend;
+    }
 
-        let mut snapshot = element_node.snapshot.lock();
-        let snapshot_reborrow = &mut *snapshot;
-        let state = &mut snapshot_reborrow
-            .inner
-            .mainline_mut()
-            .expect("An unmounted element node should not be reachable by a rebuild!")
-            .state;
+    let mut snapshot = element_node.snapshot.lock();
+    let snapshot_reborrow = &mut *snapshot;
+    let state = &mut snapshot_reborrow
+        .inner
+        .mainline_mut()
+        .expect("An unmounted element node should not be reachable by a rebuild!")
+        .state;
 
-        // We perform a "take-modify-insert" operation on the state to avoid using `replace_with` on child render objects
-        //
-        // The key flaw of any hypothetical `replace_with` implementations would be that
-        // the `E::create_render` call could panic inside, and that is an external method supplied by the library users.
-        // Moreover, `E::create_render` is hard to make `UnwindSafe` and therefore can't be handled by `catch_unwind`.
-        // Moreover, it would also be impossible to migrate `E::create_render` out of the `replace_with` critical region without a significant cost.
-        //
-        // All `replace_with` occurrence within this crate MUST avoid panic from external implementations.
-        // The only exception would be external panics from `HktContainer` implementations,
-        // since its implementation is considered advanced while it actually takes considerable stupidity to mis-implement that contract.
+    // We perform a "take-modify-insert" operation on the state to avoid using `replace_with` on child render objects
+    //
+    // The key flaw of any hypothetical `replace_with` implementations would be that
+    // the `E::create_render` call could panic inside, and that is an external method supplied by the library users.
+    // Moreover, `E::create_render` is hard to make `UnwindSafe` and therefore can't be handled by `catch_unwind`.
+    // Moreover, it would also be impossible to migrate `E::create_render` out of the `replace_with` critical region without a significant cost.
+    //
+    // All `replace_with` occurrence within this crate MUST avoid panic from external implementations.
+    // The only exception would be external panics from `HktContainer` implementations,
+    // since its implementation is considered advanced while it actually takes considerable stupidity to mis-implement that contract.
 
-        let old_state = state.take().expect(
-            "State corrupted. \
-                        This node has been previously designated to visit by a sync batch. \
-                        However, when the visit returns, \
-                        it found the sync state has been occupied.",
-        );
+    let old_state = state.take().expect(
+        "State corrupted. \
+                    This node has been previously designated to visit by a sync batch. \
+                    However, when the visit returns, \
+                    it found the sync state has been occupied.",
+    );
 
-        use MainlineState::*;
-        let mut new_attached_render_object = None;
-        let new_state = match old_state {
-            Ready {
+    use MainlineState::*;
+    let mut new_attached_render_object = None;
+    let new_state = match old_state {
+        Ready {
+            element,
+            render_object: None,
+            hooks,
+            children,
+        } => {
+            let render_object = try_create_render_object(
+                &element,
+                &snapshot_reborrow.widget,
+                &element_node.context,
+                &children,
+                render_object_changes,
+            );
+            new_attached_render_object = render_object.clone();
+            MainlineState::Ready {
                 element,
-                render_object: None,
                 hooks,
                 children,
-            } => {
-                let render_object = Self::try_create_render_object(
-                    &element,
-                    &snapshot_reborrow.widget,
-                    &element_node.context,
-                    &children,
-                    render_object_changes,
-                );
-                new_attached_render_object = render_object.clone();
-                MainlineState::Ready {
-                    element,
-                    hooks,
-                    children,
-                    render_object,
-                }
+                render_object,
             }
-            old_state @ RebuildSuspended { .. } => {
-                debug_assert!(
-                    false,
-                    "State corrupted. \
-                    This node has been previously found to have not been in RebuildSuspended state. \
-                    However, when the visit returns, \
-                    it found the node to have entered RebuildSuspended state."
-                );
-                old_state
-            }
-            Ready {
-                render_object: Some(_),
-                ..
-            } => panic!(
+        }
+        old_state @ RebuildSuspended { .. } => {
+            debug_assert!(
+                false,
                 "State corrupted. \
-                This node has been previously found to have been suspended by this visit. \
+                This node has been previously found to have not been in RebuildSuspended state. \
                 However, when the visit returns, \
-                it found the node to have resumed."
-            ),
-            InflateSuspended { .. } => panic!(
-                "State corrupted. \
-                This node has been previously designated to visit by a sync batch. \
-                However, when the visit returns, \
-                it found the node to be in an suspended inflated state."
-            ),
-        };
-        *state = Some(new_state);
-        drop(snapshot);
+                it found the node to have entered RebuildSuspended state."
+            );
+            old_state
+        }
+        Ready {
+            render_object: Some(_),
+            ..
+        } => panic!(
+            "State corrupted. \
+            This node has been previously found to have been suspended by this visit. \
+            However, when the visit returns, \
+            it found the node to have resumed."
+        ),
+        InflateSuspended { .. } => panic!(
+            "State corrupted. \
+            This node has been previously designated to visit by a sync batch. \
+            However, when the visit returns, \
+            it found the node to be in an suspended inflated state."
+        ),
+    };
+    *state = Some(new_state);
+    drop(snapshot);
 
-        if let Some(new_attached_render_object) = new_attached_render_object {
-            if let Some(layer_render_object) =
-                RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(
-                    &new_attached_render_object,
-                )
-            {
-                get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
+    if let Some(new_attached_render_object) = new_attached_render_object {
+        if let Some(layer_render_object) =
+            RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(
+                &new_attached_render_object,
+            )
+        {
+            get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
+        }
+        return SubtreeRenderObjectChange::New(new_attached_render_object);
+    } else {
+        return SubtreeRenderObjectChange::Suspend;
+    }
+}
+
+#[inline(always)]
+fn rebuild_success_process_attached<E, const PROVIDE_ELEMENT: bool>(
+    widget: &E::ArcWidget,
+    shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
+    render_object: Arc<RenderObject<E::Render>>,
+    render_object_changes: ContainerOf<
+        E::ChildContainer,
+        SubtreeRenderObjectChange<E::ChildProtocol>,
+    >,
+    is_new_widget: bool,
+) -> (
+    Option<Arc<RenderObject<E::Render>>>,
+    SubtreeRenderObjectChange<E::ParentProtocol>,
+)
+where
+    E: RenderElement,
+    ElementImpl<true, PROVIDE_ELEMENT>:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+{
+    let render_object_change_summary =
+        SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+
+    use SubtreeRenderObjectChangeSummary::*;
+
+    if render_object_change_summary.is_suspended() {
+        render_object.detach_render_object();
+        return (None, SubtreeRenderObjectChange::Suspend);
+    }
+
+    let mut self_render_action = RenderAction::None;
+
+    if shuffle.is_some()
+        || !render_object_change_summary.is_keep_all()
+        || (is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT)
+    {
+        render_object.update(|render, children| {
+            if is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT {
+                self_render_action = E::update_render(render, widget);
             }
-            return SubtreeRenderObjectChange::New(new_attached_render_object);
-        } else {
-            return SubtreeRenderObjectChange::Suspend;
-        }
+            update_children::<E::Render>(
+                children,
+                shuffle,
+                render_object_changes,
+                render_object_change_summary,
+            )
+        });
     }
 
-    #[inline(always)]
-    pub(crate) fn rebuild_success_process_attached(
-        widget: &E::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
-        render_object: Arc<RenderObject<E::Render>>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-        is_new_widget: bool,
-    ) -> (
-        Option<Arc<RenderObject<E::Render>>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
-        let render_object_change_summary =
-            SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+    let (child_render_action, subtree_has_action) = if let KeepAll {
+        child_render_action,
+        subtree_has_action,
+    } = render_object_change_summary
+    {
+        (child_render_action, subtree_has_action)
+    } else {
+        (RenderAction::Relayout, RenderAction::Relayout)
+    };
 
-        use SubtreeRenderObjectChangeSummary::*;
+    let child_render_action =
+        render_object.mark_render_action(child_render_action, subtree_has_action);
 
-        if render_object_change_summary.is_suspended() {
-            render_object.detach();
-            return (None, SubtreeRenderObjectChange::Suspend);
-        }
+    let change = SubtreeRenderObjectChange::Keep {
+        child_render_action: std::cmp::max(self_render_action, child_render_action),
+        subtree_has_action: std::cmp::max(self_render_action, subtree_has_action),
+    };
 
-        let mut self_render_action = RenderAction::None;
+    return (Some(render_object), change);
+}
 
-        if shuffle.is_some()
-            || !render_object_change_summary.is_keep_all()
-            || (is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT)
+fn rebuild_success_process_detached<E, const PROVIDE_ELEMENT: bool>(
+    element: &E,
+    widget: &E::ArcWidget,
+    element_context: &ArcElementContextNode,
+    children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    render_object_changes: ContainerOf<
+        E::ChildContainer,
+        SubtreeRenderObjectChange<E::ChildProtocol>,
+    >,
+) -> (
+    Option<Arc<RenderObject<E::Render>>>,
+    SubtreeRenderObjectChange<E::ParentProtocol>,
+)
+where
+    E: RenderElement,
+    ElementImpl<true, PROVIDE_ELEMENT>:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+{
+    let render_object_change_summary =
+        SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+
+    if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
+    | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
+    {
+        return (None, SubtreeRenderObjectChange::Suspend);
+    };
+
+    let render_object = try_create_render_object(
+        element,
+        widget,
+        element_context,
+        children,
+        render_object_changes,
+    );
+
+    if let Some(render_object) = render_object {
+        if let Some(layer_render_object) =
+            RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(&render_object)
         {
-            render_object.update(|render, children| {
-                if is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT {
-                    self_render_action = E::update_render(render, widget);
-                }
-                update_children::<E::Render>(
-                    children,
-                    shuffle,
-                    render_object_changes,
-                    render_object_change_summary,
-                )
-            });
+            get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
         }
-
-        let (child_render_action, subtree_has_action) = if let KeepAll {
-            child_render_action,
-            subtree_has_action,
-        } = render_object_change_summary
-        {
-            (child_render_action, subtree_has_action)
-        } else {
-            (RenderAction::Relayout, RenderAction::Relayout)
-        };
-
-        let child_render_action =
-            render_object.mark_render_action(child_render_action, subtree_has_action);
-
-        let change = SubtreeRenderObjectChange::Keep {
-            child_render_action: std::cmp::max(self_render_action, child_render_action),
-            subtree_has_action: std::cmp::max(self_render_action, subtree_has_action),
-        };
-
-        return (Some(render_object), change);
+        let change = SubtreeRenderObjectChange::New(render_object.clone());
+        (Some(render_object), change)
+    } else {
+        return (None, SubtreeRenderObjectChange::Suspend);
     }
+}
 
-    pub(crate) fn rebuild_success_process_detached(
-        element: &E,
-        widget: &E::ArcWidget,
-        element_context: &ArcElementContextNode,
-        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-    ) -> (
-        Option<Arc<RenderObject<E::Render>>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
-        let render_object_change_summary =
-            SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
-
-        if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
-        | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
-        {
-            return (None, SubtreeRenderObjectChange::Suspend);
-        };
-
-        let render_object = Self::try_create_render_object(
-            element,
-            widget,
-            element_context,
-            children,
-            render_object_changes,
-        );
-
-        if let Some(render_object) = render_object {
-            if let Some(layer_render_object) =
-                RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(&render_object)
-            {
-                get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
+#[inline(never)]
+fn try_create_render_object<E, const PROVIDE_ELEMENT: bool>(
+    element: &E,
+    widget: &E::ArcWidget,
+    element_context: &ArcElementContextNode,
+    children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    render_object_changes: ContainerOf<
+        E::ChildContainer,
+        SubtreeRenderObjectChange<E::ChildProtocol>,
+    >,
+) -> Option<Arc<RenderObject<E::Render>>>
+where
+    E: RenderElement,
+    ElementImpl<true, PROVIDE_ELEMENT>:
+        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+{
+    let mut suspended = false;
+    let option_child_render_objects =
+        children.zip_ref_collect(render_object_changes, |child, change| {
+            if suspended {
+                return None;
             }
-            let change = SubtreeRenderObjectChange::New(render_object.clone());
-            (Some(render_object), change)
-        } else {
-            return (None, SubtreeRenderObjectChange::Suspend);
-        }
-    }
-
-    #[inline(never)]
-    pub(crate) fn try_create_render_object(
-        element: &E,
-        widget: &E::ArcWidget,
-        element_context: &ArcElementContextNode,
-        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-    ) -> Option<Arc<RenderObject<E::Render>>> {
-        let mut suspended = false;
-        let option_child_render_objects =
-            children.zip_ref_collect(render_object_changes, |child, change| {
-                if suspended {
-                    return None;
-                }
-                use SubtreeRenderObjectChange::*;
-                match change {
-                    Keep { .. } => {
-                        let child_render_object = child.get_current_subtree_render_object();
-                        if child_render_object.is_none() {
-                            suspended = true;
-                        }
-                        child_render_object
+            use SubtreeRenderObjectChange::*;
+            match change {
+                Keep { .. } => {
+                    let child_render_object = child.get_current_subtree_render_object();
+                    if child_render_object.is_none() {
+                        suspended = true;
                     }
-                    New(child_render_object) => Some(child_render_object),
-                    Suspend => panic!("Serious logic bug"),
+                    child_render_object
                 }
-            });
+                New(child_render_object) => Some(child_render_object),
+                Suspend => panic!("Serious logic bug"),
+            }
+        });
 
-        if suspended {
-            None
-        } else {
-            let new_render_children =
-                option_child_render_objects.map_collect(|child| child.expect("Impossible to fail"));
-            let new_render_object = Arc::new(RenderObject::<E::Render>::new(
-                E::create_render(&element, &widget), //TODO: This could panic
-                new_render_children,
-                element_context.clone(),
-            ));
-            Some(new_render_object)
-        }
+    if suspended {
+        None
+    } else {
+        let new_render_children =
+            option_child_render_objects.map_collect(|child| child.expect("Impossible to fail"));
+        let new_render_object = Arc::new(RenderObject::<E::Render>::new(
+            E::create_render(&element, &widget), //TODO: This could panic
+            new_render_children,
+            element_context.clone(),
+        ));
+        Some(new_render_object)
     }
 }
 

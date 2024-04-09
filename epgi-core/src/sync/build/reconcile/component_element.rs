@@ -10,8 +10,7 @@ use crate::{
 
 use super::ImplReconcileCommit;
 
-impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E>
-    for ElementImpl<E, false, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E> for ElementImpl<false, PROVIDE_ELEMENT>
 where
     E: ElementBase<
         ChildProtocol = <E as ElementBase>::ParentProtocol,

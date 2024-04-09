@@ -102,7 +102,7 @@ impl ElementBase for RootElement {
 }
 
 impl Element for RootElement {
-    type Impl = ElementImpl<Self, true, false>;
+    type Impl = ElementImpl<true, false>;
 }
 
 impl RenderElement for RootElement {
@@ -222,7 +222,7 @@ impl HitTest for RenderRoot {
 }
 
 impl Render for RenderRoot {
-    type RenderImpl = RenderImpl<Self, true, true, true, false>;
+    type RenderImpl = RenderImpl<true, true, true, false>;
 }
 
 // impl Render for RenderRoot {

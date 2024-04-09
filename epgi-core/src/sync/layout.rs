@@ -166,7 +166,7 @@ impl<
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplLayout<R> for RenderImpl<R, false, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplLayout<R> for RenderImpl<false, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: Layout,
 {
@@ -200,7 +200,7 @@ impl<
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplLayout<R> for RenderImpl<R, true, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplLayout<R> for RenderImpl<true, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: DryLayout,
 {

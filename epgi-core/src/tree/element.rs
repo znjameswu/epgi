@@ -88,7 +88,7 @@ pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
 // impl<E> TemplateElement for E where ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Self>, //....
 // The only way to break the cycle is to relocate impl bounds on "Impl*" traits from the impl block to each individual method items.
 pub trait Element: ElementBase {
-    type Impl: ImplElement<Element = Self>;
+    type Impl: ImplElement<Self>;
 }
 
 /// We assume the render has the same child container with the element,

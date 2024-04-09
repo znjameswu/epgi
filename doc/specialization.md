@@ -339,13 +339,17 @@ impl<T> ImplBaseBySuperOrSelf<T> for BaseImpl {
 ```
 The stop point no longer works, because we cannot prove that `ImplBaseBySuper<T>` is not impl-ed for `BaseImpl` for every possible `T`, since `T` could be a user-defined type, even though `ImplBaseBySuper` is a private trait. The problem is caused by using generic trait to associate target types with associated types.
 
-Because we need to convey the self type into the helper trait, given that using generic trait is not possible, we can either use generic trait method or a generic struct.
+Because we need to convey the self type into the helper trait, given that using generic trait is not possible, we can either use generics in individual trait methods or a generic struct.
 
 Generic trait: doesn't seem possible?
 
 Generic struct: Looks more and more resembling the Select\* trait pattern
 
 Works
+
+> Notes after ditching inheritance emulation:
+> 
+> Since inheritance emulation is no longer pursued, we naturally rollback from our generic struct decision, and revert back to generic trait. This would make life easier for the trait solver.
 
 
 

@@ -120,7 +120,7 @@ impl<P: Protocol> ElementBase for SuspenseElement<P> {
 }
 
 impl<P: Protocol> Element for SuspenseElement<P> {
-    type Impl = ElementImpl<Self, true, false>;
+    type Impl = ElementImpl<true, false>;
 }
 
 pub struct RenderSuspense<P: Protocol> {

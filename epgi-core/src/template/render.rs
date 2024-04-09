@@ -54,8 +54,8 @@ where
     const NOOP_DETACH: bool = R::Template::NOOP_DETACH;
 }
 
-pub trait TemplateRender<R> {
-    type RenderImpl: ImplRender<Render = R>;
+pub trait TemplateRender<R: RenderBase> {
+    type RenderImpl: ImplRender<R>;
 }
 
 impl<R> Render for R

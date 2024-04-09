@@ -18,7 +18,7 @@ use crate::{
 use super::ImplReconcileCommit;
 
 impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<SuspenseElement<P>>
-    for ElementImpl<SuspenseElement<P>, true, PROVIDE_ELEMENT>
+    for ElementImpl<true, PROVIDE_ELEMENT>
 where
     // This is added because rustc unable to prove for any concrete type in this scenario
     SuspenseElement<P>: ElementBase<

@@ -53,7 +53,7 @@ pub trait RenderBase: Send + Sync + Sized + 'static {
 }
 
 pub trait Render: RenderBase {
-    type RenderImpl: ImplRender<Render = Self>;
+    type RenderImpl: ImplRender<Self>;
 }
 
 /// Dry layout means that under all circumstances, this render object's size is solely determined
@@ -439,7 +439,7 @@ where
 
 pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
     fn element_context(&self) -> &ElementContextNode;
-    fn detach(&self);
+    fn detach_render_object(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 
     fn mark_render_action(
@@ -463,7 +463,7 @@ where
         todo!()
     }
 
-    fn detach(&self) {
+    fn detach_render_object(&self) {
         todo!()
     }
 

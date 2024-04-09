@@ -154,7 +154,7 @@ pub trait ImplPaint<R: RenderBase> {
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
-    ImplPaint<R> for RenderImpl<R, DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+    ImplPaint<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: Paint,
 {
@@ -174,7 +174,7 @@ where
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
-    for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, false>
+    for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, false>
 where
     // Will this cause inductive cycles? We'll see
     R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
@@ -201,7 +201,7 @@ where
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
-    for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>
+    for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, true>
 where
     R::RenderImpl: ImplComposite<R>,
     R: LayerPaint,

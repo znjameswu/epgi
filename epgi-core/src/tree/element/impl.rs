@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::{
     foundation::{Arc, ArrayContainer, Asc, ContainerOf, Protocol, Provide, TypeKey},
     nodes::{RenderSuspense, SuspenseElement},
@@ -9,25 +7,20 @@ use crate::{
 
 use super::{ArcChildElementNode, ElementBase, ProvideElement, RenderElement};
 
-pub trait ImplElement:
-    ImplElementNode<Self::Element> + ImplProvide<Self::Element> + ImplReconcileCommit<Self::Element>
+pub trait ImplElement<E: ElementBase>:
+    ImplElementNode<E> + ImplProvide<E> + ImplReconcileCommit<E>
 {
-    type Element: ElementBase;
 }
 
-pub struct ElementImpl<E: ElementBase, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
-    PhantomData<E>,
-);
+pub struct ElementImpl<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
 
-impl<E: ElementBase, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElement
-    for ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<E: ElementBase, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElement<E>
+    for ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     Self: ImplElementNode<E>,
-    // Self: ImplReconcile<E>,
     Self: ImplProvide<E>,
     Self: ImplReconcileCommit<E>,
 {
-    type Element = E;
 }
 
 pub trait ImplProvide<E: ElementBase> {
@@ -43,7 +36,7 @@ pub trait ImplProvide<E: ElementBase> {
 }
 
 impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
-    for ElementImpl<E, RENDER_ELEMENT, false>
+    for ElementImpl<RENDER_ELEMENT, false>
 {
     const PROVIDE_ELEMENT: bool = false;
 
@@ -62,7 +55,7 @@ impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
 }
 
 impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
-    for ElementImpl<E, RENDER_ELEMENT, true>
+    for ElementImpl<RENDER_ELEMENT, true>
 where
     E: ProvideElement,
 {
@@ -103,7 +96,7 @@ pub trait ImplElementNode<E: ElementBase> {
 }
 
 impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
-    for ElementImpl<E, false, PROVIDE_ELEMENT>
+    for ElementImpl<false, PROVIDE_ELEMENT>
 where
     E: ElementBase<
         ChildContainer = ArrayContainer<1>,
@@ -125,7 +118,7 @@ where
 }
 
 impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
-    for ElementImpl<E, true, PROVIDE_ELEMENT>
+    for ElementImpl<true, PROVIDE_ELEMENT>
 where
     E: RenderElement,
 {
@@ -150,7 +143,7 @@ where
 }
 
 impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplElementNode<SuspenseElement<P>>
-    for ElementImpl<SuspenseElement<P>, true, PROVIDE_ELEMENT>
+    for ElementImpl<true, PROVIDE_ELEMENT>
 {
     type OptionArcRenderObject = Option<Arc<RenderObject<RenderSuspense<P>>>>;
 

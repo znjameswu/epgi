@@ -102,7 +102,7 @@ where
     R: ImplByTemplate<Template = Self>,
     R: ProxyRender,
 {
-    type RenderImpl = RenderImpl<R, false, false, false, false>;
+    type RenderImpl = RenderImpl<false, false, false, false>;
 }
 
 impl<R> TemplateLayout<R> for ProxyRenderTemplate
