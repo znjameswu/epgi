@@ -13,8 +13,8 @@ pub use vello_integrations::*;
 mod affine;
 pub use affine::*;
 
-mod template;
-pub use template::*;
+mod templates;
+pub use templates::*;
 
 // use epgi_core::nodes::Provider;
 

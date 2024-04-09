@@ -2,21 +2,24 @@ use std::marker::PhantomData;
 
 use epgi_core::{
     foundation::{Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Provide, TypeKey},
-    template::{ImplByTemplate, TemplateElement, TemplateElementBase},
+    template::{
+        ImplByTemplate, TemplateElement, TemplateElementBase, TemplateProvideElement,
+        TemplateRenderElement,
+    },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        ImplElement,
+        ImplElement, Render, RenderAction,
     },
 };
 
 use crate::BoxProtocol;
 
-pub struct BoxProxyElementTemplate<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
+pub struct BoxSingleChildElementTemplate<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
     PhantomData<E>,
 );
 
-pub trait BoxProxyElement: Clone + Send + Sync + Sized + 'static {
+pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
     type ArcWidget: ArcWidget<Element = Self>;
 
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
@@ -50,10 +53,10 @@ pub trait BoxProxyElement: Clone + Send + Sync + Sized + 'static {
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
-    for BoxProxyElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+    for BoxSingleChildElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
-    E: BoxProxyElement,
+    E: BoxSingleChildElement,
 {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = BoxProtocol;
@@ -98,10 +101,75 @@ where
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElement<E>
-    for BoxProxyElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+    for BoxSingleChildElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ElementBase,
     ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Element = E>,
 {
     type ElementImpl = ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>;
+}
+
+pub trait BoxSingleChildRenderElement: BoxSingleChildElement {
+    type Render: Render<
+        ParentProtocol = BoxProtocol,
+        ChildProtocol = BoxProtocol,
+        ChildContainer = ArrayContainer<1>,
+    >;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
+    /// Update necessary properties of render object given by the widget
+    ///
+    /// Called during the commit phase, when the widget is updated.
+    /// Always called after [RenderElement::try_update_render_object_children].
+    /// If that call failed to update children (indicating suspense), then this call will be skipped.
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
+
+    /// Whether [Render::update_render_object] is a no-op and always returns None
+    ///
+    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior.
+    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
+}
+
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateRenderElement<E>
+    for BoxSingleChildElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+where
+    E: ImplByTemplate<Template = Self>,
+    E: BoxSingleChildRenderElement,
+{
+    type Render = E::Render;
+
+    fn create_render(element: &E, widget: &<E as ElementBase>::ArcWidget) -> Self::Render {
+        E::create_render(element, widget)
+    }
+
+    fn update_render(
+        render: &mut Self::Render,
+        widget: &<E as ElementBase>::ArcWidget,
+    ) -> RenderAction {
+        E::update_render(render, widget)
+    }
+
+    const NOOP_UPDATE_RENDER_OBJECT: bool = E::NOOP_UPDATE_RENDER_OBJECT;
+}
+
+pub trait BoxSingleChildProvideElement: BoxSingleChildElement {
+    type Provided: Provide;
+    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
+}
+
+impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateProvideElement<E>
+    for BoxSingleChildElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+where
+    E: ImplByTemplate<Template = Self>,
+    E: BoxSingleChildProvideElement,
+{
+    type Provided = E::Provided;
+
+    fn get_provided_value(widget: &<E as ElementBase>::ArcWidget) -> Arc<Self::Provided> {
+        E::get_provided_value(widget)
+    }
 }
