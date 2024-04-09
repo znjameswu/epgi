@@ -1,24 +1,16 @@
 use std::marker::PhantomData;
 
 use crate::{
-    foundation::{
-        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide,
-    },
-    tree::{
-        ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObjectsUpdateCallback,
-        Element, ElementReconcileItem, Widget,
-    },
+    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
+    template::{ImplByTemplate, ProxyElement, ProxyElementTemplate, ProxyProvideElement},
+    tree::{ArcChildElementNode, ArcChildWidget, BuildContext, ElementReconcileItem, Widget},
 };
 
 pub struct Provider<T: Provide, P: Protocol> {
     pub init: Box<dyn Fn() -> Asc<T> + Send + Sync>,
     pub child: ArcChildWidget<P>,
 }
-impl<T, P> Provider<T, P>
-where
-    T: Provide,
-    P: Protocol,
-{
+impl<T: Provide, P: Protocol> Provider<T, P> {
     pub fn init<F: Fn() -> Asc<T> + Send + Sync + 'static>(
         init: F,
         child: ArcChildWidget<P>,
@@ -38,11 +30,7 @@ where
     }
 }
 
-impl<T, P> std::fmt::Debug for Provider<T, P>
-where
-    T: Provide,
-    P: Protocol,
-{
+impl<T: Provide, P: Protocol> std::fmt::Debug for Provider<T, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Provider")
             .field("Type", &std::any::type_name::<T>())
@@ -51,11 +39,7 @@ where
     }
 }
 
-impl<T, P> Widget for Provider<T, P>
-where
-    T: Provide,
-    P: Protocol,
-{
+impl<T: Provide, P: Protocol> Widget for Provider<T, P> {
     type ParentProtocol = P;
 
     type ChildProtocol = P;
@@ -69,65 +53,56 @@ where
 
 pub struct ProviderElement<T: Provide, P: Protocol>(PhantomData<(T, P)>);
 
-impl<T, P> Clone for ProviderElement<T, P>
-where
-    T: Provide,
-    P: Protocol,
-{
+impl<T: Provide, P: Protocol> Clone for ProviderElement<T, P> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T, P> Element for ProviderElement<T, P>
-where
-    T: Provide,
-    P: Protocol,
-{
+impl<T: Provide, P: Protocol> ImplByTemplate for ProviderElement<T, P> {
+    type Template = ProxyElementTemplate<Self, false, true>;
+}
+
+impl<T: Provide, P: Protocol> ProxyElement for ProviderElement<T, P> {
+    type Protocol = P;
+
     type ArcWidget = Asc<Provider<T, P>>;
-
-    type ParentProtocol = P;
-
-    type ChildProtocol = P;
-
-    type ChildContainer = ArrayContainer<1>;
-
-    type Provided = T;
-    const GET_PROVIDED_VALUE: Option<fn(&Self::ArcWidget) -> Arc<Self::Provided>> =
-        Some(|widget| (widget.init)());
 
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
         _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: [ArcChildElementNode<P>; 1],
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<P>>,
+        child: ArcChildElementNode<Self::Protocol>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::Protocol>>,
     ) -> Result<
-        (
-            [ElementReconcileItem<P>; 1],
-            Option<ChildRenderObjectsUpdateCallback<Self>>,
-        ),
-        ([ArcChildElementNode<P>; 1], BuildSuspendedError),
+        ElementReconcileItem<Self::Protocol>,
+        (ArcChildElementNode<Self::Protocol>, BuildSuspendedError),
     > {
-        let [child] = children;
-        match child.can_rebuild_with(widget.child.clone()) {
-            Ok(item) => Ok(([item], None)),
+        let item = match child.can_rebuild_with(widget.child.clone()) {
+            Ok(item) => item,
             Err((child, child_widget)) => {
                 nodes_needing_unmount.push(child);
-                Ok(([ElementReconcileItem::new_inflate(child_widget)], None))
+                ElementReconcileItem::new_inflate(child_widget)
             }
-        }
+        };
+        Ok(item)
     }
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
         _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, [ArcChildWidget<P>; 1]), BuildSuspendedError> {
+    ) -> Result<(Self, ArcChildWidget<Self::Protocol>), BuildSuspendedError> {
         let child_widget = widget.child.clone();
-        Ok((Self(PhantomData), [child_widget]))
+        Ok((Self(PhantomData), child_widget))
     }
+}
 
-    type RenderOrUnit = ();
+impl<T: Provide, P: Protocol> ProxyProvideElement for ProviderElement<T, P> {
+    type Provided = T;
+
+    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided> {
+        (widget.init)()
+    }
 }

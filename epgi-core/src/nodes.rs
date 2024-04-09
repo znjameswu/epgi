@@ -1,8 +1,8 @@
 mod component;
 pub use component::*;
-//
-//mod provider;
-//pub use provider::*;
+
+mod provider;
+pub use provider::*;
 //
 //mod proxy;
 //pub use proxy::*;
