@@ -5,23 +5,22 @@ use crate::{
     tree::{ArcAnyRenderObject, ArcChildRenderObject, RenderObject},
 };
 
-use super::{ArcChildElementNode, ElementBase, ProvideElement, RenderElement};
+use super::{ArcChildElementNode, Element, ElementBase, ProvideElement, RenderElement};
 
-pub trait ImplElement<E: ElementBase>:
-    ImplElementNode<E> + ImplProvide<E> + ImplReconcileCommit<E>
+pub trait ImplElement<E: ElementBase>: ImplElementNode<E> + ImplProvide<E> {}
+impl<I, E: ElementBase> ImplElement<E> for I where I: ImplElementNode<E> + ImplProvide<E> {}
+
+pub trait ImplFullElement<E: Element<Impl = Self>>:
+    ImplElement<E> + ImplReconcileCommit<E>
+{
+}
+
+impl<I, E: Element<Impl = Self>> ImplFullElement<E> for I where
+    I: ImplElement<E> + ImplReconcileCommit<E>
 {
 }
 
 pub struct ElementImpl<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
-
-impl<E: ElementBase, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElement<E>
-    for ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    Self: ImplElementNode<E>,
-    Self: ImplProvide<E>,
-    Self: ImplReconcileCommit<E>,
-{
-}
 
 pub trait ImplProvide<E: ElementBase> {
     const PROVIDE_ELEMENT: bool;

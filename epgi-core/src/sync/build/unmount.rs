@@ -1,6 +1,6 @@
 use crate::{
     foundation::Arc,
-    tree::{Element, ElementNode, SuspendWaker},
+    tree::{ElementNode, FullElement, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 
@@ -8,13 +8,13 @@ pub trait AnyElementNodeUnmountExt {
     fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
 }
 
-impl<E: Element> AnyElementNodeUnmountExt for ElementNode<E> {
+impl<E: FullElement> AnyElementNodeUnmountExt for ElementNode<E> {
     fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>) {
         ElementNode::unmount(&self, scope)
     }
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     // We could require a BuildScheduler in parameter to ensure the global lock
     // However, doing so on a virtual function incurs additional overhead.
     fn unmount(self: &Arc<Self>, scope: &rayon::Scope<'_>) {

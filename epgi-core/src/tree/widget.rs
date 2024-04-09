@@ -8,7 +8,7 @@ use std::{
 
 use crate::foundation::{AsAny, AsHeapPtr, Asc, Key, Protocol};
 
-use super::{ArcAnyElementNode, Element, ElementBase};
+use super::{ArcAnyElementNode, ElementBase, FullElement};
 
 pub type ArcChildWidget<P> = Asc<dyn ChildWidget<P>>;
 pub type ArcParentWidget<P> = Asc<dyn ParentWidget<ChildProtocol = P>>;
@@ -17,7 +17,7 @@ pub type ArcAnyWidget = Asc<dyn AnyWidget>;
 pub trait Widget: AsAny + std::fmt::Debug + 'static + Send + Sync {
     type ParentProtocol: Protocol;
     type ChildProtocol: Protocol;
-    type Element: Element<
+    type Element: FullElement<
         ParentProtocol = Self::ParentProtocol,
         ChildProtocol = Self::ChildProtocol,
     >;

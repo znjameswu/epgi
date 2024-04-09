@@ -111,7 +111,7 @@ where
 }
 
 pub trait TemplateElement<E: ElementBase> {
-    type ElementImpl: ImplElement<E>;
+    type Impl: ImplElement<E>;
 }
 
 impl<E> Element for E
@@ -120,7 +120,7 @@ where
     E::Template: TemplateElement<E>,
     E: ElementBase,
 {
-    type Impl = <E::Template as TemplateElement<E>>::ElementImpl;
+    type Impl = <E::Template as TemplateElement<E>>::Impl;
 }
 
 pub trait TemplateRenderElement<E: ElementBase> {

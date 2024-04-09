@@ -1,7 +1,7 @@
 use either::Either;
 
 use crate::{
-    foundation::{Arc, ArrayContainer, Asc, EitherContainer, EitherParallel, Protocol},
+    foundation::{Arc, Asc, EitherParallel, Protocol},
     nodes::{RenderSuspense, Suspense, SuspenseElement},
     scheduler::BuildScheduler,
     sync::{
@@ -10,24 +10,14 @@ use crate::{
     },
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementImpl, ElementNode,
-        MainlineState, RenderAction, RenderObject,
+        ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementNode, MainlineState,
+        RenderAction, RenderObject,
     },
 };
 
 use super::ImplReconcileCommit;
 
-impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<SuspenseElement<P>>
-    for ElementImpl<true, PROVIDE_ELEMENT>
-where
-    // This is added because rustc unable to prove for any concrete type in this scenario
-    SuspenseElement<P>: ElementBase<
-        ArcWidget = Asc<Suspense<P>>,
-        ParentProtocol = P,
-        ChildProtocol = P,
-        ChildContainer = EitherContainer<ArrayContainer<1>, ArrayContainer<2>>,
-    >,
-{
+impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, false> {
     fn visit_commit(
         element_node: &ElementNode<SuspenseElement<P>>,
         render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
@@ -38,10 +28,7 @@ where
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<P>
-    where
-        SuspenseElement<P>: Element<Impl = Self>,
-    {
+    ) -> SubtreeRenderObjectChange<P> {
         let render_object = render_object.expect("Suspense can never suspend");
         use Either::*;
         use SubtreeRenderObjectChange::*;

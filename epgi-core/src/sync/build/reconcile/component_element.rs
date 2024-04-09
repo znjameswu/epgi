@@ -12,9 +12,10 @@ use super::ImplReconcileCommit;
 
 impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E> for ElementImpl<false, PROVIDE_ELEMENT>
 where
-    E: ElementBase<
+    E: Element<
         ChildProtocol = <E as ElementBase>::ParentProtocol,
         ChildContainer = ArrayContainer<1>,
+        Impl = Self,
     >,
 {
     fn visit_commit(
@@ -24,10 +25,7 @@ where
         _self_rebuild_suspended: bool,
         _scope: &rayon::Scope<'_>,
         _build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
-    where
-        E: Element,
-    {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         render_object_change
     }
 

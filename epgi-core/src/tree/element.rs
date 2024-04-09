@@ -83,12 +83,31 @@ pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
     >;
 }
 
-// This is separated from the main Element trait to avoid inductive cycles when implementing templates.
+// This is separated from the main ELement trait to avoid inductive cycles in ImplReconcileCommit::visit_commit
+/// This is an auto-impled trait, users should not impl this trait directly.
+/// Rather, they should impl [Element]
+///
+/// If `E: FullElement`, then `ElementNode<E>` will have full capability to reconcile, pointer cast, etc.
+pub trait FullElement: Element<Impl = <Self as FullElement>::Impl> {
+    type Impl: ImplFullElement<Self>;
+}
+
+// This is separated from the main ElementBase trait to avoid inductive cycles when implementing templates.
 // Otherwise, there will be something like
 // impl<E> TemplateElement for E where ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Self>, //....
 // The only way to break the cycle is to relocate impl bounds on "Impl*" traits from the impl block to each individual method items.
+// Separating Element vs ElementBase almost eliminate all possible cycles, except for ImplReconcileCommit::visit_commit
+/// If `E: Element`, then `ElementNode<E>` will have a well-defined layout
 pub trait Element: ElementBase {
-    type Impl: ImplElement<Self>;
+    type Impl: ImplElementNode<Self> + ImplProvide<Self>;
+}
+
+impl<E> FullElement for E
+where
+    E: Element,
+    E::Impl: ImplFullElement<E>,
+{
+    type Impl = E::Impl;
 }
 
 /// We assume the render has the same child container with the element,
@@ -116,7 +135,7 @@ impl<CP> ElementReconcileItem<CP>
 where
     CP: Protocol,
 {
-    pub fn new_update<E: Element<ParentProtocol = CP>>(
+    pub fn new_update<E: FullElement<ParentProtocol = CP>>(
         element: Arc<ElementNode<E>>,
         widget: E::ArcWidget,
     ) -> Self {
@@ -186,9 +205,9 @@ pub fn create_root_element<E, R>(
     layout_memo: R::LayoutMemo,
 ) -> (Arc<ElementNode<E>>, Arc<RenderObject<R>>)
 where
-    E: Element,
+    E: FullElement,
     E: RenderElement<Render = R>,
-    E::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<R>>>>,
+    <E as Element>::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<R>>>>,
     R: Render<
         ChildContainer = E::ChildContainer,
         ParentProtocol = E::ParentProtocol,

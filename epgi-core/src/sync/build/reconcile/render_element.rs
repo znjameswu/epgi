@@ -4,9 +4,9 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementImpl, ElementNode,
-        ImplElementNode, ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase,
-        RenderElement, RenderObject, RenderObjectSlots,
+        ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElementNode,
+        ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase, RenderElement,
+        RenderObject, RenderObjectSlots,
     },
 };
 
@@ -14,8 +14,8 @@ use super::ImplReconcileCommit;
 
 impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E> for ElementImpl<true, PROVIDE_ELEMENT>
 where
-    E: ElementBase,
     E: RenderElement,
+    E: Element<Impl = Self>,
     Self: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     fn visit_commit(
@@ -28,10 +28,7 @@ where
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
-    where
-        E: Element<Impl = Self>,
-    {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
             "Logic error in parameters: \

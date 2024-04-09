@@ -5,7 +5,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        ImplElement, Render, RenderAction,
+        ImplElement, ImplFullElement, Render, RenderAction,
     },
 };
 
@@ -103,7 +103,7 @@ where
     E: ElementBase,
     ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<E>,
 {
-    type ElementImpl = ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>;
+    type Impl = ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>;
 }
 
 pub trait SingleChildRenderElement: SingleChildElement {

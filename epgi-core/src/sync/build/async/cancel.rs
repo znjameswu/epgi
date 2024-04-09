@@ -13,7 +13,7 @@ use crate::{
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, ImplProvide, Mainline, SubscriptionDiff,
+        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff,
     },
 };
 
@@ -32,7 +32,7 @@ pub(in super::super) struct RemoveAsync<E: ElementBase> {
     start: Option<AsyncRebuild<E>>,
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     // // This functions serves as an example function on how to invoke the kit
     // pub(super) fn cancel_async_work(
     //     self: &Arc<Self>,
@@ -129,7 +129,7 @@ impl<E: Element> ElementNode<E> {
     }
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     fn remove_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
@@ -194,7 +194,7 @@ impl<E: Element> ElementNode<E> {
     }
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     fn purge_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
@@ -325,7 +325,7 @@ impl<E: Element> ElementNode<E> {
         subscription_diff: SubscriptionDiff,
         lane_pos: LanePos,
     ) {
-        if E::Impl::PROVIDE_ELEMENT {
+        if <E as Element>::Impl::PROVIDE_ELEMENT {
             if reserved_provider_write {
                 self.context.unreserve_write_async(lane_pos);
                 // // We choose relaxed lane marking without unmarking
@@ -372,7 +372,7 @@ impl<E: Element> ElementNode<E> {
     }
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     pub fn remove_async_work_and_lane_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
@@ -444,7 +444,7 @@ pub(crate) mod cancel_private {
         fn purge_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos);
     }
 
-    impl<E: Element> AnyElementNodeAsyncCancelExt for ElementNode<E> {
+    impl<E: FullElement> AnyElementNodeAsyncCancelExt for ElementNode<E> {
         fn remove_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
             Self::remove_async_work_in_subtree(&self, lane_pos)
         }

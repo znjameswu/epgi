@@ -2,12 +2,12 @@ use crate::{
     foundation::Arc,
     scheduler::LanePos,
     sync::BuildScheduler,
-    tree::{Element, ElementNode},
+    tree::{ElementNode, FullElement},
 };
 
 use super::reorder_work::ReorderAsync;
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     fn restart_async_work(
         self: &Arc<Self>,
         lane_pos: LanePos,
@@ -47,7 +47,7 @@ pub(crate) mod restart_private {
         fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, build_scheduler: &BuildScheduler);
     }
 
-    impl<E: Element> AnyElementNodeRestartAsyncExt for ElementNode<E> {
+    impl<E: FullElement> AnyElementNodeRestartAsyncExt for ElementNode<E> {
         fn restart_async_work(
             self: Arc<Self>,
             lane_pos: LanePos,

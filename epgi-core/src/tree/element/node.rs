@@ -6,7 +6,7 @@ use crate::{
 use super::{
     ArcAnyElementNode, ArcAnyRenderObject, ArcChildElementNode, ArcChildRenderObject,
     ArcChildWidget, ArcElementContextNode, Element, ElementContextNode, ElementReconcileItem,
-    ElementSnapshot, ElementSnapshotInner, ImplElementNode, Mainline, MainlineState,
+    ElementSnapshot, ElementSnapshotInner, FullElement, ImplElementNode, Mainline, MainlineState,
 };
 
 pub struct ElementNode<E: Element> {
@@ -71,7 +71,7 @@ pub trait ChildElementNode<PP: Protocol>:
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
 }
 
-impl<E: Element> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
+impl<E: FullElement> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
     fn context(&self) -> &ElementContextNode {
         self.context.as_ref()
     }
@@ -105,11 +105,11 @@ impl<E: Element> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
             return None;
         };
 
-        E::Impl::get_current_subtree_render_object(render_object, children)
+        <E as Element>::Impl::get_current_subtree_render_object(render_object, children)
     }
 }
 
-impl<E: Element> AnyElementNode for ElementNode<E> {
+impl<E: FullElement> AnyElementNode for ElementNode<E> {
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode {
         self
     }
@@ -119,7 +119,7 @@ impl<E: Element> AnyElementNode for ElementNode<E> {
     }
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
-        let Some(get_render_object) = E::Impl::GET_RENDER_OBJECT_AS_ANY else {
+        let Some(get_render_object) = <E as Element>::Impl::GET_RENDER_OBJECT_AS_ANY else {
             return Err("Render object call should not be called on a non-RenderElement");
         };
         let snapshot = self.snapshot.lock();

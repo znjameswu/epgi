@@ -115,7 +115,7 @@ where
     E: LeafElement,
 {
     // Must have a render. Pointless to provide
-    type ElementImpl = ElementImpl<true, false>;
+    type Impl = ElementImpl<true, false>;
 }
 
 impl<E> TemplateRenderElement<E> for LeafElementTemplate

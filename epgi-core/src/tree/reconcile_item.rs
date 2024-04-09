@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     try_convert_if_same_type, ArcChildElementNode, ArcChildWidget, ArcElementContextNode,
-    ArcWidget, Element, ElementNode, ElementReconcileItem, WorkContext, WorkHandle,
+    ArcWidget, ElementNode, ElementReconcileItem, FullElement, WorkContext, WorkHandle,
 };
 
 pub enum ReconcileItem<CP: Protocol> {
@@ -17,7 +17,7 @@ impl<CP> ReconcileItem<CP>
 where
     CP: Protocol,
 {
-    pub fn new_rebuild<E: Element<ParentProtocol = CP>>(
+    pub fn new_rebuild<E: FullElement<ParentProtocol = CP>>(
         element: Arc<ElementNode<E>>,
         widget: E::ArcWidget,
     ) -> Self {
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     pub(crate) fn can_rebuild_with(
         self: Arc<Self>,
         widget: ArcChildWidget<E::ParentProtocol>,
@@ -100,14 +100,14 @@ impl<E: Element> ElementNode<E> {
     }
 }
 
-pub struct ElementWidgetPair<E: Element> {
+pub struct ElementWidgetPair<E: FullElement> {
     pub element: Arc<ElementNode<E>>,
     pub widget: E::ArcWidget,
 }
 
 impl<E> Clone for ElementWidgetPair<E>
 where
-    E: Element,
+    E: FullElement,
 {
     fn clone(&self) -> Self {
         Self {
@@ -129,7 +129,7 @@ pub trait ChildElementWidgetPair<P: Protocol>:
 
 impl<E> ChildElementWidgetPair<E::ParentProtocol> for ElementWidgetPair<E>
 where
-    E: Element,
+    E: FullElement,
 {
     fn element(&self) -> ArcChildElementNode<E::ParentProtocol> {
         todo!()

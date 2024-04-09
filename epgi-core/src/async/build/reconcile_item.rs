@@ -2,7 +2,7 @@ use crate::{
     foundation::{Arc, Asc, Protocol},
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, ChildElementWidgetPair, Element, ElementBase, ElementWidgetPair,
+        ArcElementContextNode, ChildElementWidgetPair, ElementBase, ElementWidgetPair, FullElement,
         Widget, WorkContext, WorkHandle,
     },
 };
@@ -25,7 +25,7 @@ pub trait ChildElementWidgetPairAsyncBuildExt<P: Protocol> {
 
 impl<E> ChildElementWidgetPairAsyncBuildExt<E::ParentProtocol> for ElementWidgetPair<E>
 where
-    E: Element,
+    E: FullElement,
 {
     fn rebuild_async(
         self,

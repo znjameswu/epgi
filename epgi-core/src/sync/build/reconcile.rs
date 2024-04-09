@@ -14,14 +14,14 @@ use crate::{
     tree::{
         no_widget_update, ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext,
         ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementContextNode, ElementNode,
-        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, HookContext, Hooks,
-        ImplElementNode, ImplProvide, Mainline, MainlineState,
+        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, FullElement, HookContext,
+        Hooks, ImplElementNode, ImplProvide, Mainline, MainlineState,
     },
 };
 
 use super::CancelAsync;
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     pub(super) fn rebuild_node_sync(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
@@ -74,7 +74,7 @@ impl<E: Element> ElementNode<E> {
     }
 }
 
-enum VisitAction<E: Element> {
+enum VisitAction<E: FullElement> {
     Rebuild {
         is_poll: bool,
         old_widget: E::ArcWidget,
@@ -97,7 +97,7 @@ enum VisitAction<E: Element> {
         // we have to write it into the node anyway. Could just lock the mutex
         // We also do not store the widget, because everytime we need to access it, (create render object)
         // we have to write the render object into the node anyway
-        render_object: <E::Impl as ImplElementNode<E>>::OptionArcRenderObject,
+        render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         // render_object: Option<
         //     // This field is needed in case a new descendant render object pops up.
         //     ArcRenderObjectOf<E>,
@@ -108,7 +108,7 @@ enum VisitAction<E: Element> {
     EndOfVisit,
 }
 
-impl<E: ElementBase + Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     fn visit_inspect(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
@@ -232,7 +232,7 @@ impl<E: ElementBase + Element> ElementNode<E> {
                     });
                 let (_children, render_object_changes) = results.unzip_collect(|x| x);
 
-                return E::Impl::visit_commit(
+                return <E as Element>::Impl::visit_commit(
                     &self,
                     render_object,
                     render_object_changes,
@@ -343,7 +343,7 @@ impl<E: ElementBase + Element> ElementNode<E> {
         mut element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         mut hook_context: HookContext,
-        old_render_object: <E::Impl as ImplElementNode<E>>::OptionArcRenderObject,
+        old_render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
@@ -385,7 +385,7 @@ impl<E: ElementBase + Element> ElementNode<E> {
                     });
                 let (children, changes) = results.unzip_collect(|x| x);
 
-                let (render_object, change) = E::Impl::rebuild_success_commit(
+                let (render_object, change) = <E as Element>::Impl::rebuild_success_commit(
                     &element,
                     widget,
                     shuffle,
@@ -418,7 +418,7 @@ impl<E: ElementBase + Element> ElementNode<E> {
                         children,
                         waker: err.waker,
                     },
-                    E::Impl::rebuild_suspend_commit(old_render_object),
+                    <E as Element>::Impl::rebuild_suspend_commit(old_render_object),
                 )
             }
         };
@@ -457,8 +457,12 @@ impl<E: ElementBase + Element> ElementNode<E> {
                     "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
                 );
 
-                let (render_object, change) =
-                    E::Impl::inflate_success_commit(&element, widget, &self.context, changes);
+                let (render_object, change) = <E as Element>::Impl::inflate_success_commit(
+                    &element,
+                    widget,
+                    &self.context,
+                    changes,
+                );
 
                 (
                     MainlineState::Ready {
@@ -556,7 +560,9 @@ impl<E: ElementBase + Element> ElementNode<E> {
         element_context: &ElementContextNode,
         build_scheduler: &BuildScheduler,
     ) {
-        if let Some(new_provided_value) = E::Impl::diff_provided_value(old_widget, new_widget) {
+        if let Some(new_provided_value) =
+            <E as Element>::Impl::diff_provided_value(old_widget, new_widget)
+        {
             let contending_readers = element_context
                 .provider
                 .as_ref()
@@ -670,7 +676,7 @@ pub(crate) mod sync_build_private {
         ) -> ArcAnyElementNode;
     }
 
-    impl<E: Element> AnyElementSyncReconcileExt for ElementNode<E> {
+    impl<E: FullElement> AnyElementSyncReconcileExt for ElementNode<E> {
         fn visit_and_work_sync_any(
             self: Arc<Self>,
             job_ids: &Inlinable64Vec<JobId>,
@@ -691,7 +697,7 @@ pub(crate) mod sync_build_private {
         ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
     }
 
-    impl<E: Element> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNode<E> {
+    impl<E: FullElement> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNode<E> {
         fn visit_and_work_sync(
             self: Arc<Self>,
             job_ids: &Inlinable64Vec<JobId>,
@@ -707,7 +713,7 @@ pub(crate) mod sync_build_private {
     }
 }
 
-pub trait ImplReconcileCommit<E: ElementBase>: ImplElementNode<E> {
+pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
     fn visit_commit(
         element_node: &ElementNode<E>,
         render_object: Self::OptionArcRenderObject,
@@ -718,9 +724,7 @@ pub trait ImplReconcileCommit<E: ElementBase>: ImplElementNode<E> {
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>
-    where
-        E: Element<Impl = Self>;
+    ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
 
     fn rebuild_success_commit(
         element: &E,

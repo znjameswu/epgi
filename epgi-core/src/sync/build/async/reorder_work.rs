@@ -2,7 +2,7 @@ use crate::{
     foundation::{Arc, ContainerOf},
     r#async::AsyncRebuild,
     sync::BuildScheduler,
-    tree::{ArcChildElementNode, Element, ElementBase, ElementNode, Mainline},
+    tree::{ArcChildElementNode, ElementBase, ElementNode, FullElement, Mainline},
 };
 
 use super::cancel::CancelAsync;
@@ -13,7 +13,7 @@ pub(in super::super) struct ReorderAsync<E: ElementBase> {
     pub(in super::super) start: AsyncRebuild<E>,
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     fn reorder_async_work(self: &Arc<Self>, build_scheduler: &BuildScheduler) {
         let try_reorder_result = {
             let mut snapshot = self.snapshot.lock();
@@ -135,7 +135,7 @@ pub(crate) mod reorder_work_private {
         fn reorder_async_work(self: Arc<Self>, build_scheduler: &BuildScheduler);
     }
 
-    impl<E: Element> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
+    impl<E: FullElement> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
         fn reorder_async_work(self: Arc<Self>, build_scheduler: &BuildScheduler) {
             ElementNode::reorder_async_work(&self, build_scheduler)
         }

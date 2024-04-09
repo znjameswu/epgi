@@ -9,9 +9,10 @@ use crate::{
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
-        no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
-        ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks,
-        Mainline, ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle,
+        no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash,
+        ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
+        FullElement, Hooks, Mainline, ProviderElementMap, SubscriptionDiff, Work, WorkContext,
+        WorkHandle,
     },
 };
 
@@ -39,7 +40,7 @@ pub(super) enum TryAsyncRebuild<E: ElementBase> {
     Backqueued,
 }
 
-impl<E: Element> ElementNode<E> {
+impl<E: FullElement> ElementNode<E> {
     pub(super) fn new_async_uninflated(
         widget: E::ArcWidget,
         work_context: Asc<WorkContext>,

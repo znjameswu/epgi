@@ -3,8 +3,8 @@ use crate::{
     scheduler::{BuildScheduler, JobId},
     sync::SubtreeRenderObjectChange,
     tree::{
-        ArcChildElementNode, ArcElementContextNode, Element, ElementBase, ElementNode,
-        ElementWidgetPair, Widget,
+        ArcChildElementNode, ArcElementContextNode, ElementBase, ElementNode, ElementWidgetPair,
+        FullElement, Widget,
     },
 };
 
@@ -26,7 +26,7 @@ pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
 
 impl<E> ChildElementWidgetPairSyncBuildExt<E::ParentProtocol> for ElementWidgetPair<E>
 where
-    E: Element,
+    E: FullElement,
 {
     fn rebuild_sync(
         self,
