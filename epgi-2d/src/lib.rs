@@ -16,6 +16,6 @@ pub use affine::*;
 mod templates;
 pub use templates::*;
 
-// use epgi_core::nodes::Provider;
+use epgi_core::nodes::Provider;
 
-// pub type BoxProvider<T> = Provider<T, BoxProtocol>;
+pub type BoxProvider<T> = Provider<T, BoxProtocol>;

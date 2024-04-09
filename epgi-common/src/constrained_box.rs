@@ -62,8 +62,8 @@ impl BoxSingleChildRenderElement for ConstrainedBoxElement {
     }
 
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
-        if render.constraints != &widget.constraints {
-            *render.constraints = widget.constraints.clone();
+        if render.constraints != widget.constraints {
+            render.constraints = widget.constraints.clone();
             return RenderAction::Relayout;
         }
         return RenderAction::None;

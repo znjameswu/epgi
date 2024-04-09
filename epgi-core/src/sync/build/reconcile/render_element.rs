@@ -31,7 +31,7 @@ where
         build_scheduler: &BuildScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol>
     where
-        E: Element,
+        E: Element<Impl = Self>,
     {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
@@ -166,7 +166,10 @@ where
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> where E: Element {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
+    where
+        E: Element<Impl = Self>,
+    {
         use SubtreeRenderObjectChangeSummary::*;
         match render_object_change_summary {
             KeepAll {
@@ -241,7 +244,10 @@ where
         >,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> where E: Element {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
+    where
+        E: Element<Impl = Self>,
+    {
         if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
         | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
         {

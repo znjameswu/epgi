@@ -27,7 +27,7 @@ impl Widget for PhantomBox {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PhantomBoxElement {}
+pub struct PhantomBoxElement;
 
 impl ImplByTemplate for PhantomBoxElement {
     type Template = LeafElementTemplate;

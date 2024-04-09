@@ -10,7 +10,7 @@ use epgi_core::{
     scheduler::{
         get_current_scheduler, setup_scheduler, BuildScheduler, Scheduler, SchedulerHandle,
     },
-    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObjectOld},
+    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObject},
 };
 use std::{
     num::NonZeroUsize,
@@ -305,7 +305,7 @@ impl<'a> MainState<'a> {
 
 fn initialize_root() -> (
     Arc<ElementNode<RootElement>>,
-    Arc<RenderObjectOld<RenderRoot>>,
+    Arc<RenderObject<RenderRoot>>,
     SetState<Option<Arc<dyn ChildWidget<BoxProtocol>>>>,
 ) {
     // First we inflate a simple root widget by hand, with no children attached.

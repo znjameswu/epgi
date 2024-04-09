@@ -720,7 +720,7 @@ pub trait ImplReconcileCommit<E: ElementBase>: ImplElementNode<E> {
         build_scheduler: &BuildScheduler,
     ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>
     where
-        E: Element;
+        E: Element<Impl = Self>;
 
     fn rebuild_success_commit(
         element: &E,

@@ -21,7 +21,7 @@ impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<SuspenseEleme
     for ElementImpl<SuspenseElement<P>, true, PROVIDE_ELEMENT>
 where
     // This is added because rustc unable to prove for any concrete type in this scenario
-    SuspenseElement<P>: Element<
+    SuspenseElement<P>: ElementBase<
         ArcWidget = Asc<Suspense<P>>,
         ParentProtocol = P,
         ChildProtocol = P,
@@ -38,7 +38,10 @@ where
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<P> {
+    ) -> SubtreeRenderObjectChange<P>
+    where
+        SuspenseElement<P>: Element<Impl = Self>,
+    {
         let render_object = render_object.expect("Suspense can never suspend");
         use Either::*;
         use SubtreeRenderObjectChange::*;

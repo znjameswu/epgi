@@ -10,8 +10,8 @@ use epgi_core::{
     nodes::{ComponentElement, ComponentWidget},
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{
-        ArcChildWidget, BuildContext, Element, ElementBase, HitTestBehavior, RenderAction,
-        RenderObject, Widget,
+        ArcChildWidget, BuildContext, ElementBase, HitTestBehavior, ImplRenderObjectReconcile,
+        RenderAction, RenderObject, Widget,
     },
 };
 use hashbrown::HashMap;
@@ -270,7 +270,7 @@ impl PointerEventHandler for RenderObject<RenderRawGestureDetector> {
     ) -> Option<(GestureRecognizerTeamPolicy, Vec<Asc<dyn GestureRecognizer>>)> {
         Some((
             GestureRecognizerTeamPolicy::Competing,
-            self.modify_render_with(|render| render.state.recognizers.values().cloned().collect()),
+            self.update(|render, _| render.recognizers.values().cloned().collect()),
         ))
     }
 }

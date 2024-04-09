@@ -62,7 +62,7 @@ impl BoxSingleChildRenderElement for ColorBoxElement {
 
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
         if render.color != widget.color {
-            *render.color = widget.color;
+            render.color = widget.color;
             RenderAction::Repaint
         } else {
             RenderAction::None
