@@ -3,10 +3,7 @@ use std::{any::TypeId, marker::PhantomData};
 use crate::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Protocol, Provide},
     template::{ImplByTemplate, ProxyElement, ProxyElementTemplate},
-    tree::{
-        ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, ElementBase,
-        ElementReconcileItem, Widget, WidgetExt,
-    },
+    tree::{ArcAnyWidget, ArcChildWidget, ArcWidget, BuildContext, ElementBase, Widget, WidgetExt},
 };
 
 // ComponentWidget and Consumer are separated due to the virtual call overhead in get_consumed_types
@@ -46,38 +43,19 @@ impl<P: Protocol> ImplByTemplate for ComponentElement<P> {
 
 impl<P: Protocol> ProxyElement for ComponentElement<P> {
     type Protocol = P;
-
     type ArcWidget = Asc<dyn ComponentWidget<P>>;
 
-    fn perform_rebuild_element(
-        &mut self,
+    fn get_child_widget(
+        _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        child: ArcChildElementNode<Self::Protocol>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::Protocol>>,
-    ) -> Result<
-        ElementReconcileItem<Self::Protocol>,
-        (ArcChildElementNode<Self::Protocol>, BuildSuspendedError),
-    > {
-        let child_widget = widget.build(ctx);
-        let item = match child.can_rebuild_with(child_widget) {
-            Ok(item) => item,
-            Err((child, child_widget)) => {
-                nodes_needing_unmount.push(child);
-                ElementReconcileItem::new_inflate(child_widget)
-            }
-        };
-        Ok(item)
+    ) -> Result<ArcChildWidget<Self::Protocol>, BuildSuspendedError> {
+        Ok(widget.build(ctx))
     }
 
-    fn perform_inflate_element(
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, ArcChildWidget<Self::Protocol>), BuildSuspendedError> {
-        let child_widget = widget.build(ctx);
-        Ok((Self(PhantomData), child_widget))
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
+        Self(PhantomData)
     }
 }
 
@@ -101,9 +79,7 @@ where
     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
 {
     type ParentProtocol = P;
-
     type ChildProtocol = P;
-
     type Element = ComponentElement<P>;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {

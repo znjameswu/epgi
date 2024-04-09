@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
     template::{ImplByTemplate, ProxyElement, ProxyElementTemplate, ProxyProvideElement},
-    tree::{ArcChildElementNode, ArcChildWidget, BuildContext, ElementReconcileItem, Widget},
+    tree::{ArcChildWidget, BuildContext, Widget},
 };
 
 pub struct Provider<T: Provide, P: Protocol> {
@@ -41,9 +41,7 @@ impl<T: Provide, P: Protocol> std::fmt::Debug for Provider<T, P> {
 
 impl<T: Provide, P: Protocol> Widget for Provider<T, P> {
     type ParentProtocol = P;
-
     type ChildProtocol = P;
-
     type Element = ProviderElement<T, P>;
 
     fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
@@ -65,37 +63,19 @@ impl<T: Provide, P: Protocol> ImplByTemplate for ProviderElement<T, P> {
 
 impl<T: Provide, P: Protocol> ProxyElement for ProviderElement<T, P> {
     type Protocol = P;
-
     type ArcWidget = Asc<Provider<T, P>>;
 
-    fn perform_rebuild_element(
-        &mut self,
+    fn get_child_widget(
+        _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        child: ArcChildElementNode<Self::Protocol>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::Protocol>>,
-    ) -> Result<
-        ElementReconcileItem<Self::Protocol>,
-        (ArcChildElementNode<Self::Protocol>, BuildSuspendedError),
-    > {
-        let item = match child.can_rebuild_with(widget.child.clone()) {
-            Ok(item) => item,
-            Err((child, child_widget)) => {
-                nodes_needing_unmount.push(child);
-                ElementReconcileItem::new_inflate(child_widget)
-            }
-        };
-        Ok(item)
+    ) -> Result<ArcChildWidget<Self::Protocol>, BuildSuspendedError> {
+        Ok(widget.child.clone())
     }
 
-    fn perform_inflate_element(
-        widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, ArcChildWidget<Self::Protocol>), BuildSuspendedError> {
-        let child_widget = widget.child.clone();
-        Ok((Self(PhantomData), child_widget))
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
+        Self(PhantomData)
     }
 }
 

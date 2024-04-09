@@ -22,34 +22,25 @@ pub struct BoxSingleChildElementTemplate<E, const RENDER_ELEMENT: bool, const PR
 pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
     type ArcWidget: ArcWidget<Element = Self>;
 
-    // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
-    // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
     #[allow(unused_variables)]
     fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
         &[]
     }
 
-    // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
-    // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
-    /// If a hook suspended, then the untouched Self should be returned along with the suspended error
-    /// If nothing suspended, then the new Self should be returned.
-    fn perform_rebuild_element(
-        &mut self,
+    fn get_child_widget(
+        element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        child: ArcChildElementNode<BoxProtocol>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<BoxProtocol>>,
-    ) -> Result<
-        ElementReconcileItem<BoxProtocol>,
-        (ArcChildElementNode<BoxProtocol>, BuildSuspendedError),
-    >;
+    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError>;
 
-    fn perform_inflate_element(
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, ArcChildWidget<BoxProtocol>), BuildSuspendedError>;
+    /// A major limitation to the single child element template is that,
+    /// we cannot provide consumed values and build context during the creation the Element itself.
+    /// On top of that, since you can no longer access hooks when creating the Element itself,
+    /// it also becomes impossible to suspend safely during the process, hence the "must-succeed" signature.
+    /// We expect most people does not need provider or hooks during this process.
+    /// If you do need, you can always perform relevant operations in the parent and pass it down in widget.
+    fn create_element(widget: &Self::ArcWidget) -> Self;
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
@@ -78,16 +69,18 @@ where
         ),
         ([ArcChildElementNode<BoxProtocol>; 1], BuildSuspendedError),
     > {
-        E::perform_rebuild_element(
-            element,
-            widget,
-            ctx,
-            provider_values,
-            child,
-            nodes_needing_unmount,
-        )
-        .map(|item| ([item], None))
-        .map_err(|(child, error)| ([child], error))
+        let child_widget = match E::get_child_widget(Some(element), widget, ctx, provider_values) {
+            Err(error) => return Err(([child], error)),
+            Ok(child_wdiget) => child_wdiget,
+        };
+        let item = match child.can_rebuild_with(child_widget) {
+            Ok(item) => item,
+            Err((child, child_widget)) => {
+                nodes_needing_unmount.push(child);
+                ElementReconcileItem::new_inflate(child_widget)
+            }
+        };
+        Ok(([item], None))
     }
 
     fn perform_inflate_element(
@@ -95,8 +88,9 @@ where
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<(E, [ArcChildWidget<BoxProtocol>; 1]), BuildSuspendedError> {
-        E::perform_inflate_element(widget, ctx, provider_values)
-            .map(|(element, child_widget)| (element, [child_widget]))
+        let element = E::create_element(widget);
+        let child_widget = E::get_child_widget(None, widget, ctx, provider_values)?;
+        Ok((element, [child_widget]))
     }
 }
 
