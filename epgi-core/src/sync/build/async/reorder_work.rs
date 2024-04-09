@@ -1,15 +1,15 @@
 use crate::{
-    foundation::Arc,
+    foundation::{Arc, ContainerOf},
     r#async::AsyncRebuild,
     sync::BuildScheduler,
-    tree::{ArcChildElementNode, ContainerOf, Element, ElementNode, Mainline},
+    tree::{ArcChildElementNode, Element, ElementBase, ElementNode, Mainline},
 };
 
 use super::cancel::CancelAsync;
 
-pub(in super::super) struct ReorderAsync<E: Element> {
+pub(in super::super) struct ReorderAsync<E: ElementBase> {
     pub(in super::super) cancel:
-        Option<CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>>,
+        Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
     pub(in super::super) start: AsyncRebuild<E>,
 }
 

@@ -36,6 +36,8 @@ pub trait AsIterator {
     fn as_iter(&self) -> Self::IntoIter<'_>;
 }
 
+pub type ContainerOf<C, T> = <C as HktContainer>::Container<T>;
+
 impl<T: ?Sized> AsIterator for T
 where
     T: IntoIterator,

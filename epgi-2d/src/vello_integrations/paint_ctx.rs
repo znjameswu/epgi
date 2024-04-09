@@ -1,7 +1,8 @@
 use epgi_core::{
     foundation::{Asc, Canvas, Key, PaintContext, Protocol, Transform},
     tree::{
-        ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject, ComposableChildLayer, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment
+        ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
+        ComposableChildLayer, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
     },
 };
 use peniko::{kurbo::Stroke, BrushRef};

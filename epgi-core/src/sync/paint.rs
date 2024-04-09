@@ -4,8 +4,8 @@ use crate::{
     foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, AweakAnyLayerRenderObject, HasLayerPaintImpl, HasOrphanLayerImpl,
-        HasPaintImpl, LayerCache, Render, RenderImpl, RenderObject,
+        ArcChildRenderObject, AweakAnyLayerRenderObject, LayerCache, LayerPaint, OrphanLayer,
+        Paint, Render, RenderBase, RenderImpl, RenderObject,
     },
 };
 
@@ -35,7 +35,7 @@ impl<R> AnyLayerRenderObjectPaintExt for RenderObject<R>
 where
     R: Render,
     R::RenderImpl: ImplComposite<R>,
-    R::RenderImpl: HasLayerPaintImpl<R>,
+    R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
@@ -46,7 +46,7 @@ where
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
 
-        let paint_results = R::RenderImpl::paint_layer(&inner.render, &inner.children);
+        let paint_results = inner.render.paint_layer(&inner.children);
         let layout_cache = inner
             .cache
             .layout_cache_mut(no_relayout_token)
@@ -138,7 +138,7 @@ where
     }
 }
 
-pub trait ImplPaint<R: Render> {
+pub trait ImplPaint<R: RenderBase> {
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
@@ -149,13 +149,14 @@ pub trait ImplPaint<R: Render> {
             ArcChildRenderObject<R::ChildProtocol>,
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
-    );
+    ) where
+        R: Render;
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
     ImplPaint<R> for RenderImpl<R, DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R::RenderImpl: HasPaintImpl<R>,
+    R: Paint,
 {
     fn paint_into_context(
         render: &R,
@@ -168,7 +169,7 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
-        R::RenderImpl::perform_paint(render, size, offset, memo, children, paint_ctx)
+        render.perform_paint(size, offset, memo, children, paint_ctx)
     }
 }
 
@@ -178,7 +179,7 @@ where
     // Will this cause inductive cycles? We'll see
     R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
         + ImplComposite<R>,
-    R::RenderImpl: HasLayerPaintImpl<R>,
+    R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
@@ -203,8 +204,8 @@ impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<
     for RenderImpl<R, DRY_LAYOUT, true, CACHED_COMPOSITE, true>
 where
     R::RenderImpl: ImplComposite<R>,
-    R::RenderImpl: HasLayerPaintImpl<R>,
-    R::RenderImpl: HasOrphanLayerImpl<R>,
+    R: LayerPaint,
+    R: OrphanLayer,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
@@ -221,7 +222,7 @@ where
     ) {
         paint_ctx.add_orphan_layer(
             render_object.clone(),
-            R::RenderImpl::adopter_key(render).clone(),
+            R::adopter_key(render).clone(),
             |transform| {
                 <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
             },

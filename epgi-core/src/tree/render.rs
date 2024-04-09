@@ -13,15 +13,16 @@ use crate::{
     foundation::{
         default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
-        AnyRawPointer, Arc, Aweak, Canvas, CastInterfaceByRawPtr, Protocol, SyncMutex, Transform,
+        AnyRawPointer, Arc, AsIterator, Asc, Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf,
+        HktContainer, Key, LayerProtocol, PaintContext, Protocol, SyncMutex, Transform,
         TransformHitPosition,
     },
     sync::ImplAdopterLayer,
+    tree::{ChildLayerProducingIterator, LayerCompositionConfig, PaintResults},
 };
 
 use super::{
-    ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject, ContainerOf,
-    ElementContextNode, TreeNode,
+    ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject, ElementContextNode,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -30,17 +31,201 @@ pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
 pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<P>>;
 pub type ArcChildRenderObjectWithCanvas<C> = Arc<dyn ChildRenderObjectWithCanvas<C>>;
 
-pub trait Render: TreeNode + Sized + 'static {
+pub type ContainerOfRender<E, T> =
+    <<E as RenderBase>::ChildContainer as HktContainer>::Container<T>;
+
+pub trait RenderBase: Send + Sync + Sized + 'static {
+    type ParentProtocol: Protocol;
+    type ChildProtocol: Protocol;
+    type ChildContainer: HktContainer;
+
     type LayoutMemo: Send + Sync;
-    type RenderImpl: ImplRender<Render = Self>;
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    where
+        Self: Render,
     {
         &[]
     }
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
+}
+
+pub trait Render: RenderBase {
+    type RenderImpl: ImplRender<Render = Self>;
+}
+
+/// Dry layout means that under all circumstances, this render object's size is solely determined
+/// by the constraints given by its parents.
+///
+/// Since the size of its children does not affect its own size,
+/// this render object will always serves as a relayout boundary.
+///
+/// Contrary to what you may assume, dry-layout itself does not bring
+/// any additional optimization during the actual layout visit.
+/// It still needs to layout its children if dirty or receiving a new constraints.
+/// It merely serves a boundary to halt relayout propagation.
+pub trait Layout: RenderBase {
+    fn perform_layout(
+        &mut self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
+}
+
+pub trait DryLayout: RenderBase {
+    fn compute_dry_layout(
+        &self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> <Self::ParentProtocol as Protocol>::Size;
+
+    fn compute_layout_memo(
+        &mut self,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+    ) -> Self::LayoutMemo;
+}
+
+pub trait Paint: RenderBase {
+    fn perform_paint(
+        &self,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
+    );
+
+    // fn hit_test_children(
+    //     &self,
+    //     size: &<Self::ParentProtocol as Protocol>::Size,
+    //     offset: &<Self::ParentProtocol as Protocol>::Offset,
+    //     memo: &Self::LayoutMemo,
+    //     children: &ContainerOf<Self, ArcChildRenderObject<Self::ChildProtocol>>,
+    //     results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
+    // ) -> bool;
+
+    // #[allow(unused_variables)]
+    // fn hit_test_self(
+    //     &self,
+    //     position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+    //     size: &<Self::ParentProtocol as Protocol>::Size,
+    //     offset: &<Self::ParentProtocol as Protocol>::Offset,
+    //     memo: &Self::LayoutMemo,
+    // ) -> Option<HitTestBehavior> {
+    //     <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
+    //         .then_some(HitTestBehavior::DeferToChild)
+    // }
+}
+
+pub trait LayerPaint: RenderBase
+where
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
+{
+    fn paint_layer(
+        &self,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+    ) -> PaintResults<<Self::ChildProtocol as Protocol>::Canvas> {
+        <<Self::ChildProtocol as Protocol>::Canvas as Canvas>::paint_render_objects(
+            children.as_iter().cloned(),
+        )
+    }
+
+    // fn transform_config(
+    //     self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+    //     child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    // ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
+
+    fn layer_key(&self) -> Option<&Arc<dyn Key>> {
+        None
+    }
+}
+
+pub trait Composite<
+    AdopterCanvas: Canvas = <<Self as RenderBase>::ParentProtocol as Protocol>::Canvas,
+>: RenderBase
+{
+    fn composite_to(
+        &self,
+        encoding: &mut AdopterCanvas::Encoding,
+        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<AdopterCanvas>,
+    );
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<AdopterCanvas>,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<AdopterCanvas>;
+}
+
+pub trait CachedComposite<
+    AdopterCanvas: Canvas = <<Self as RenderBase>::ParentProtocol as Protocol>::Canvas,
+>: RenderBase
+{
+    type CompositionCache: Send + Sync + Clone + 'static;
+
+    fn composite_into_cache(
+        &self,
+        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> Self::CompositionCache;
+
+    fn composite_from_cache_to(
+        &self,
+        encoding: &mut AdopterCanvas::Encoding,
+        cache: &Self::CompositionCache,
+        composition_config: &LayerCompositionConfig<AdopterCanvas>,
+    );
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<AdopterCanvas>,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<AdopterCanvas>;
+}
+
+/// Orphan layers can skip this implementation
+pub trait HitTest: RenderBase {
+    fn hit_test_children(
+        &self,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) -> bool;
+
+    #[allow(unused_variables)]
+    fn hit_test_self(
+        &self,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+    ) -> Option<HitTestBehavior> {
+        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
+            .then_some(HitTestBehavior::DeferToChild)
+    }
+}
+
+// We COULD orthogonalize the Orphan/Structured vs Noncached/cached trait set,
+// but that would inevitably bake directly into library user's code an explicit AdopterCanvas type
+// either somewhere in an associated type or somewhere as a generic trait paramter.
+// As an unproven idea, I would like to make orphan layer mechanism optional and not bake into anything more than necessary.
+// Edit: We actually did orthogonalize these traits.
+pub trait OrphanLayer: LayerPaint
+where
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
+{
+    fn adopter_key(&self) -> &Asc<dyn Key>;
+}
+
+pub enum HitTestBehavior {
+    Transparent,
+    DeferToChild,
+    Opaque,
 }
 
 pub struct HitTestResults<C: Canvas> {
@@ -182,16 +367,19 @@ impl RenderAction {
     }
 }
 
-pub trait ImplRenderObjectReconcile<R: TreeNode>: Send + Sync + Sized {
+pub trait ImplRenderObjectReconcile<R: RenderBase>: Send + Sync + Sized {
     fn new(
         render: R,
-        children: ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
+        children: ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
         context: ArcElementContextNode,
     ) -> Self;
 
     fn update<T>(
         &self,
-        op: impl FnOnce(&mut R, &mut ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>) -> T,
+        op: impl FnOnce(
+            &mut R,
+            &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
+        ) -> T,
     ) -> T;
 }
 
@@ -201,7 +389,7 @@ where
 {
     fn new(
         render: R,
-        children: ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
+        children: ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
         context: ArcElementContextNode,
     ) -> Self {
         Self {
@@ -218,7 +406,10 @@ where
 
     fn update<T>(
         &self,
-        op: impl FnOnce(&mut R, &mut ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>) -> T,
+        op: impl FnOnce(
+            &mut R,
+            &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
+        ) -> T,
     ) -> T {
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;

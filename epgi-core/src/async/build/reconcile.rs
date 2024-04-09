@@ -10,13 +10,12 @@ use crate::{
     sync::CommitBarrier,
     tree::{
         no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, Element,
-        ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks,
-        HasReconcileImpl, Mainline, ProviderElementMap, SubscriptionDiff, Work, WorkContext,
-        WorkHandle,
+        ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, Hooks,
+        Mainline, ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle,
     },
 };
 
-pub(crate) struct AsyncRebuild<E: Element> {
+pub(crate) struct AsyncRebuild<E: ElementBase> {
     pub(crate) handle: WorkHandle,
     pub(crate) barrier: CommitBarrier,
     pub(crate) work: Work<E::ArcWidget>,
@@ -25,12 +24,12 @@ pub(crate) struct AsyncRebuild<E: Element> {
     pub(crate) states: Option<(Hooks, E)>,
 }
 
-pub(crate) struct AsyncSkip<E: Element> {
+pub(crate) struct AsyncSkip<E: ElementBase> {
     barrier: CommitBarrier,
     work: Work<E::ArcWidget>,
 }
 
-pub(super) enum TryAsyncRebuild<E: Element> {
+pub(super) enum TryAsyncRebuild<E: ElementBase> {
     Success(AsyncRebuild<E>),
     Skip {
         barrier: CommitBarrier,
@@ -55,7 +54,7 @@ impl<E: Element> ElementNode<E> {
             let element_context =
                 ElementContextNode::new_for::<E>(node.clone() as _, parent_context, &widget);
             let subscription_diff = Self::calc_subscription_diff(
-                E::ElementImpl::get_consumed_types(&widget),
+                E::get_consumed_types(&widget),
                 EMPTY_CONSUMED_TYPES,
                 &work_context.reserved_provider_values,
                 &element_context.provider_map,
@@ -160,9 +159,9 @@ impl<E: Element> ElementNode<E> {
             // 2. If we do not have a widget to reconcile (i.e., a pure refresh), then we have no reason to fear for another batch to change our widget.
             return Success(Err(AsyncSkip { barrier, work }));
         } else {
-            let old_consumed_types = E::ElementImpl::get_consumed_types(old_widget);
+            let old_consumed_types = E::get_consumed_types(old_widget);
             let new_widget_ref = work.widget.as_ref().unwrap_or(old_widget);
-            let new_consumed_types = E::ElementImpl::get_consumed_types(new_widget_ref);
+            let new_consumed_types = E::get_consumed_types(new_widget_ref);
             let subscription_diff = Self::calc_subscription_diff(
                 new_consumed_types,
                 old_consumed_types,
@@ -304,7 +303,7 @@ impl<E: Element> ElementNode<E> {
                 .async_inflating_mut()
                 .expect("Async inflate should only be called on a AsyncInflating node");
             let provider_values = self.read_consumed_values_async(
-                E::ElementImpl::get_consumed_types(&snapshot_reborrow.widget),
+                E::get_consumed_types(&snapshot_reborrow.widget),
                 EMPTY_CONSUMED_TYPES,
                 &work_context,
                 &barrier,

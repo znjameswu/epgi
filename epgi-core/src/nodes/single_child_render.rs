@@ -3,280 +3,112 @@ use std::marker::PhantomData;
 
 use crate::foundation::{
     AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec,
-    Never, PaintContext, Protocol, Provide,
+    Never, PaintContext, Protocol, Provide, TypeKey,
 };
 
 use crate::tree::{
     ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
-    ChildRenderObjectsUpdateCallback, DryLayoutFunctionTable, Element, ElementReconcileItem,
-    HitTestBehavior, HitTestResults, LayerOrUnit, Render, RenderAction, RenderElement,
-    RenderObjectOld, Widget,
+    ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementImpl, ElementReconcileItem,
+    HasReconcileImpl, HitTestBehavior, HitTestResults, ImplElement, ImplElementBySuper, Render,
+    RenderAction, RenderElement, Widget,
 };
 
-pub trait SingleChildRenderObjectWidget:
-    Widget<Element = SingleChildRenderObjectElement<Self>> + Sized
+pub struct SingleChildElementImpl<
+    E: Element,
+    const RENDER_ELEMENT: bool,
+    const PROVIDE_ELEMENT: bool,
+>(PhantomData<E>);
+
+impl<E: Element, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElementBySuper
+    for SingleChildElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+where
+    ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Element = E>,
 {
-    type RenderState: Send + Sync;
+    type Super = ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>;
+}
 
-    fn child(&self) -> &ArcChildWidget<Self::ChildProtocol>;
-
-    fn create_render_state(&self) -> Self::RenderState;
-
-    fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction;
-
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
-
-    fn detach_render_state(render_state: &mut Self::RenderState);
-
-    const NOOP_DETACH: bool = false;
-
-    type LayoutMemo: Send + Sync + 'static;
-
-    fn perform_layout(
-        state: &Self::RenderState,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
-
-    /// If this is not None, then [`Self::perform_layout`]'s implementation will be ignored.
-    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> =
-        None;
-
-    // We don't make perform paint into an associated constant because it has an generic paramter
-    // Then we have to go to associated generic type, which makes the boilerplate explodes.
-    fn perform_paint(
-        state: &Self::RenderState,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    );
-
-    fn hit_test_children(
-        state: &Self::RenderState,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool;
-
-    fn hit_test_self(
-        state: &Self::RenderState,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
-        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
-    }
-
-    type LayerOrUnit: LayerOrUnit<SingleChildRenderObject<Self>>;
-
-    fn all_hit_test_interfaces() -> &'static [(
-        TypeId,
-        fn(*mut RenderObjectOld<SingleChildRenderObject<Self>>) -> AnyRawPointer,
-    )] {
+pub trait SingleChildReconcile: Element<ChildContainer = ArrayContainer<1>> {
+    // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
+    // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
+    #[allow(unused_variables)]
+    fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
         &[]
     }
-}
 
-pub trait SingleChildDryLayout: SingleChildRenderObjectWidget {
-    const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<SingleChildRenderObject<Self>>> =
-        Some(DryLayoutFunctionTable {
-            compute_dry_layout: |render, constraints| {
-                Self::compute_dry_layout(&render.state, constraints)
-            },
-            compute_layout_memo: |render, constraints, size, children| {
-                let [child] = children;
-                Self::compute_layout_memo(&render.state, constraints, size, child)
-            },
-        });
-
-    fn compute_dry_layout(
-        state: &Self::RenderState,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-    ) -> <Self::ParentProtocol as Protocol>::Size;
-
-    fn compute_layout_memo(
-        state: &Self::RenderState,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        child: &ArcChildRenderObject<Self::ChildProtocol>,
-    ) -> Self::LayoutMemo;
-}
-
-pub struct SingleChildRenderObjectElement<W: SingleChildRenderObjectWidget>(PhantomData<W>);
-
-impl<W> Clone for SingleChildRenderObjectElement<W>
-where
-    W: SingleChildRenderObjectWidget,
-{
-    fn clone(&self) -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<W> Element for SingleChildRenderObjectElement<W>
-where
-    W: SingleChildRenderObjectWidget<Element = Self>,
-{
-    type ArcWidget = Asc<W>;
-
-    type ParentProtocol = W::ParentProtocol;
-
-    type ChildContainer = ArrayContainer<1>;
-
-    type ChildProtocol = W::ChildProtocol;
-
-    type Provided = Never;
-
+    // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
+    // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
+    /// If a hook suspended, then the untouched Self should be returned along with the suspended error
+    /// If nothing suspended, then the new Self should be returned.
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: [ArcChildElementNode<Self::ChildProtocol>; 1],
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        child: ArcChildElementNode<Self::ChildProtocol>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
     ) -> Result<
+        ElementReconcileItem<Self::ChildProtocol>,
         (
-            [ElementReconcileItem<Self::ChildProtocol>; 1],
-            Option<ChildRenderObjectsUpdateCallback<Self>>,
-        ),
-        (
-            [ArcChildElementNode<Self::ChildProtocol>; 1],
+            ArcChildElementNode<Self::ChildProtocol>,
             BuildSuspendedError,
         ),
-    > {
-        let [child] = children;
-        match child.can_rebuild_with(widget.child().clone()) {
-            Ok(item) => Ok(([item], None)),
-            Err((child, child_widget)) => {
-                nodes_needing_unmount.push(child);
-                Ok(([ElementReconcileItem::new_inflate(child_widget)], None))
-            }
-        }
-    }
+    >;
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, [ArcChildWidget<Self::ChildProtocol>; 1]), BuildSuspendedError> {
-        let child_widget = widget.child().clone();
-        Ok((Self(PhantomData), [child_widget]))
-    }
-
-    type RenderOrUnit = SingleChildRenderObject<W>;
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<(Self, ArcChildWidget<Self::ChildProtocol>), BuildSuspendedError>;
 }
 
-impl<W> RenderElement for SingleChildRenderObjectElement<W>
+impl<E: Element, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> HasReconcileImpl<E>
+    for SingleChildElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    W: SingleChildRenderObjectWidget<Element = Self>,
+    E: SingleChildReconcile,
 {
-    type Render = SingleChildRenderObject<W>;
-
-    #[inline(always)]
-    fn create_render(&self, widget: &Self::ArcWidget) -> SingleChildRenderObject<W> {
-        SingleChildRenderObject {
-            state: W::create_render_state(widget),
-        }
+    fn get_consumed_types(widget: &E::ArcWidget) -> &[TypeKey] {
+        E::get_consumed_types(widget)
     }
 
-    #[inline(always)]
-    fn update_render(
-        render: &mut SingleChildRenderObject<W>,
-        widget: &Self::ArcWidget,
-    ) -> RenderAction {
-        W::update_render_state(widget, &mut render.state)
-    }
-    const NOOP_UPDATE_RENDER_OBJECT: bool = W::NOOP_UPDATE_RENDER_OBJECT;
-
-    fn element_render_children_mapping<T: Send + Sync>(
-        &self,
-        element_children: <Self::ChildContainer as crate::foundation::HktContainer>::Container<T>,
-    ) -> <<SingleChildRenderObject<W> as Render>::ChildContainer as crate::foundation::HktContainer>::Container<T>{
-        element_children
-    }
-}
-
-pub struct SingleChildRenderObject<W: SingleChildRenderObjectWidget> {
-    pub state: W::RenderState,
-}
-
-impl<W> Render for SingleChildRenderObject<W>
-where
-    W: SingleChildRenderObjectWidget,
-{
-    type ParentProtocol = W::ParentProtocol;
-
-    type ChildProtocol = W::ChildProtocol;
-
-    type ChildContainer = ArrayContainer<1>;
-
-    const NOOP_DETACH: bool = W::NOOP_DETACH;
-
-    type LayoutMemo = W::LayoutMemo;
-
-    #[inline(always)]
-    fn perform_layout(
-        &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
-    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-        let [child] = children;
-        if W::DRY_LAYOUT_FUNCTION_TABLE.is_some() {
-            unreachable!()
-        } else {
-            return W::perform_layout(&self.state, constraints, child);
-        }
+    fn perform_rebuild_element(
+        element: &mut E,
+        widget: &E::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        [child]: [ArcChildElementNode<E::ChildProtocol>; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+    ) -> Result<
+        (
+            ContainerOf<E, ElementReconcileItem<E::ChildProtocol>>,
+            Option<ChildRenderObjectsUpdateCallback<E>>,
+        ),
+        (
+            ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+            BuildSuspendedError,
+        ),
+    > {
+        E::perform_rebuild_element(
+            element,
+            widget,
+            ctx,
+            provider_values,
+            child,
+            nodes_needing_unmount,
+        )
+        .map(|item| ([item], None))
+        .map_err(|(child, error)| ([child], error))
     }
 
-    #[inline(always)]
-    fn perform_paint(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
-    ) {
-        let [child] = children;
-        if <W::LayerOrUnit as LayerOrUnit<Self>>::LAYER_RENDER_FUNCTION_TABLE.is_some() {
-            unreachable!()
-        } else {
-            return W::perform_paint(&self.state, size, offset, memo, child, paint_ctx);
-        }
-    }
-
-    type LayerOrUnit = ();
-
-    fn hit_test_children(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool {
-        let [child] = children;
-        return W::hit_test_children(&self.state, size, offset, memo, child, results);
-    }
-
-    fn hit_test_self(
-        &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
-        W::hit_test_self(&self.state, position, size, offset, memo)
-    }
-
-    fn all_hit_test_interfaces(
-    ) -> &'static [(TypeId, fn(*mut RenderObjectOld<Self>) -> AnyRawPointer)] {
-        W::all_hit_test_interfaces()
+    fn perform_inflate_element(
+        widget: &E::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<(E, ContainerOf<E, ArcChildWidget<E::ChildProtocol>>), BuildSuspendedError> {
+        E::perform_inflate_element(widget, ctx, provider_values)
+            .map(|(element, child_widget)| (element, [child_widget]))
     }
 }
+
+
+pub trait SingleRenderElement: RenderElement<ChildContainer = ArrayContainer<1>> {}
+

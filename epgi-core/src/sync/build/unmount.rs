@@ -1,6 +1,6 @@
 use crate::{
     foundation::Arc,
-    tree::{Element, ElementNode, HasReconcileImpl, SuspendWaker},
+    tree::{Element, ElementNode, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 
@@ -60,7 +60,7 @@ impl<E: Element> ElementNode<E> {
             self.perform_purge_async_work(purge)
         }
 
-        for consumed_type in E::ElementImpl::get_consumed_types(&widget) {
+        for consumed_type in E::get_consumed_types(&widget) {
             let removed = self
                 .context
                 .provider_map

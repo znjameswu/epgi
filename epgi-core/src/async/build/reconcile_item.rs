@@ -2,7 +2,7 @@ use crate::{
     foundation::{Arc, Asc, Protocol},
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, ChildElementWidgetPair, Element, ElementWidgetPair, TreeNode,
+        ArcElementContextNode, ChildElementWidgetPair, Element, ElementBase, ElementWidgetPair,
         Widget, WorkContext, WorkHandle,
     },
 };
@@ -64,7 +64,7 @@ pub trait ChildWidgetAsyncInflateExt<PP: Protocol> {
     ) -> Box<dyn ChildElementWidgetPair<PP>>;
 }
 
-impl<T> ChildWidgetAsyncInflateExt<<<T as Widget>::Element as TreeNode>::ParentProtocol> for T
+impl<T> ChildWidgetAsyncInflateExt<<<T as Widget>::Element as ElementBase>::ParentProtocol> for T
 where
     T: Widget,
 {
@@ -74,7 +74,8 @@ where
         parent_context: ArcElementContextNode,
         barrier: CommitBarrier,
         handle: WorkHandle,
-    ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as TreeNode>::ParentProtocol>> {
+    ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as ElementBase>::ParentProtocol>>
+    {
         todo!()
         // let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
         //     self.clone().into_arc_widget(),

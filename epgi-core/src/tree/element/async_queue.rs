@@ -1,35 +1,35 @@
 use crate::{
-    foundation::{Asc, InlinableUsizeVec, TryResult, TryResult::*, VecPushLastExt},
+    foundation::{Asc, ContainerOf, InlinableUsizeVec, TryResult, TryResult::*, VecPushLastExt},
     scheduler::LanePos,
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, BuildResults, BuildSuspendResults, Element, Work, WorkContext,
+        ArcElementContextNode, BuildResults, BuildSuspendResults, ElementBase, Work, WorkContext,
         WorkHandle,
     },
 };
 
-use super::{ArcChildElementNode, ContainerOf};
+use super::ArcChildElementNode;
 
-pub(crate) struct AsyncWorkQueue<E: Element> {
+pub(crate) struct AsyncWorkQueue<E: ElementBase> {
     pub(crate) inner: Option<Box<AsyncWorkQueueInner<E>>>,
 }
 
-pub(crate) struct AsyncWorkQueueInner<E: Element> {
+pub(crate) struct AsyncWorkQueueInner<E: ElementBase> {
     pub(crate) current: Option<AsyncQueueCurrentEntry<E>>,
     pub(crate) backqueue: Vec<AsyncQueueBackqueueEntry<E::ArcWidget>>,
 }
 
-pub(crate) struct AsyncQueueCurrentEntry<E: Element> {
+pub(crate) struct AsyncQueueCurrentEntry<E: ElementBase> {
     pub(crate) work: Work<E::ArcWidget>,
     pub(crate) stash: AsyncStash<E>,
 }
 
-pub(crate) struct AsyncInflating<E: Element> {
+pub(crate) struct AsyncInflating<E: ElementBase> {
     pub(crate) work_context: Asc<WorkContext>,
     pub(crate) stash: AsyncStash<E>,
 }
 
-pub(crate) struct AsyncStash<E: Element> {
+pub(crate) struct AsyncStash<E: ElementBase> {
     /// This handle can be used to:
     /// 1. Prevent further write-backs
     /// 2. Prevent further wake calls.
@@ -47,7 +47,7 @@ pub(crate) struct AsyncQueueBackqueueEntry<ArcWidget> {
 
 impl<E> AsyncWorkQueue<E>
 where
-    E: Element,
+    E: ElementBase,
 {
     pub(crate) fn new_empty() -> Self {
         Self { inner: None }
@@ -241,7 +241,7 @@ where
     }
 }
 
-pub(crate) enum AsyncDequeueResult<E: Element> {
+pub(crate) enum AsyncDequeueResult<E: ElementBase> {
     FoundCurrent(AsyncQueueCurrentEntry<E>),
     FoundBackqueue(AsyncQueueBackqueueEntry<E::ArcWidget>),
     NotFound,
@@ -249,14 +249,14 @@ pub(crate) enum AsyncDequeueResult<E: Element> {
 
 impl<E> Default for AsyncWorkQueue<E>
 where
-    E: Element,
+    E: ElementBase,
 {
     fn default() -> Self {
         Self { inner: None }
     }
 }
 
-pub(crate) enum AsyncOutput<E: Element> {
+pub(crate) enum AsyncOutput<E: ElementBase> {
     Uninitiated {
         barrier: CommitBarrier,
     },
@@ -268,7 +268,7 @@ pub(crate) enum AsyncOutput<E: Element> {
     },
     Completed {
         results: BuildResults<E>,
-        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     },
 }
 

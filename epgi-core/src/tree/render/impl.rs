@@ -1,24 +1,8 @@
-mod render_impl;
-pub use render_impl::*;
-
-mod impl_layout;
-pub use impl_layout::*;
-
-mod impl_paint;
-pub use impl_paint::*;
-
-mod impl_composite;
-pub use impl_composite::*;
-
-mod impl_hit_test;
-pub use impl_hit_test::*;
-
-mod impl_orphan;
-pub use impl_orphan::*;
+use std::marker::PhantomData;
 
 use crate::sync::{ImplAdopterLayer, ImplHitTest, ImplLayout, ImplPaint};
 
-use super::{ImplRenderObject, Render};
+use super::{ImplRenderObject, RenderBase};
 
 pub trait ImplRender:
     ImplRenderObject<Self::Render>
@@ -27,23 +11,30 @@ pub trait ImplRender:
     + ImplHitTest<Self::Render>
     + ImplAdopterLayer<Self::Render>
 {
-    type Render: Render;
+    type Render: RenderBase;
 }
 
-pub trait ImplRenderBySuper:
-    ImplRenderObject<Self::Render>
-    + ImplLayout<Self::Render>
-    + ImplPaint<Self::Render>
-    + ImplHitTest<Self::Render>
-    + ImplAdopterLayer<Self::Render>
-{
-    type Render: Render;
-    type Super: ImplRender<Render = Self::Render>;
-}
+pub struct RenderImpl<
+    R: RenderBase,
+    const DRY_LAYOUT: bool,
+    const LAYER_PAINT: bool,
+    const CACHED_COMPOSITE: bool,
+    const ORPHAN_LAYER: bool,
+>(PhantomData<R>);
 
-impl<T> ImplRender for T
+impl<
+        R: RenderBase,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ImplRender for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    T: ImplRenderBySuper,
+    Self: ImplLayout<R>,
+    Self: ImplPaint<R>,
+    Self: ImplHitTest<R>,
+    Self: ImplAdopterLayer<R>,
+    Self: ImplRenderObject<R>,
 {
-    type Render = T::Render;
+    type Render = R;
 }

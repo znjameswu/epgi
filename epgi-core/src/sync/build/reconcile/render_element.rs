@@ -1,34 +1,31 @@
 use crate::{
-    foundation::{Arc, AsIterator, Container},
+    foundation::{Arc, AsIterator, Container, ContainerOf},
     scheduler::{get_current_scheduler, BuildScheduler},
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, ContainerOf, Element, ElementImpl, ElementNode,
-        ImplElementNode, HasRenderElementImpl, ImplRenderObjectReconcile, MainlineState, Render,
-        RenderAction, RenderObject, RenderObjectSlots, TreeNode,
+        ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElementNode,
+        ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase, RenderElement,
+        RenderObject, RenderObjectSlots,
     },
 };
 
 use super::ImplReconcileCommit;
 
-impl<E, const PROVIDE_ELEMENT: bool, R: Render> ImplReconcileCommit<E>
+impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E>
     for ElementImpl<E, true, PROVIDE_ELEMENT>
 where
     E: Element,
-    E::ElementImpl: HasRenderElementImpl<E, Render = R>,
-    // This extra bound is necessary, because rust doesn't seem to understand type bounds for associated types
-    R: Render<
-        ParentProtocol = E::ParentProtocol,
-        ChildProtocol = E::ChildProtocol,
-        ChildContainer = E::ChildContainer,
-    >,
-    E::ElementImpl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<R>>>>,
+    E: RenderElement,
+    E::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     fn visit_commit(
         element_node: &ElementNode<E>,
-        render_object: Option<Arc<RenderObject<R>>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        render_object: Option<Arc<RenderObject<E::Render>>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
@@ -60,10 +57,13 @@ where
     fn rebuild_success_commit(
         element: &E,
         widget: &E::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
+        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object: Self::OptionArcRenderObject,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
         element_context: &ArcElementContextNode,
         is_new_widget: bool,
     ) -> (
@@ -90,9 +90,9 @@ where
     }
 
     fn rebuild_suspend_commit(
-        render_object: Self::OptionArcRenderObject,
+        render_object: Option<Arc<RenderObject<E::Render>>>,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        render_object.map(|render_object| render_object.detach());
+        render_object.map(|render_object| render_object.as_ref().detach()); // use as_ref() to avoid rust-analyzer hazard
         SubtreeRenderObjectChange::Suspend
     }
 
@@ -100,9 +100,12 @@ where
         element: &E,
         widget: &E::ArcWidget,
         element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
     ) -> (
-        Self::OptionArcRenderObject,
+        Option<Arc<RenderObject<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -127,14 +130,14 @@ where
             }
         });
 
-        let new_render_object = Arc::new(RenderObject::<R>::new(
-            E::ElementImpl::create_render(&element, &widget), //TODO: This could panic
+        let new_render_object = Arc::new(RenderObject::<E::Render>::new(
+            E::create_render(&element, &widget), //TODO: This could panic
             child_render_objects,
             element_context.clone(),
         ));
 
         if let Some(layer_render_object) =
-            RenderObject::<R>::try_as_aweak_any_layer_render_object(&new_render_object)
+            RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(&new_render_object)
         {
             get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
         }
@@ -145,23 +148,20 @@ where
     }
 }
 
-impl<E, const PROVIDE_ELEMENT: bool, R: Render> ElementImpl<E, true, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> ElementImpl<E, true, PROVIDE_ELEMENT>
 where
     E: Element,
-    E::ElementImpl: HasRenderElementImpl<E, Render = R>,
-    // This extra bound is necessary, because rust doesn't seem to understand type bounds for associated types
-    R: Render<
-        ParentProtocol = E::ParentProtocol,
-        ChildProtocol = E::ChildProtocol,
-        ChildContainer = E::ChildContainer,
-    >,
-    E::ElementImpl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<R>>>>,
+    E: RenderElement,
+    E::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     #[inline(always)]
     pub(crate) fn visit_commit_attached(
         element_node: &ElementNode<E>,
-        render_object: Arc<RenderObject<R>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        render_object: Arc<RenderObject<E::Render>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         use SubtreeRenderObjectChangeSummary::*;
@@ -182,7 +182,7 @@ where
                 let render_action = render_object
                     .mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
                 render_object.update(|render, children| {
-                    update_children::<R>(
+                    update_children::<E::Render>(
                         children,
                         None,
                         render_object_changes,
@@ -195,7 +195,7 @@ where
                 };
             }
             HasSuspended => {
-                render_object.detach();
+                render_object.as_ref().detach(); // use as_ref() to avoid rust-analyzer hazard
                 let mut snapshot = element_node.snapshot.lock();
                 let state = snapshot
                     .inner
@@ -232,7 +232,10 @@ where
 
     pub(crate) fn visit_commit_detached(
         element_node: &ElementNode<E>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
         render_object_change_summary: SubtreeRenderObjectChangeSummary,
         self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
@@ -327,7 +330,9 @@ where
 
         if let Some(new_attached_render_object) = new_attached_render_object {
             if let Some(layer_render_object) =
-                RenderObject::<R>::try_as_aweak_any_layer_render_object(&new_attached_render_object)
+                RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(
+                    &new_attached_render_object,
+                )
             {
                 get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
             }
@@ -340,12 +345,15 @@ where
     #[inline(always)]
     pub(crate) fn rebuild_success_process_attached(
         widget: &E::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<E>>,
-        render_object: Arc<RenderObject<R>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
+        render_object: Arc<RenderObject<E::Render>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
         is_new_widget: bool,
     ) -> (
-        Option<Arc<RenderObject<R>>>,
+        Option<Arc<RenderObject<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -362,13 +370,13 @@ where
 
         if shuffle.is_some()
             || !render_object_change_summary.is_keep_all()
-            || (is_new_widget && !E::ElementImpl::NOOP_UPDATE_RENDER_OBJECT)
+            || (is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT)
         {
             render_object.update(|render, children| {
-                if is_new_widget && !E::ElementImpl::NOOP_UPDATE_RENDER_OBJECT {
-                    self_render_action = E::ElementImpl::update_render(render, widget);
+                if is_new_widget && !E::NOOP_UPDATE_RENDER_OBJECT {
+                    self_render_action = E::update_render(render, widget);
                 }
-                update_children::<R>(
+                update_children::<E::Render>(
                     children,
                     shuffle,
                     render_object_changes,
@@ -402,10 +410,13 @@ where
         element: &E,
         widget: &E::ArcWidget,
         element_context: &ArcElementContextNode,
-        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
+        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
     ) -> (
-        Option<Arc<RenderObject<R>>>,
+        Option<Arc<RenderObject<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
@@ -427,7 +438,7 @@ where
 
         if let Some(render_object) = render_object {
             if let Some(layer_render_object) =
-                RenderObject::<R>::try_as_aweak_any_layer_render_object(&render_object)
+                RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(&render_object)
             {
                 get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
             }
@@ -443,9 +454,12 @@ where
         element: &E,
         widget: &E::ArcWidget,
         element_context: &ArcElementContextNode,
-        children: &ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object_changes: ContainerOf<E, SubtreeRenderObjectChange<E::ChildProtocol>>,
-    ) -> Option<Arc<RenderObject<R>>> {
+        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        render_object_changes: ContainerOf<
+            E::ChildContainer,
+            SubtreeRenderObjectChange<E::ChildProtocol>,
+        >,
+    ) -> Option<Arc<RenderObject<E::Render>>> {
         let mut suspended = false;
         let option_child_render_objects =
             children.zip_ref_collect(render_object_changes, |child, change| {
@@ -471,8 +485,8 @@ where
         } else {
             let new_render_children =
                 option_child_render_objects.map_collect(|child| child.expect("Impossible to fail"));
-            let new_render_object = Arc::new(RenderObject::<R>::new(
-                E::ElementImpl::create_render(&element, &widget), //TODO: This could panic
+            let new_render_object = Arc::new(RenderObject::<E::Render>::new(
+                E::create_render(&element, &widget), //TODO: This could panic
                 new_render_children,
                 element_context.clone(),
             ));
@@ -481,16 +495,20 @@ where
     }
 }
 
-fn update_children<R: TreeNode>(
-    children: &mut ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
+fn update_children<R: RenderBase>(
+    children: &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
     shuffle: Option<
         Box<
             dyn FnOnce(
-                ContainerOf<R, ArcChildRenderObject<R::ChildProtocol>>,
-            ) -> ContainerOf<R, RenderObjectSlots<R::ChildProtocol>>,
+                ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
+            )
+                -> ContainerOf<R::ChildContainer, RenderObjectSlots<R::ChildProtocol>>,
         >,
     >,
-    render_object_changes: ContainerOf<R, SubtreeRenderObjectChange<R::ChildProtocol>>,
+    render_object_changes: ContainerOf<
+        R::ChildContainer,
+        SubtreeRenderObjectChange<R::ChildProtocol>,
+    >,
     render_object_change_summary: SubtreeRenderObjectChangeSummary,
 ) {
     if let Some(shuffle) = shuffle {

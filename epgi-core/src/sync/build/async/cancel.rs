@@ -6,13 +6,13 @@
 /// 3. Cancel: Remove this lane in the **descendants**. For the subtree root, we first purge this lane and then put it into backqueue.
 /// We do not try to requeue anything in the subtree root.
 use crate::{
-    foundation::{Arc, Container},
+    foundation::{Arc, Container, ContainerOf},
     r#async::AsyncRebuild,
     scheduler::{get_current_scheduler, LanePos},
     sync::BuildScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, ContainerOf, Element, ElementNode, ElementSnapshot,
+        AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementNode, ElementSnapshot,
         ElementSnapshotInner, ImplProvide, Mainline, SubscriptionDiff,
     },
 };
@@ -24,10 +24,10 @@ pub(in super::super) struct CancelAsync<I> {
     pub(super) non_mainline_children: Option<I>,
 }
 
-pub(in super::super) struct RemoveAsync<E: Element> {
+pub(in super::super) struct RemoveAsync<E: ElementBase> {
     purge: Result<
-        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     >,
     start: Option<AsyncRebuild<E>>,
 }
@@ -64,8 +64,8 @@ impl<E: Element> ElementNode<E> {
         lane_pos: LanePos,
         build_scheduler: &BuildScheduler,
     ) -> Result<
-        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
         let Mainline { state, async_queue } = mainline;
         use AsyncDequeueResult::*;
@@ -108,7 +108,7 @@ impl<E: Element> ElementNode<E> {
 
     pub(in super::super) fn perform_cancel_async_work(
         self: &Arc<Self>,
-        cancel: CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     ) {
         let CancelAsync {
             lane_pos,
@@ -223,8 +223,8 @@ impl<E: Element> ElementNode<E> {
         snapshot: &mut ElementSnapshot<E>,
         lane_pos: LanePos,
     ) -> Result<
-        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
         match &mut snapshot.inner {
             ElementSnapshotInner::AsyncInflating(async_inflating) => {
@@ -240,8 +240,8 @@ impl<E: Element> ElementNode<E> {
         async_inflating: &mut AsyncInflating<E>,
         lane_pos: LanePos,
     ) -> Result<
-        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
         let AsyncInflating {
             work_context,
@@ -283,8 +283,8 @@ impl<E: Element> ElementNode<E> {
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
     ) -> Result<
-        CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
         let Mainline { state, async_queue } = mainline;
         use AsyncDequeueResult::*;
@@ -325,7 +325,7 @@ impl<E: Element> ElementNode<E> {
         subscription_diff: SubscriptionDiff,
         lane_pos: LanePos,
     ) {
-        if E::ElementImpl::PROVIDE_ELEMENT {
+        if E::Impl::PROVIDE_ELEMENT {
             if reserved_provider_write {
                 self.context.unreserve_write_async(lane_pos);
                 // // We choose relaxed lane marking without unmarking
@@ -353,7 +353,7 @@ impl<E: Element> ElementNode<E> {
 
     pub(in super::super) fn perform_purge_async_work(
         self: &Arc<Self>,
-        cancel: CancelAsync<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>>,
+        cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     ) {
         let CancelAsync {
             lane_pos,

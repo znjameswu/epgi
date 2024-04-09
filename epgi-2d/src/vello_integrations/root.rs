@@ -6,9 +6,9 @@ use epgi_core::{
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
         ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
-        ElementImpl, ElementReconcileItem, HitTest, HitTestResults, LayerCompositionConfig,
-        LayerPaint, Reconcile, Render, RenderAction, RenderElement, RenderImpl, RenderObjectSlots,
-        TreeNode, Widget,
+        ElementBase, ElementImpl, ElementReconcileItem, HitTest, HitTestResults,
+        LayerCompositionConfig, LayerPaint, Render, RenderAction, RenderBase, RenderElement,
+        RenderImpl, RenderObjectSlots, Widget,
     },
 };
 
@@ -41,20 +41,13 @@ impl Widget for RootView {
 #[derive(Clone)]
 pub struct RootElement {}
 
-impl TreeNode for RootElement {
+impl ElementBase for RootElement {
     type ParentProtocol = BoxProtocol;
-
     type ChildProtocol = BoxProtocol;
-
     type ChildContainer = OptionContainer;
-}
 
-impl Element for RootElement {
     type ArcWidget = Asc<RootView>;
-    type ElementImpl = ElementImpl<Self, true, false>;
-}
 
-impl Reconcile for RootElement {
     fn perform_rebuild_element(
         // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
         &mut self,
@@ -66,7 +59,7 @@ impl Reconcile for RootElement {
     ) -> Result<
         (
             Option<ElementReconcileItem<Self::ChildProtocol>>,
-            Option<ChildRenderObjectsUpdateCallback<Self>>,
+            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, Self::ChildProtocol>>,
         ),
         (
             Option<ArcChildElementNode<Self::ChildProtocol>>,
@@ -108,6 +101,10 @@ impl Reconcile for RootElement {
     }
 }
 
+impl Element for RootElement {
+    type Impl = ElementImpl<Self, true, false>;
+}
+
 impl RenderElement for RootElement {
     type Render = RenderRoot;
 
@@ -129,10 +126,10 @@ impl RenderElement for RootElement {
 
     // fn element_render_children_mapping<T: Send + Sync>(
     //     &self,
-    //     element_children: <Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<
+    //     element_children: <Self::ChildContainer as epgi_core::foundation::ChildContainer>::Container<
     //         T,
     //     >,
-    // ) -> <<RenderRoot as Render>::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>
+    // ) -> <<RenderRoot as Render>::ChildContainer as epgi_core::foundation::ChildContainer>::Container<T>
     // {
     //     todo!()
     // }
@@ -142,12 +139,11 @@ pub struct RenderRoot {
     pub child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
-impl TreeNode for RenderRoot {
+impl RenderBase for RenderRoot {
     type ParentProtocol = BoxProtocol;
-
     type ChildProtocol = BoxProtocol;
-
     type ChildContainer = OptionContainer;
+    type LayoutMemo = ();
 }
 
 impl DryLayout for RenderRoot {
@@ -192,11 +188,9 @@ impl CachedComposite for RenderRoot {
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<
-            <<Self as TreeNode>::ParentProtocol as Protocol>::Canvas,
-        >,
+        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
         child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<<Self as TreeNode>::ParentProtocol as Protocol>::Canvas> {
+    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
         todo!()
     }
 }
@@ -228,7 +222,6 @@ impl HitTest for RenderRoot {
 }
 
 impl Render for RenderRoot {
-    type LayoutMemo = ();
     type RenderImpl = RenderImpl<Self, true, true, true, false>;
 }
 

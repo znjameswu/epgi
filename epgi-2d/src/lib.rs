@@ -13,6 +13,9 @@ pub use vello_integrations::*;
 mod affine;
 pub use affine::*;
 
+mod template;
+pub use template::*;
+
 // use epgi_core::nodes::Provider;
 
 // pub type BoxProvider<T> = Provider<T, BoxProtocol>;

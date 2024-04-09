@@ -5,8 +5,8 @@ use crate::{
 };
 
 use super::{
-    ArcChildRenderObject, ArcElementContextNode, HasCachedCompositeImpl, NoRelayoutToken, Render,
-    RenderImpl, RenderMark,
+    ArcChildRenderObject, ArcElementContextNode, CachedComposite, NoRelayoutToken, Render,
+    RenderBase, RenderImpl, RenderMark,
 };
 
 pub struct RenderObject<R>
@@ -22,7 +22,7 @@ where
 
 pub(crate) struct RenderObjectInner<R, C>
 where
-    R: Render,
+    R: RenderBase,
 {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
@@ -32,19 +32,23 @@ where
         <R::ChildContainer as HktContainer>::Container<ArcChildRenderObject<R::ChildProtocol>>,
 }
 
-pub trait ImplRenderObject<R: Render> {
+pub trait ImplRenderObject<R: RenderBase> {
     type LayerMark: Default + Send + Sync;
     type LayerCache: Send + Sync;
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
-    ImplRenderObject<R> for RenderImpl<R, DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<
+        R: RenderBase,
+        const DRY_LAYOUT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ImplRenderObject<R> for RenderImpl<R, DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 {
     type LayerMark = ();
     type LayerCache = ();
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
+impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
     for RenderImpl<R, DRY_LAYOUT, true, false, ORPHAN_LAYER>
 {
     type LayerMark = LayerMark;
@@ -55,11 +59,7 @@ impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CC> ImplRender
     for RenderImpl<R, DRY_LAYOUT, true, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>,
-    R::RenderImpl: HasCachedCompositeImpl<
-        R,
-        <Self as ImplAdopterLayer<R>>::AdopterCanvas,
-        CompositionCache = CC,
-    >,
+    R: CachedComposite<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CompositionCache = CC>,
     CC: Clone + Send + Sync,
 {
     type LayerMark = LayerMark;
@@ -69,11 +69,11 @@ where
 #[derive(Default)]
 pub(crate) struct RenderCache<R, LC>(Option<LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>>)
 where
-    R: Render;
+    R: RenderBase;
 
 impl<R, LC> RenderCache<R, LC>
 where
-    R: Render,
+    R: RenderBase,
 {
     pub(crate) fn new() -> Self {
         Self(None)

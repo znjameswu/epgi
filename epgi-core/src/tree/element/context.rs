@@ -94,7 +94,7 @@ impl ElementContextNode {
         parent_context: ArcElementContextNode,
         widget: &E::ArcWidget,
     ) -> Self {
-        let provider = E::ElementImpl::option_get_provided_key_value_pair(widget)
+        let provider = E::Impl::option_get_provided_key_value_pair(widget)
             .map(|(provided, type_key)| Box::new(ProviderObject::new(provided, type_key)));
         Self::new(node, Some(parent_context), provider)
     }

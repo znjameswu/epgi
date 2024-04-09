@@ -21,14 +21,3 @@ pub use widget::*;
 
 mod work;
 pub use work::*;
-
-use crate::foundation::{HktContainer, Protocol};
-
-pub trait TreeNode: Send + Sync {
-    type ParentProtocol: Protocol;
-    type ChildProtocol: Protocol;
-    type ChildContainer: HktContainer;
-}
-
-#[allow(type_alias_bounds)]
-pub type ContainerOf<E: TreeNode, T> = <E::ChildContainer as HktContainer>::Container<T>;

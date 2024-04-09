@@ -7,9 +7,12 @@ use crate::{
     },
     tree::{
         ArcAnyWidget, ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, Widget, WidgetExt, ElementOld,
+        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, TreeNode, Widget,
+        WidgetExt,
     },
 };
+
+use super::SingleChildElementImpl;
 
 // ComponentWidget and Consumer are separated due to the virtual call overhead in get_consumed_types
 // ComponentWidget and Provider are separated due to type inconsistencies in Element::Provided
@@ -45,19 +48,24 @@ where
 #[derive(Default, Clone)]
 pub struct ComponentElement<P: Protocol>(PhantomData<P>);
 
-impl<P> ElementOld for ComponentElement<P>
+impl<P> TreeNode for ComponentElement<P>
 where
     P: Protocol,
 {
-    type ArcWidget = Asc<dyn ComponentWidget<P>>;
-
     type ParentProtocol = P;
 
     type ChildProtocol = P;
 
     type ChildContainer = ArrayContainer<1>;
+}
 
-    type Provided = Never;
+impl<P> Element for ComponentElement<P>
+where
+    P: Protocol,
+{
+    type ArcWidget = Asc<dyn ComponentWidget<P>>;
+
+    type ElementImpl = SingleChildElementImpl<Self, false, false>;
 
     #[inline(always)]
     fn perform_rebuild_element(

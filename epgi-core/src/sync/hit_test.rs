@@ -1,6 +1,8 @@
 use crate::{
     foundation::{Arc, Canvas, Protocol},
-    tree::{HasHitTestImpl, HitTestBehavior, HitTestResults, Render, RenderImpl, RenderObject},
+    tree::{
+        HitTest, HitTestBehavior, HitTestResults, Render, RenderBase, RenderImpl, RenderObject,
+    },
 };
 
 use super::ImplAdopterLayer;
@@ -26,18 +28,20 @@ pub trait ChildLayerRenderObjectHitTestExt<C: Canvas> {
     // fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<C>) -> bool;
 }
 
-pub trait ImplHitTest<R: Render> {
+pub trait ImplHitTest<R: RenderBase> {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
         results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool;
+    ) -> bool
+    where
+        R: Render;
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
     ImplHitTest<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
 where
     R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
-    R::RenderImpl: HasHitTestImpl<R>,
+    R: HitTest,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
@@ -54,8 +58,7 @@ where
             .as_ref()
             .expect("Hit test should not occur before paint");
 
-        let hit_within_shape = R::RenderImpl::hit_test_self(
-            &inner.render,
+        let hit_within_shape = inner.render.hit_test_self(
             results.curr_position(),
             &layout_cache.layout_results.size,
             offset,
@@ -66,8 +69,7 @@ where
             return false;
         };
 
-        let hit_children = R::RenderImpl::hit_test_children(
-            &inner.render,
+        let hit_children = inner.render.hit_test_children(
             &layout_cache.layout_results.size,
             offset,
             &layout_cache.layout_results.memo,
@@ -96,7 +98,7 @@ where
 impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
     ImplHitTest<R> for RenderImpl<R, DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
 where
-    R::RenderImpl: HasHitTestImpl<R>,
+    R: HitTest,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,

@@ -3,8 +3,8 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, HasDryLayoutImpl, HasLayoutImpl, ImplRenderBySuper, LayoutCache,
-        LayoutResults, Render, RenderImpl, RenderObject, TreeNode,
+        ArcChildRenderObject, DryLayout, Layout, LayoutCache, LayoutResults, Render, RenderBase,
+        RenderImpl, RenderObject,
     },
 };
 
@@ -142,7 +142,7 @@ where
     }
 }
 
-pub trait ImplLayout<R: Render> {
+pub trait ImplLayout<R: RenderBase> {
     const DRY_LAYOUT: bool;
     fn perform_layout_without_resize(
         render: &mut R,
@@ -168,7 +168,7 @@ impl<
         const ORPHAN_LAYER: bool,
     > ImplLayout<R> for RenderImpl<R, false, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R::RenderImpl: HasLayoutImpl<R>,
+    R: Layout,
 {
     const DRY_LAYOUT: bool = false;
     fn perform_layout_without_resize(
@@ -179,7 +179,7 @@ where
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> R::LayoutMemo {
-        let (new_size, memo) = R::RenderImpl::perform_layout(render, constraints, children);
+        let (new_size, memo) = render.perform_layout(constraints, children);
         *size = new_size;
         memo
     }
@@ -191,7 +191,7 @@ where
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
-        R::RenderImpl::perform_layout(render, constraints, children)
+        render.perform_layout(constraints, children)
     }
 }
 
@@ -202,7 +202,7 @@ impl<
         const ORPHAN_LAYER: bool,
     > ImplLayout<R> for RenderImpl<R, true, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R::RenderImpl: HasDryLayoutImpl<R>,
+    R: DryLayout,
 {
     const DRY_LAYOUT: bool = true;
     fn perform_layout_without_resize(
@@ -213,7 +213,7 @@ where
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> R::LayoutMemo {
-        R::RenderImpl::compute_layout_memo(render, constraints, size, children)
+        render.compute_layout_memo(constraints, size, children)
     }
 
     fn perform_wet_layout(
@@ -223,38 +223,8 @@ where
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
-        let size = R::RenderImpl::compute_dry_layout(render, constraints);
-        let memo = R::RenderImpl::compute_layout_memo(render, constraints, &size, children);
+        let size = render.compute_dry_layout(constraints);
+        let memo = render.compute_layout_memo(constraints, &size, children);
         (size, memo)
-    }
-}
-
-impl<T> ImplLayout<T::Render> for T
-where
-    T: ImplRenderBySuper,
-{
-    const DRY_LAYOUT: bool = T::Super::DRY_LAYOUT;
-    fn perform_layout_without_resize(
-        render: &mut T::Render,
-        constraints: &<<T::Render as TreeNode>::ParentProtocol as Protocol>::Constraints,
-        size: &mut <<T::Render as TreeNode>::ParentProtocol as Protocol>::Size,
-        children: &<<T::Render as TreeNode>::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<<T::Render as TreeNode>::ChildProtocol>,
-        >,
-    ) -> <T::Render as Render>::LayoutMemo {
-        T::Super::perform_layout_without_resize(render, constraints, size, children)
-    }
-
-    fn perform_wet_layout(
-        render: &mut T::Render,
-        constraints: &<<T::Render as TreeNode>::ParentProtocol as Protocol>::Constraints,
-        children: &<<T::Render as TreeNode>::ChildContainer as HktContainer>::Container<
-            ArcChildRenderObject<<T::Render as TreeNode>::ChildProtocol>,
-        >,
-    ) -> (
-        <<T::Render as TreeNode>::ParentProtocol as Protocol>::Size,
-        <T::Render as Render>::LayoutMemo,
-    ) {
-        T::Super::perform_wet_layout(render, constraints, children)
     }
 }

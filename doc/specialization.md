@@ -83,6 +83,44 @@ Creates
 
 TODO
 
+# Disjointness based on associated type trick
+The original disjointness trick (https://github.com/rust-lang/rfcs/pull/1672#issuecomment-1405377983) doesn't work well between crates
+
+Imagine we use associated type to allow downstream crate to provide a general impl for an upstream trait
+```rust
+// upstream crate
+trait SelectImpl {
+    type I;
+}
+trait P {}
+trait PBy<I> {}
+impl<E> P for E where E: SelectImpl + PBy<E::I> {}
+```
+```rust
+// downstream crate
+struct I2<E>(PhantomData<E>);
+trait P2 {}
+impl<E> PBy<I2<E>> for E where E: P2 {}
+```
+The downstream impl violates the ordered orphan rule!
+
+However, a small modification would align us well with the orphan rule ordering.
+```rust
+// upstream crate
+trait SelectImpl {
+    type I;
+}
+trait P {}
+trait ImplP<E> {}
+impl<E> P for E where E: SelectImpl, E::I: ImplP<E> {}
+```
+```rust
+// downstream crate
+struct I2<E>(PhantomData<E>);
+trait P2 {}
+impl<E> ImplP<E> for I2<E> where E: P2 {}
+```
+
 # Inheritance emulation
 
 Inheritance is very useful tool in UI tools. It is very natural to abstract away the base trait which is often too verbose and too hard to impl, and let users impl a more specific trait, and "inherit" the all the behaviors available on the base trait.
@@ -180,6 +218,9 @@ We preserve other failed approaches at the end of this article.
 We have a two-layer inheritance structure.
 
 This is identical to what an interface/trait system would look like. Inheritance is dead.
+
+## Dropping the idea of mergine inheritance discriminant with specialization
+This causes rust-analyzer running way too slow. Not happy with the design.
 
 ### Other failed approaches (for record only, ignore explanation)
 

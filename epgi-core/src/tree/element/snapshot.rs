@@ -3,14 +3,20 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    foundation::{Asc, Container, InlinableDwsizeVec, InlinableUsizeVec},
+    foundation::{Asc, Container, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
     tree::{AsyncInflating, Hook, HookContext},
 };
 
 use super::{
-    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, ContainerOf, Element, ImplElementNode,
+    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, Element, ElementBase, ImplElementNode,
 };
+
+pub(crate) struct ElementSnapshot<E: Element> {
+    pub(crate) widget: E::ArcWidget,
+    // pub(super) subtree_suspended: bool,
+    pub(crate) inner: ElementSnapshotInner<E>,
+}
 
 pub(crate) enum ElementSnapshotInner<E: Element> {
     /// Helper state for sync inflate and rebuild. This state exists solely due to the lack of Arc::new_cyclic_async and mem::replace_with
@@ -58,8 +64,8 @@ pub(crate) enum MainlineState<E: Element> {
     Ready {
         element: E,
         hooks: Hooks,
-        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: <E::ElementImpl as ImplElementNode<E>>::OptionArcRenderObject,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        render_object: <E::Impl as ImplElementNode<E>>::OptionArcRenderObject,
     },
     InflateSuspended {
         suspended_hooks: Hooks,
@@ -68,7 +74,7 @@ pub(crate) enum MainlineState<E: Element> {
     RebuildSuspended {
         element: E,
         suspended_hooks: Hooks,
-        children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         waker: SuspendWaker,
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }
@@ -104,7 +110,7 @@ impl<E: Element> MainlineState<E> {
 
     pub(crate) fn children_ref(
         &self,
-    ) -> Option<&ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>> {
+    ) -> Option<&ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
             MainlineState::Ready { children, .. }
@@ -114,7 +120,7 @@ impl<E: Element> MainlineState<E> {
 
     pub(crate) fn children_cloned(
         &self,
-    ) -> Option<ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>> {
+    ) -> Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
             MainlineState::Ready { children, .. }
@@ -163,7 +169,7 @@ impl<E: Element> MainlineState<E> {
     }
 }
 
-pub struct BuildResults<E: Element> {
+pub struct BuildResults<E: ElementBase> {
     hooks: Hooks,
     element: E,
     nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
@@ -173,7 +179,7 @@ pub struct BuildResults<E: Element> {
 
 impl<E> BuildResults<E>
 where
-    E: Element,
+    E: ElementBase,
 {
     pub fn from_pieces(
         hooks_iter: HookContext,

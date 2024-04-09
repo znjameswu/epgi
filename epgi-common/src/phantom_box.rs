@@ -93,8 +93,8 @@ impl RenderElement for PhantomBoxElement {
 
     fn element_render_children_mapping<T: Send + Sync>(
         &self,
-        _element_children: <Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>,
-    ) -> <<RenderPhantomBox as Render>::ChildContainer as epgi_core::foundation::HktContainer>::Container<T>{
+        _element_children: <Self::ChildContainer as epgi_core::foundation::ChildContainer>::Container<T>,
+    ) -> <<RenderPhantomBox as Render>::ChildContainer as epgi_core::foundation::ChildContainer>::Container<T>{
         todo!()
     }
 }

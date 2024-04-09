@@ -1,36 +1,133 @@
-mod impl_reconcile;
-pub use impl_reconcile::*;
+use std::marker::PhantomData;
 
-mod impl_provide_element;
-pub use impl_provide_element::*;
+use crate::{
+    foundation::{Arc, ArrayContainer, Asc, ContainerOf, Provide, TypeKey},
+    sync::ImplReconcileCommit,
+    tree::{ArcChildRenderObject, RenderObject},
+};
 
-mod impl_render_element;
-pub use impl_render_element::*;
-
-mod element_impl;
-pub use element_impl::*;
-
-use crate::sync::ImplReconcileCommit;
-
-use super::Element;
+use super::{ArcChildElementNode, ElementBase, ProvideElement, RenderElement};
 
 pub trait ImplElement:
     ImplElementNode<Self::Element> + ImplProvide<Self::Element> + ImplReconcileCommit<Self::Element>
 {
-    type Element: Element;
+    type Element: ElementBase;
 }
 
-pub trait ImplElementBySuper {
-    type Super: ImplElement;
-}
+pub struct ElementImpl<E: ElementBase, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
+    PhantomData<E>,
+);
 
-impl<I, E: Element> ImplElement for I
+impl<E: ElementBase, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> ImplElement
+    for ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
-    I: ImplElementBySuper,
-    I::Super: ImplElement<Element = E>,
     Self: ImplElementNode<E>,
+    // Self: ImplReconcile<E>,
     Self: ImplProvide<E>,
     Self: ImplReconcileCommit<E>,
 {
     type Element = E;
+}
+
+pub trait ImplProvide<E: ElementBase> {
+    const PROVIDE_ELEMENT: bool;
+    fn option_get_provided_key_value_pair(
+        widget: &E::ArcWidget,
+    ) -> Option<(Arc<dyn Provide>, TypeKey)>;
+
+    fn diff_provided_value(
+        old_widget: &E::ArcWidget,
+        new_widget: &E::ArcWidget,
+    ) -> Option<Arc<dyn Provide>>;
+}
+
+impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
+    for ElementImpl<E, RENDER_ELEMENT, false>
+{
+    const PROVIDE_ELEMENT: bool = false;
+
+    fn option_get_provided_key_value_pair(
+        _widget: &E::ArcWidget,
+    ) -> Option<(Arc<dyn Provide>, TypeKey)> {
+        None
+    }
+
+    fn diff_provided_value(
+        _old_widget: &E::ArcWidget,
+        _new_widget: &E::ArcWidget,
+    ) -> Option<Arc<dyn Provide>> {
+        None
+    }
+}
+
+impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
+    for ElementImpl<E, RENDER_ELEMENT, true>
+where
+    E: ProvideElement,
+{
+    const PROVIDE_ELEMENT: bool = true;
+
+    fn option_get_provided_key_value_pair(
+        widget: &E::ArcWidget,
+    ) -> Option<(Arc<dyn Provide>, TypeKey)> {
+        Some((E::get_provided_value(widget), TypeKey::of::<E::Provided>()))
+    }
+
+    fn diff_provided_value(
+        old_widget: &E::ArcWidget,
+        new_widget: &E::ArcWidget,
+    ) -> Option<Arc<dyn Provide>> {
+        let old_provided_value = E::get_provided_value(&old_widget);
+        let new_provided_value = E::get_provided_value(new_widget);
+        if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
+            && !old_provided_value.eq_sized(new_provided_value.as_ref())
+        {
+            Some(new_provided_value)
+        } else {
+            None
+        }
+    }
+}
+
+pub trait ImplElementNode<E: ElementBase> {
+    type OptionArcRenderObject: Default + Clone + Send + Sync;
+    fn get_current_subtree_render_object(
+        render_object: &Self::OptionArcRenderObject,
+        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    ) -> Option<ArcChildRenderObject<E::ParentProtocol>>;
+}
+
+impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
+    for ElementImpl<E, false, PROVIDE_ELEMENT>
+where
+    E: ElementBase<
+        ChildContainer = ArrayContainer<1>,
+        ChildProtocol = <E as ElementBase>::ParentProtocol,
+    >,
+{
+    type OptionArcRenderObject = ();
+
+    fn get_current_subtree_render_object(
+        _render_object: &(),
+        [child]: &[ArcChildElementNode<E::ChildProtocol>; 1],
+    ) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
+        child.get_current_subtree_render_object()
+    }
+}
+
+impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
+    for ElementImpl<E, true, PROVIDE_ELEMENT>
+where
+    E: RenderElement,
+{
+    type OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>;
+
+    fn get_current_subtree_render_object(
+        render_object: &Self::OptionArcRenderObject,
+        _children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    ) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.clone() as _)
+    }
 }

@@ -13,28 +13,82 @@ pub use node::*;
 mod provider;
 pub use provider::*;
 
-mod render_or_unit;
-pub use render_or_unit::*;
 mod snapshot;
-
 pub use snapshot::*;
 
 mod r#impl;
 pub use r#impl::*;
 
-use crate::{
-    foundation::{Arc, Aweak, Protocol, PtrEq, SyncMutex},
-    scheduler::JobId,
+use crate::foundation::{
+    Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
+    Provide, PtrEq, TypeKey,
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, ChildElementWidgetPair,
-    ContainerOf, ElementWidgetPair, TreeNode,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
+    ChildElementWidgetPair, ElementWidgetPair, Render, RenderAction,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
 pub type AweakAnyElementNode = Aweak<dyn AnyElementNode>;
 pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
+
+pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
+    type ParentProtocol: Protocol;
+    type ChildProtocol: Protocol;
+    type ChildContainer: HktContainer;
+
+    type ArcWidget: ArcWidget<Element = Self>;
+
+    // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
+    // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
+    #[allow(unused_variables)]
+    fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
+        &[]
+    }
+
+    // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
+    // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
+    /// If a hook suspended, then the untouched Self should be returned along with the suspended error
+    /// If nothing suspended, then the new Self should be returned.
+    fn perform_rebuild_element(
+        &mut self,
+        widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        children: ContainerOf<Self::ChildContainer, ArcChildElementNode<Self::ChildProtocol>>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
+    ) -> Result<
+        (
+            ContainerOf<Self::ChildContainer, ElementReconcileItem<Self::ChildProtocol>>,
+            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, Self::ChildProtocol>>,
+        ),
+        (
+            ContainerOf<Self::ChildContainer, ArcChildElementNode<Self::ChildProtocol>>,
+            BuildSuspendedError,
+        ),
+    >;
+
+    fn perform_inflate_element(
+        widget: &Self::ArcWidget,
+        ctx: BuildContext<'_>,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<
+        (
+            Self,
+            ContainerOf<Self::ChildContainer, ArcChildWidget<Self::ChildProtocol>>,
+        ),
+        BuildSuspendedError,
+    >;
+}
+
+// This is separated from the main Element trait to avoid inductive cycles when implementing templates.
+// Otherwise, there will be something like
+// impl<E> TemplateElement for E where ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Self>, //....
+// The only way to break the cycle is to relocate impl bounds on "Impl*" traits from the impl block to each individual method items.
+pub trait Element: ElementBase {
+    type Impl: ImplElement<Element = Self>;
+}
 
 /// We assume the render has the same child container with the element,
 /// ignoring the fact that Suspense may have different child containers.
@@ -42,11 +96,14 @@ pub type ArcChildElementNode<P> = Arc<dyn ChildElementNode<P>>;
 /// However, we designate Suspense to be the only component to have different containers,
 /// which will be handled by Suspense's specialized function pointers.
 #[allow(type_alias_bounds)]
-pub type ChildRenderObjectsUpdateCallback<E: TreeNode> = Box<
-    dyn FnOnce(
-        ContainerOf<E, ArcChildRenderObject<E::ChildProtocol>>,
-    ) -> ContainerOf<E, RenderObjectSlots<E::ChildProtocol>>,
+pub type ChildRenderObjectsUpdateCallback<C, CP> = Box<
+    dyn FnOnce(ContainerOf<C, ArcChildRenderObject<CP>>) -> ContainerOf<C, RenderObjectSlots<CP>>,
 >;
+
+pub enum RenderObjectSlots<P: Protocol> {
+    Inflate,
+    Reuse(ArcChildRenderObject<P>),
+}
 
 pub enum ElementReconcileItem<P: Protocol> {
     Keep(ArcChildElementNode<P>),
@@ -74,158 +131,38 @@ where
     }
 }
 
-pub enum RenderObjectSlots<P: Protocol> {
-    Inflate,
-    Reuse(ArcChildRenderObject<P>),
+pub trait RenderElement: ElementBase {
+    type Render: Render<
+        ParentProtocol = Self::ParentProtocol,
+        ChildProtocol = Self::ChildProtocol,
+        ChildContainer = Self::ChildContainer,
+    >;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
+    /// Update necessary properties of render object given by the widget
+    ///
+    /// Called during the commit phase, when the widget is updated.
+    /// Always called after [RenderElement::try_update_render_object_children].
+    /// If that call failed to update children (indicating suspense), then this call will be skipped.
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
+
+    /// Whether [Render::update_render_object] is a no-op and always returns None
+    ///
+    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior.
+    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 }
 
-pub trait Element: TreeNode + Clone + Sized + 'static {
-    type ArcWidget: ArcWidget<Element = Self>;
-    type ElementImpl: ImplElement<Element = Self> + HasReconcileImpl<Self>;
-}
-
-pub struct ElementNode<E: Element> {
-    pub context: ArcElementContextNode,
-    pub(crate) snapshot: SyncMutex<ElementSnapshot<E>>,
-}
-
-pub(crate) struct ElementSnapshot<E: Element> {
-    pub(crate) widget: E::ArcWidget,
-    // pub(super) subtree_suspended: bool,
-    pub(crate) inner: ElementSnapshotInner<E>,
-}
-
-impl<E: Element> ElementNode<E> {
-    pub(super) fn new(
-        context: ArcElementContextNode,
-        widget: E::ArcWidget,
-        inner: ElementSnapshotInner<E>,
-    ) -> Self {
-        Self {
-            context,
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget,
-                // subtree_suspended: true,
-                inner,
-            }),
-        }
-    }
-    pub fn widget(&self) -> E::ArcWidget {
-        self.snapshot.lock().widget.clone()
-    }
-}
-
-pub trait AnyElementNode:
-    crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
-    + crate::sync::sync_build_private::AnyElementSyncReconcileExt
-    + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
-    + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
-    + crate::sync::unmount::AnyElementNodeUnmountExt
-    + Send
-    + Sync
-    + 'static
-{
-    fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode;
-    fn push_job(&self, job_id: JobId);
-    fn render_object(&self) -> Result<ArcAnyRenderObject, &str>;
-    // fn context(&self) -> &ArcElementContextNode;
-}
-
-pub trait ChildElementNode<PP: Protocol>:
-    AnyElementNode
-    + crate::sync::sync_build_private::ChildElementSyncReconcileExt<PP>
-    + Send
-    + Sync
-    + 'static
-{
-    fn context(&self) -> &ElementContextNode;
-
-    fn as_arc_any(self: Arc<Self>) -> ArcAnyElementNode;
-
-    // Due to the limitation of both arbitrary_self_type and downcasting, we have to consume both Arc pointers
-    // Which may not be a bad thing after all, considering how a fat &Arc would look like in memory layout.
-    fn can_rebuild_with(
-        self: Arc<Self>,
-        widget: ArcChildWidget<PP>,
-    ) -> Result<ElementReconcileItem<PP>, (ArcChildElementNode<PP>, ArcChildWidget<PP>)>;
-
-    fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
-}
-
-impl<E: Element> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
-    fn context(&self) -> &ElementContextNode {
-        self.context.as_ref()
-    }
-
-    fn as_arc_any(self: Arc<Self>) -> ArcAnyElementNode {
-        self
-    }
-
-    fn can_rebuild_with(
-        self: Arc<Self>,
-        widget: ArcChildWidget<E::ParentProtocol>,
-    ) -> Result<
-        ElementReconcileItem<E::ParentProtocol>,
-        (
-            ArcChildElementNode<E::ParentProtocol>,
-            ArcChildWidget<E::ParentProtocol>,
-        ),
-    > {
-        Self::can_rebuild_with(self, widget).map_err(|(element, widget)| (element as _, widget))
-    }
-
-    fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
-        let snapshot = self.snapshot.lock();
-
-        let MainlineState::Ready {
-            children,
-            render_object,
-            ..
-        } = snapshot.inner.mainline_ref()?.state.as_ref()?
-        else {
-            return None;
-        };
-
-        E::ElementImpl::get_current_subtree_render_object(render_object, children)
-    }
-}
-
-impl<E: Element> AnyElementNode for ElementNode<E> {
-    fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode {
-        self
-    }
-
-    fn push_job(&self, job_id: JobId) {
-        todo!()
-    }
-
-    fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
-        todo!()
-        // let RenderElementFunctionTable::RenderObject {
-        //     into_arc_child_render_object,
-        //     ..
-        // } = render_element_function_table_of::<E>()
-        // else {
-        //     return Err("Render object call should not be called on an Element type that does not associate with a render object");
-        // };
-        // let snapshot = self.snapshot.lock();
-        // let Some(Mainline {
-        //     state:
-        //         Some(MainlineState::Ready {
-        //             render_object: Some(render_object),
-        //             ..
-        //         }),
-        //     ..
-        // }) = snapshot.inner.mainline_ref()
-        // else {
-        //     return Err("Render object call should only be called on element nodes that are ready and attached");
-        // };
-        // Ok(into_arc_child_render_object(render_object.clone()).as_arc_any_render_object())
-    }
+pub trait ProvideElement: ElementBase {
+    type Provided: Provide;
+    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
 }
 
 #[inline(always)]
-pub(crate) fn no_widget_update<E: Element>(
+pub(crate) fn no_widget_update<E: ElementBase>(
     new_widget: Option<&E::ArcWidget>,
     old_widget: &E::ArcWidget,
 ) -> bool {
