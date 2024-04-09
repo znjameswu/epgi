@@ -1,8 +1,6 @@
-use epgi_core::{
-    foundation::{Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Provide, TypeKey},
-    template::{
-        ImplByTemplate, TemplateElement, TemplateElementBase, TemplateProvideElement,
-        TemplateRenderElement,
+use crate::{
+    foundation::{
+        Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide, TypeKey,
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
@@ -11,11 +9,17 @@ use epgi_core::{
     },
 };
 
-use crate::BoxProtocol;
+use super::{
+    ImplByTemplate, TemplateElement, TemplateElementBase, TemplateProvideElement,
+    TemplateRenderElement,
+};
 
-pub struct BoxSingleChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
+pub struct SingleChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
 
-pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
+pub trait SingleChildElement: Clone + Send + Sync + Sized + 'static {
+    type ParentProtocol: Protocol;
+    type ChildProtocol: Protocol;
+
     type ArcWidget: ArcWidget<Element = Self>;
 
     #[allow(unused_variables)]
@@ -28,7 +32,7 @@ pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError>;
+    ) -> Result<ArcChildWidget<Self::ChildProtocol>, BuildSuspendedError>;
 
     /// A major limitation to the single child element template is that,
     /// we cannot provide consumed values and build context during the creation the Element itself.
@@ -40,13 +44,13 @@ pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
-    for BoxSingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+    for SingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
-    E: BoxSingleChildElement,
+    E: SingleChildElement,
 {
-    type ParentProtocol = BoxProtocol;
-    type ChildProtocol = BoxProtocol;
+    type ParentProtocol = E::ParentProtocol;
+    type ChildProtocol = E::ChildProtocol;
     type ChildContainer = ArrayContainer<1>;
 
     type ArcWidget = E::ArcWidget;
@@ -56,14 +60,17 @@ where
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        [child]: [ArcChildElementNode<BoxProtocol>; 1],
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<BoxProtocol>>,
+        [child]: [ArcChildElementNode<E::ChildProtocol>; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     ) -> Result<
         (
-            [ElementReconcileItem<BoxProtocol>; 1],
-            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, BoxProtocol>>,
+            [ElementReconcileItem<E::ChildProtocol>; 1],
+            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, E::ChildProtocol>>,
         ),
-        ([ArcChildElementNode<BoxProtocol>; 1], BuildSuspendedError),
+        (
+            [ArcChildElementNode<E::ChildProtocol>; 1],
+            BuildSuspendedError,
+        ),
     > {
         let child_widget = match E::get_child_widget(Some(element), widget, ctx, provider_values) {
             Err(error) => return Err(([child], error)),
@@ -83,7 +90,7 @@ where
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(E, [ArcChildWidget<BoxProtocol>; 1]), BuildSuspendedError> {
+    ) -> Result<(E, [ArcChildWidget<E::ChildProtocol>; 1]), BuildSuspendedError> {
         let element = E::create_element(widget);
         let child_widget = E::get_child_widget(None, widget, ctx, provider_values)?;
         Ok((element, [child_widget]))
@@ -91,7 +98,7 @@ where
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElement<E>
-    for BoxSingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+    for SingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ElementBase,
     ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Element = E>,
@@ -99,10 +106,10 @@ where
     type ElementImpl = ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>;
 }
 
-pub trait BoxSingleChildRenderElement: BoxSingleChildElement {
+pub trait SingleChildRenderElement: SingleChildElement {
     type Render: Render<
-        ParentProtocol = BoxProtocol,
-        ChildProtocol = BoxProtocol,
+        ParentProtocol = Self::ParentProtocol,
+        ChildProtocol = Self::ChildProtocol,
         ChildContainer = ArrayContainer<1>,
     >;
 
@@ -125,10 +132,10 @@ pub trait BoxSingleChildRenderElement: BoxSingleChildElement {
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateRenderElement<E>
-    for BoxSingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+    for SingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
-    E: BoxSingleChildRenderElement,
+    E: SingleChildRenderElement,
 {
     type Render = E::Render;
 
@@ -146,16 +153,16 @@ where
     const NOOP_UPDATE_RENDER_OBJECT: bool = E::NOOP_UPDATE_RENDER_OBJECT;
 }
 
-pub trait BoxSingleChildProvideElement: BoxSingleChildElement {
+pub trait SingleChildProvideElement: SingleChildElement {
     type Provided: Provide;
     fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateProvideElement<E>
-    for BoxSingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+    for SingleChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
-    E: BoxSingleChildProvideElement,
+    E: SingleChildProvideElement,
 {
     type Provided = E::Provided;
 

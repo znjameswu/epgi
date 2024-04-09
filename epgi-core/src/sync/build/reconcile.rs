@@ -1,6 +1,6 @@
 pub(crate) mod component_element;
 pub(crate) mod render_element;
-// pub(crate) mod suspense_element;
+pub(crate) mod suspense_element;
 
 use linear_map::LinearMap;
 
@@ -712,13 +712,13 @@ pub trait ImplReconcileCommit<E: ElementBase>: ImplElementNode<E> {
         element_node: &ElementNode<E>,
         render_object: Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            <E as ElementBase>::ChildContainer,
+            SubtreeRenderObjectChange<<E as ElementBase>::ChildProtocol>,
         >,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
         build_scheduler: &BuildScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>
+    ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>
     where
         E: Element;
 

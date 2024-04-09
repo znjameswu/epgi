@@ -204,7 +204,7 @@ pub trait HitTest: RenderBase {
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
     ) -> Option<HitTestBehavior> {
-        <Self::ParentProtocol as Protocol>::position_in_shape(position, offset, size)
+        Self::ParentProtocol::position_in_shape(position, offset, size)
             .then_some(HitTestBehavior::DeferToChild)
     }
 }

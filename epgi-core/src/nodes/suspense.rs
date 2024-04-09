@@ -5,12 +5,12 @@ use either::Either;
 use crate::{
     foundation::{
         Arc, ArrayContainer, Asc, BuildSuspendedError, EitherContainer, EitherParallel,
-        InlinableDwsizeVec, Key, Never, PaintContext, Protocol, Provide,
+        InlinableDwsizeVec, Key, Protocol, Provide,
     },
+    template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementReconcileItem, HitTestResults, Render,
-        Widget,
+        ArcChildElementNode, ArcChildWidget, BuildContext, ChildRenderObjectsUpdateCallback,
+        Element, ElementBase, ElementImpl, ElementReconcileItem, Widget,
     },
 };
 
@@ -27,11 +27,11 @@ impl<P: Protocol> Widget for Suspense<P> {
     type Element = SuspenseElement<P>;
 
     fn key(&self) -> Option<&dyn Key> {
-        todo!()
+        self.key.as_deref()
     }
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as Element>::ArcWidget {
-        todo!()
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+        self
     }
 }
 
@@ -41,7 +41,7 @@ pub struct SuspenseElement<P: Protocol> {
                               // pub(crate) fallback: Option<ArcChildElementNode<P>>,
 }
 
-impl<P: Protocol> Element for SuspenseElement<P> {
+impl<P: Protocol> ElementBase for SuspenseElement<P> {
     type ArcWidget = Asc<Suspense<P>>;
 
     type ParentProtocol = P;
@@ -49,8 +49,6 @@ impl<P: Protocol> Element for SuspenseElement<P> {
     type ChildProtocol = P;
 
     type ChildContainer = EitherContainer<ArrayContainer<1>, ArrayContainer<2>>;
-
-    type Provided = Never;
 
     fn perform_rebuild_element(
         &mut self,
@@ -62,7 +60,7 @@ impl<P: Protocol> Element for SuspenseElement<P> {
     ) -> Result<
         (
             EitherParallel<[ElementReconcileItem<P>; 1], [ElementReconcileItem<P>; 2]>,
-            Option<ChildRenderObjectsUpdateCallback<Self>>,
+            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, Self::ChildProtocol>>,
         ),
         (
             EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
@@ -119,8 +117,10 @@ impl<P: Protocol> Element for SuspenseElement<P> {
             EitherParallel::new_left([widget.child.clone()]),
         ))
     }
+}
 
-    type RenderOrUnit = RenderSuspense<P>;
+impl<P: Protocol> Element for SuspenseElement<P> {
+    type Impl = ElementImpl<Self, true, false>;
 }
 
 pub struct RenderSuspense<P: Protocol> {
@@ -128,46 +128,10 @@ pub struct RenderSuspense<P: Protocol> {
     phantom_data: PhantomData<P>,
 }
 
-impl<P: Protocol> Render for RenderSuspense<P> {
-    type ParentProtocol = P;
+impl<P: Protocol> ImplByTemplate for RenderSuspense<P> {
+    type Template = ProxyRenderTemplate;
+}
 
-    type ChildProtocol = P;
-
-    type ChildContainer = ArrayContainer<1>;
-
-    const NOOP_DETACH: bool = true;
-
-    type LayoutMemo = ();
-
-    fn perform_layout<'a, 'layout>(
-        &'a mut self,
-        constraints: &'a P::Constraints,
-        children: &[ArcChildRenderObject<P>; 1],
-    ) -> (P::Size, Self::LayoutMemo) {
-        unreachable!()
-    }
-
-    fn perform_paint(
-        &self,
-        size: &P::Size,
-        offset: &P::Offset,
-        memo: &Self::LayoutMemo,
-        children: &[ArcChildRenderObject<P>; 1],
-        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
-    ) {
-        todo!()
-    }
-
-    fn hit_test_children(
-        &self,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-        children: &[ArcChildRenderObject<P>; 1],
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool {
-        todo!()
-    }
-
-    type LayerOrUnit = ();
+impl<P: Protocol> ProxyRender for RenderSuspense<P> {
+    type Protocol = P;
 }

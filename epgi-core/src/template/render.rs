@@ -7,8 +7,8 @@ use crate::{
     },
     tree::{
         ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, Composite, DryLayout,
-        HitTest, HitTestBehavior, HitTestResults, LayerCompositionConfig, LayerPaint, Layout,
-        OrphanLayer, Paint, PaintResults, Render, RenderBase, RenderObject,
+        HitTest, HitTestBehavior, HitTestResults, ImplRender, LayerCompositionConfig, LayerPaint,
+        Layout, OrphanLayer, Paint, PaintResults, Render, RenderBase, RenderObject,
     },
 };
 
@@ -52,6 +52,19 @@ where
         R::Template::detach(self)
     }
     const NOOP_DETACH: bool = R::Template::NOOP_DETACH;
+}
+
+pub trait TemplateRender<R> {
+    type RenderImpl: ImplRender<Render = R>;
+}
+
+impl<R> Render for R
+where
+    R: ImplByTemplate,
+    R::Template: TemplateRender<R>,
+    R: RenderBase,
+{
+    type RenderImpl = <R::Template as TemplateRender<R>>::RenderImpl;
 }
 
 pub trait TemplateLayout<R: RenderBase> {

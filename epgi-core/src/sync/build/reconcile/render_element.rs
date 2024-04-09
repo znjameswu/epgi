@@ -495,7 +495,7 @@ where
     }
 }
 
-fn update_children<R: RenderBase>(
+pub(super) fn update_children<R: RenderBase>(
     children: &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
     shuffle: Option<
         Box<

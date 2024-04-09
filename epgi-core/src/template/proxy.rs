@@ -1,171 +1,168 @@
-use std::marker::PhantomData;
+use std::any::TypeId;
 
 use crate::{
-    foundation::{
-        Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide, TypeKey,
-    },
-    template::{
-        ImplByTemplate, TemplateElement, TemplateElementBase, TemplateProvideElement,
-        TemplateRenderElement,
-    },
+    foundation::{AnyRawPointer, ArrayContainer, Canvas, PaintContext, Protocol},
     tree::{
-        ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        ImplElement, Render, RenderAction,
+        ArcChildRenderObject, HitTestBehavior, HitTestResults, Render, RenderBase, RenderImpl,
+        RenderObject,
     },
 };
 
-pub struct ProxyElementTemplate<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>(
-    PhantomData<E>,
-);
+use super::{
+    ImplByTemplate, TemplateHitTest, TemplateLayout, TemplatePaint, TemplateRender,
+    TemplateRenderBase,
+};
 
-pub trait ProxyElement: Clone + Send + Sync + Sized + 'static {
+/// Proxy nodes stand for nodes that:
+/// 1. Has exactly one child
+/// 2. Has the same parent protocol and child protocol
+pub struct ProxyRenderTemplate;
+
+pub trait ProxyRender: Send + Sync + Sized + 'static {
     type Protocol: Protocol;
 
-    type ArcWidget: ArcWidget<Element = Self>;
+    fn perform_layout(
+        &mut self,
+        constraints: &<Self::Protocol as Protocol>::Constraints,
+        child: &ArcChildRenderObject<Self::Protocol>,
+    ) -> <Self::Protocol as Protocol>::Size {
+        child.layout_use_size(constraints)
+    }
 
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
+    fn perform_paint(
+        &self,
+        size: &<Self::Protocol as Protocol>::Size,
+        offset: &<Self::Protocol as Protocol>::Offset,
+        child: &ArcChildRenderObject<Self::Protocol>,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::Protocol as Protocol>::Canvas>,
+    ) {
+        paint_ctx.paint(child, offset)
+    }
+
+    #[allow(unused_variables)]
+    fn hit_test_children(
+        &self,
+        size: &<Self::Protocol as Protocol>::Size,
+        offset: &<Self::Protocol as Protocol>::Offset,
+        child: &ArcChildRenderObject<Self::Protocol>,
+        results: &mut HitTestResults<<Self::Protocol as Protocol>::Canvas>,
+    ) -> bool {
+        results.hit_test(child.clone())
+    }
+
+    #[allow(unused_variables)]
+    fn hit_test_self(
+        &self,
+        position: &<<Self::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::Protocol as Protocol>::Size,
+        offset: &<Self::Protocol as Protocol>::Offset,
+    ) -> Option<HitTestBehavior> {
+        Self::Protocol::position_in_shape(position, offset, size)
+            .then_some(HitTestBehavior::DeferToChild)
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    where
+        Self: Render,
+    {
         &[]
     }
 
-    fn get_child_widget(
-        element: Option<&mut Self>,
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<Self::Protocol>, BuildSuspendedError>;
-
-    /// A major limitation to the single child element template is that,
-    /// we cannot provide consumed values and build context during the creation the Element itself.
-    /// On top of that, since you can no longer access hooks when creating the Element itself,
-    /// it also becomes impossible to suspend safely during the process, hence the "must-succeed" signature.
-    /// We expect most people does not need provider or hooks during this process.
-    /// If you do need, you can always perform relevant operations in the parent and pass it down in widget.
-    fn create_element(widget: &Self::ArcWidget) -> Self;
+    fn detach(&mut self) {}
+    const NOOP_DETACH: bool = false;
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
-    for ProxyElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<R> TemplateRenderBase<R> for ProxyRenderTemplate
 where
-    E: ImplByTemplate<Template = Self>,
-    E: ProxyElement,
+    R: ImplByTemplate<Template = Self>,
+    R: ProxyRender,
 {
-    type ParentProtocol = E::Protocol;
-    type ChildProtocol = E::Protocol;
+    type ParentProtocol = R::Protocol;
+
+    type ChildProtocol = R::Protocol;
+
     type ChildContainer = ArrayContainer<1>;
 
-    type ArcWidget = E::ArcWidget;
+    type LayoutMemo = ();
 
-    fn perform_rebuild_element(
-        element: &mut E,
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        [child]: [ArcChildElementNode<E::Protocol>; 1],
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<E::Protocol>>,
-    ) -> Result<
-        (
-            [ElementReconcileItem<E::Protocol>; 1],
-            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, E::Protocol>>,
-        ),
-        ([ArcChildElementNode<E::Protocol>; 1], BuildSuspendedError),
-    > {
-        let child_widget = match E::get_child_widget(Some(element), widget, ctx, provider_values) {
-            Err(error) => return Err(([child], error)),
-            Ok(child_wdiget) => child_wdiget,
-        };
-        let item = match child.can_rebuild_with(child_widget) {
-            Ok(item) => item,
-            Err((child, child_widget)) => {
-                nodes_needing_unmount.push(child);
-                ElementReconcileItem::new_inflate(child_widget)
-            }
-        };
-        Ok(([item], None))
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
+    where
+        R: Render,
+    {
+        <R as ProxyRender>::all_hit_test_interfaces()
     }
 
-    fn perform_inflate_element(
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(E, [ArcChildWidget<E::Protocol>; 1]), BuildSuspendedError> {
-        let element = E::create_element(widget);
-        let child_widget = E::get_child_widget(None, widget, ctx, provider_values)?;
-        Ok((element, [child_widget]))
+    fn detach(render: &mut R) {
+        R::detach(render)
     }
+
+    const NOOP_DETACH: bool = R::NOOP_DETACH;
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElement<E>
-    for ProxyElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<R> TemplateRender<R> for ProxyRenderTemplate
 where
-    E: ElementBase,
-    ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<Element = E>,
+    R: ImplByTemplate<Template = Self>,
+    R: ProxyRender,
 {
-    type ElementImpl = ElementImpl<E, RENDER_ELEMENT, PROVIDE_ELEMENT>;
+    type RenderImpl = RenderImpl<R, false, false, false, false>;
 }
 
-pub trait ProxyRenderElement: ProxyElement {
-    type Render: Render<
-        ParentProtocol = Self::Protocol,
-        ChildProtocol = Self::Protocol,
-        ChildContainer = ArrayContainer<1>,
-    >;
-
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
-    /// Update necessary properties of render object given by the widget
-    ///
-    /// Called during the commit phase, when the widget is updated.
-    /// Always called after [RenderElement::try_update_render_object_children].
-    /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction;
-
-    /// Whether [Render::update_render_object] is a no-op and always returns None
-    ///
-    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
-}
-
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateRenderElement<E>
-    for ProxyElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<R> TemplateLayout<R> for ProxyRenderTemplate
 where
-    E: ImplByTemplate<Template = Self>,
-    E: ProxyRenderElement,
+    R: ImplByTemplate<Template = Self>,
+    R: ProxyRender,
 {
-    type Render = E::Render;
+    fn perform_layout(
+        render: &mut R,
+        constraints: &<R::Protocol as Protocol>::Constraints,
+        [child]: &[ArcChildRenderObject<R::Protocol>; 1],
+    ) -> (<R::Protocol as Protocol>::Size, ()) {
+        let size = R::perform_layout(render, constraints, child);
+        (size, ())
+    }
+}
 
-    fn create_render(element: &E, widget: &<E as ElementBase>::ArcWidget) -> Self::Render {
-        E::create_render(element, widget)
+impl<R> TemplatePaint<R> for ProxyRenderTemplate
+where
+    R: ImplByTemplate<Template = Self>,
+    R: ProxyRender,
+{
+    fn perform_paint(
+        render: &R,
+        size: &<R::Protocol as Protocol>::Size,
+        offset: &<R::Protocol as Protocol>::Offset,
+        memo: &(),
+        [child]: &[ArcChildRenderObject<<R as RenderBase>::ChildProtocol>; 1],
+        paint_ctx: &mut impl PaintContext<Canvas = <R::Protocol as Protocol>::Canvas>,
+    ) {
+        R::perform_paint(render, size, offset, child, paint_ctx)
+    }
+}
+
+impl<R> TemplateHitTest<R> for ProxyRenderTemplate
+where
+    R: ImplByTemplate<Template = Self>,
+    R: ProxyRender,
+{
+    fn hit_test_children(
+        render: &R,
+        size: &<R::Protocol as Protocol>::Size,
+        offset: &<R::Protocol as Protocol>::Offset,
+        memo: &<R as RenderBase>::LayoutMemo,
+        [child]: &[ArcChildRenderObject<<R as RenderBase>::ChildProtocol>; 1],
+        results: &mut HitTestResults<<R::Protocol as Protocol>::Canvas>,
+    ) -> bool {
+        R::hit_test_children(render, size, offset, child, results)
     }
 
-    fn update_render(
-        render: &mut Self::Render,
-        widget: &<E as ElementBase>::ArcWidget,
-    ) -> RenderAction {
-        E::update_render(render, widget)
-    }
-
-    const NOOP_UPDATE_RENDER_OBJECT: bool = E::NOOP_UPDATE_RENDER_OBJECT;
-}
-
-pub trait ProxyProvideElement: ProxyElement {
-    type Provided: Provide;
-    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
-}
-
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateProvideElement<E>
-    for ProxyElementTemplate<E, RENDER_ELEMENT, PROVIDE_ELEMENT>
-where
-    E: ImplByTemplate<Template = Self>,
-    E: ProxyProvideElement,
-{
-    type Provided = E::Provided;
-
-    fn get_provided_value(widget: &<E as ElementBase>::ArcWidget) -> Arc<Self::Provided> {
-        E::get_provided_value(widget)
+    fn hit_test_self(
+        render: &R,
+        position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<R::Protocol as Protocol>::Size,
+        offset: &<R::Protocol as Protocol>::Offset,
+        memo: &<R as RenderBase>::LayoutMemo,
+    ) -> Option<HitTestBehavior> {
+        R::hit_test_self(render, position, size, offset)
     }
 }

@@ -7,6 +7,9 @@ pub use render::*;
 mod widget;
 pub use widget::*;
 
+mod single_child;
+pub use single_child::*;
+
 mod proxy;
 pub use proxy::*;
 

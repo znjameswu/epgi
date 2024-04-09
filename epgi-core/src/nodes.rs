@@ -7,6 +7,5 @@ pub use provider::*;
 mod repaint_boundary;
 pub use repaint_boundary::*;
 
-//mod suspense;
-//pub use suspense::*;
-//
+mod suspense;
+pub use suspense::*;

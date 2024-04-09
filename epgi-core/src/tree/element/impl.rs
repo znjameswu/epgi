@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
-    foundation::{Arc, ArrayContainer, Asc, ContainerOf, Provide, TypeKey},
+    foundation::{Arc, ArrayContainer, Asc, ContainerOf, Protocol, Provide, TypeKey},
+    nodes::{RenderSuspense, SuspenseElement},
     sync::ImplReconcileCommit,
     tree::{ArcChildRenderObject, RenderObject},
 };
@@ -126,6 +127,24 @@ where
         render_object: &Self::OptionArcRenderObject,
         _children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     ) -> Option<ArcChildRenderObject<E::ParentProtocol>> {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.clone() as _)
+    }
+}
+
+impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplElementNode<SuspenseElement<P>>
+    for ElementImpl<SuspenseElement<P>, true, PROVIDE_ELEMENT>
+{
+    type OptionArcRenderObject = Option<Arc<RenderObject<RenderSuspense<P>>>>;
+
+    fn get_current_subtree_render_object(
+        render_object: &Self::OptionArcRenderObject,
+        _children: &ContainerOf<
+            <SuspenseElement<P> as ElementBase>::ChildContainer,
+            ArcChildElementNode<P>,
+        >,
+    ) -> Option<ArcChildRenderObject<P>> {
         render_object
             .as_ref()
             .map(|render_object| render_object.clone() as _)

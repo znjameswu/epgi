@@ -2,7 +2,7 @@ use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Protocol, Provide},
-    template::{ImplByTemplate, ProxyElement, ProxyElementTemplate},
+    template::{ImplByTemplate, SingleChildElement, SingleChildElementTemplate},
     tree::{ArcAnyWidget, ArcChildWidget, ArcWidget, BuildContext, ElementBase, Widget, WidgetExt},
 };
 
@@ -38,11 +38,12 @@ impl<P: Protocol> ArcWidget for Asc<dyn ComponentWidget<P>> {
 pub struct ComponentElement<P: Protocol>(PhantomData<P>);
 
 impl<P: Protocol> ImplByTemplate for ComponentElement<P> {
-    type Template = ProxyElementTemplate<Self, false, false>;
+    type Template = SingleChildElementTemplate<false, false>;
 }
 
-impl<P: Protocol> ProxyElement for ComponentElement<P> {
-    type Protocol = P;
+impl<P: Protocol> SingleChildElement for ComponentElement<P> {
+    type ParentProtocol = P;
+    type ChildProtocol = P;
     type ArcWidget = Asc<dyn ComponentWidget<P>>;
 
     fn get_child_widget(
@@ -50,7 +51,7 @@ impl<P: Protocol> ProxyElement for ComponentElement<P> {
         widget: &Self::ArcWidget,
         ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<Self::Protocol>, BuildSuspendedError> {
+    ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
         Ok(widget.build(ctx))
     }
 

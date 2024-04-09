@@ -19,17 +19,10 @@ pub trait TemplateElementBase<E> {
 
     type ArcWidget: ArcWidget<Element = E>;
 
-    // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
-    // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
     #[allow(unused_variables)]
     fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
         &[]
     }
-
-    // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.
-    // Rationale for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
-    /// If a hook suspended, then the untouched Self should be returned along with the suspended error
-    /// If nothing suspended, then the new Self should be returned.
     fn perform_rebuild_element(
         element: &mut E,
         widget: &Self::ArcWidget,

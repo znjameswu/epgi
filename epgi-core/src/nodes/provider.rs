@@ -2,7 +2,9 @@ use std::marker::PhantomData;
 
 use crate::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
-    template::{ImplByTemplate, ProxyElement, ProxyElementTemplate, ProxyProvideElement},
+    template::{
+        ImplByTemplate, SingleChildElement, SingleChildElementTemplate, SingleChildProvideElement,
+    },
     tree::{ArcChildWidget, BuildContext, Widget},
 };
 
@@ -58,11 +60,12 @@ impl<T: Provide, P: Protocol> Clone for ProviderElement<T, P> {
 }
 
 impl<T: Provide, P: Protocol> ImplByTemplate for ProviderElement<T, P> {
-    type Template = ProxyElementTemplate<Self, false, true>;
+    type Template = SingleChildElementTemplate<false, true>;
 }
 
-impl<T: Provide, P: Protocol> ProxyElement for ProviderElement<T, P> {
-    type Protocol = P;
+impl<T: Provide, P: Protocol> SingleChildElement for ProviderElement<T, P> {
+    type ParentProtocol = P;
+    type ChildProtocol = P;
     type ArcWidget = Asc<Provider<T, P>>;
 
     fn get_child_widget(
@@ -70,7 +73,7 @@ impl<T: Provide, P: Protocol> ProxyElement for ProviderElement<T, P> {
         widget: &Self::ArcWidget,
         _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<Self::Protocol>, BuildSuspendedError> {
+    ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
@@ -79,7 +82,7 @@ impl<T: Provide, P: Protocol> ProxyElement for ProviderElement<T, P> {
     }
 }
 
-impl<T: Provide, P: Protocol> ProxyProvideElement for ProviderElement<T, P> {
+impl<T: Provide, P: Protocol> SingleChildProvideElement for ProviderElement<T, P> {
     type Provided = T;
 
     fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided> {

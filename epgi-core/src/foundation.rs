@@ -29,21 +29,3 @@ pub use try_result::*;
 pub use type_key::*;
 pub use utils::*;
 pub use vec_push_last::*;
-
-#[derive(Debug)]
-pub struct True;
-
-#[derive(Debug)]
-pub struct False;
-
-pub trait ConstBool {
-    const VALUE: bool;
-}
-
-impl ConstBool for True {
-    const VALUE: bool = true;
-}
-
-impl ConstBool for False {
-    const VALUE: bool = false;
-}
