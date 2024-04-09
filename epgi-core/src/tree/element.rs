@@ -20,13 +20,14 @@ mod r#impl;
 pub use r#impl::*;
 
 use crate::foundation::{
-    Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
-    Provide, PtrEq, TypeKey,
+    Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, LayerProtocol,
+    Protocol, Provide, PtrEq, SyncMutex, TypeKey,
 };
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, Render, RenderAction,
+    ChildElementWidgetPair, ElementWidgetPair, ImplRenderObjectReconcile, LayerPaint, LayoutCache,
+    LayoutResults, Render, RenderAction, RenderObject,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -172,73 +173,73 @@ pub(crate) fn no_widget_update<E: ElementBase>(
     return true;
 }
 
-// pub fn create_root_element<E, R>(
-//     widget: E::ArcWidget,
-//     element: E,
-//     element_children: ContainerOf<E, ArcChildElementNode<E::ChildProtocol>>,
-//     render: R,
-//     render_children: <R::ChildContainer as HktContainer>::Container<
-//         ArcChildRenderObject<E::ChildProtocol>,
-//     >,
-//     hooks: Hooks,
-//     constraints: <E::ParentProtocol as Protocol>::Constraints,
-//     offset: <E::ParentProtocol as Protocol>::Offset,
-//     size: <E::ParentProtocol as Protocol>::Size,
-//     layout_memo: R::LayoutMemo,
-// ) -> (Arc<ElementNode<E>>, Arc<RenderObjectOld<R>>)
-// where
-//     E: RenderElement<Render = R>,
-//     R: Render<
-//         ChildContainer = E::ChildContainer,
-//         ParentProtocol = E::ParentProtocol,
-//         ChildProtocol = E::ChildProtocol,
-//     >,
-//     R: LayerRender,
-//     R::ChildProtocol: LayerProtocol,
-//     R::ParentProtocol: LayerProtocol,
-// {
-//     let mut render_object_built = None;
-//     let render_object_built_mut = &mut render_object_built;
-//     let element_node = Arc::new_cyclic(move |node| {
-//         let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
-//         // let render = R::try_create_render_object_from_element(&element, &widget)
-//         //     .expect("Root render object creation should always be successfully");
-//         let render_object = Arc::new(RenderObjectOld::new(
-//             render,
-//             render_children,
-//             element_context.clone(),
-//         ));
-//         *render_object_built_mut = Some(render_object.clone());
-//         {
-//             render_object
-//                 .inner
-//                 .lock()
-//                 .cache
-//                 .insert_layout_cache(LayoutCache::new(
-//                     LayoutResults::new(constraints, size, layout_memo),
-//                     Some(offset),
-//                     None,
-//                 ));
-//         }
-//         render_object.mark.set_parent_not_use_size::<R>();
-//         ElementNode {
-//             context: element_context,
-//             snapshot: SyncMutex::new(ElementSnapshot {
-//                 widget,
-//                 inner: ElementSnapshotInner::Mainline(Mainline {
-//                     state: Some(MainlineState::Ready {
-//                         element,
-//                         children: element_children,
-//                         hooks,
-//                         render_object: Some(render_object),
-//                     }),
-//                     async_queue: AsyncWorkQueue::new_empty(),
-//                 }),
-//             }),
-//         }
-//     });
-//     (
-//         element_node,
-//         render_object_built.expect("Impossible to fail"),
-//     )
-// }
+pub fn create_root_element<E, R>(
+    widget: E::ArcWidget,
+    element: E,
+    element_children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    render: R,
+    render_children: ContainerOf<R::ChildContainer, ArcChildRenderObject<E::ChildProtocol>>,
+    hooks: Hooks,
+    constraints: <E::ParentProtocol as Protocol>::Constraints,
+    offset: <E::ParentProtocol as Protocol>::Offset,
+    size: <E::ParentProtocol as Protocol>::Size,
+    layout_memo: R::LayoutMemo,
+) -> (Arc<ElementNode<E>>, Arc<RenderObject<R>>)
+where
+    E: Element,
+    E: RenderElement<Render = R>,
+    E::Impl: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<R>>>>,
+    R: Render<
+        ChildContainer = E::ChildContainer,
+        ParentProtocol = E::ParentProtocol,
+        ChildProtocol = E::ChildProtocol,
+    >,
+    R: LayerPaint,
+    R::ChildProtocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+{
+    let mut render_object_built = None;
+    let render_object_built_mut = &mut render_object_built;
+    let element_node = Arc::new_cyclic(move |node| {
+        let element_context = Arc::new(ElementContextNode::new_root(node.clone() as _));
+        // let render = R::try_create_render_object_from_element(&element, &widget)
+        //     .expect("Root render object creation should always be successfully");
+        let render_object = Arc::new(RenderObject::new(
+            render,
+            render_children,
+            element_context.clone(),
+        ));
+        *render_object_built_mut = Some(render_object.clone());
+        {
+            render_object
+                .inner
+                .lock()
+                .cache
+                .insert_layout_cache(LayoutCache::new(
+                    LayoutResults::new(constraints, size, layout_memo),
+                    Some(offset),
+                    None,
+                ));
+        }
+        render_object.mark.clear_parent_use_size();
+        ElementNode {
+            context: element_context,
+            snapshot: SyncMutex::new(ElementSnapshot {
+                widget,
+                inner: ElementSnapshotInner::Mainline(Mainline {
+                    state: Some(MainlineState::Ready {
+                        element,
+                        children: element_children,
+                        hooks,
+                        render_object: Some(render_object),
+                    }),
+                    async_queue: AsyncWorkQueue::new_empty(),
+                }),
+            }),
+        }
+    });
+    (
+        element_node,
+        render_object_built.expect("Impossible to fail"),
+    )
+}
