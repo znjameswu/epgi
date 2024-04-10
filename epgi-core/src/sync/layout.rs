@@ -29,10 +29,10 @@ pub trait AnyRenderObjectLayoutExt {
 impl<R> AnyRenderObjectLayoutExt for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplLayout<R>,
+    R::Impl: ImplLayout<R>,
 {
     fn visit_and_layout(&self) {
-        let is_relayout_boundary = R::RenderImpl::DRY_LAYOUT || !self.mark.parent_use_size();
+        let is_relayout_boundary = R::Impl::DRY_LAYOUT || !self.mark.parent_use_size();
         let needs_layout = self.mark.needs_layout();
         let subtree_has_layout = self.mark.subtree_has_layout();
         debug_assert!(
@@ -56,7 +56,7 @@ where
                     that has been laid out at least once",
                 );
                 // We not only keeps the orignial constraints, we also keep painting offset.
-                let memo = R::RenderImpl::perform_layout_without_resize(
+                let memo = R::Impl::perform_layout_without_resize(
                     &mut inner_reborrow.render,
                     &layout_results.constraints,
                     &mut layout_results.size,
@@ -83,7 +83,7 @@ pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
 impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplLayout<R>,
+    R::Impl: ImplLayout<R>,
 {
     fn layout_use_size(
         &self,
@@ -100,7 +100,7 @@ where
                 }
             }
         }
-        let (size, memo) = R::RenderImpl::perform_wet_layout(
+        let (size, memo) = R::Impl::perform_wet_layout(
             &mut inner_reborrow.render,
             &constraints,
             &inner_reborrow.children,
@@ -127,7 +127,7 @@ where
                 }
             }
         }
-        let (size, memo) = R::RenderImpl::perform_wet_layout(
+        let (size, memo) = R::Impl::perform_wet_layout(
             &mut inner_reborrow.render,
             &constraints,
             &inner_reborrow.children,

@@ -64,7 +64,7 @@ where
     R::Template: TemplateRender<R>,
     R: RenderBase,
 {
-    type RenderImpl = <R::Template as TemplateRender<R>>::RenderImpl;
+    type Impl = <R::Template as TemplateRender<R>>::RenderImpl;
 }
 
 pub trait TemplateLayout<R: RenderBase> {

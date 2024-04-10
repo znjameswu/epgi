@@ -15,9 +15,8 @@ where
 {
     pub(crate) element_context: ArcElementContextNode,
     pub(crate) mark: RenderMark,
-    pub(crate) layer_mark: <R::RenderImpl as ImplRenderObject<R>>::LayerMark,
-    pub(crate) inner:
-        SyncMutex<RenderObjectInner<R, <R::RenderImpl as ImplRenderObject<R>>::LayerCache>>,
+    pub(crate) layer_mark: <R::Impl as ImplRenderObject<R>>::LayerMark,
+    pub(crate) inner: SyncMutex<RenderObjectInner<R, <R::Impl as ImplRenderObject<R>>::LayerCache>>,
 }
 
 pub(crate) struct RenderObjectInner<R, C>

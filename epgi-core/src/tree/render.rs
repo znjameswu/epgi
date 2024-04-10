@@ -53,7 +53,19 @@ pub trait RenderBase: Send + Sync + Sized + 'static {
 }
 
 pub trait Render: RenderBase {
-    type RenderImpl: ImplRender<Self>;
+    type Impl: ImplRender<Self>;
+}
+
+pub trait FullRender: Render<Impl = <Self as FullRender>::Impl> {
+    type Impl: ImplFullRender<Self>;
+}
+
+impl<R> FullRender for R
+where
+    R: Render,
+    R::Impl: ImplFullRender<R>,
+{
+    type Impl = R::Impl;
 }
 
 /// Dry layout means that under all circumstances, this render object's size is solely determined
@@ -430,7 +442,7 @@ pub trait ChildRenderObject<PP: Protocol>:
 
 impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
 where
-    R: Render,
+    R: FullRender,
 {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
         self
@@ -496,7 +508,7 @@ pub trait ChildRenderObjectWithCanvas<C: Canvas>:
 {
 }
 
-impl<R> ChildRenderObjectWithCanvas<<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas>
+impl<R> ChildRenderObjectWithCanvas<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas>
     for RenderObject<R>
 where
     R: Render,

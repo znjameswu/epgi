@@ -8,7 +8,8 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        HitTestBehavior, HitTestResults, Render, RenderAction, RenderImpl, RenderObject,
+        FullRender, HitTestBehavior, HitTestResults, Render, RenderAction, RenderImpl,
+        RenderObject,
     },
 };
 
@@ -23,7 +24,7 @@ pub trait LeafElement: Clone + Send + Sync + Sized + 'static {
     type Protocol: Protocol;
     type ArcWidget: ArcWidget<Element = Self>;
 
-    type Render: Render<
+    type Render: FullRender<
         ParentProtocol = Self::Protocol,
         ChildProtocol = Self::Protocol,
         ChildContainer = ArrayContainer<0>,

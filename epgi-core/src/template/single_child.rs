@@ -5,7 +5,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        ImplElement, ImplFullElement, Render, RenderAction,
+        FullRender, ImplElement, RenderAction,
     },
 };
 
@@ -107,7 +107,7 @@ where
 }
 
 pub trait SingleChildRenderElement: SingleChildElement {
-    type Render: Render<
+    type Render: FullRender<
         ParentProtocol = Self::ParentProtocol,
         ChildProtocol = Self::ChildProtocol,
         ChildContainer = ArrayContainer<1>,

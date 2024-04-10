@@ -92,7 +92,7 @@ pub struct ComposableUnadoptedLayer<C: Canvas> {
 impl<R> AnyLayerRenderObject for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplComposite<R>,
+    R::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
@@ -102,11 +102,7 @@ where
     }
 
     fn as_any_arc_child_layer(self: Arc<Self>) -> Box<dyn std::any::Any> {
-        Box::new(
-            self as ArcChildLayerRenderObject<
-                <R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas,
-            >,
-        )
+        Box::new(self as ArcChildLayerRenderObject<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas>)
     }
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn std::any::Any + Send + Sync>> {
@@ -114,11 +110,10 @@ where
     }
 }
 
-impl<R> ChildLayerRenderObject<<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas>
-    for RenderObject<R>
+impl<R> ChildLayerRenderObject<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas> for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplComposite<R>,
+    R::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,

@@ -7,7 +7,7 @@ use epgi_core::{
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        ImplElement, Render, RenderAction,
+        FullRender, ImplElement, RenderAction,
     },
 };
 
@@ -100,7 +100,7 @@ where
 }
 
 pub trait BoxSingleChildRenderElement: BoxSingleChildElement {
-    type Render: Render<
+    type Render: FullRender<
         ParentProtocol = BoxProtocol,
         ChildProtocol = BoxProtocol,
         ChildContainer = ArrayContainer<1>,

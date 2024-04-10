@@ -1,11 +1,20 @@
 use crate::sync::{ImplAdopterLayer, ImplHitTest, ImplLayout, ImplPaint};
 
-use super::{ImplRenderObject, RenderBase};
+use super::{ImplRenderObject, Render, RenderBase};
 
 pub trait ImplRender<R: RenderBase>:
-    ImplRenderObject<R> + ImplLayout<R> + ImplPaint<R> + ImplHitTest<R> + ImplAdopterLayer<R>
+    ImplRenderObject<R> + ImplLayout<R> + ImplAdopterLayer<R>
 {
 }
+
+impl<I, R: RenderBase> ImplRender<R> for I where
+    I: ImplRenderObject<R> + ImplLayout<R> + ImplAdopterLayer<R>
+{
+}
+
+pub trait ImplFullRender<R: Render>: ImplRender<R> + ImplPaint<R> + ImplHitTest<R> {}
+
+impl<I, R: Render> ImplFullRender<R> for I where I: ImplRender<R> + ImplPaint<R> + ImplHitTest<R> {}
 
 pub struct RenderImpl<
     const DRY_LAYOUT: bool,
@@ -13,19 +22,3 @@ pub struct RenderImpl<
     const CACHED_COMPOSITE: bool,
     const ORPHAN_LAYER: bool,
 >;
-
-impl<
-        R: RenderBase,
-        const DRY_LAYOUT: bool,
-        const LAYER_PAINT: bool,
-        const CACHED_COMPOSITE: bool,
-        const ORPHAN_LAYER: bool,
-    > ImplRender<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
-where
-    Self: ImplLayout<R>,
-    Self: ImplPaint<R>,
-    Self: ImplHitTest<R>,
-    Self: ImplAdopterLayer<R>,
-    Self: ImplRenderObject<R>,
-{
-}

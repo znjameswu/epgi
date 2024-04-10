@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Canvas, Protocol},
     tree::{
-        HitTest, HitTestBehavior, HitTestResults, Render, RenderBase, RenderImpl, RenderObject,
+        FullRender, HitTest, HitTestBehavior, HitTestResults, Render, RenderImpl, RenderObject,
     },
 };
 
@@ -13,14 +13,13 @@ pub trait ChildRenderObjectHitTestExt<PP: Protocol> {
 
 impl<R> ChildRenderObjectHitTestExt<R::ParentProtocol> for RenderObject<R>
 where
-    R: Render,
-    R::RenderImpl: ImplHitTest<R>,
+    R: FullRender,
 {
     fn hit_test(
         self: Arc<Self>,
         results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
-        R::RenderImpl::hit_test(self, results)
+        <R as Render>::Impl::hit_test(self, results)
     }
 }
 
@@ -28,19 +27,17 @@ pub trait ChildLayerRenderObjectHitTestExt<C: Canvas> {
     // fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<C>) -> bool;
 }
 
-pub trait ImplHitTest<R: RenderBase> {
+pub trait ImplHitTest<R: Render> {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
         results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool
-    where
-        R: Render;
+    ) -> bool;
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
     ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
 where
-    R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
+    R::Impl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
     R: HitTest,
 {
     fn hit_test(

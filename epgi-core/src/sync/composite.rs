@@ -25,7 +25,7 @@ pub trait AnyLayerRenderObjectCompositeExt {
 impl<R> AnyLayerRenderObjectCompositeExt for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplComposite<R>,
+    R::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
@@ -63,10 +63,8 @@ where
             .as_mut()
             .expect("Layer should only be composited after they are painted");
 
-        let composition_results = R::RenderImpl::regenerate_composite_cache(
-            &inner_reborrow.render,
-            &layer_cache.paint_results,
-        );
+        let composition_results =
+            R::Impl::regenerate_composite_cache(&inner_reborrow.render, &layer_cache.paint_results);
         let cached_composition = Asc::new(composition_results.cached_composition.clone());
         layer_cache.insert_composite_results(composition_results);
         self.layer_mark.clear_needs_composite();
@@ -82,22 +80,22 @@ pub trait ChildLayerRenderObjectCompositeExt<PC: Canvas> {
     ) -> Vec<ComposableUnadoptedLayer<PC>>;
 }
 
-impl<R> ChildLayerRenderObjectCompositeExt<<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas>
+impl<R> ChildLayerRenderObjectCompositeExt<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas>
     for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplComposite<R>,
+    R::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
     fn composite_to(
         &self,
-        encoding: &mut <<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas as Canvas>::Encoding,
+        encoding: &mut <<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas as Canvas>::Encoding,
         composition_config: &LayerCompositionConfig<
-            <R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas,
+            <R::Impl as ImplAdopterLayer<R>>::AdopterCanvas,
         >,
-    ) -> Vec<ComposableUnadoptedLayer<<R::RenderImpl as ImplAdopterLayer<R>>::AdopterCanvas>> {
+    ) -> Vec<ComposableUnadoptedLayer<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas>> {
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
@@ -116,7 +114,7 @@ where
             .and_then(|token| layer_cache.composite_results_ref(token));
 
         let composite_results = if let Some(composite_results) = composite_results {
-            R::RenderImpl::composite_with_cache(
+            R::Impl::composite_with_cache(
                 &inner_reborrow.render,
                 encoding,
                 composition_config,
@@ -125,7 +123,7 @@ where
             );
             composite_results
         } else {
-            let composite_results = R::RenderImpl::composite_without_cache(
+            let composite_results = R::Impl::composite_without_cache(
                 &inner_reborrow.render,
                 encoding,
                 composition_config,

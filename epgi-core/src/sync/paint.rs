@@ -5,7 +5,7 @@ use crate::{
     sync::BuildScheduler,
     tree::{
         ArcChildRenderObject, AweakAnyLayerRenderObject, LayerCache, LayerPaint, OrphanLayer,
-        Paint, Render, RenderBase, RenderImpl, RenderObject,
+        Paint, Render, RenderImpl, RenderObject,
     },
 };
 
@@ -34,7 +34,7 @@ pub trait AnyLayerRenderObjectPaintExt {
 impl<R> AnyLayerRenderObjectPaintExt for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplComposite<R>,
+    R::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
@@ -112,7 +112,7 @@ where
 impl<R> ChildRenderObjectPaintExtImpl<R::ParentProtocol> for RenderObject<R>
 where
     R: Render,
-    R::RenderImpl: ImplPaint<R>,
+    R::Impl: ImplPaint<R>,
 {
     fn paint_impl(
         self: Arc<Self>,
@@ -125,7 +125,7 @@ where
         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
             panic!("Paint should only be called after layout has finished")
         };
-        R::RenderImpl::paint_into_context(
+        R::Impl::paint_into_context(
             &mut inner_reborrow.render,
             &self,
             &cache.layout_results.size,
@@ -138,7 +138,7 @@ where
     }
 }
 
-pub trait ImplPaint<R: RenderBase> {
+pub trait ImplPaint<R: Render> {
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
@@ -149,8 +149,7 @@ pub trait ImplPaint<R: RenderBase> {
             ArcChildRenderObject<R::ChildProtocol>,
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
-    ) where
-        R: Render;
+    );
 }
 
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
@@ -177,7 +176,7 @@ impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<
     for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, false>
 where
     // Will this cause inductive cycles? We'll see
-    R::RenderImpl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
+    R::Impl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
         + ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
@@ -203,7 +202,7 @@ where
 impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
     for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, true>
 where
-    R::RenderImpl: ImplComposite<R>,
+    R::Impl: ImplComposite<R>,
     R: LayerPaint,
     R: OrphanLayer,
     R::ParentProtocol: LayerProtocol,

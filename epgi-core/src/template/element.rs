@@ -5,8 +5,8 @@ use crate::{
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementReconcileItem, ImplElement,
-        ProvideElement, Render, RenderAction, RenderElement,
+        ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementReconcileItem, FullRender,
+        ImplElement, ProvideElement, RenderAction, RenderElement,
     },
 };
 
@@ -124,7 +124,7 @@ where
 }
 
 pub trait TemplateRenderElement<E: ElementBase> {
-    type Render: Render<
+    type Render: FullRender<
         ParentProtocol = E::ParentProtocol,
         ChildProtocol = E::ChildProtocol,
         ChildContainer = E::ChildContainer,

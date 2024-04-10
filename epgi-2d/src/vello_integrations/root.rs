@@ -222,7 +222,7 @@ impl HitTest for RenderRoot {
 }
 
 impl Render for RenderRoot {
-    type RenderImpl = RenderImpl<true, true, true, false>;
+    type Impl = RenderImpl<true, true, true, false>;
 }
 
 // impl Render for RenderRoot {

@@ -26,8 +26,8 @@ use crate::foundation::{
 
 use super::{
     ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, ImplRenderObjectReconcile, LayerPaint, LayoutCache,
-    LayoutResults, Render, RenderAction, RenderObject,
+    ChildElementWidgetPair, ElementWidgetPair, FullRender, ImplRenderObjectReconcile, LayerPaint,
+    LayoutCache, LayoutResults, Render, RenderAction, RenderObject,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -152,7 +152,7 @@ where
 }
 
 pub trait RenderElement: ElementBase {
-    type Render: Render<
+    type Render: FullRender<
         ParentProtocol = Self::ParentProtocol,
         ChildProtocol = Self::ChildProtocol,
         ChildContainer = Self::ChildContainer,
