@@ -321,7 +321,7 @@ fn initialize_root() -> (
         root_widget,
         element,
         None,
-        RenderRoot { child: None },
+        RenderRoot {},
         None,
         Hooks {
             array_hooks: [
@@ -331,10 +331,7 @@ fn initialize_root() -> (
         },
         BoxConstraints::default(),
         BoxOffset::ZERO,
-        BoxSize {
-            width: f32::INFINITY,
-            height: f32::INFINITY,
-        },
+        BoxSize::INFINITY,
         (),
     );
 

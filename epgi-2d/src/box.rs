@@ -80,9 +80,14 @@ pub struct BoxSize {
 }
 
 impl BoxSize {
-    const ZERO: Self = Self {
+    pub const ZERO: Self = Self {
         width: 0.0,
         height: 0.0,
+    };
+
+    pub const INFINITY: Self = Self {
+        width: f32::INFINITY,
+        height: f32::INFINITY,
     };
 }
 

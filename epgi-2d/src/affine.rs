@@ -37,8 +37,8 @@ impl Mul<Point2d> for &Affine2d {
             self.0[3] * rhs.y,
         ];
         Point2d {
-            x: a[0] + a[2] + self.0[5],
-            y: a[1] + a[3] + self.0[6],
+            x: a[0] + a[2] + self.0[4],
+            y: a[1] + a[3] + self.0[5],
         }
     }
 }

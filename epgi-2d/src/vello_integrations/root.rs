@@ -5,14 +5,16 @@ use epgi_core::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
-        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
-        ElementBase, ElementImpl, ElementReconcileItem, HitTest, HitTestResults,
-        LayerCompositionConfig, LayerPaint, Render, RenderAction, RenderBase, RenderElement,
-        RenderImpl, RenderObjectSlots, Widget,
+        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableChildLayer,
+        DryLayout, Element, ElementBase, ElementImpl, ElementReconcileItem, HitTest,
+        HitTestBehavior, HitTestResults, LayerCompositionConfig, LayerPaint, Render, RenderAction,
+        RenderBase, RenderElement, RenderImpl, RenderObjectSlots, Widget,
     },
 };
 
-use crate::{Affine2dCanvas, Affine2dEncoding, BoxOffset, BoxProtocol, BoxSize, Point2d};
+use crate::{
+    Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
+};
 
 pub struct RootView {
     pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
@@ -136,7 +138,7 @@ impl RenderElement for RootElement {
 }
 
 pub struct RenderRoot {
-    pub child: Option<ArcChildRenderObject<BoxProtocol>>,
+    // pub child: Option<ArcChildRenderObject<BoxProtocol>>,
 }
 
 impl RenderBase for RenderRoot {
@@ -147,22 +149,18 @@ impl RenderBase for RenderRoot {
 }
 
 impl DryLayout for RenderRoot {
-    fn compute_dry_layout(
-        &self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-    ) -> <Self::ParentProtocol as Protocol>::Size {
-        todo!()
+    fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize {
+        BoxSize::INFINITY
     }
 
     fn compute_layout_memo(
         &mut self,
-        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        children: &<Self::ChildContainer as epgi_core::foundation::HktContainer>::Container<
-            ArcChildRenderObject<Self::ChildProtocol>,
-        >,
+        constraints: &BoxConstraints,
+        _size: &BoxSize,
+        child: &Option<ArcChildRenderObject<BoxProtocol>>,
     ) -> Self::LayoutMemo {
-        todo!()
+        child.as_ref().map(|child| child.layout(constraints));
+        ()
     }
 }
 
@@ -173,24 +171,35 @@ impl CachedComposite for RenderRoot {
 
     fn composite_into_cache(
         &self,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+        child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> Self::CompositionCache {
-        todo!()
+        let mut result = Affine2dEncoding::new();
+        use epgi_core::tree::ChildLayerOrFragmentRef::*;
+        child_iterator.for_each(|child| match child {
+            Fragment(encoding) => {
+                Affine2dCanvas::composite_encoding(&mut result, encoding, None);
+                Vec::new()
+            }
+            StructuredChild(composable_layer) | AdoptedChild(composable_layer) => composable_layer
+                .layer
+                .composite_to(&mut result, &composable_layer.config),
+        });
+        return Arc::new(result);
     }
 
     fn composite_from_cache_to(
         &self,
-        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+        encoding: &mut Affine2dEncoding,
         cache: &Self::CompositionCache,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
         todo!()
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
         todo!()
     }
 }
@@ -208,16 +217,6 @@ impl HitTest for RenderRoot {
             .as_ref()
             .map(|child| results.hit_test(child.clone()))
             .unwrap_or_default()
-    }
-
-    fn hit_test_self(
-        &self,
-        position: &Point2d,
-        _size: &BoxSize,
-        _offset: &BoxOffset,
-        _memo: &Self::LayoutMemo,
-    ) -> Option<epgi_core::tree::HitTestBehavior> {
-        todo!()
     }
 }
 
