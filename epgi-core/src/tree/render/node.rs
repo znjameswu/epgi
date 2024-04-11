@@ -34,6 +34,21 @@ where
 pub trait ImplRenderObject<R: RenderBase> {
     type LayerMark: Default + Send + Sync;
     type LayerCache: Send + Sync;
+
+    // const IS_LAYER: bool;
+    // fn into_arc_any_layer_render_object(
+    //     render_object: Arc<RenderObject<R>>,
+    // ) -> ArcAnyLayerRenderObject
+    // where
+    //     R: FullRender<Impl = Self>,
+    //     Self: ImplFullRender<R>;
+
+    // fn into_aweak_any_layer_render_object(
+    //     render_object: Aweak<RenderObject<R>>,
+    // ) -> AweakAnyLayerRenderObject
+    // where
+    //     R: FullRender<Impl = Self>,
+    //     Self: ImplFullRender<R>;
 }
 
 impl<

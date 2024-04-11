@@ -4,12 +4,12 @@ use crate::{
     foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, AweakAnyLayerRenderObject, LayerCache, LayerPaint, OrphanLayer,
-        Paint, Render, RenderImpl, RenderObject,
+        ArcChildRenderObject, AweakAnyLayerRenderObject, ImplLayerRenderObjectCast, ImplRender,
+        LayerCache, LayerPaint, OrphanLayer, Paint, Render, RenderImpl, RenderObject,
     },
 };
 
-use super::{ImplAdopterLayer, ImplComposite};
+use super::{ImplAdopterLayer, ImplComposite, ImplHitTest};
 
 impl BuildScheduler {
     pub(crate) fn perform_paint(
@@ -138,7 +138,7 @@ where
     }
 }
 
-pub trait ImplPaint<R: Render> {
+pub trait ImplPaint<R: Render<Impl = Self>> {
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
@@ -152,8 +152,12 @@ pub trait ImplPaint<R: Render> {
     );
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool, const ORPHAN_LAYER: bool>
-    ImplPaint<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+impl<
+        R: Render<Impl = Self>,
+        const DRY_LAYOUT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > ImplPaint<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: Paint,
 {
@@ -172,12 +176,14 @@ where
     }
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
+impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
     for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, false>
 where
-    // Will this cause inductive cycles? We'll see
-    R::Impl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>
-        + ImplComposite<R>,
+    Self: ImplRender<R>,
+    Self: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
+    Self: ImplLayerRenderObjectCast<R>,
+    Self: ImplHitTest<R>,
+    Self: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
@@ -199,10 +205,13 @@ where
     }
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
+impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
     for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, true>
 where
-    R::Impl: ImplComposite<R>,
+    Self: ImplRender<R>,
+    Self: ImplLayerRenderObjectCast<R>,
+    Self: ImplHitTest<R>,
+    Self: ImplComposite<R>,
     R: LayerPaint,
     R: OrphanLayer,
     R::ParentProtocol: LayerProtocol,

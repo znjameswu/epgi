@@ -89,9 +89,10 @@ pub trait ImplElementNode<E: ElementBase> {
         children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     ) -> Option<ArcChildRenderObject<E::ParentProtocol>>;
 
-    const GET_RENDER_OBJECT_AS_ANY: Option<
-        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
-    >;
+    const HAS_RENDER: bool;
+    fn get_render_object(
+        option_render_object: &Self::OptionArcRenderObject,
+    ) -> Option<ArcAnyRenderObject>;
 }
 
 impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
@@ -111,9 +112,12 @@ where
         child.get_current_subtree_render_object()
     }
 
-    const GET_RENDER_OBJECT_AS_ANY: Option<
-        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
-    > = None;
+    const HAS_RENDER: bool = false;
+    fn get_render_object(
+        option_render_object: &Self::OptionArcRenderObject,
+    ) -> Option<ArcAnyRenderObject> {
+        unreachable!()
+    }
 }
 
 impl<E: ElementBase, const PROVIDE_ELEMENT: bool> ImplElementNode<E>
@@ -132,13 +136,14 @@ where
             .map(|render_object| render_object.clone() as _)
     }
 
-    const GET_RENDER_OBJECT_AS_ANY: Option<
-        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
-    > = Some(|render_object| {
-        render_object
+    const HAS_RENDER: bool = true;
+    fn get_render_object(
+        option_render_object: &Self::OptionArcRenderObject,
+    ) -> Option<ArcAnyRenderObject> {
+        option_render_object
             .as_ref()
             .map(|render_object| render_object.clone() as _)
-    });
+    }
 }
 
 impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplElementNode<SuspenseElement<P>>
@@ -158,11 +163,12 @@ impl<P: Protocol, const PROVIDE_ELEMENT: bool> ImplElementNode<SuspenseElement<P
             .map(|render_object| render_object.clone() as _)
     }
 
-    const GET_RENDER_OBJECT_AS_ANY: Option<
-        fn(&Self::OptionArcRenderObject) -> Option<ArcAnyRenderObject>,
-    > = Some(|render_object| {
-        render_object
+    const HAS_RENDER: bool = true;
+    fn get_render_object(
+        option_render_object: &Self::OptionArcRenderObject,
+    ) -> Option<ArcAnyRenderObject> {
+        option_render_object
             .as_ref()
             .map(|render_object| render_object.clone() as _)
-    });
+    }
 }

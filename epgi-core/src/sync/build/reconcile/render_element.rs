@@ -4,9 +4,9 @@ use crate::{
     sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
-        ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElementNode,
-        ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase, RenderElement,
-        RenderObject, RenderObjectSlots,
+        ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElement,
+        ImplElementNode, ImplRenderObjectReconcile, MainlineState, RenderAction, RenderBase,
+        RenderElement, RenderObject, RenderObjectSlots,
     },
 };
 
@@ -16,7 +16,7 @@ impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E> for ElementImpl<true
 where
     E: RenderElement,
     E: Element<Impl = Self>,
-    Self: ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
+    Self: ImplElement<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     fn visit_commit(
         element_node: &ElementNode<E>,

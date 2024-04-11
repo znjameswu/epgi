@@ -162,7 +162,7 @@ pub trait ImplLayout<R: RenderBase> {
 }
 
 impl<
-        R: Render,
+        R: RenderBase,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
@@ -196,7 +196,7 @@ where
 }
 
 impl<
-        R: Render,
+        R: RenderBase,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,

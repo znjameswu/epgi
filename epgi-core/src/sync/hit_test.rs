@@ -1,11 +1,10 @@
 use crate::{
     foundation::{Arc, Canvas, Protocol},
     tree::{
-        FullRender, HitTest, HitTestBehavior, HitTestResults, Render, RenderImpl, RenderObject,
+        FullRender, HitTest, HitTestBehavior, HitTestResults, ImplFullRender, ImplRender, Render,
+        RenderImpl, RenderObject,
     },
 };
-
-use super::ImplAdopterLayer;
 
 pub trait ChildRenderObjectHitTestExt<PP: Protocol> {
     fn hit_test(self: Arc<Self>, results: &mut HitTestResults<PP::Canvas>) -> bool;
@@ -27,23 +26,34 @@ pub trait ChildLayerRenderObjectHitTestExt<C: Canvas> {
     // fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<C>) -> bool;
 }
 
-pub trait ImplHitTest<R: Render> {
+pub trait ImplHitTest<R: Render<Impl = Self>> {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
         results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool;
+    ) -> bool
+    // This where clause is introduced to cut cycles between ImplHitTest and ImplPaint
+    // ImplHitTest and ImplPaint are in a very awkward position to have irreducible cycles
+    where
+        Self: ImplFullRender<R>;
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
-    ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
+impl<
+        R: Render<Impl = Self>,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+    > ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
 where
-    R::Impl: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
+    Self: ImplRender<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
     R: HitTest,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
         results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool {
+    ) -> bool
+    where
+        Self: ImplFullRender<R>,
+    {
         let inner = render_object.inner.lock();
         let no_relayout_token = render_object.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
         let layout_cache = inner
@@ -92,9 +102,14 @@ where
     }
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const CACHED_COMPOSITE: bool>
-    ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
+impl<
+        R: Render<Impl = Self>,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+    > ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
 where
+    Self: ImplRender<R, AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas>,
     R: HitTest,
 {
     fn hit_test(

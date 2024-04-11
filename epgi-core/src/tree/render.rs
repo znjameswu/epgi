@@ -469,7 +469,7 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
 
 impl<R> AnyRenderObject for RenderObject<R>
 where
-    R: Render,
+    R: FullRender,
 {
     fn element_context(&self) -> &ElementContextNode {
         todo!()
@@ -480,7 +480,13 @@ where
     }
 
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
-        todo!()
+        if <R as FullRender>::Impl::IS_LAYER {
+            Some(<R as FullRender>::Impl::into_arc_any_layer_render_object(
+                self,
+            ))
+        } else {
+            None
+        }
     }
 
     fn mark_render_action(
@@ -497,7 +503,13 @@ where
     where
         Self: Sized,
     {
-        todo!()
+        if <R as FullRender>::Impl::IS_LAYER {
+            Some(<R as FullRender>::Impl::into_aweak_any_layer_render_object(
+                Arc::downgrade(render_object),
+            ))
+        } else {
+            None
+        }
     }
 }
 

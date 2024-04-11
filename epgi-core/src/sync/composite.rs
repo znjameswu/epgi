@@ -171,7 +171,7 @@ impl<
     type AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas;
 }
 
-pub trait ImplComposite<R: Render>:
+pub trait ImplComposite<R: RenderBase>:
     ImplAdopterLayer<R>
     + ImplRenderObject<
         R,
@@ -210,7 +210,7 @@ where
     );
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>
+impl<R: RenderBase, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>
     ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
@@ -264,8 +264,13 @@ where
     }
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LAYER: bool, CC>
-    ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
+impl<
+        R: RenderBase,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const ORPHAN_LAYER: bool,
+        CC,
+    > ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
         + ImplRenderObject<

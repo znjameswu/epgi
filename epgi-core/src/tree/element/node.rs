@@ -105,7 +105,10 @@ impl<E: FullElement> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
             return None;
         };
 
-        <E as Element>::Impl::get_current_subtree_render_object(render_object, children)
+        <<E as Element>::Impl as ImplElementNode<E>>::get_current_subtree_render_object(
+            render_object,
+            children,
+        )
     }
 }
 
@@ -119,7 +122,7 @@ impl<E: FullElement> AnyElementNode for ElementNode<E> {
     }
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
-        let Some(get_render_object) = <E as Element>::Impl::GET_RENDER_OBJECT_AS_ANY else {
+        if !<E as Element>::Impl::HAS_RENDER {
             return Err("Render object call should not be called on a non-RenderElement");
         };
         let snapshot = self.snapshot.lock();
@@ -130,7 +133,7 @@ impl<E: FullElement> AnyElementNode for ElementNode<E> {
         else {
             return Err("Render object call should only be called on element nodes that are ready and attached");
         };
-        get_render_object(render_object)
+        <E as Element>::Impl::get_render_object(render_object)
             .ok_or("Render object call should only be called on after render object is attached")
     }
 }

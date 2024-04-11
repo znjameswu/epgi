@@ -4,7 +4,7 @@ use crate::{
     sync::SubtreeRenderObjectChange,
     tree::{
         ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, Element,
-        ElementBase, ElementImpl, ElementNode,
+        ElementBase, ElementImpl, ElementNode, ImplElement,
     },
 };
 
@@ -17,6 +17,7 @@ where
         ChildContainer = ArrayContainer<1>,
         Impl = Self,
     >,
+    Self: ImplElement<E, OptionArcRenderObject = ()>,
 {
     fn visit_commit(
         _element_node: &ElementNode<E>,
