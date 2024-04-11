@@ -213,7 +213,7 @@ where
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> R::LayoutMemo {
-        render.compute_layout_memo(constraints, size, children)
+        render.perform_layout(constraints, size, children)
     }
 
     fn perform_wet_layout(
@@ -224,7 +224,7 @@ where
         >,
     ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
         let size = render.compute_dry_layout(constraints);
-        let memo = render.compute_layout_memo(constraints, &size, children);
+        let memo = render.perform_layout(constraints, &size, children);
         (size, memo)
     }
 }

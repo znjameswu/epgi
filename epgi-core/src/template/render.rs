@@ -117,7 +117,7 @@ where
         R::Template::compute_dry_layout(self, constraints)
     }
 
-    fn compute_layout_memo(
+    fn perform_layout(
         &mut self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
         size: &<Self::ParentProtocol as Protocol>::Size,

@@ -92,7 +92,7 @@ pub trait DryLayout: RenderBase {
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
     ) -> <Self::ParentProtocol as Protocol>::Size;
 
-    fn compute_layout_memo(
+    fn perform_layout(
         &mut self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
         size: &<Self::ParentProtocol as Protocol>::Size,
