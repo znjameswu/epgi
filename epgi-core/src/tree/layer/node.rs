@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Canvas, Key, LayerProtocol},
     sync::{ImplAdopterLayer, ImplComposite},
-    tree::{FullRender, LayerPaint, Render, RenderObject},
+    tree::{FullRender, LayerPaint, RenderObject},
 };
 
 use super::{

@@ -92,32 +92,3 @@ impl RenderMark {
         self.subtree_has_layout.store(true, Relaxed)
     }
 }
-
-// impl<R> RenderObjectOld<R>
-// where
-//     R: Render,
-// {
-//     /// Returns the render action that should be passed to the parent.
-//     /// The render action is less or equal to the child_render_action,
-//     /// because some of the action may be absorbed by the corresponding boundaries.
-//     pub(crate) fn mark_render_action(
-//         self: &Arc<Self>,
-//         mut child_render_action: RenderAction,
-//         subtree_has_action: RenderAction,
-//     ) -> RenderAction {
-//         if child_render_action == RenderAction::Relayout {
-//             self.mark.set_self_needs_layout();
-//             if self.mark.parent_not_use_size::<R>() {
-//                 child_render_action = RenderAction::Repaint;
-//             }
-//         }
-//         if subtree_has_action == RenderAction::Relayout {
-//             self.mark.set_subtree_has_layout();
-//         }
-//         <R::LayerOrUnit as LayerOrUnit<R>>::layer_mark_render_action(
-//             self,
-//             child_render_action,
-//             subtree_has_action,
-//         )
-//     }
-// }

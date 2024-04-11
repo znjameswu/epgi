@@ -4,8 +4,8 @@ use crate::{
     foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, AweakAnyLayerRenderObject, ImplLayerRenderObjectCast, ImplRender,
-        LayerCache, LayerPaint, OrphanLayer, Paint, Render, RenderImpl, RenderObject,
+        ArcChildRenderObject, AweakAnyLayerRenderObject, ImplMaybeLayer, ImplRender, LayerCache,
+        LayerPaint, OrphanLayer, Paint, Render, RenderImpl, RenderObject,
     },
 };
 
@@ -181,7 +181,7 @@ impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: boo
 where
     Self: ImplRender<R>,
     Self: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
-    Self: ImplLayerRenderObjectCast<R>,
+    Self: ImplMaybeLayer<R>,
     Self: ImplHitTest<R>,
     Self: ImplComposite<R>,
     R: LayerPaint,
@@ -209,7 +209,7 @@ impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: boo
     for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, true>
 where
     Self: ImplRender<R>,
-    Self: ImplLayerRenderObjectCast<R>,
+    Self: ImplMaybeLayer<R>,
     Self: ImplHitTest<R>,
     Self: ImplComposite<R>,
     R: LayerPaint,

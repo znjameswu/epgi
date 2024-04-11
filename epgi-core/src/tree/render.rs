@@ -455,10 +455,12 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 
     fn mark_render_action(
-        &self,
+        self: &Arc<Self>,
         child_render_action: RenderAction,
         subtree_has_action: RenderAction,
-    ) -> RenderAction;
+    ) -> RenderAction
+    where
+        Self: Sized;
 
     fn try_as_aweak_any_layer_render_object(
         render_object: &Arc<Self>,
@@ -490,11 +492,24 @@ where
     }
 
     fn mark_render_action(
-        &self,
-        child_render_action: RenderAction,
+        self: &Arc<Self>,
+        mut child_render_action: RenderAction,
         subtree_has_action: RenderAction,
     ) -> RenderAction {
-        todo!()
+        if child_render_action == RenderAction::Relayout {
+            self.mark.set_self_needs_layout();
+            if !self.mark.parent_use_size() {
+                child_render_action = RenderAction::Repaint;
+            }
+        }
+        if subtree_has_action == RenderAction::Relayout {
+            self.mark.set_subtree_has_layout();
+        }
+        <R as FullRender>::Impl::maybe_layer_mark_render_action(
+            self,
+            child_render_action,
+            subtree_has_action,
+        )
     }
 
     fn try_as_aweak_any_layer_render_object(
