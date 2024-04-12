@@ -110,7 +110,6 @@ impl<
     > ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
 where
     Self: ImplRender<R, AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas>,
-    R: HitTest,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,

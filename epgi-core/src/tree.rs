@@ -7,9 +7,6 @@ pub use element::*;
 mod hook;
 pub use hook::*;
 
-mod layer;
-pub use layer::*;
-
 mod reconcile_item;
 pub use reconcile_item::*;
 

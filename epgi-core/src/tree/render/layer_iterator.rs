@@ -1,9 +1,22 @@
 use crate::foundation::{Canvas, Key};
 
 use super::{
-    ArcAnyLayerRenderObjectExt, ChildLayerOrFragmentRef, ChildLayerProducingIterator,
-    ComposableChildLayer, ComposableUnadoptedLayer, LayerCompositionConfig, PaintResults,
+    ArcAnyLayerRenderObjectExt, ComposableChildLayer, ComposableUnadoptedLayer,
+    LayerCompositionConfig, PaintResults,
 };
+
+pub trait ChildLayerProducingIterator<CC: Canvas> {
+    fn for_each(
+        &mut self,
+        composite: impl FnMut(ChildLayerOrFragmentRef<'_, CC>) -> Vec<ComposableUnadoptedLayer<CC>>,
+    );
+}
+
+pub enum ChildLayerOrFragmentRef<'a, C: Canvas> {
+    Fragment(&'a C::Encoding),
+    StructuredChild(&'a ComposableChildLayer<C>),
+    AdoptedChild(&'a ComposableChildLayer<C>),
+}
 
 pub struct NonCachingChildLayerProducingIterator<'a, PC, CC, F>
 where

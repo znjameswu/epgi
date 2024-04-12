@@ -1,35 +1,33 @@
 mod mark;
 pub use mark::*;
 
-mod node;
-pub use node::*;
+mod render_object;
+pub use render_object::*;
 
 mod r#impl;
 pub use r#impl::*;
 
+mod render_cache;
+pub use render_cache::*;
+
+mod layer_cache;
+pub use layer_cache::*;
+
+mod layer_iterator;
+pub use layer_iterator::*;
+
+mod layer_child;
+pub use layer_child::*;
+
 use std::any::TypeId;
 
-use crate::{
-    foundation::{
-        default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut,
-        default_query_interface_arc, default_query_interface_box, default_query_interface_ref,
-        AnyRawPointer, Arc, AsIterator, Asc, Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf,
-        HktContainer, Key, LayerProtocol, PaintContext, Protocol, SyncMutex, Transform,
-        TransformHitPosition,
-    },
-    sync::ImplAdopterLayer,
-    tree::{ChildLayerProducingIterator, LayerCompositionConfig, PaintResults},
+use crate::foundation::{
+    default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut, AnyRawPointer,
+    Arc, AsIterator, Asc, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, Key,
+    LayerProtocol, PaintContext, Protocol, SyncMutex, Transform, TransformHitPosition,
 };
 
-use super::{
-    ArcAnyLayerRenderObject, ArcElementContextNode, AweakAnyLayerRenderObject, ElementContextNode,
-};
-
-pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
-pub type ArcAnyRenderObject = Arc<dyn AnyRenderObject>;
-pub type AweakAnyRenderObject = Aweak<dyn AnyRenderObject>;
-pub type AweakParentRenderObject<P> = Arc<dyn ParentRenderObject<P>>;
-pub type ArcChildRenderObjectWithCanvas<C> = Arc<dyn ChildRenderObjectWithCanvas<C>>;
+use super::ArcElementContextNode;
 
 pub type ContainerOfRender<E, T> =
     <<E as RenderBase>::ChildContainer as HktContainer>::Container<T>;
@@ -426,135 +424,5 @@ where
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
         op(&mut inner_reborrow.render, &mut inner_reborrow.children)
-    }
-}
-
-pub trait ChildRenderObject<PP: Protocol>:
-    AnyRenderObject
-    + crate::sync::ChildRenderObjectLayoutExt<PP>
-    + crate::sync::ChildRenderObjectPaintExt<PP>
-    + crate::sync::ChildRenderObjectHitTestExt<PP>
-    + Send
-    + Sync
-{
-    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
-}
-
-impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
-where
-    R: FullRender,
-{
-    fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
-        self
-    }
-}
-
-pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
-    fn element_context(&self) -> &ElementContextNode;
-    fn detach_render_object(&self);
-    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
-
-    fn mark_render_action(
-        self: &Arc<Self>,
-        child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction
-    where
-        Self: Sized;
-
-    fn try_as_aweak_any_layer_render_object(
-        render_object: &Arc<Self>,
-    ) -> Option<AweakAnyLayerRenderObject>
-    where
-        Self: Sized;
-}
-
-impl<R> AnyRenderObject for RenderObject<R>
-where
-    R: FullRender,
-{
-    fn element_context(&self) -> &ElementContextNode {
-        todo!()
-    }
-
-    fn detach_render_object(&self) {
-        todo!()
-    }
-
-    fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
-        if <R as FullRender>::Impl::IS_LAYER {
-            Some(<R as FullRender>::Impl::into_arc_any_layer_render_object(
-                self,
-            ))
-        } else {
-            None
-        }
-    }
-
-    fn mark_render_action(
-        self: &Arc<Self>,
-        mut child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
-    ) -> RenderAction {
-        if child_render_action == RenderAction::Relayout {
-            self.mark.set_self_needs_layout();
-            if !self.mark.parent_use_size() {
-                child_render_action = RenderAction::Repaint;
-            }
-        }
-        if subtree_has_action == RenderAction::Relayout {
-            self.mark.set_subtree_has_layout();
-        }
-        <R as FullRender>::Impl::maybe_layer_mark_render_action(
-            self,
-            child_render_action,
-            subtree_has_action,
-        )
-    }
-
-    fn try_as_aweak_any_layer_render_object(
-        render_object: &Arc<Self>,
-    ) -> Option<AweakAnyLayerRenderObject>
-    where
-        Self: Sized,
-    {
-        if <R as FullRender>::Impl::IS_LAYER {
-            Some(<R as FullRender>::Impl::into_aweak_any_layer_render_object(
-                Arc::downgrade(render_object),
-            ))
-        } else {
-            None
-        }
-    }
-}
-
-pub trait ParentRenderObject<CP: Protocol>: Send + Sync + 'static {}
-
-pub trait ChildRenderObjectWithCanvas<C: Canvas>:
-    CastInterfaceByRawPtr + Send + Sync + 'static
-{
-}
-
-impl<R> ChildRenderObjectWithCanvas<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas>
-    for RenderObject<R>
-where
-    R: Render,
-{
-}
-
-impl<C> dyn ChildRenderObjectWithCanvas<C>
-where
-    C: Canvas,
-{
-    pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
-        default_query_interface_ref(self)
-    }
-
-    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
-        default_query_interface_box(self)
-    }
-
-    pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
-        default_query_interface_arc(self)
     }
 }
