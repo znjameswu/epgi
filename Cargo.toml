@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "epgi-core",
-    "epgi-macro",
     "epgi-common",
     "epgi-2d",
     # # Glazier was broken due to wgpu updates
