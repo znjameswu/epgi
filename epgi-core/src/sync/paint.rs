@@ -199,9 +199,7 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
-        paint_ctx.add_layer(render_object.clone(), |transform| {
-            <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
-        });
+        paint_ctx.add_layer::<R::ParentProtocol>(render_object.clone(), offset);
     }
 }
 
@@ -228,12 +226,10 @@ where
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
-        paint_ctx.add_orphan_layer(
+        paint_ctx.add_orphan_layer::<R::ParentProtocol>(
             render_object.clone(),
             R::adopter_key(render).clone(),
-            |transform| {
-                <R::ParentProtocol as LayerProtocol>::compute_layer_transform(&offset, transform)
-            },
+            offset,
         );
     }
 }

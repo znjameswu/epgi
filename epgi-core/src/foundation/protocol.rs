@@ -1,7 +1,8 @@
 use std::{fmt::Debug, ops::Mul};
 
 use crate::tree::{
-    ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject, PaintResults,
+    ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
+    LayerCompositionConfig, PaintResults,
 };
 
 use super::{Asc, Key};
@@ -24,10 +25,15 @@ pub trait Protocol: std::fmt::Debug + Copy + Clone + Send + Sync + 'static {
 pub trait LayerProtocol: Protocol {
     fn zero_offset() -> Self::Offset;
 
-    fn compute_layer_transform(
+    fn offset_layer_transform(
         offset: &Self::Offset,
         transform: &<<Self as Protocol>::Canvas as Canvas>::Transform,
     ) -> <<Self as Protocol>::Canvas as Canvas>::Transform;
+
+    fn offset_layer_composition_config(
+        offset: &Self::Offset,
+        config: &LayerCompositionConfig<Self::Canvas>,
+    ) -> LayerCompositionConfig<Self::Canvas>;
 }
 
 pub trait Intrinsics: Debug + Send + Sync {
@@ -74,7 +80,7 @@ where
     }
 }
 
-pub trait Canvas: Sized + 'static {
+pub trait Canvas: Clone + Sized + 'static {
     type Transform: Mul<Self::Transform, Output = Self::Transform>
         + Transform<Self>
         + TransformHitPosition<Self, Self>;
@@ -136,22 +142,18 @@ pub trait PaintContext {
     // );
 
     // Temporary signature
-    fn add_layer(
+    fn add_layer<P: LayerProtocol<Canvas = Self::Canvas>>(
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
-        transform: impl FnOnce(
-            &<Self::Canvas as Canvas>::Transform,
-        ) -> <Self::Canvas as Canvas>::Transform,
+        offset: &P::Offset,
     );
 
     // Temporary signature
-    fn add_orphan_layer(
+    fn add_orphan_layer<P: LayerProtocol<Canvas = Self::Canvas>>(
         &mut self,
         layer: ArcAnyLayerRenderObject,
         adopter_key: Asc<dyn Key>,
-        transform: impl FnOnce(
-            &<Self::Canvas as Canvas>::Transform,
-        ) -> <Self::Canvas as Canvas>::Transform,
+        offset: &P::Offset,
     );
 
     fn with_transform(

@@ -1,6 +1,8 @@
 use epgi_core::{
     foundation::{Canvas, LayerProtocol, Transform, TransformHitPosition},
-    tree::{ArcChildRenderObject, PaintResults, StructuredChildLayerOrFragment},
+    tree::{
+        ArcChildRenderObject, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
+    },
 };
 
 use crate::{
@@ -54,7 +56,9 @@ impl Canvas for Affine2dCanvas {
             detached_children: Default::default(),
         };
         let mut paint_ctx = VelloPaintContext {
-            curr_transform: Affine2d::IDENTITY,
+            curr_config: LayerCompositionConfig {
+                transform: Affine2d::IDENTITY,
+            },
             curr_fragment_encoding: Affine2dEncoding::new(),
             results: &mut paint_results,
         };

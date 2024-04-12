@@ -45,6 +45,13 @@ pub struct PaintResults<C: Canvas> {
 }
 
 pub struct CompositeResults<C: Canvas, T> {
+    // pub(crate) adopted_layers:
     pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<C>>,
-    pub(crate) cached_composition: T,
+    pub(crate) cached_composition_results: T,
+}
+
+#[derive(Clone)]
+pub struct CompositionCache<C: Canvas, CM> {
+    pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<C>>,
+    pub(crate) memo: CM,
 }

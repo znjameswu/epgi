@@ -1,4 +1,7 @@
-use epgi_core::foundation::{Intrinsics, LayerProtocol, Protocol};
+use epgi_core::{
+    foundation::{Intrinsics, LayerProtocol, Protocol},
+    tree::LayerCompositionConfig,
+};
 
 use crate::{Affine2d, Affine2dCanvas, Point2d};
 
@@ -162,11 +165,20 @@ impl Protocol for BoxProtocol {
 }
 
 impl LayerProtocol for BoxProtocol {
-    fn compute_layer_transform(offset: &BoxOffset, transform: &Affine2d) -> Affine2d {
-        todo!()
-    }
-
     fn zero_offset() -> BoxOffset {
         BoxOffset { x: 0.0, y: 0.0 }
+    }
+
+    fn offset_layer_transform(offset: &BoxOffset, transform: &Affine2d) -> Affine2d {
+        transform.mul_translation(*offset)
+    }
+
+    fn offset_layer_composition_config(
+        offset: &Self::Offset,
+        config: &LayerCompositionConfig<Self::Canvas>,
+    ) -> LayerCompositionConfig<Self::Canvas> {
+        LayerCompositionConfig {
+            transform: Self::offset_layer_transform(offset, &config.transform),
+        }
     }
 }

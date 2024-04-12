@@ -175,17 +175,17 @@ pub trait CachedComposite<
     AdopterCanvas: Canvas = <<Self as RenderBase>::ParentProtocol as Protocol>::Canvas,
 >: RenderBase
 {
-    type CompositionCache: Send + Sync + Clone + 'static;
+    type CompositionMemo: Send + Sync + Clone + 'static;
 
     fn composite_into_cache(
         &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> Self::CompositionCache;
+    ) -> Self::CompositionMemo;
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut AdopterCanvas::Encoding,
-        cache: &Self::CompositionCache,
+        cache: &Self::CompositionMemo,
         composition_config: &LayerCompositionConfig<AdopterCanvas>,
     );
 

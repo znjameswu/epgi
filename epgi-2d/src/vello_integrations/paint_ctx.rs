@@ -1,5 +1,5 @@
 use epgi_core::{
-    foundation::{Asc, Canvas, Key, PaintContext, Protocol, Transform},
+    foundation::{Asc, Canvas, Key, LayerProtocol, PaintContext, Protocol, Transform},
     tree::{
         ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
         ComposableChildLayer, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
@@ -16,7 +16,7 @@ use crate::{
 pub struct VelloPaintContext<'a> {
     /// Vello does not store transform on stack (i.e. transform is absolute).
     /// However, our canvas design requires a transform stack. Hence we store it here.
-    pub(crate) curr_transform: Affine2d,
+    pub(crate) curr_config: LayerCompositionConfig<Affine2dCanvas>,
     // scene: &'a mut vello_encoding::Encoding,
     pub(crate) curr_fragment_encoding: Affine2dEncoding,
     pub(crate) results: &'a mut PaintResults<Affine2dCanvas>,
@@ -40,14 +40,14 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             DrawShape { shape, painter } => match painter {
                 Painter::Fill(painter) => self.fill(
                     painter.fill,
-                    self.curr_transform,
+                    self.curr_config.transform,
                     &painter.brush,
                     painter.transform,
                     shape,
                 ),
                 Painter::Stroke(painter) => self.stroke(
                     &painter.stroke,
-                    self.curr_transform,
+                    self.curr_config.transform,
                     &painter.brush,
                     painter.transform,
                     shape,
@@ -57,11 +57,11 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
                 shape,
                 blend,
                 alpha,
-            } => self.push_layer(blend, alpha, self.curr_transform, shape),
+            } => self.push_layer(blend, alpha, self.curr_config.transform, shape),
             PopClip => self.pop_layer(),
             DrawParagraph { paragraph } => render_text(
                 &mut self.curr_fragment_encoding,
-                self.curr_transform,
+                self.curr_config.transform,
                 &paragraph,
             ),
         }
@@ -93,12 +93,10 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
     //         ));
     // }
 
-    fn add_layer(
+    fn add_layer<P: LayerProtocol<Canvas = Affine2dCanvas>>(
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
-        transform: impl FnOnce(
-            &<Self::Canvas as Canvas>::Transform,
-        ) -> <Self::Canvas as Canvas>::Transform,
+        offset: &P::Offset,
     ) {
         if !self.curr_fragment_encoding.is_empty() {
             let encoding = std::mem::take(&mut self.curr_fragment_encoding);
@@ -110,21 +108,17 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             .structured_children
             .push(StructuredChildLayerOrFragment::StructuredChild(
                 ComposableChildLayer {
-                    config: LayerCompositionConfig {
-                        transform: transform(&self.curr_transform),
-                    },
+                    config: P::offset_layer_composition_config(offset, &self.curr_config),
                     layer,
                 },
             ));
     }
 
-    fn add_orphan_layer(
+    fn add_orphan_layer<P: LayerProtocol<Canvas = Affine2dCanvas>>(
         &mut self,
         layer: ArcAnyLayerRenderObject,
         adopter_key: Asc<dyn Key>,
-        transform: impl FnOnce(
-            &<Self::Canvas as Canvas>::Transform,
-        ) -> <Self::Canvas as Canvas>::Transform,
+        offset: &P::Offset,
     ) {
         todo!()
     }
@@ -134,10 +128,10 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         transform: <Self::Canvas as Canvas>::Transform,
         op: impl FnOnce(&mut Self),
     ) {
-        let new_transform = Transform::mul(&self.curr_transform, &transform);
-        let old_transform = std::mem::replace(&mut self.curr_transform, new_transform);
+        let new_transform = Transform::mul(&self.curr_config.transform, &transform);
+        let old_transform = std::mem::replace(&mut self.curr_config.transform, new_transform);
         op(self);
-        self.curr_transform = old_transform;
+        self.curr_config.transform = old_transform;
     }
 }
 
@@ -153,21 +147,19 @@ impl PaintContext for VelloPaintScanner {
     ) {
     }
 
-    fn add_layer(
+    fn add_layer<P: LayerProtocol<Canvas = Affine2dCanvas>>(
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
-        offset: impl FnOnce(&<Self::Canvas as Canvas>::Transform) -> <Self::Canvas as Canvas>::Transform,
+        offset: &P::Offset,
     ) {
         todo!()
     }
 
-    fn add_orphan_layer(
+    fn add_orphan_layer<P: LayerProtocol<Canvas = Affine2dCanvas>>(
         &mut self,
         layer: ArcAnyLayerRenderObject,
         adopter_key: Asc<dyn Key>,
-        transform: impl FnOnce(
-            &<Self::Canvas as Canvas>::Transform,
-        ) -> <Self::Canvas as Canvas>::Transform,
+        offset: &P::Offset,
     ) {
         todo!()
     }

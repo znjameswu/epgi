@@ -4,9 +4,9 @@ use crate::{
     foundation::{Arc, Asc, Canvas, LayerProtocol, Protocol},
     tree::{
         CachedComposite, CachingChildLayerProducingIterator, ComposableUnadoptedLayer, Composite,
-        CompositeResults, ImplRenderObject, LayerCache, LayerCompositionConfig, LayerMark,
-        LayerPaint, NonCachingChildLayerProducingIterator, PaintResults, Render, RenderBase,
-        RenderImpl, RenderObject,
+        CompositeResults, CompositionCache, ImplRenderObject, LayerCache, LayerCompositionConfig,
+        LayerMark, LayerPaint, NonCachingChildLayerProducingIterator, PaintResults, Render,
+        RenderBase, RenderImpl, RenderObject,
     },
 };
 
@@ -48,7 +48,7 @@ where
                 .expect(
                     "Caching layers that are not marked as dirty should have a compositiong cache",
                 )
-                .cached_composition
+                .cached_composition_results
                 .clone();
             return Asc::new(cached_composition);
         }
@@ -65,7 +65,7 @@ where
 
         let composition_results =
             R::Impl::regenerate_composite_cache(&inner_reborrow.render, &layer_cache.paint_results);
-        let cached_composition = Asc::new(composition_results.cached_composition.clone());
+        let cached_composition = Asc::new(composition_results.cached_composition_results.clone());
         layer_cache.insert_composite_results(composition_results);
         self.layer_mark.clear_needs_composite();
         return cached_composition;
@@ -119,7 +119,7 @@ where
                 encoding,
                 composition_config,
                 &layer_cache.paint_results,
-                &composite_results.cached_composition,
+                &composite_results.cached_composition_results,
             );
             composite_results
         } else {
@@ -249,7 +249,7 @@ where
         render.composite_to(encoding, &mut iter, composition_config);
         CompositeResults {
             unadopted_layers: todo!(), //iter.unadopted_layers,
-            cached_composition: (),
+            cached_composition_results: (),
         }
     }
 
@@ -269,22 +269,25 @@ impl<
         const DRY_LAYOUT: bool,
         const LAYER_PAINT: bool,
         const ORPHAN_LAYER: bool,
-        CC,
+        CM,
     > ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>
         + ImplRenderObject<
             R,
             LayerMark = LayerMark,
-            LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, CC>,
+            LayerCache = LayerCache<
+                <R::ChildProtocol as Protocol>::Canvas,
+                CompositionCache<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CM>,
+            >,
         >,
-    R: CachedComposite<Self::AdopterCanvas, CompositionCache = CC>,
+    R: CachedComposite<Self::AdopterCanvas, CompositionMemo = CM>,
     R: LayerPaint,
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
-    CC: Clone + Send + Sync,
+    CM: Clone + Send + Sync,
 {
-    type CompositionCache = CC;
+    type CompositionCache = CompositionCache<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CM>;
 
     fn regenerate_composite_cache(
         render: &R,
@@ -299,7 +302,7 @@ where
         let cached_composition = render.composite_into_cache(&mut iter);
         CompositeResults {
             unadopted_layers: iter.unadopted_layers,
-            cached_composition,
+            cached_composition_results: cached_composition,
         }
     }
 
@@ -310,7 +313,11 @@ where
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
     ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
         let results = Self::regenerate_composite_cache(render, paint_results);
-        render.composite_from_cache_to(encoding, &results.cached_composition, composition_config);
+        render.composite_from_cache_to(
+            encoding,
+            &results.cached_composition_results,
+            composition_config,
+        );
         results
     }
 

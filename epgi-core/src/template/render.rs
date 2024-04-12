@@ -253,17 +253,17 @@ where
 }
 
 pub trait TemplateCachedComposite<R: RenderBase, AdopterCanvas: Canvas> {
-    type CompositionCache: Send + Sync + Clone + 'static;
+    type CompositionMemo: Send + Sync + Clone + 'static;
 
     fn composite_into_cache(
         render: &R,
         child_iterator: &mut impl ChildLayerProducingIterator<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> Self::CompositionCache;
+    ) -> Self::CompositionMemo;
 
     fn composite_from_cache_to(
         render: &R,
         encoding: &mut AdopterCanvas::Encoding,
-        cache: &Self::CompositionCache,
+        cache: &Self::CompositionMemo,
         composition_config: &LayerCompositionConfig<AdopterCanvas>,
     );
 
@@ -279,19 +279,19 @@ where
     R::Template: TemplateCachedComposite<R, C>,
     R: RenderBase,
 {
-    type CompositionCache = <R::Template as TemplateCachedComposite<R, C>>::CompositionCache;
+    type CompositionMemo = <R::Template as TemplateCachedComposite<R, C>>::CompositionMemo;
 
     fn composite_into_cache(
         &self,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> Self::CompositionCache {
+    ) -> Self::CompositionMemo {
         R::Template::composite_into_cache(self, child_iterator)
     }
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut <C as Canvas>::Encoding,
-        cache: &Self::CompositionCache,
+        cache: &Self::CompositionMemo,
         composition_config: &LayerCompositionConfig<C>,
     ) {
         R::Template::composite_from_cache_to(self, encoding, cache, composition_config)

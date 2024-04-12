@@ -10,8 +10,8 @@ use crate::{
 };
 
 use super::{
-    ArcElementContextNode, CachedComposite, FullRender, ImplMaybeLayer, LayerPaint, Render,
-    RenderAction, RenderBase, RenderCache, RenderImpl, RenderMark,
+    ArcElementContextNode, CachedComposite, CompositionCache, FullRender, ImplMaybeLayer,
+    LayerPaint, Render, RenderAction, RenderBase, RenderCache, RenderImpl, RenderMark,
 };
 
 pub type ArcChildRenderObject<P> = Arc<dyn ChildRenderObject<P>>;
@@ -70,15 +70,18 @@ impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRender
     type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>;
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CC> ImplRenderObject<R>
+impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CM> ImplRenderObject<R>
     for RenderImpl<DRY_LAYOUT, true, true, ORPHAN_LAYER>
 where
     Self: ImplAdopterLayer<R>,
-    R: CachedComposite<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CompositionCache = CC>,
-    CC: Clone + Send + Sync,
+    R: CachedComposite<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CompositionMemo = CM>,
+    CM: Clone + Send + Sync,
 {
     type LayerMark = LayerMark;
-    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, CC>;
+    type LayerCache = LayerCache<
+        <R::ChildProtocol as Protocol>::Canvas,
+        CompositionCache<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CM>,
+    >;
 }
 
 pub trait ChildRenderObject<PP: Protocol>:

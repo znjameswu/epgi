@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use crate::Point2d;
+use crate::{BoxOffset, Point2d};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
@@ -14,6 +14,28 @@ impl Affine2d {
             x: self.0[4],
             y: self.0[5],
         }
+    }
+
+    pub fn from_translation(offset: BoxOffset) -> Self {
+        Self([1.0, 0.0, 0.0, 1.0, offset.x, offset.y])
+    }
+
+    pub fn mul_translation(&self, offset: BoxOffset) -> Self {
+        let a = [
+            offset.x * self.0[0],
+            offset.x * self.0[1],
+            offset.y * self.0[2],
+            offset.y * self.0[3],
+        ];
+        let new_translation = [self.0[4] + a[0] + a[2], self.0[5] + a[1] + a[3]];
+        Affine2d([
+            self.0[0],
+            self.0[1],
+            self.0[2],
+            self.0[3],
+            new_translation[0],
+            new_translation[1],
+        ])
     }
 }
 
