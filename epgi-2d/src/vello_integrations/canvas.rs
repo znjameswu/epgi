@@ -91,4 +91,20 @@ impl Transform<Affine2dCanvas> for Affine2d {
     fn identity() -> Self {
         Affine2d::IDENTITY
     }
+
+    fn inv(&self) -> Option<Self> {
+        let det = self.0[0] * self.0[3] - self.0[1] * self.0[2];
+        let inv_det = det.recip();
+        if !inv_det.is_finite() {
+            return None;
+        }
+        Some(Self([
+            inv_det * self.0[3],
+            -inv_det * self.0[1],
+            -inv_det * self.0[2],
+            inv_det * self.0[0],
+            inv_det * (self.0[2] * self.0[5] - self.0[3] * self.0[4]),
+            inv_det * (self.0[1] * self.0[4] - self.0[0] * self.0[5]),
+        ]))
+    }
 }
