@@ -77,7 +77,10 @@ where
     CM: Clone + Send + Sync,
 {
     type LayerMark = LayerMark;
-    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, CompositionCache<CM>>;
+    type LayerCache = LayerCache<
+        <R::ChildProtocol as Protocol>::Canvas,
+        CompositionCache<<R::ChildProtocol as Protocol>::Canvas, CM>,
+    >;
 }
 
 pub trait ChildRenderObject<PP: Protocol>:

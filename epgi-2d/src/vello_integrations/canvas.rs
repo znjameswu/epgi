@@ -12,6 +12,7 @@ use crate::{
 
 pub type Point2d = BoxOffset;
 
+#[derive(Clone)]
 pub struct Affine2dCanvas;
 
 impl Canvas for Affine2dCanvas {

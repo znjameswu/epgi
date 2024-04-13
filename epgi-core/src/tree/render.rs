@@ -144,10 +144,10 @@ where
         )
     }
 
-    // fn transform_config(
-    //     self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-    //     child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    // ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
+    fn transform_config(
+        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
 
     fn layer_key(&self) -> Option<&Arc<dyn Key>> {
         None
@@ -158,7 +158,7 @@ pub trait Composite: RenderBase {
     fn composite_to(
         &self,
         encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     );
 
@@ -171,15 +171,15 @@ pub trait Composite: RenderBase {
 pub trait CachedComposite: RenderBase {
     type CompositionMemo: Send + Sync + Clone + 'static;
 
-    fn composite_into_cache(
+    fn composite_into_memo(
         &self,
-        child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
     ) -> Self::CompositionMemo;
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
-        cache: &Self::CompositionMemo,
+        memo: &Self::CompositionMemo,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     );
 

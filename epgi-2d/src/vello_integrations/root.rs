@@ -161,14 +161,21 @@ impl DryLayout for RenderRoot {
     }
 }
 
-impl LayerPaint for RenderRoot {}
+impl LayerPaint for RenderRoot {
+    fn transform_config(
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
+        todo!()
+    }
+}
 
 impl CachedComposite for RenderRoot {
     type CompositionMemo = Arc<Affine2dEncoding>;
 
-    fn composite_into_cache(
+    fn composite_into_memo(
         &self,
-        child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> Self::CompositionMemo {
         let mut result = Affine2dEncoding::new();
         use epgi_core::tree::ChildLayerOrFragmentRef::*;

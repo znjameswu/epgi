@@ -3,10 +3,9 @@ use std::any::Any;
 use crate::{
     foundation::{Arc, Asc, Canvas, LayerProtocol, Protocol},
     tree::{
-        CachedComposite, CachingChildLayerProducingIterator, ComposableUnadoptedLayer, Composite,
+        CachedComposite, ChildLayerProducingIterator, ComposableUnadoptedLayer, Composite,
         CompositeResults, CompositionCache, ImplRenderObject, LayerCache, LayerCompositionConfig,
-        LayerMark, LayerPaint, NonCachingChildLayerProducingIterator, PaintResults, Render,
-        RenderBase, RenderImpl, RenderObject,
+        LayerMark, LayerPaint, PaintResults, Render, RenderBase, RenderImpl, RenderObject,
     },
 };
 
@@ -14,12 +13,12 @@ use super::BuildScheduler;
 
 impl BuildScheduler {
     pub(crate) fn perform_composite(&self) -> Asc<dyn Any + Send + Sync> {
-        self.root_render_object.recomposite_into_cache()
+        self.root_render_object.recomposite_into_memo()
     }
 }
 
 pub trait AnyLayerRenderObjectCompositeExt {
-    fn recomposite_into_cache(&self) -> Asc<dyn Any + Send + Sync>;
+    fn recomposite_into_memo(&self) -> Asc<dyn Any + Send + Sync>;
 }
 
 impl<R> AnyLayerRenderObjectCompositeExt for RenderObject<R>
@@ -30,7 +29,7 @@ where
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
-    fn recomposite_into_cache(&self) -> Asc<dyn Any + Send + Sync> {
+    fn recomposite_into_memo(&self) -> Asc<dyn Any + Send + Sync> {
         let no_relayout_token = self.mark.assume_not_needing_layout();
         let _no_detach_token = self.mark.assume_not_detached();
         let needs_composite = self.layer_mark.needs_composite();
@@ -48,7 +47,7 @@ where
                 .expect(
                     "Caching layers that are not marked as dirty should have a compositiong cache",
                 )
-                .cached_composition_results
+                .cache
                 .clone();
             return Asc::new(cached_composition);
         }
@@ -63,12 +62,12 @@ where
             .as_mut()
             .expect("Layer should only be composited after they are painted");
 
-        let composition_results =
+        let (composition_results, unadopted_layers) =
             R::Impl::regenerate_composite_cache(&inner_reborrow.render, &layer_cache.paint_results);
-        let cached_composition = Asc::new(composition_results.cached_composition_results.clone());
+        let arc_memo = Asc::new(composition_results.cache.clone());
         layer_cache.insert_composite_results(composition_results);
         self.layer_mark.clear_needs_composite();
-        return cached_composition;
+        return arc_memo;
     }
 }
 
@@ -111,37 +110,34 @@ where
             .err()
             .and_then(|token| layer_cache.composite_results_ref(token));
 
-        let composite_results = if let Some(composite_results) = composite_results {
+        let unadopted_layers = if let Some(composite_results) = composite_results {
             R::Impl::composite_with_cache(
                 &inner_reborrow.render,
                 encoding,
                 composition_config,
                 &layer_cache.paint_results,
-                &composite_results.cached_composition_results,
-            );
-            composite_results
+                &composite_results.cache,
+            )
         } else {
-            let composite_results = R::Impl::composite_without_cache(
+            let (composite_results, unadopted_layers) = R::Impl::composite_without_cache(
                 &inner_reborrow.render,
                 encoding,
                 composition_config,
                 &layer_cache.paint_results,
             );
-            layer_cache.insert_composite_results(composite_results)
+            layer_cache.insert_composite_results(composite_results);
+            unadopted_layers
         };
         // return composite_results.unadopted_layers.clone();
 
-        // return composite_results
-        //     .unadopted_layers
-        //     .iter()
-        //     .map(|unadopted_layer| ComposableUnadoptedLayer {
-        //         config: R::transform_config(composition_config, &unadopted_layer.config),
-        //         adopter_key: unadopted_layer.adopter_key.clone(),
-        //         layer: unadopted_layer.layer.clone(),
-        //     })
-        //     .collect();
-
-        todo!()
+        return unadopted_layers
+            .iter()
+            .map(|unadopted_layer| ComposableUnadoptedLayer {
+                config: R::transform_config(composition_config, &unadopted_layer.config),
+                adopter_key: unadopted_layer.adopter_key.clone(),
+                layer: unadopted_layer.layer.clone(),
+            })
+            .collect();
     }
 }
 
@@ -161,18 +157,28 @@ where
     R::ParentProtocol: LayerProtocol,
     R::ChildProtocol: LayerProtocol,
 {
+    type CompositionMemo: Clone + Send + Sync;
     type CompositionCache: Clone + Send + Sync;
+
+    fn get_composition_memo(cache: &Self::CompositionCache) -> &Self::CompositionMemo;
+
     fn regenerate_composite_cache(
         render: &R,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>;
+    ) -> (
+        CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    );
 
     fn composite_without_cache(
         render: &R,
         encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>;
+    ) -> (
+        CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    );
 
     fn composite_with_cache(
         render: &R,
@@ -180,12 +186,20 @@ where
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
         cache: &Self::CompositionCache,
-    );
+    ) -> Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>;
 }
 
-impl<R: RenderBase, const DRY_LAYOUT: bool, const LAYER_PAINT: bool, const ORPHAN_LAYER: bool>
-    ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
+impl<
+        R: RenderBase,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const ORPHAN_LAYER: bool,
+        CC: Canvas,
+        PC: Canvas,
+    > ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
 where
+    R::ParentProtocol: Protocol<Canvas = PC>,
+    R::ChildProtocol: Protocol<Canvas = CC>,
     Self: ImplRenderObject<
         R,
         LayerMark = LayerMark,
@@ -196,12 +210,20 @@ where
     R::ChildProtocol: LayerProtocol,
     R::ParentProtocol: LayerProtocol,
 {
+    type CompositionMemo = ();
     type CompositionCache = ();
+
+    fn get_composition_memo(cache: &Self::CompositionCache) -> &Self::CompositionMemo {
+        cache
+    }
 
     fn regenerate_composite_cache(
         render: &R,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
+    ) -> (
+        CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    ) {
         panic!("Recomposite can only be called on layer render object with composition caches")
     }
 
@@ -210,19 +232,20 @@ where
         encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
-        let mut iter = NonCachingChildLayerProducingIterator {
-            paint_results: &paint_results,
-            key: render.layer_key().map(Arc::as_ref),
-            unadopted_layers: Vec::new(),
-            composition_config,
-            transform_config: R::transform_config,
-        };
+    ) -> (
+        CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    ) {
+        let mut iter =
+            ChildLayerProducingIterator::new(&paint_results, render.layer_key().map(Arc::as_ref));
         render.composite_to(encoding, &mut iter, composition_config);
-        CompositeResults {
-            unadopted_layers: todo!(), //iter.unadopted_layers,
-            cached_composition_results: (),
-        }
+        (
+            CompositeResults {
+                adopted_layers: iter.adopted_layers, //iter.unadopted_layers,
+                cache: (),
+            },
+            iter.unadopted_layers,
+        )
     }
 
     fn composite_with_cache(
@@ -231,8 +254,8 @@ where
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
         cache: &Self::CompositionCache,
-    ) {
-        Self::composite_without_cache(render, encoding, composition_config, paint_results);
+    ) -> Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>> {
+        Self::composite_without_cache(render, encoding, composition_config, paint_results).1
     }
 }
 
@@ -249,7 +272,7 @@ where
         LayerMark = LayerMark,
         LayerCache = LayerCache<
             <R::ChildProtocol as Protocol>::Canvas,
-            CompositionCache<<R::ParentProtocol as Protocol>::Canvas, CM>,
+            CompositionCache<<R::ChildProtocol as Protocol>::Canvas, CM>,
         >,
     >,
     R: CachedComposite<CompositionMemo = CM>,
@@ -258,23 +281,33 @@ where
     R::ParentProtocol: LayerProtocol,
     CM: Clone + Send + Sync,
 {
-    type CompositionCache = CompositionCache<<R::ParentProtocol as Protocol>::Canvas, CM>;
+    type CompositionMemo = CM;
+    type CompositionCache = CompositionCache<<R::ChildProtocol as Protocol>::Canvas, CM>;
+
+    fn get_composition_memo(cache: &Self::CompositionCache) -> &Self::CompositionMemo {
+        &cache.memo
+    }
 
     fn regenerate_composite_cache(
         render: &R,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
-        let mut iter = CachingChildLayerProducingIterator {
-            paint_results,
-            key: render.layer_key().map(Arc::as_ref),
-            // key: inner_reborrow.layer.key().map(Arc::as_ref),
-            unadopted_layers: Vec::new(),
-        };
-        let cached_composition = render.composite_into_cache(&mut iter);
-        CompositeResults {
-            unadopted_layers: iter.unadopted_layers,
-            cached_composition_results: cached_composition,
-        }
+    ) -> (
+        CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    ) {
+        let mut iter =
+            ChildLayerProducingIterator::new(paint_results, render.layer_key().map(Arc::as_ref));
+        let memo = render.composite_into_memo(&mut iter);
+        (
+            CompositeResults {
+                adopted_layers: iter.adopted_layers,
+                cache: CompositionCache {
+                    unadopted_layers: iter.unadopted_layers.clone(),
+                    memo,
+                },
+            },
+            iter.unadopted_layers,
+        )
     }
 
     fn composite_without_cache(
@@ -282,13 +315,12 @@ where
         encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache> {
+    ) -> (
+        CompositeResults<<R::ChildProtocol as Protocol>::Canvas, Self::CompositionCache>,
+        Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>>,
+    ) {
         let results = Self::regenerate_composite_cache(render, paint_results);
-        render.composite_from_cache_to(
-            encoding,
-            &results.cached_composition_results,
-            composition_config,
-        );
+        render.composite_from_cache_to(encoding, &results.0.cache.memo, composition_config);
         results
     }
 
@@ -298,7 +330,8 @@ where
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         paint_results: &PaintResults<<R::ChildProtocol as Protocol>::Canvas>,
         cache: &Self::CompositionCache,
-    ) {
-        render.composite_from_cache_to(encoding, &cache, composition_config);
+    ) -> Vec<ComposableUnadoptedLayer<<R::ChildProtocol as Protocol>::Canvas>> {
+        render.composite_from_cache_to(encoding, &cache.memo, composition_config);
+        cache.unadopted_layers.clone()
     }
 }
