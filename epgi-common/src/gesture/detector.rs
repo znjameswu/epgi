@@ -10,8 +10,8 @@ use epgi_core::{
     nodes::{ComponentElement, ComponentWidget},
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{
-        ArcChildWidget, BuildContext, ElementBase, HitTestBehavior, ImplRenderObjectReconcile,
-        RenderAction, RenderObject, Widget,
+        ArcChildWidget, BuildContext, ElementBase, HitTestBehavior, RenderAction, RenderObject,
+        Widget,
     },
 };
 use hashbrown::HashMap;
@@ -194,13 +194,12 @@ impl ImplByTemplate for RenderRawGestureDetector {
 impl ProxyRender for RenderRawGestureDetector {
     type Protocol = BoxProtocol;
 
-    fn hit_test_self(
-        &self,
-        position: &Point2d,
-        size: &BoxSize,
-        offset: &BoxOffset,
-    ) -> Option<HitTestBehavior> {
-        BoxProtocol::position_in_shape(position, offset, size).then_some(HitTestBehavior::Opaque)
+    fn hit_test_self(&self, position: &Point2d, size: &BoxSize, offset: &BoxOffset) -> bool {
+        BoxProtocol::position_in_shape(position, offset, size)
+    }
+
+    fn hit_test_behavior(&self) -> HitTestBehavior {
+        HitTestBehavior::Opaque
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]

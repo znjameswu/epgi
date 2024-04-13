@@ -8,6 +8,7 @@ Previously, the orphan layer carries all the following responsibilities
 2. Registering self as orphan during paint
 3. Attach to adopter layer as adopted child layer
 4. Compsite with adopter and receive hit tests from adopter.
+5. Ignore hit test from adopter
 
 This causes the adopter canvas to be different from parent canvas.
 

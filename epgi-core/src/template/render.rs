@@ -6,9 +6,10 @@ use crate::{
         PaintContext, Protocol,
     },
     tree::{
-        ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, Composite, DryLayout,
-        HitTest, HitTestBehavior, HitTestResults, ImplRender, LayerCompositionConfig, LayerPaint,
-        Layout, OrphanLayer, Paint, PaintResults, Render, RenderBase, RenderObject,
+        ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, ComposableChildLayer,
+        Composite, DryLayout, HitTest, HitTestBehavior, HitTestContext, HitTestResult, ImplRender,
+        LayerCompositionConfig, LayerPaint, Layout, OrphanLayer, Paint, PaintResults, Render,
+        RenderBase, RenderObject,
     },
 };
 
@@ -314,13 +315,44 @@ where
 
 /// Orphan layers can skip this implementation
 pub trait TemplateHitTest<R: RenderBase> {
-    fn hit_test_children(
+    fn hit_test(
         render: &R,
+        ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
         children: &ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        results: &mut HitTestResults<<R::ParentProtocol as Protocol>::Canvas>,
+        adopted_children: &[ComposableChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
+    ) -> HitTestResult {
+        use HitTestResult::*;
+        let hit_self = Self::hit_test_self(render, ctx.curr_position(), size, offset, memo);
+        if !hit_self {
+            // Stop hit-test children if the hit is outside of parent
+            return NotHit;
+        }
+
+        let hit_children =
+            Self::hit_test_children(render, ctx, size, offset, memo, children, adopted_children);
+        if hit_children {
+            return Hit;
+        }
+
+        use HitTestBehavior::*;
+        match Self::hit_test_behavior(render) {
+            DeferToChild => NotHit,
+            Transparent => HitThroughSelf,
+            Opaque => Hit,
+        }
+    }
+
+    fn hit_test_children(
+        render: &R,
+        ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+        size: &<R::ParentProtocol as Protocol>::Size,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        memo: &R::LayoutMemo,
+        children: &ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
+        adopted_children: &[ComposableChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> bool;
 
     fn hit_test_self(
@@ -329,7 +361,13 @@ pub trait TemplateHitTest<R: RenderBase> {
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
-    ) -> Option<HitTestBehavior>;
+    ) -> bool {
+        R::ParentProtocol::position_in_shape(position, offset, size)
+    }
+
+    fn hit_test_behavior(render: &R) -> HitTestBehavior {
+        HitTestBehavior::DeferToChild
+    }
 }
 
 impl<R> HitTest for R
@@ -338,25 +376,31 @@ where
     R::Template: TemplateHitTest<R>,
     R: RenderBase,
 {
-    fn hit_test_children(
+    fn hit_test(
         &self,
+        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> bool {
-        R::Template::hit_test_children(self, size, offset, memo, children, results)
+        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+    ) -> HitTestResult {
+        R::Template::hit_test(self, ctx, size, offset, memo, children, adopted_children)
     }
 
-    fn hit_test_self(
+    fn hit_test_children(
         &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
-        R::Template::hit_test_self(self, position, size, offset, memo)
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+    ) -> bool {
+        unreachable!(
+            "TemplateHitTest has already provided a hit_test implementation, \
+            but hit_test_children is still invoked somehow. This indicates a framework bug."
+        )
     }
 }
 

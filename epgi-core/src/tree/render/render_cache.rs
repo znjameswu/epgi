@@ -3,14 +3,11 @@ use crate::foundation::Protocol;
 use super::{NoRelayoutToken, RenderBase};
 
 #[derive(Default)]
-pub(crate) struct RenderCache<R, LC>(Option<LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>>)
-where
-    R: RenderBase;
+pub(crate) struct RenderCache<R: RenderBase, LC>(
+    Option<LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>>,
+);
 
-impl<R, LC> RenderCache<R, LC>
-where
-    R: RenderBase,
-{
+impl<R: RenderBase, LC> RenderCache<R, LC> {
     pub(crate) fn new() -> Self {
         Self(None)
     }

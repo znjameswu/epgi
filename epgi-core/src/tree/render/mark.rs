@@ -80,20 +80,20 @@ impl RenderMark {
         NoRelayoutToken(())
     }
 
-    pub(crate) fn subtree_has_layout(&self) -> bool {
-        self.subtree_has_layout.load(Relaxed)
-    }
-
     pub(crate) fn clear_self_needs_layout(&self) {
         self.needs_layout.store(false, Relaxed)
     }
 
-    pub(crate) fn clear_subtree_has_layout(&self) {
-        self.subtree_has_layout.store(false, Relaxed)
-    }
-
     pub(crate) fn set_self_needs_layout(&self) {
         self.needs_layout.store(true, Relaxed)
+    }
+
+    pub(crate) fn subtree_has_layout(&self) -> bool {
+        self.subtree_has_layout.load(Relaxed)
+    }
+
+    pub(crate) fn clear_subtree_has_layout(&self) {
+        self.subtree_has_layout.store(false, Relaxed)
     }
 
     pub(crate) fn set_subtree_has_layout(&self) {
@@ -134,6 +134,14 @@ impl LayerMark {
         } else {
             Err(NoRecompositeToken(()))
         }
+    }
+
+    pub(crate) fn assume_not_needing_composite(&self) -> NoRecompositeToken {
+        debug_assert!(
+            !self.needs_composite.load(Relaxed),
+            "We assumed this render object to be not needing recomposite"
+        );
+        NoRecompositeToken(())
     }
 
     pub(crate) fn set_needs_composite(&self) {

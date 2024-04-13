@@ -3,7 +3,8 @@ use std::any::TypeId;
 use crate::{
     foundation::{AnyRawPointer, ArrayContainer, Canvas, PaintContext, Protocol},
     tree::{
-        ArcChildRenderObject, HitTestBehavior, HitTestResults, Render, RenderImpl, RenderObject,
+        ArcChildRenderObject, ComposableChildLayer, HitTestBehavior, HitTestContext, Render,
+        RenderImpl, RenderObject,
     },
 };
 
@@ -42,12 +43,12 @@ pub trait ProxyRender: Send + Sync + Sized + 'static {
     #[allow(unused_variables)]
     fn hit_test_children(
         &self,
+        ctx: &mut HitTestContext<<Self::Protocol as Protocol>::Canvas>,
         size: &<Self::Protocol as Protocol>::Size,
         offset: &<Self::Protocol as Protocol>::Offset,
         child: &ArcChildRenderObject<Self::Protocol>,
-        results: &mut HitTestResults<<Self::Protocol as Protocol>::Canvas>,
     ) -> bool {
-        results.hit_test(child.clone())
+        ctx.hit_test(child.clone())
     }
 
     #[allow(unused_variables)]
@@ -56,9 +57,12 @@ pub trait ProxyRender: Send + Sync + Sized + 'static {
         position: &<<Self::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::Protocol as Protocol>::Size,
         offset: &<Self::Protocol as Protocol>::Offset,
-    ) -> Option<HitTestBehavior> {
+    ) -> bool {
         Self::Protocol::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
+    }
+
+    fn hit_test_behavior(&self) -> HitTestBehavior {
+        HitTestBehavior::DeferToChild
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -144,13 +148,14 @@ where
 {
     fn hit_test_children(
         render: &R,
+        ctx: &mut HitTestContext<<R::Protocol as Protocol>::Canvas>,
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
         memo: &(),
         [child]: &[ArcChildRenderObject<R::Protocol>; 1],
-        results: &mut HitTestResults<<R::Protocol as Protocol>::Canvas>,
+        adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
     ) -> bool {
-        R::hit_test_children(render, size, offset, child, results)
+        R::hit_test_children(render, ctx, size, offset, child)
     }
 
     fn hit_test_self(
@@ -159,7 +164,11 @@ where
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
         memo: &(),
-    ) -> Option<HitTestBehavior> {
+    ) -> bool {
         R::hit_test_self(render, position, size, offset)
+    }
+
+    fn hit_test_behavior(render: &R) -> HitTestBehavior {
+        R::hit_test_behavior(render)
     }
 }

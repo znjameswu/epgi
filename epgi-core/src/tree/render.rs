@@ -24,7 +24,7 @@ use std::any::TypeId;
 use crate::foundation::{
     default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut, AnyRawPointer,
     Arc, AsIterator, Asc, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, Key,
-    LayerProtocol, PaintContext, Protocol, SyncMutex, Transform, TransformHitPosition,
+    LayerProtocol, PaintContext, Protocol, Transform, TransformHitPosition,
 };
 
 use super::ArcElementContextNode;
@@ -191,15 +191,57 @@ pub trait CachedComposite: RenderBase {
 
 /// Orphan layers can skip this implementation
 pub trait HitTest: RenderBase {
-    fn hit_test_children(
+    /// The actual method that was invoked for hit-testing.
+    ///
+    /// Note however, this method is hard to impl directly. Therefore, if not for rare edge cases,
+    /// it is recommended to implement [HitTest::hit_test_children], [HitTest::hit_test_self],
+    /// and [HitTest::hit_test_behavior] instead. This method has a default impl that is composed on top of those method.
+    ///
+    /// If you do indeed overwrite the default impl of this method without using the other methods,
+    /// you can assume the other methods mentioned above are `unreachable!()`.
+    fn hit_test(
         &self,
+        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
-        results: &mut HitTestResults<<Self::ParentProtocol as Protocol>::Canvas>,
+        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+    ) -> HitTestResult {
+        use HitTestResult::*;
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
+        if !hit_self {
+            // Stop hit-test children if the hit is outside of parent
+            return NotHit;
+        }
+
+        let hit_children =
+            self.hit_test_children(ctx, size, offset, memo, children, adopted_children);
+        if hit_children {
+            return Hit;
+        }
+
+        use HitTestBehavior::*;
+        match self.hit_test_behavior() {
+            DeferToChild => NotHit,
+            Transparent => HitThroughSelf,
+            Opaque => Hit,
+        }
+    }
+
+    /// Returns: If a child has claimed the hit
+    fn hit_test_children(
+        &self,
+        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
+        memo: &Self::LayoutMemo,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> bool;
 
+    // The reason we separate hit_test_self from hit_test_children is that we do not wish to leak hit_position into hit_test_children
+    // Therefore preventing implementer to perform transform on hit_position rather than recording it in
     #[allow(unused_variables)]
     fn hit_test_self(
         &self,
@@ -207,23 +249,21 @@ pub trait HitTest: RenderBase {
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-    ) -> Option<HitTestBehavior> {
+    ) -> bool {
         Self::ParentProtocol::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
+    }
+
+    fn hit_test_behavior(&self) -> HitTestBehavior {
+        HitTestBehavior::DeferToChild
     }
 }
 
-// We COULD orthogonalize the Orphan/Structured vs Noncached/cached trait set,
-// but that would inevitably bake directly into library user's code an explicit AdopterCanvas type
-// either somewhere in an associated type or somewhere as a generic trait paramter.
-// As an unproven idea, I would like to make orphan layer mechanism optional and not bake into anything more than necessary.
-// Edit: We actually did orthogonalize these traits.
-pub trait OrphanLayer: LayerPaint
-where
-    Self::ParentProtocol: LayerProtocol,
-    Self::ChildProtocol: LayerProtocol,
-{
-    fn adopter_key(&self) -> &Asc<dyn Key>;
+#[derive(PartialEq, Eq)]
+pub enum HitTestResult {
+    NotHit,
+    /// Add self to hit list, but pretend to the parent that the hit inside subtree has never happened
+    HitThroughSelf,
+    Hit,
 }
 
 pub enum HitTestBehavior {
@@ -232,7 +272,15 @@ pub enum HitTestBehavior {
     Opaque,
 }
 
-pub struct HitTestResults<C: Canvas> {
+pub trait OrphanLayer: LayerPaint
+where
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
+{
+    fn adopter_key(&self) -> &Asc<dyn Key>;
+}
+
+pub struct HitTestContext<C: Canvas> {
     position: C::HitPosition,
     curr_transform: C::Transform,
     curr_position: C::HitPosition,
@@ -240,7 +288,7 @@ pub struct HitTestResults<C: Canvas> {
     trait_type_id: TypeId,
 }
 
-impl<C> HitTestResults<C>
+impl<C> HitTestContext<C>
 where
     C: Canvas,
 {
@@ -269,40 +317,85 @@ where
     }
 
     #[inline(always)]
-    pub fn hit_test_with_raw_transform<P: Protocol<Canvas = C>>(
+    pub fn with_raw_transform<T>(
         &mut self,
-        render_object: ArcChildRenderObject<P>,
-        transform: Option<&C::Transform>,
-    ) -> bool {
-        if let Some(transform) = transform {
-            let new_transform = Transform::mul(&self.curr_transform, transform);
-            let old_position = std::mem::replace(
-                &mut self.curr_position,
-                new_transform.transform(&self.position),
-            );
-            let old_transform = std::mem::replace(&mut self.curr_transform, new_transform);
-            let subtree_has_absorbed = render_object.hit_test(self);
-            self.curr_transform = old_transform;
-            self.curr_position = old_position;
-            return subtree_has_absorbed;
-        } else {
-            return render_object.hit_test(self);
-        }
+        raw_transform: &C::Transform,
+        op: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let new_transform = Transform::mul(&self.curr_transform, raw_transform);
+        let old_position = std::mem::replace(
+            &mut self.curr_position,
+            new_transform.transform(&self.position),
+        );
+        let old_transform = std::mem::replace(&mut self.curr_transform, new_transform);
+        let result = op(self);
+        self.curr_transform = old_transform;
+        self.curr_position = old_position;
+        return result;
     }
 
     #[inline(always)]
+    pub fn with_paint_transform<T>(
+        &mut self,
+        paint_transform: &C::Transform,
+        op: impl FnOnce(&mut Self) -> T,
+    ) -> Option<T> {
+        paint_transform
+            .inv()
+            .map(|raw_transform| self.with_raw_transform(&raw_transform, op))
+    }
+
     pub fn hit_test<P: Protocol<Canvas = C>>(
         &mut self,
         render_object: ArcChildRenderObject<P>,
     ) -> bool {
-        return render_object.hit_test(self);
+        return render_object.hit_test_with(self);
+    }
+
+    pub fn hit_test_adopted_layer(&mut self, render_object: ArcChildLayerRenderObject<C>) -> bool {
+        return render_object.hit_test_from_adopter_with(self);
+    }
+
+    pub fn hit_test_with_raw_transform<P: Protocol<Canvas = C>>(
+        &mut self,
+        render_object: ArcChildRenderObject<P>,
+        raw_transform: &C::Transform,
+    ) -> bool {
+        self.with_raw_transform(raw_transform, |ctx| ctx.hit_test(render_object))
+    }
+
+    pub fn hit_test_with_paint_transform<P: Protocol<Canvas = C>>(
+        &mut self,
+        render_object: ArcChildRenderObject<P>,
+        paint_transform: &C::Transform,
+    ) -> bool {
+        self.with_paint_transform(paint_transform, |ctx| ctx.hit_test(render_object))
+            .unwrap_or(false) // If the inverse cannot be found, it means the object has lost it size during transformation, and we consider this a no-hit
+    }
+
+    pub fn hit_test_adopted_layer_with_raw_transform(
+        &mut self,
+        render_object: ArcChildLayerRenderObject<C>,
+        raw_transform: &C::Transform,
+    ) -> bool {
+        self.with_raw_transform(raw_transform, |ctx| {
+            ctx.hit_test_adopted_layer(render_object)
+        })
+    }
+
+    pub fn hit_test_w_adopted_layerith_paint_transform(
+        &mut self,
+        render_object: ArcChildLayerRenderObject<C>,
+        paint_transform: &C::Transform,
+    ) -> bool {
+        self.with_paint_transform(paint_transform, |ctx| {
+            ctx.hit_test_adopted_layer(render_object)
+        })
+        .unwrap_or(false) // If the inverse cannot be found, it means the object has lost it size during transformation, and we consider this a no-hit
     }
 }
 
-impl<R> CastInterfaceByRawPtr for RenderObject<R>
-where
-    R: Render,
-{
+impl<R: Render> CastInterfaceByRawPtr for RenderObject<R> {
     fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
         default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
     }
@@ -368,55 +461,5 @@ impl RenderAction {
             Recomposite => None,
             other => other,
         }
-    }
-}
-
-pub trait ImplRenderObjectReconcile<R: RenderBase>: Send + Sync + Sized {
-    fn new(
-        render: R,
-        children: ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        context: ArcElementContextNode,
-    ) -> Self;
-
-    fn update<T>(
-        &self,
-        op: impl FnOnce(
-            &mut R,
-            &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        ) -> T,
-    ) -> T;
-}
-
-impl<R> ImplRenderObjectReconcile<R> for RenderObject<R>
-where
-    R: Render,
-{
-    fn new(
-        render: R,
-        children: ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        context: ArcElementContextNode,
-    ) -> Self {
-        Self {
-            element_context: context,
-            mark: RenderMark::new(),
-            layer_mark: Default::default(),
-            inner: SyncMutex::new(RenderObjectInner {
-                cache: RenderCache::new(),
-                render,
-                children,
-            }),
-        }
-    }
-
-    fn update<T>(
-        &self,
-        op: impl FnOnce(
-            &mut R,
-            &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        ) -> T,
-    ) -> T {
-        let mut inner = self.inner.lock();
-        let inner_reborrow = &mut *inner;
-        op(&mut inner_reborrow.render, &mut inner_reborrow.children)
     }
 }

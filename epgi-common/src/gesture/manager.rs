@@ -7,7 +7,7 @@ use std::{any::TypeId, time::Instant};
 use epgi_2d::{Affine2d, BoxProtocol};
 use epgi_core::{
     foundation::{Arc, AssertExt, SyncMpscReceiver, SyncMpscSender, TransformHitPosition},
-    tree::{ArcChildRenderObject, HitTestResults},
+    tree::{ArcChildRenderObject, HitTestContext},
 };
 use hashbrown::{hash_map::Entry, HashMap};
 
@@ -84,11 +84,11 @@ impl PointerGestureManager {
                 variant: Down(_) | PanZoomStart,
                 ..
             } => {
-                let mut results = HitTestResults::new(
+                let mut results = HitTestContext::new(
                     event.common.physical_position,
                     TypeId::of::<dyn PointerEventHandler>(),
                 );
-                root.hit_test(&mut results);
+                root.hit_test_with(&mut results);
                 let entries = results
                     .targets
                     .into_iter()

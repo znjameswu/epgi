@@ -7,9 +7,9 @@ use crate::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        FullRender, HitTestBehavior, HitTestResults, Render, RenderAction, RenderImpl,
-        RenderObject,
+        ChildRenderObjectsUpdateCallback, ComposableChildLayer, ElementBase, ElementImpl,
+        ElementReconcileItem, FullRender, HitTestBehavior, HitTestContext, Render, RenderAction,
+        RenderImpl, RenderObject,
     },
 };
 
@@ -164,9 +164,12 @@ pub trait LeafRender: Send + Sync + Sized + 'static {
         position: &<<Self::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::Protocol as Protocol>::Size,
         offset: &<Self::Protocol as Protocol>::Offset,
-    ) -> Option<HitTestBehavior> {
+    ) -> bool {
         Self::Protocol::position_in_shape(position, offset, size)
-            .then_some(HitTestBehavior::DeferToChild)
+    }
+
+    fn hit_test_behavior(&self) -> HitTestBehavior {
+        HitTestBehavior::DeferToChild
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -253,11 +256,12 @@ where
 {
     fn hit_test_children(
         _render: &R,
+        _ctx: &mut HitTestContext<<R::Protocol as Protocol>::Canvas>,
         _size: &<R::Protocol as Protocol>::Size,
         _offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
         _children: &[ArcChildRenderObject<R::Protocol>; 0],
-        _results: &mut HitTestResults<<R::Protocol as Protocol>::Canvas>,
+        _adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
     ) -> bool {
         false
     }
@@ -268,7 +272,11 @@ where
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
-    ) -> Option<HitTestBehavior> {
+    ) -> bool {
         R::hit_test_self(render, position, size, offset)
+    }
+
+    fn hit_test_behavior(render: &R) -> HitTestBehavior {
+        R::hit_test_behavior(render)
     }
 }

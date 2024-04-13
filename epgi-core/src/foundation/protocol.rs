@@ -178,4 +178,5 @@ pub trait Transform<C: Canvas>:
 {
     fn identity() -> Self;
     fn mul(&self, other: &Self) -> Self;
+    fn inv(&self) -> Option<Self>;
 }

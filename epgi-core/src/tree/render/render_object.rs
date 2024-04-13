@@ -3,7 +3,8 @@ use std::any::Any;
 use crate::{
     foundation::{
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref, Arc,
-        Aweak, Canvas, CastInterfaceByRawPtr, HktContainer, LayerProtocol, Protocol, SyncMutex,
+        Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol, Protocol,
+        SyncMutex,
     },
     sync::ImplComposite,
     tree::{ElementContextNode, LayerCache, LayerMark},
@@ -33,6 +34,37 @@ where
     pub(crate) mark: RenderMark,
     pub(crate) layer_mark: <R::Impl as ImplRenderObject<R>>::LayerMark,
     pub(crate) inner: SyncMutex<RenderObjectInner<R, <R::Impl as ImplRenderObject<R>>::LayerCache>>,
+}
+
+impl<R: Render> RenderObject<R> {
+    pub(crate) fn new(
+        render: R,
+        children: ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
+        context: ArcElementContextNode,
+    ) -> Self {
+        Self {
+            element_context: context,
+            mark: RenderMark::new(),
+            layer_mark: Default::default(),
+            inner: SyncMutex::new(RenderObjectInner {
+                cache: RenderCache::new(),
+                render,
+                children,
+            }),
+        }
+    }
+
+    pub fn update<T>(
+        &self,
+        op: impl FnOnce(
+            &mut R,
+            &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
+        ) -> T,
+    ) -> T {
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        op(&mut inner_reborrow.render, &mut inner_reborrow.children)
+    }
 }
 
 pub(crate) struct RenderObjectInner<R, C>
@@ -85,19 +117,16 @@ where
 
 pub trait ChildRenderObject<PP: Protocol>:
     AnyRenderObject
+    + ChildRenderObjectWithCanvas<PP::Canvas>
     + crate::sync::ChildRenderObjectLayoutExt<PP>
     + crate::sync::ChildRenderObjectPaintExt<PP>
-    + crate::sync::ChildRenderObjectHitTestExt<PP>
     + Send
     + Sync
 {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
 }
 
-impl<R> ChildRenderObject<R::ParentProtocol> for RenderObject<R>
-where
-    R: FullRender,
-{
+impl<R: FullRender> ChildRenderObject<R::ParentProtocol> for RenderObject<R> {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
         self
     }
@@ -123,10 +152,7 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
         Self: Sized;
 }
 
-impl<R> AnyRenderObject for RenderObject<R>
-where
-    R: FullRender,
-{
+impl<R: FullRender> AnyRenderObject for RenderObject<R> {
     fn element_context(&self) -> &ElementContextNode {
         todo!()
     }
@@ -185,19 +211,16 @@ where
 pub trait ParentRenderObject<CP: Protocol>: Send + Sync + 'static {}
 
 pub trait ChildRenderObjectWithCanvas<C: Canvas>:
-    CastInterfaceByRawPtr + Send + Sync + 'static
+    CastInterfaceByRawPtr + crate::sync::ChildRenderObjectHitTestExt<C> + Send + Sync + 'static
 {
 }
 
-impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R> where
-    R: Render
+impl<R: FullRender> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas>
+    for RenderObject<R>
 {
 }
 
-impl<C> dyn ChildRenderObjectWithCanvas<C>
-where
-    C: Canvas,
-{
+impl<C: Canvas> dyn ChildRenderObjectWithCanvas<C> {
     pub fn query_interface_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
         default_query_interface_ref(self)
     }
@@ -225,9 +248,8 @@ pub trait AnyLayerRenderObject:
     fn get_composited_cache_box(&self) -> Option<Box<dyn Any + Send + Sync>>;
 }
 
-impl<R> AnyLayerRenderObject for RenderObject<R>
+impl<R: FullRender> AnyLayerRenderObject for RenderObject<R>
 where
-    R: FullRender,
     <R as FullRender>::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,
@@ -267,14 +289,14 @@ impl ArcAnyLayerRenderObjectExt for ArcAnyLayerRenderObject {
 }
 
 pub trait ChildLayerRenderObject<PC: Canvas>:
-    crate::sync::ChildLayerRenderObjectCompositeExt<PC> + Send + Sync
+    ChildRenderObjectWithCanvas<PC> + crate::sync::ChildLayerRenderObjectCompositeExt<PC> + Send + Sync
 {
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject;
 }
 
-impl<R> ChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R>
+impl<R: FullRender> ChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas>
+    for RenderObject<R>
 where
-    R: FullRender,
     <R as FullRender>::Impl: ImplComposite<R>,
     R: LayerPaint,
     R::ParentProtocol: LayerProtocol,

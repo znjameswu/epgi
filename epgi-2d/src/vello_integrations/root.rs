@@ -4,10 +4,10 @@ use epgi_core::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
-        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
-        ElementBase, ElementImpl, ElementReconcileItem, HitTest, HitTestResults,
-        LayerCompositionConfig, LayerPaint, Render, RenderAction, RenderBase, RenderElement,
-        RenderImpl, RenderObjectSlots, Widget,
+        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableChildLayer,
+        DryLayout, Element, ElementBase, ElementImpl, ElementReconcileItem, HitTest,
+        HitTestContext, LayerCompositionConfig, LayerPaint, Render, RenderAction, RenderBase,
+        RenderElement, RenderImpl, RenderObjectSlots, Widget,
     },
 };
 
@@ -211,15 +211,20 @@ impl CachedComposite for RenderRoot {
 impl HitTest for RenderRoot {
     fn hit_test_children(
         &self,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
         _size: &BoxSize,
         _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         children: &Option<ArcChildRenderObject<BoxProtocol>>,
-        results: &mut HitTestResults<Affine2dCanvas>,
+        _adopted_children: &[ComposableChildLayer<Affine2dCanvas>],
     ) -> bool {
+        debug_assert!(
+            _adopted_children.is_empty(),
+            "Root layer does not take adoption"
+        );
         children
             .as_ref()
-            .map(|child| results.hit_test(child.clone()))
+            .map(|child| ctx.hit_test(child.clone()))
             .unwrap_or_default()
     }
 }
