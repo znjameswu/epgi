@@ -133,11 +133,6 @@ pub trait Composite: RenderBase {
         child_iterator: &mut ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
 }
 
 pub trait CachedComposite: RenderBase {
@@ -154,11 +149,6 @@ pub trait CachedComposite: RenderBase {
         memo: &Self::CompositionMemo,
         composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>;
 }
 
 pub trait OrphanLayer: LayerPaint

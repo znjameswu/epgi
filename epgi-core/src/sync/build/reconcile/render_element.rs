@@ -26,8 +26,8 @@ where
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         self_rebuild_suspended: bool,
-        scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        _scope: &rayon::Scope<'_>,
+        _build_scheduler: &BuildScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
@@ -180,7 +180,7 @@ where
         HasNewNoSuspend => {
             let render_action =
                 render_object.mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
-            render_object.update(|render, children| {
+            render_object.update(|_render, children| {
                 update_children::<E::Render>(
                     children,
                     None,

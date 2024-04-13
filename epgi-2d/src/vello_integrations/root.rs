@@ -107,12 +107,12 @@ impl Element for RootElement {
 impl RenderElement for RootElement {
     type Render = RenderRoot;
 
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
-        todo!()
+    fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
+        RenderRoot {}
     }
 
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
-        todo!()
+    fn update_render(_render: &mut Self::Render, _widget: &Self::ArcWidget) -> RenderAction {
+        RenderAction::None
     }
 
     // fn create_render(&self, widget: &Self::ArcWidget) -> RenderRoot {
@@ -146,7 +146,7 @@ impl RenderBase for RenderRoot {
 }
 
 impl DryLayout for RenderRoot {
-    fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize {
+    fn compute_dry_layout(&self, _constraints: &BoxConstraints) -> BoxSize {
         BoxSize::INFINITY
     }
 
@@ -193,18 +193,11 @@ impl CachedComposite for RenderRoot {
 
     fn composite_from_cache_to(
         &self,
-        encoding: &mut Affine2dEncoding,
-        cache: &Self::CompositionMemo,
-        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
+        _encoding: &mut Affine2dEncoding,
+        _cache: &Self::CompositionMemo,
+        _composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
-        todo!()
-    }
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<Affine2dCanvas>,
-        child_config: &LayerCompositionConfig<Affine2dCanvas>,
-    ) -> LayerCompositionConfig<Affine2dCanvas> {
-        todo!()
+        unreachable!()
     }
 }
 

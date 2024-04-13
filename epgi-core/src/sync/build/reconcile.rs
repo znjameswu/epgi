@@ -271,8 +271,8 @@ impl<E: FullElement> ElementNode<E> {
                         render_object,
                     } => {
                         assert!(!is_poll, "A non-suspended node should not be polled");
-                        Self::apply_updates_sync_new(&self.context, job_ids, &mut hooks);
-                        self.perform_rebuild_node_sync_new(
+                        Self::apply_updates_sync(&self.context, job_ids, &mut hooks);
+                        self.perform_rebuild_node_sync(
                             new_widget,
                             element,
                             children,
@@ -294,13 +294,9 @@ impl<E: FullElement> ElementNode<E> {
                         waker.abort();
                         // If it is not poll, then it means a new job occurred on this previously suspended node
                         if !is_poll {
-                            Self::apply_updates_sync_new(
-                                &self.context,
-                                job_ids,
-                                &mut suspended_hooks,
-                            );
+                            Self::apply_updates_sync(&self.context, job_ids, &mut suspended_hooks);
                         }
-                        self.perform_rebuild_node_sync_new(
+                        self.perform_rebuild_node_sync(
                             new_widget,
                             element,
                             children,
@@ -337,7 +333,7 @@ impl<E: FullElement> ElementNode<E> {
         return result;
     }
 
-    fn perform_rebuild_node_sync_new(
+    fn perform_rebuild_node_sync(
         self: &Arc<Self>,
         widget: &E::ArcWidget,
         mut element: E,
@@ -490,7 +486,7 @@ impl<E: FullElement> ElementNode<E> {
         return change;
     }
 
-    fn apply_updates_sync_new(
+    fn apply_updates_sync(
         element_context: &ElementContextNode,
         job_ids: &Inlinable64Vec<JobId>,
         hooks: &mut Hooks,

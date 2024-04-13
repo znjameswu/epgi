@@ -198,11 +198,6 @@ pub trait TemplateComposite<R: RenderBase> {
         child_iterator: &mut ChildLayerProducingIterator<<R::ChildProtocol as Protocol>::Canvas>,
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>;
 }
 
 impl<R> Composite for R
@@ -218,13 +213,6 @@ where
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::Template::composite_to(self, encoding, child_iterator, composition_config)
-    }
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas> {
-        R::Template::transform_config(self_config, child_config)
     }
 }
 
@@ -242,11 +230,6 @@ pub trait TemplateCachedComposite<R: RenderBase> {
         cache: &Self::CompositionMemo,
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     );
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>;
 }
 
 impl<R> CachedComposite for R
@@ -271,13 +254,6 @@ where
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::Template::composite_from_cache_to(self, encoding, cache, composition_config)
-    }
-
-    fn transform_config(
-        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas> {
-        R::Template::transform_config(self_config, child_config)
     }
 }
 

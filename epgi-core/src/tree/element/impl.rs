@@ -114,7 +114,7 @@ where
 
     const HAS_RENDER: bool = false;
     fn get_render_object(
-        option_render_object: &Self::OptionArcRenderObject,
+        _option_render_object: &Self::OptionArcRenderObject,
     ) -> Option<ArcAnyRenderObject> {
         unreachable!()
     }

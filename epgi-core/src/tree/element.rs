@@ -241,21 +241,19 @@ where
                 ));
         }
         render_object.mark.clear_parent_use_size();
-        ElementNode {
-            context: element_context,
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget,
-                inner: ElementSnapshotInner::Mainline(Mainline {
-                    state: Some(MainlineState::Ready {
-                        element,
-                        children: element_children,
-                        hooks,
-                        render_object: Some(render_object),
-                    }),
-                    async_queue: AsyncWorkQueue::new_empty(),
+        ElementNode::new(
+            element_context,
+            widget,
+            ElementSnapshotInner::Mainline(Mainline {
+                state: Some(MainlineState::Ready {
+                    element,
+                    children: element_children,
+                    hooks,
+                    render_object: Some(render_object),
                 }),
+                async_queue: AsyncWorkQueue::new_empty(),
             }),
-        }
+        )
     });
     (
         element_node,

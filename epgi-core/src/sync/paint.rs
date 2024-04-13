@@ -163,7 +163,7 @@ where
 {
     fn paint_into_context(
         render: &R,
-        render_object: &Arc<RenderObject<R>>,
+        _render_object: &Arc<RenderObject<R>>,
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
@@ -188,12 +188,12 @@ where
     R::ChildProtocol: LayerProtocol,
 {
     fn paint_into_context(
-        render: &R,
+        _render: &R,
         render_object: &Arc<RenderObject<R>>,
-        size: &<R::ParentProtocol as Protocol>::Size,
+        _size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
-        memo: &R::LayoutMemo,
-        children: &<R::ChildContainer as HktContainer>::Container<
+        _memo: &R::LayoutMemo,
+        _children: &<R::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<R::ChildProtocol>,
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
@@ -217,10 +217,10 @@ where
     fn paint_into_context(
         render: &R,
         render_object: &Arc<RenderObject<R>>,
-        size: &<R::ParentProtocol as Protocol>::Size,
+        _size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
-        memo: &R::LayoutMemo,
-        children: &<R::ChildContainer as HktContainer>::Container<
+        _memo: &R::LayoutMemo,
+        _children: &<R::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<R::ChildProtocol>,
         >,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
