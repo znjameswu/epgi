@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-use super::{ImplAdopterLayer, ImplComposite, ImplHitTest};
+use super::{ImplComposite, ImplHitTest};
 
 impl BuildScheduler {
     pub(crate) fn perform_paint(
@@ -180,7 +180,6 @@ impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: boo
     for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, false>
 where
     Self: ImplRender<R>,
-    Self: ImplAdopterLayer<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
     Self: ImplMaybeLayer<R>,
     Self: ImplHitTest<R>,
     Self: ImplComposite<R>,

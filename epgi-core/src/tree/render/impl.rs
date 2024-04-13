@@ -1,21 +1,15 @@
 use crate::{
     foundation::{Arc, Aweak, LayerProtocol},
     scheduler::get_current_scheduler,
-    sync::{ImplAdopterLayer, ImplComposite, ImplHitTest, ImplLayout, ImplPaint},
+    sync::{ImplComposite, ImplHitTest, ImplLayout, ImplPaint},
     tree::{ArcAnyLayerRenderObject, AweakAnyLayerRenderObject},
 };
 
 use super::{ImplRenderObject, LayerPaint, Render, RenderAction, RenderBase, RenderObject};
 
-pub trait ImplRender<R: RenderBase>:
-    ImplRenderObject<R> + ImplLayout<R> + ImplAdopterLayer<R>
-{
-}
+pub trait ImplRender<R: RenderBase>: ImplRenderObject<R> + ImplLayout<R> {}
 
-impl<I, R: RenderBase> ImplRender<R> for I where
-    I: ImplRenderObject<R> + ImplLayout<R> + ImplAdopterLayer<R>
-{
-}
+impl<I, R: RenderBase> ImplRender<R> for I where I: ImplRenderObject<R> + ImplLayout<R> {}
 
 pub trait ImplFullRender<R: Render<Impl = Self>>:
     ImplRender<R> + ImplMaybeLayer<R> + ImplPaint<R> + ImplHitTest<R>

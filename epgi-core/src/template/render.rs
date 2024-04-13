@@ -215,44 +215,44 @@ where
     }
 }
 
-pub trait TemplateComposite<R: RenderBase, AdopterCanvas: Canvas> {
+pub trait TemplateComposite<R: RenderBase> {
     fn composite_to(
         render: &R,
-        encoding: &mut AdopterCanvas::Encoding,
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         child_iterator: &mut impl ChildLayerProducingIterator<<R::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<AdopterCanvas>,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     );
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<AdopterCanvas>,
+        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         child_config: &LayerCompositionConfig<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<AdopterCanvas>;
+    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>;
 }
 
-impl<R, C: Canvas> Composite<C> for R
+impl<R> Composite for R
 where
     R: ImplByTemplate,
-    R::Template: TemplateComposite<R, C>,
+    R::Template: TemplateComposite<R>,
     R: RenderBase,
 {
     fn composite_to(
         &self,
-        encoding: &mut <C as Canvas>::Encoding,
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         child_iterator: &mut impl ChildLayerProducingIterator<<Self::ChildProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<C>,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::Template::composite_to(self, encoding, child_iterator, composition_config)
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<C>,
+        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<C> {
+    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas> {
         R::Template::transform_config(self_config, child_config)
     }
 }
 
-pub trait TemplateCachedComposite<R: RenderBase, AdopterCanvas: Canvas> {
+pub trait TemplateCachedComposite<R: RenderBase> {
     type CompositionMemo: Send + Sync + Clone + 'static;
 
     fn composite_into_cache(
@@ -262,24 +262,24 @@ pub trait TemplateCachedComposite<R: RenderBase, AdopterCanvas: Canvas> {
 
     fn composite_from_cache_to(
         render: &R,
-        encoding: &mut AdopterCanvas::Encoding,
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         cache: &Self::CompositionMemo,
-        composition_config: &LayerCompositionConfig<AdopterCanvas>,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     );
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<AdopterCanvas>,
+        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         child_config: &LayerCompositionConfig<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<AdopterCanvas>;
+    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>;
 }
 
-impl<R, C: Canvas> CachedComposite<C> for R
+impl<R> CachedComposite for R
 where
     R: ImplByTemplate,
-    R::Template: TemplateCachedComposite<R, C>,
+    R::Template: TemplateCachedComposite<R>,
     R: RenderBase,
 {
-    type CompositionMemo = <R::Template as TemplateCachedComposite<R, C>>::CompositionMemo;
+    type CompositionMemo = <R::Template as TemplateCachedComposite<R>>::CompositionMemo;
 
     fn composite_into_cache(
         &self,
@@ -290,17 +290,17 @@ where
 
     fn composite_from_cache_to(
         &self,
-        encoding: &mut <C as Canvas>::Encoding,
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         cache: &Self::CompositionMemo,
-        composition_config: &LayerCompositionConfig<C>,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::Template::composite_from_cache_to(self, encoding, cache, composition_config)
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<C>,
+        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
         child_config: &LayerCompositionConfig<<Self::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<C> {
+    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas> {
         R::Template::transform_config(self_config, child_config)
     }
 }

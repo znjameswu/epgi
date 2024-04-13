@@ -5,7 +5,7 @@ use crate::{
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref, Arc,
         Aweak, Canvas, CastInterfaceByRawPtr, HktContainer, LayerProtocol, Protocol, SyncMutex,
     },
-    sync::{ImplAdopterLayer, ImplComposite},
+    sync::ImplComposite,
     tree::{ElementContextNode, LayerCache, LayerMark},
 };
 
@@ -73,15 +73,11 @@ impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRender
 impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CM> ImplRenderObject<R>
     for RenderImpl<DRY_LAYOUT, true, true, ORPHAN_LAYER>
 where
-    Self: ImplAdopterLayer<R>,
-    R: CachedComposite<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CompositionMemo = CM>,
+    R: CachedComposite<CompositionMemo = CM>,
     CM: Clone + Send + Sync,
 {
     type LayerMark = LayerMark;
-    type LayerCache = LayerCache<
-        <R::ChildProtocol as Protocol>::Canvas,
-        CompositionCache<<Self as ImplAdopterLayer<R>>::AdopterCanvas, CM>,
-    >;
+    type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, CompositionCache<CM>>;
 }
 
 pub trait ChildRenderObject<PP: Protocol>:
@@ -190,10 +186,8 @@ pub trait ChildRenderObjectWithCanvas<C: Canvas>:
 {
 }
 
-impl<R> ChildRenderObjectWithCanvas<<R::Impl as ImplAdopterLayer<R>>::AdopterCanvas>
-    for RenderObject<R>
-where
-    R: Render,
+impl<R> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R> where
+    R: Render
 {
 }
 
@@ -241,11 +235,7 @@ where
     }
 
     fn as_any_arc_child_layer(self: Arc<Self>) -> Box<dyn std::any::Any> {
-        Box::new(
-            self as ArcChildLayerRenderObject<
-                <<R as FullRender>::Impl as ImplAdopterLayer<R>>::AdopterCanvas,
-            >,
-        )
+        Box::new(self as ArcChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas>)
     }
 
     fn get_composited_cache_box(&self) -> Option<Box<dyn std::any::Any + Send + Sync>> {
@@ -279,8 +269,7 @@ pub trait ChildLayerRenderObject<PC: Canvas>:
     fn as_arc_any_layer_render_object(self: Arc<Self>) -> ArcAnyLayerRenderObject;
 }
 
-impl<R> ChildLayerRenderObject<<<R as FullRender>::Impl as ImplAdopterLayer<R>>::AdopterCanvas>
-    for RenderObject<R>
+impl<R> ChildLayerRenderObject<<R::ParentProtocol as Protocol>::Canvas> for RenderObject<R>
 where
     R: FullRender,
     <R as FullRender>::Impl: ImplComposite<R>,

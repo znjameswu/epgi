@@ -44,7 +44,7 @@ impl<
         const CACHED_COMPOSITE: bool,
     > ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, false>
 where
-    Self: ImplRender<R, AdopterCanvas = <R::ParentProtocol as Protocol>::Canvas>,
+    Self: ImplRender<R>,
     R: HitTest,
 {
     fn hit_test(
@@ -109,7 +109,7 @@ impl<
         const CACHED_COMPOSITE: bool,
     > ImplHitTest<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, true>
 where
-    Self: ImplRender<R, AdopterCanvas = <R::ChildProtocol as Protocol>::Canvas>,
+    Self: ImplRender<R>,
 {
     fn hit_test(
         render_object: Arc<RenderObject<R>>,
