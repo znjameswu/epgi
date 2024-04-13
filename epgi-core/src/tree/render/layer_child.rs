@@ -1,24 +1,22 @@
 use std::ops::Mul;
 
-use crate::foundation::{Arc, Canvas, Key, Transform};
+use crate::foundation::{Asc, Canvas, Key, Transform};
 
 use super::{ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ChildLayerOrFragmentRef};
 
-pub enum StructuredChildLayerOrFragment<C: Canvas> {
+pub enum ChildLayerOrFragment<C: Canvas> {
     Fragment(C::Encoding),
-    StructuredChild(ComposableChildLayer<C>),
+    Layer(ComposableChildLayer<C>),
 }
 
-impl<'a, C> Into<ChildLayerOrFragmentRef<'a, C>> for &'a StructuredChildLayerOrFragment<C>
+impl<'a, C> Into<ChildLayerOrFragmentRef<'a, C>> for &'a ChildLayerOrFragment<C>
 where
     C: Canvas,
 {
     fn into(self) -> ChildLayerOrFragmentRef<'a, C> {
         match self {
-            StructuredChildLayerOrFragment::Fragment(x) => ChildLayerOrFragmentRef::Fragment(x),
-            StructuredChildLayerOrFragment::StructuredChild(x) => {
-                ChildLayerOrFragmentRef::StructuredChild(x)
-            }
+            ChildLayerOrFragment::Fragment(x) => ChildLayerOrFragmentRef::Fragment(x),
+            ChildLayerOrFragment::Layer(x) => ChildLayerOrFragmentRef::StructuredChild(x),
         }
     }
 }
@@ -32,7 +30,7 @@ pub struct ComposableChildLayer<C: Canvas> {
 #[derivative(Clone(bound = ""))]
 pub struct ComposableUnadoptedLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
-    pub adopter_key: Option<Arc<dyn Key>>,
+    pub adopter_key: Asc<dyn Key>,
     pub layer: ArcAnyLayerRenderObject,
 }
 

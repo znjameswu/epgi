@@ -2,7 +2,8 @@ use epgi_core::{
     foundation::{Asc, Canvas, Key, LayerProtocol, PaintContext, Protocol, Transform},
     tree::{
         ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
-        ComposableChildLayer, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
+        ChildLayerOrFragment, ComposableChildLayer, ComposableUnadoptedLayer,
+        LayerCompositionConfig, PaintResults,
     },
 };
 use peniko::{kurbo::Stroke, BrushRef};
@@ -101,17 +102,15 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         if !self.curr_fragment_encoding.is_empty() {
             let encoding = std::mem::take(&mut self.curr_fragment_encoding);
             self.results
-                .structured_children
-                .push(StructuredChildLayerOrFragment::Fragment(encoding));
+                .children
+                .push(ChildLayerOrFragment::Fragment(encoding));
         }
         self.results
-            .structured_children
-            .push(StructuredChildLayerOrFragment::StructuredChild(
-                ComposableChildLayer {
-                    config: P::offset_layer_composition_config(offset, &self.curr_config),
-                    layer,
-                },
-            ));
+            .children
+            .push(ChildLayerOrFragment::Layer(ComposableChildLayer {
+                config: P::offset_layer_composition_config(offset, &self.curr_config),
+                layer,
+            }));
     }
 
     fn add_orphan_layer<P: LayerProtocol<Canvas = Affine2dCanvas>>(
@@ -120,7 +119,11 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         adopter_key: Asc<dyn Key>,
         offset: &P::Offset,
     ) {
-        todo!()
+        self.results.orphan_layers.push(ComposableUnadoptedLayer {
+            config: P::offset_layer_composition_config(offset, &self.curr_config),
+            layer,
+            adopter_key,
+        });
     }
 
     fn with_transform(
@@ -135,6 +138,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
     }
 }
 
+#[allow(unused_variables)]
 impl PaintContext for VelloPaintScanner {
     type Canvas = Affine2dCanvas;
 

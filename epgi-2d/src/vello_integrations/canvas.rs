@@ -1,8 +1,6 @@
 use epgi_core::{
     foundation::{Canvas, LayerProtocol, Transform, TransformHitPosition},
-    tree::{
-        ArcChildRenderObject, LayerCompositionConfig, PaintResults, StructuredChildLayerOrFragment,
-    },
+    tree::{ArcChildRenderObject, ChildLayerOrFragment, LayerCompositionConfig, PaintResults},
 };
 
 use crate::{
@@ -53,8 +51,8 @@ impl Canvas for Affine2dCanvas {
         render_objects: impl IntoIterator<Item = ArcChildRenderObject<P>>,
     ) -> PaintResults<Self> {
         let mut paint_results = PaintResults {
-            structured_children: Default::default(),
-            detached_children: Default::default(),
+            children: Default::default(),
+            orphan_layers: Default::default(),
         };
         let mut paint_ctx = VelloPaintContext {
             curr_config: LayerCompositionConfig {
@@ -67,8 +65,8 @@ impl Canvas for Affine2dCanvas {
             render_object.paint(&P::zero_offset(), &mut paint_ctx);
         }
         // Save the recordings on the tail
-        let new_child = StructuredChildLayerOrFragment::Fragment(paint_ctx.curr_fragment_encoding);
-        paint_results.structured_children.push(new_child);
+        let new_child = ChildLayerOrFragment::Fragment(paint_ctx.curr_fragment_encoding);
+        paint_results.children.push(new_child);
         paint_results
     }
 

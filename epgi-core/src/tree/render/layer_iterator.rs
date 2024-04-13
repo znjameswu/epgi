@@ -34,21 +34,18 @@ impl<'a, CC: Canvas> ChildLayerProducingIterator<'a, CC> {
         mut composite: impl FnMut(ChildLayerOrFragmentRef<'_, CC>) -> Vec<ComposableUnadoptedLayer<CC>>,
     ) {
         let mut subtree_unadopted_layers = Vec::new();
-        for child in &self.paint_results.structured_children {
+        for child in &self.paint_results.children {
             let child_unadopted_layers = composite(child.into());
             subtree_unadopted_layers.extend(child_unadopted_layers);
         }
-        subtree_unadopted_layers.extend(self.paint_results.detached_children.iter().cloned());
+        subtree_unadopted_layers.extend(self.paint_results.orphan_layers.iter().cloned());
         // DFS traversal, working from end to front
         subtree_unadopted_layers.reverse();
         while let Some(child) = subtree_unadopted_layers.pop() {
             let adopter_key = &child.adopter_key;
-            if adopter_key.is_none()
-                || self.key.is_some_and(|key| {
-                    adopter_key
-                        .as_ref()
-                        .is_some_and(|parent_key| <dyn Key>::eq(parent_key.as_ref(), key))
-                })
+            if self
+                .key
+                .is_some_and(|key| <dyn Key>::eq(adopter_key.as_ref(), key))
             {
                 if let Some(layer) = child.layer.clone().downcast_arc_adopted_layer::<CC>() {
                     let adopted_child_layer = ComposableChildLayer {

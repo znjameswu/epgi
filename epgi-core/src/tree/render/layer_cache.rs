@@ -1,6 +1,6 @@
 use crate::{foundation::Canvas, tree::NoRecompositeToken};
 
-use super::{ComposableChildLayer, ComposableUnadoptedLayer, StructuredChildLayerOrFragment};
+use super::{ChildLayerOrFragment, ComposableChildLayer, ComposableUnadoptedLayer};
 
 pub struct LayerCache<CC: Canvas, T> {
     pub(crate) paint_results: PaintResults<CC>,
@@ -40,8 +40,8 @@ where
 }
 
 pub struct PaintResults<C: Canvas> {
-    pub structured_children: Vec<StructuredChildLayerOrFragment<C>>,
-    pub detached_children: Vec<ComposableUnadoptedLayer<C>>,
+    pub children: Vec<ChildLayerOrFragment<C>>,
+    pub orphan_layers: Vec<ComposableUnadoptedLayer<C>>,
 }
 
 pub struct CompositeResults<CC: Canvas, T> {
