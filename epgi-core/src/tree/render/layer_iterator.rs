@@ -39,6 +39,7 @@ impl<'a, CC: Canvas> ChildLayerProducingIterator<'a, CC> {
         collected_orphan_layers.extend(self.paint_results.orphan_layers.iter().cloned());
         // DFS traversal, working from end to front
         collected_orphan_layers.reverse();
+        // Also we pop from end to front
         while let Some(child) = collected_orphan_layers.pop() {
             let adopter_key = &child.adopter_key;
             if self
@@ -46,13 +47,14 @@ impl<'a, CC: Canvas> ChildLayerProducingIterator<'a, CC> {
                 .is_some_and(|key| <dyn Key>::eq(adopter_key.as_ref(), key))
             {
                 if let Some(layer) = child.layer.clone().downcast_arc_adopted_layer::<CC>() {
-                    let adopted_child_layer = RecordedChildLayer {
+                    let adopted_layer = RecordedChildLayer {
                         config: child.config,
                         layer,
                     };
                     let child_orphan_layers =
-                        composite(ChildLayerOrFragmentRef::AdoptedChild(&adopted_child_layer));
+                        composite(ChildLayerOrFragmentRef::AdoptedChild(&adopted_layer));
                     collected_orphan_layers.extend(child_orphan_layers.into_iter().rev());
+                    self.adopted_layers.push(adopted_layer);
                     continue;
                 }
             }
