@@ -6,10 +6,10 @@ use crate::{
         PaintContext, Protocol,
     },
     tree::{
-        ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, ComposableChildLayer,
-        Composite, DryLayout, HitTest, HitTestBehavior, HitTestContext, HitTestResult, ImplRender,
-        LayerCompositionConfig, LayerPaint, Layout, OrphanLayer, Paint, PaintResults, Render,
-        RenderBase, RenderObject,
+        ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, Composite, DryLayout,
+        HitTest, HitTestBehavior, HitTestContext, HitTestResult, ImplRender,
+        LayerCompositionConfig, LayerPaint, Layout, OrphanLayer, Paint, PaintResults,
+        RecordedChildLayer, Render, RenderBase, RenderObject,
     },
 };
 
@@ -290,7 +290,7 @@ pub trait TemplateHitTest<R: RenderBase> {
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
         children: &ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
         let hit_self = Self::hit_test_self(render, ctx.curr_position(), size, offset, memo);
@@ -320,7 +320,7 @@ pub trait TemplateHitTest<R: RenderBase> {
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
         children: &ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> bool;
 
     #[allow(unused_variables)]
@@ -360,7 +360,7 @@ where
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         R::Template::hit_test(self, ctx, size, offset, memo, children, adopted_children)
     }
@@ -372,7 +372,7 @@ where
         _offset: &<Self::ParentProtocol as Protocol>::Offset,
         _memo: &Self::LayoutMemo,
         _children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
-        _adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+        _adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> bool {
         unreachable!(
             "TemplateHitTest has already provided a hit_test implementation, \

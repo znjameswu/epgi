@@ -3,7 +3,7 @@ use std::any::TypeId;
 use crate::{
     foundation::{AnyRawPointer, ArrayContainer, Canvas, PaintContext, Protocol},
     tree::{
-        ArcChildRenderObject, ComposableChildLayer, HitTestBehavior, HitTestContext, HitTestResult,
+        ArcChildRenderObject, HitTestBehavior, HitTestContext, HitTestResult, RecordedChildLayer,
         Render, RenderImpl, RenderObject,
     },
 };
@@ -181,7 +181,7 @@ where
         offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
         [child]: &[ArcChildRenderObject<R::Protocol>; 1],
-        adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<R::Protocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         debug_assert!(
             adopted_children.is_empty(),
@@ -197,7 +197,7 @@ where
         _offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
         [_child]: &[ArcChildRenderObject<R::Protocol>; 1],
-        _adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
+        _adopted_children: &[RecordedChildLayer<<R::Protocol as Protocol>::Canvas>],
     ) -> bool {
         unreachable!(
             "TemplatePaint has already provided a hit_test implementation, \

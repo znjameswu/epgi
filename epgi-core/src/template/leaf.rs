@@ -7,8 +7,8 @@ use crate::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-        ChildRenderObjectsUpdateCallback, ComposableChildLayer, ElementBase, ElementImpl,
-        ElementReconcileItem, FullRender, HitTestBehavior, HitTestContext, Render, RenderAction,
+        ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
+        FullRender, HitTestBehavior, HitTestContext, RecordedChildLayer, Render, RenderAction,
         RenderImpl, RenderObject,
     },
 };
@@ -255,7 +255,7 @@ where
         _offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
         _children: &[ArcChildRenderObject<R::Protocol>; 0],
-        _adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
+        _adopted_children: &[RecordedChildLayer<<R::Protocol as Protocol>::Canvas>],
     ) -> bool {
         false
     }

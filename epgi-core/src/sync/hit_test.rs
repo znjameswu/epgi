@@ -1,9 +1,9 @@
 use crate::{
     foundation::{Arc, Canvas, ContainerOf, Protocol},
     tree::{
-        ArcChildRenderObject, CachedComposite, ComposableChildLayer, CompositionCache, FullRender,
-        HitTest, HitTestContext, HitTestResult, ImplRender, ImplRenderObject, LayerCache,
-        LayerMark, Render, RenderBase, RenderImpl, RenderObject,
+        ArcChildRenderObject, CachedComposite, CompositionCache, FullRender, HitTest,
+        HitTestContext, HitTestResult, ImplRender, ImplRenderObject, LayerCache, LayerMark,
+        RecordedChildLayer, Render, RenderBase, RenderImpl, RenderObject,
     },
 };
 
@@ -93,7 +93,7 @@ pub trait ImplHitTest<R: Render<Impl = Self>>: ImplRender<R> {
     fn get_adopted_children<'a>(
         layer_cache: &'a <R::Impl as ImplRenderObject<R>>::LayerCache,
         layer_mark: &'a <R::Impl as ImplRenderObject<R>>::LayerMark,
-    ) -> Option<&'a [ComposableChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>;
+    ) -> Option<&'a [RecordedChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>;
 
     fn hit_test(
         render: &R,
@@ -102,7 +102,7 @@ pub trait ImplHitTest<R: Render<Impl = Self>>: ImplRender<R> {
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
         children: &ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult;
 }
 
@@ -121,7 +121,7 @@ where
     fn get_adopted_children<'a>(
         _layer_cache: &'a <<R as Render>::Impl as ImplRenderObject<R>>::LayerCache,
         _layer_mark: &'a <R::Impl as ImplRenderObject<R>>::LayerMark,
-    ) -> Option<&'a [ComposableChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
+    ) -> Option<&'a [RecordedChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
     {
         None
     }
@@ -133,7 +133,7 @@ where
         offset: &<<R>::ParentProtocol as Protocol>::Offset,
         memo: &<R>::LayoutMemo,
         children: &ContainerOf<<R>::ChildContainer, ArcChildRenderObject<<R>::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<<R>::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<<R>::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         R::hit_test(render, ctx, size, offset, memo, children, adopted_children)
     }
@@ -155,7 +155,7 @@ where
     fn get_adopted_children<'a>(
         layer_cache: &'a <<R as Render>::Impl as ImplRenderObject<R>>::LayerCache,
         layer_mark: &'a <R::Impl as ImplRenderObject<R>>::LayerMark,
-    ) -> Option<&'a [ComposableChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
+    ) -> Option<&'a [RecordedChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
     {
         layer_cache
             .composite_results_ref(layer_mark.assume_not_needing_composite())
@@ -169,7 +169,7 @@ where
         offset: &<<R>::ParentProtocol as Protocol>::Offset,
         memo: &<R>::LayoutMemo,
         children: &ContainerOf<<R>::ChildContainer, ArcChildRenderObject<<R>::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<<R>::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<<R>::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         R::hit_test(render, ctx, size, offset, memo, children, adopted_children)
     }
@@ -195,7 +195,7 @@ where
     fn get_adopted_children<'a>(
         layer_cache: &'a <<R as Render>::Impl as ImplRenderObject<R>>::LayerCache,
         layer_mark: &'a <R::Impl as ImplRenderObject<R>>::LayerMark,
-    ) -> Option<&'a [ComposableChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
+    ) -> Option<&'a [RecordedChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
     {
         layer_cache
             .composite_results_ref(layer_mark.assume_not_needing_composite())
@@ -209,7 +209,7 @@ where
         offset: &<<R>::ParentProtocol as Protocol>::Offset,
         memo: &<R>::LayoutMemo,
         children: &ContainerOf<<R>::ChildContainer, ArcChildRenderObject<<R>::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<<R>::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<<R>::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         R::hit_test(render, ctx, size, offset, memo, children, adopted_children)
     }

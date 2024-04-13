@@ -2,8 +2,8 @@ use epgi_core::{
     foundation::{Asc, Canvas, Key, LayerProtocol, PaintContext, Protocol, Transform},
     tree::{
         ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
-        ChildLayerOrFragment, ComposableChildLayer, ComposableUnadoptedLayer,
-        LayerCompositionConfig, PaintResults,
+        ChildLayerOrFragment, LayerCompositionConfig, PaintResults, RecordedChildLayer,
+        RecordedOrphanLayer,
     },
 };
 use peniko::{kurbo::Stroke, BrushRef};
@@ -76,24 +76,6 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         child.clone().paint(offset, self)
     }
 
-    // fn add_layer(
-    //     &mut self,
-    //     layer: epgi_core::tree::ArcChildLayerRenderObject<Self::Canvas>,
-    //     config: epgi_core::tree::LayerCompositionConfig<Self::Canvas>,
-    // ) {
-    //     if !self.curr_fragment_encoding.is_empty() {
-    //         let encoding = std::mem::take(&mut self.curr_fragment_encoding);
-    //         self.results
-    //             .structured_children
-    //             .push(StructuredChildLayerOrFragment::Fragment(encoding));
-    //     }
-    //     self.results
-    //         .structured_children
-    //         .push(StructuredChildLayerOrFragment::StructuredChild(
-    //             ComposableChildLayer { config, layer },
-    //         ));
-    // }
-
     fn add_layer<P: LayerProtocol<Canvas = Affine2dCanvas>>(
         &mut self,
         layer: ArcChildLayerRenderObject<Self::Canvas>,
@@ -107,7 +89,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         }
         self.results
             .children
-            .push(ChildLayerOrFragment::Layer(ComposableChildLayer {
+            .push(ChildLayerOrFragment::Layer(RecordedChildLayer {
                 config: P::offset_layer_composition_config(offset, &self.curr_config),
                 layer,
             }));
@@ -119,7 +101,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
         adopter_key: Asc<dyn Key>,
         offset: &P::Offset,
     ) {
-        self.results.orphan_layers.push(ComposableUnadoptedLayer {
+        self.results.orphan_layers.push(RecordedOrphanLayer {
             config: P::offset_layer_composition_config(offset, &self.curr_config),
             layer,
             adopter_key,

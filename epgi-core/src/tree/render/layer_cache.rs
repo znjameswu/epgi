@@ -1,6 +1,6 @@
 use crate::{foundation::Canvas, tree::NoRecompositeToken};
 
-use super::{ChildLayerOrFragment, ComposableChildLayer, ComposableUnadoptedLayer};
+use super::{ChildLayerOrFragment, RecordedChildLayer, RecordedOrphanLayer};
 
 pub struct LayerCache<CC: Canvas, T> {
     pub(crate) paint_results: PaintResults<CC>,
@@ -41,11 +41,11 @@ where
 
 pub struct PaintResults<C: Canvas> {
     pub children: Vec<ChildLayerOrFragment<C>>,
-    pub orphan_layers: Vec<ComposableUnadoptedLayer<C>>,
+    pub orphan_layers: Vec<RecordedOrphanLayer<C>>,
 }
 
 pub struct CompositeResults<CC: Canvas, T> {
-    pub(crate) adopted_layers: Vec<ComposableChildLayer<CC>>,
+    pub(crate) adopted_layers: Vec<RecordedChildLayer<CC>>,
     pub(crate) cache: T,
 }
 
@@ -53,6 +53,6 @@ pub struct CompositeResults<CC: Canvas, T> {
 pub struct CompositionCache<CC: Canvas, CM> {
     // The reason we store untransformed unadopted layers (using child canvas) instead of transfomed ones (using parent canvas)
     // is that transform needs a transform_config, which is acquired when composite, and can be different with each composite attempt.
-    pub(crate) unadopted_layers: Vec<ComposableUnadoptedLayer<CC>>,
+    pub(crate) orphan_layers: Vec<RecordedOrphanLayer<CC>>,
     pub(crate) memo: CM,
 }

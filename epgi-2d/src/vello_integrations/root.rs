@@ -4,9 +4,9 @@ use epgi_core::{
     },
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
-        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, ComposableChildLayer,
-        DryLayout, Element, ElementBase, ElementImpl, ElementReconcileItem, HitTest,
-        HitTestContext, LayerCompositionConfig, LayerPaint, Render, RenderAction, RenderBase,
+        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
+        ElementBase, ElementImpl, ElementReconcileItem, HitTest, HitTestContext,
+        LayerCompositionConfig, LayerPaint, RecordedChildLayer, Render, RenderAction, RenderBase,
         RenderElement, RenderImpl, RenderObjectSlots, Widget,
     },
 };
@@ -184,9 +184,9 @@ impl CachedComposite for RenderRoot {
                 Affine2dCanvas::composite_encoding(&mut result, encoding, None);
                 Vec::new()
             }
-            StructuredChild(composable_layer) | AdoptedChild(composable_layer) => composable_layer
-                .layer
-                .composite_to(&mut result, &composable_layer.config),
+            Child(layer) | AdoptedChild(layer) => {
+                layer.layer.composite_to(&mut result, &layer.config)
+            }
         });
         return Arc::new(result);
     }
@@ -216,7 +216,7 @@ impl HitTest for RenderRoot {
         _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
         children: &Option<ArcChildRenderObject<BoxProtocol>>,
-        _adopted_children: &[ComposableChildLayer<Affine2dCanvas>],
+        _adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
         debug_assert!(
             _adopted_children.is_empty(),
@@ -232,132 +232,3 @@ impl HitTest for RenderRoot {
 impl Render for RenderRoot {
     type Impl = RenderImpl<true, true, true, false>;
 }
-
-// impl Render for RenderRoot {
-//     type ParentProtocol = BoxProtocol;
-
-//     type ChildProtocol = BoxProtocol;
-
-//     type ChildContainer = OptionContainer;
-
-//     type LayoutMemo = ();
-
-//     fn perform_layout<'a, 'layout>(
-//         &'a mut self,
-//         _constraints: &'a BoxConstraints,
-//         _children: &Option<ArcChildRenderObject<BoxProtocol>>,
-//     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo) {
-//         unreachable!()
-//     }
-
-//     const DRY_LAYOUT_FUNCTION_TABLE: Option<DryLayoutFunctionTable<Self>> =
-//         <Self as DryLayoutOld>::DRY_LAYOUT_FUNCTION_TABLE;
-
-//     fn perform_paint(
-//         &self,
-//         _size: &BoxSize,
-//         _offset: &BoxOffset,
-//         _memo: &Self::LayoutMemo,
-//         _children: &Option<ArcChildRenderObject<BoxProtocol>>,
-//         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
-//     ) {
-//         unreachable!()
-//     }
-
-//     fn hit_test_children(
-//         &self,
-//         _size: &BoxSize,
-//         _offset: &BoxOffset,
-//         _memo: &Self::LayoutMemo,
-//         children: &Option<ArcChildRenderObject<BoxProtocol>>,
-//         results: &mut HitTestResults<Affine2dCanvas>,
-//     ) -> bool {
-//         children
-//             .as_ref()
-//             .map(|child| results.hit_test(child.clone()))
-//             .unwrap_or_default()
-//     }
-
-//     type LayerOrUnit = RenderRoot;
-// }
-
-// impl DryLayoutOld for RenderRoot {
-//     fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize {
-//         constraints.biggest()
-//     }
-
-//     fn compute_layout_memo(
-//         &self,
-//         constraints: &BoxConstraints,
-//         _size: &BoxSize,
-//         children: &Option<ArcChildRenderObject<BoxProtocol>>,
-//     ) -> Self::LayoutMemo {
-//         if let Some(child) = children {
-//             child.layout(constraints)
-//         }
-//         ()
-//     }
-// }
-
-// impl LayerRender for RenderRoot {
-//     fn composite_to(
-//         encoding: &mut Affine2dEncoding,
-//         child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
-//         composition_config: &LayerCompositionConfig<Affine2dCanvas>,
-//     ) {
-//         todo!()
-//     }
-
-//     fn transform_config(
-//         self_config: &LayerCompositionConfig<Affine2dCanvas>,
-//         child_config: &LayerCompositionConfig<Affine2dCanvas>,
-//     ) -> LayerCompositionConfig<Affine2dCanvas> {
-//         todo!()
-//     }
-
-//     fn transform_hit_test(
-//         &self,
-//         position: &<Affine2dCanvas as Canvas>::HitPosition,
-//     ) -> <Affine2dCanvas as Canvas>::HitPosition {
-//         todo!()
-//     }
-
-//     fn key(&self) -> Option<&Arc<dyn Key>> {
-//         None
-//     }
-
-//     type CachedComposition = Arc<Affine2dEncoding>;
-
-//     const CACHED_COMPOSITION_FUNCTION_TABLE: Option<CachedCompositionFunctionTable<Self>> =
-//         <Self as CachedLayer>::PERFORM_CACHED_COMPOSITION;
-// }
-
-// impl CachedLayer for RenderRoot {
-//     fn composite_into_cache(
-//         child_iterator: &mut impl ChildLayerProducingIterator<Affine2dCanvas>,
-//     ) -> Self::CachedComposition {
-//         let mut result = Affine2dEncoding::new();
-//         use epgi_core::tree::ChildLayerOrFragmentRef::*;
-//         child_iterator.for_each(|child| match child {
-//             Fragment(encoding) => {
-//                 Affine2dCanvas::composite_encoding(&mut result, encoding, None);
-//                 Vec::new()
-//             }
-//             StructuredChild(ComposableChildLayer { config, layer }) => {
-//                 layer.composite_to(&mut result, config)
-//             }
-//             AdoptedChild(ComposableAdoptedLayer { config, layer }) => {
-//                 layer.composite_to(&mut result, config)
-//             }
-//         });
-//         return Arc::new(result);
-//     }
-
-//     fn composite_from_cache_to(
-//         encoding: &mut Affine2dEncoding,
-//         cache: &Self::CachedComposition,
-//         composition_config: &LayerCompositionConfig<Affine2dCanvas>,
-//     ) {
-//         todo!()
-//     }
-// }

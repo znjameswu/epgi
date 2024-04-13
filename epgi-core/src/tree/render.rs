@@ -199,7 +199,7 @@ pub trait HitTest: RenderBase {
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
         let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
@@ -230,7 +230,7 @@ pub trait HitTest: RenderBase {
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
-        adopted_children: &[ComposableChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> bool;
 
     // The reason we separate hit_test_self from hit_test_children is that we do not wish to leak hit_position into hit_test_children

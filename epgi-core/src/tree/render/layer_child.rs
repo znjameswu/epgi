@@ -6,7 +6,7 @@ use super::{ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ChildLayerOrFrag
 
 pub enum ChildLayerOrFragment<C: Canvas> {
     Fragment(C::Encoding),
-    Layer(ComposableChildLayer<C>),
+    Layer(RecordedChildLayer<C>),
 }
 
 impl<'a, C> Into<ChildLayerOrFragmentRef<'a, C>> for &'a ChildLayerOrFragment<C>
@@ -16,19 +16,19 @@ where
     fn into(self) -> ChildLayerOrFragmentRef<'a, C> {
         match self {
             ChildLayerOrFragment::Fragment(x) => ChildLayerOrFragmentRef::Fragment(x),
-            ChildLayerOrFragment::Layer(x) => ChildLayerOrFragmentRef::StructuredChild(x),
+            ChildLayerOrFragment::Layer(x) => ChildLayerOrFragmentRef::Child(x),
         }
     }
 }
 
-pub struct ComposableChildLayer<C: Canvas> {
+pub struct RecordedChildLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
     pub layer: ArcChildLayerRenderObject<C>,
 }
 
 #[derive(derivative::Derivative)]
 #[derivative(Clone(bound = ""))]
-pub struct ComposableUnadoptedLayer<C: Canvas> {
+pub struct RecordedOrphanLayer<C: Canvas> {
     pub config: LayerCompositionConfig<C>,
     pub adopter_key: Asc<dyn Key>,
     pub layer: ArcAnyLayerRenderObject,
