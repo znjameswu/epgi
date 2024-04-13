@@ -39,18 +39,11 @@ pub trait RenderBase: Send + Sync + Sized + 'static {
 
     type LayoutMemo: Send + Sync;
 
-    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
-    where
-        Self: Render,
-    {
-        &[]
-    }
-
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
 }
 
-pub trait Render: RenderBase {
+pub trait Render: RenderBase + HitTest {
     type Impl: ImplRender<Self>;
 }
 
@@ -255,6 +248,13 @@ pub trait HitTest: RenderBase {
 
     fn hit_test_behavior(&self) -> HitTestBehavior {
         HitTestBehavior::DeferToChild
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    where
+        Self: Render,
+    {
+        &[]
     }
 }
 

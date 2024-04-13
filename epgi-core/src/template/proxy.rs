@@ -3,8 +3,8 @@ use std::any::TypeId;
 use crate::{
     foundation::{AnyRawPointer, ArrayContainer, Canvas, PaintContext, Protocol},
     tree::{
-        ArcChildRenderObject, ComposableChildLayer, HitTestBehavior, HitTestContext, Render,
-        RenderImpl, RenderObject,
+        ArcChildRenderObject, ComposableChildLayer, HitTestBehavior, HitTestContext, HitTestResult,
+        Render, RenderImpl, RenderObject,
     },
 };
 
@@ -40,8 +40,43 @@ pub trait ProxyRender: Send + Sync + Sized + 'static {
         paint_ctx.paint(child, offset)
     }
 
+    /// The actual method that was invoked for hit-testing.
+    ///
+    /// Note however, this method is hard to impl directly. Therefore, if not for rare edge cases,
+    /// it is recommended to implement [ProxyRender::hit_test_child], [ProxyRender::hit_test_self],
+    /// and [ProxyRender::hit_test_behavior] instead. This method has a default impl that is composed on top of those method.
+    ///
+    /// If you do indeed overwrite the default impl of this method without using the other methods,
+    /// you can assume the other methods mentioned above are `unreachable!()`.
+    fn hit_test(
+        &self,
+        ctx: &mut HitTestContext<<Self::Protocol as Protocol>::Canvas>,
+        size: &<Self::Protocol as Protocol>::Size,
+        offset: &<Self::Protocol as Protocol>::Offset,
+        child: &ArcChildRenderObject<Self::Protocol>,
+    ) -> HitTestResult {
+        use HitTestResult::*;
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset);
+        if !hit_self {
+            // Stop hit-test children if the hit is outside of parent
+            return NotHit;
+        }
+
+        let hit_children = self.hit_test_child(ctx, size, offset, child);
+        if hit_children {
+            return Hit;
+        }
+
+        use HitTestBehavior::*;
+        match self.hit_test_behavior() {
+            DeferToChild => NotHit,
+            Transparent => HitThroughSelf,
+            Opaque => Hit,
+        }
+    }
+
     #[allow(unused_variables)]
-    fn hit_test_children(
+    fn hit_test_child(
         &self,
         ctx: &mut HitTestContext<<Self::Protocol as Protocol>::Canvas>,
         size: &<Self::Protocol as Protocol>::Size,
@@ -87,13 +122,6 @@ where
 
     type LayoutMemo = ();
 
-    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
-    where
-        R: Render,
-    {
-        <R as ProxyRender>::all_hit_test_interfaces()
-    }
-
     fn detach(render: &mut R) {
         R::detach(render)
     }
@@ -133,7 +161,7 @@ where
         render: &R,
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
-        memo: &(),
+        _memo: &(),
         [child]: &[ArcChildRenderObject<R::Protocol>; 1],
         paint_ctx: &mut impl PaintContext<Canvas = <R::Protocol as Protocol>::Canvas>,
     ) {
@@ -146,29 +174,41 @@ where
     R: ImplByTemplate<Template = Self>,
     R: ProxyRender,
 {
-    fn hit_test_children(
+    fn hit_test(
         render: &R,
         ctx: &mut HitTestContext<<R::Protocol as Protocol>::Canvas>,
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
-        memo: &(),
+        _memo: &(),
         [child]: &[ArcChildRenderObject<R::Protocol>; 1],
         adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
-    ) -> bool {
-        R::hit_test_children(render, ctx, size, offset, child)
+    ) -> HitTestResult {
+        debug_assert!(
+            adopted_children.is_empty(),
+            "Proxy render does not take adoption"
+        );
+        R::hit_test(render, ctx, size, offset, child)
     }
 
-    fn hit_test_self(
-        render: &R,
-        position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<R::Protocol as Protocol>::Size,
-        offset: &<R::Protocol as Protocol>::Offset,
-        memo: &(),
+    fn hit_test_children(
+        _render: &R,
+        _ctx: &mut HitTestContext<<R::Protocol as Protocol>::Canvas>,
+        _size: &<R::Protocol as Protocol>::Size,
+        _offset: &<R::Protocol as Protocol>::Offset,
+        _memo: &(),
+        [_child]: &[ArcChildRenderObject<R::Protocol>; 1],
+        _adopted_children: &[ComposableChildLayer<<R::Protocol as Protocol>::Canvas>],
     ) -> bool {
-        R::hit_test_self(render, position, size, offset)
+        unreachable!(
+            "TemplatePaint has already provided a hit_test implementation, \
+            but hit_test_children is still invoked somehow. This indicates a framework bug."
+        )
     }
 
-    fn hit_test_behavior(render: &R) -> HitTestBehavior {
-        R::hit_test_behavior(render)
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
+    where
+        R: Render,
+    {
+        <R as ProxyRender>::all_hit_test_interfaces()
     }
 }

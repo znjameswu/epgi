@@ -52,6 +52,7 @@ pub trait LeafElement: Clone + Send + Sync + Sized + 'static {
     /// Called during the commit phase, when the widget is updated.
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
+    #[allow(unused_variables)]
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
         RenderAction::None
     }
@@ -194,13 +195,6 @@ where
 
     type LayoutMemo = ();
 
-    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
-    where
-        R: Render,
-    {
-        <R as LeafRender>::all_hit_test_interfaces()
-    }
-
     fn detach(render: &mut R) {
         R::detach(render)
     }
@@ -278,5 +272,12 @@ where
 
     fn hit_test_behavior(render: &R) -> HitTestBehavior {
         R::hit_test_behavior(render)
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
+    where
+        R: Render,
+    {
+        <R as LeafRender>::all_hit_test_interfaces()
     }
 }
