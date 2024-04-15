@@ -44,7 +44,7 @@ impl<E: FullElement> ElementNode<E> {
     pub(super) fn new_async_uninflated(
         widget: E::ArcWidget,
         work_context: Asc<WorkContext>,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         handle: WorkHandle,
         barrier: CommitBarrier,
     ) -> Arc<Self> {

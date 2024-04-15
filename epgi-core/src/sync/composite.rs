@@ -3,9 +3,9 @@ use std::any::Any;
 use crate::{
     foundation::{Arc, Asc, Canvas, LayerProtocol, Protocol},
     tree::{
-        CachedComposite, ChildLayerProducingIterator, Composite, CompositeResults,
-        CompositionCache, ImplRenderObject, LayerCache, LayerCompositionConfig, LayerMark,
-        LayerPaint, PaintResults, RecordedOrphanLayer, Render, RenderBase, RenderImpl,
+        AnyLayerRenderObject, CachedComposite, ChildLayerProducingIterator, Composite,
+        CompositeResults, CompositionCache, ImplRenderObject, LayerCache, LayerCompositionConfig,
+        LayerMark, LayerPaint, PaintResults, RecordedOrphanLayer, Render, RenderBase, RenderImpl,
         RenderObject,
     },
 };
@@ -13,8 +13,11 @@ use crate::{
 use super::BuildScheduler;
 
 impl BuildScheduler {
-    pub(crate) fn perform_composite(&self) -> Asc<dyn Any + Send + Sync> {
-        self.root_render_object.recomposite_into_memo()
+    pub(crate) fn perform_composite(
+        &self,
+        root_render_object: &dyn AnyLayerRenderObject,
+    ) -> Asc<dyn Any + Send + Sync> {
+        root_render_object.recomposite_into_memo()
     }
 }
 

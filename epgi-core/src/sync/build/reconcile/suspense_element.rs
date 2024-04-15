@@ -77,7 +77,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                 };
 
                 let (fallback, change) =
-                    fallback.inflate_sync(element_node.context.clone(), build_scheduler);
+                    fallback.inflate_sync(Some(element_node.context.clone()), build_scheduler);
 
                 let SubtreeRenderObjectChange::New(fallback_render_object) = change else {
                     panic!(

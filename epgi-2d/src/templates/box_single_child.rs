@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
-use epgi_core::tree::RenderBase;
+use epgi_core::template::TemplateRender;
+use epgi_core::tree::{HitTest, ImplRender, RenderBase, RenderImpl};
 use epgi_core::{
     foundation::{
         AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec,
@@ -214,6 +215,21 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateRender<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: RenderBase,
+    RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>: ImplRender<R>,
+{
+    type RenderImpl = RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>;
 }
 
 /// Dry layout means that under all circumstances, this render object's size is solely determined

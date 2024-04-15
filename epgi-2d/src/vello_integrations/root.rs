@@ -1,20 +1,21 @@
 use epgi_core::{
-    foundation::{
-        Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, OptionContainer, Provide,
-    },
+    foundation::{Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Provide},
+    template::ImplByTemplate,
     tree::{
-        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, BuildContext, CachedComposite,
-        ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback, DryLayout, Element,
-        ElementBase, ElementImpl, ElementReconcileItem, HitTest, HitTestContext,
-        LayerCompositionConfig, LayerPaint, RecordedChildLayer, Render, RenderAction, RenderBase,
-        RenderElement, RenderImpl, RenderObjectSlots, Widget,
+        ArcChildWidget, BuildContext, ChildLayerProducingIterator, HitTestContext,
+        LayerCompositionConfig, RecordedChildLayer, RenderAction, Widget,
     },
 };
 
-use crate::{Affine2dCanvas, Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize};
+use crate::{
+    Affine2dCanvas, Affine2dEncoding, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset,
+    BoxProtocol, BoxSingleChildCachedComposite, BoxSingleChildDryLayout, BoxSingleChildElement,
+    BoxSingleChildElementTemplate, BoxSingleChildHitTest, BoxSingleChildLayerPaint,
+    BoxSingleChildRender, BoxSingleChildRenderElement, BoxSingleChildRenderTemplate, BoxSize,
+};
 
 pub struct RootView {
-    pub build: Box<dyn Fn(BuildContext) -> Option<ArcChildWidget<BoxProtocol>> + Send + Sync>,
+    pub child: ArcBoxWidget,
 }
 
 impl std::fmt::Debug for RootView {
@@ -40,71 +41,28 @@ impl Widget for RootView {
 #[derive(Clone)]
 pub struct RootElement {}
 
-impl ElementBase for RootElement {
-    type ParentProtocol = BoxProtocol;
-    type ChildProtocol = BoxProtocol;
-    type ChildContainer = OptionContainer;
+impl ImplByTemplate for RootElement {
+    type Template = BoxSingleChildElementTemplate<true, false>;
+}
 
+impl BoxSingleChildElement for RootElement {
     type ArcWidget = Asc<RootView>;
 
-    fn perform_rebuild_element(
-        // Rational for a moving self: Allows users to destructure the self without needing to fill in a placeholder value.
-        &mut self,
+    fn get_child_widget(
+        _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        _ctx: BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        children: Option<ArcChildElementNode<Self::ChildProtocol>>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
-    ) -> Result<
-        (
-            Option<ElementReconcileItem<Self::ChildProtocol>>,
-            Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, Self::ChildProtocol>>,
-        ),
-        (
-            Option<ArcChildElementNode<Self::ChildProtocol>>,
-            BuildSuspendedError,
-        ),
-    > {
-        let child_widget = (widget.build)(ctx);
-        let (item, shuffle) = match (child_widget, children) {
-            (None, None) => (None, None),
-            (None, Some(child)) => {
-                nodes_needing_unmount.push(child.clone());
-                (None, Some(Box::new(|_| None) as _))
-            }
-            (Some(child_widget), None) => (
-                Some(ElementReconcileItem::new_inflate(child_widget)),
-                Some(Box::new(|_| Some(RenderObjectSlots::Inflate)) as _),
-            ),
-            (Some(child_widget), Some(child)) => {
-                let item = match child.can_rebuild_with(child_widget) {
-                    Ok(item) => Some(item),
-                    Err((child, child_widget)) => {
-                        nodes_needing_unmount.push(child);
-                        Some(ElementReconcileItem::new_inflate(child_widget))
-                    }
-                };
-                (item, None)
-            }
-        };
-        Ok((item, shuffle))
+    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+        Ok(widget.child.clone())
     }
 
-    fn perform_inflate_element(
-        widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(Self, Option<ArcChildWidget<Self::ChildProtocol>>), BuildSuspendedError> {
-        let child_widget = (widget.build)(ctx);
-        Ok((RootElement {}, child_widget))
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
+        Self {}
     }
 }
 
-impl Element for RootElement {
-    type Impl = ElementImpl<true, false>;
-}
-
-impl RenderElement for RootElement {
+impl BoxSingleChildRenderElement for RootElement {
     type Render = RenderRoot;
 
     fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
@@ -114,38 +72,19 @@ impl RenderElement for RootElement {
     fn update_render(_render: &mut Self::Render, _widget: &Self::ArcWidget) -> RenderAction {
         RenderAction::None
     }
-
-    // fn create_render(&self, widget: &Self::ArcWidget) -> RenderRoot {
-    //     todo!()
-    // }
-
-    // fn update_render(render_object: &mut RenderRoot, widget: &Self::ArcWidget) -> RenderAction {
-    //     todo!()
-    // }
-
-    // fn element_render_children_mapping<T: Send + Sync>(
-    //     &self,
-    //     element_children: <Self::ChildContainer as epgi_core::foundation::ChildContainer>::Container<
-    //         T,
-    //     >,
-    // ) -> <<RenderRoot as Render>::ChildContainer as epgi_core::foundation::ChildContainer>::Container<T>
-    // {
-    //     todo!()
-    // }
 }
 
-pub struct RenderRoot {
-    // pub child: Option<ArcChildRenderObject<BoxProtocol>>,
+pub struct RenderRoot {}
+
+impl ImplByTemplate for RenderRoot {
+    type Template = BoxSingleChildRenderTemplate<true, true, true, false>;
 }
 
-impl RenderBase for RenderRoot {
-    type ParentProtocol = BoxProtocol;
-    type ChildProtocol = BoxProtocol;
-    type ChildContainer = OptionContainer;
+impl BoxSingleChildRender for RenderRoot {
     type LayoutMemo = ();
 }
 
-impl DryLayout for RenderRoot {
+impl BoxSingleChildDryLayout for RenderRoot {
     fn compute_dry_layout(&self, _constraints: &BoxConstraints) -> BoxSize {
         BoxSize::INFINITY
     }
@@ -154,23 +93,15 @@ impl DryLayout for RenderRoot {
         &mut self,
         constraints: &BoxConstraints,
         _size: &BoxSize,
-        child: &Option<ArcChildRenderObject<BoxProtocol>>,
+        child: &ArcBoxRenderObject,
     ) -> Self::LayoutMemo {
-        child.as_ref().map(|child| child.layout(constraints));
-        ()
+        child.layout(constraints)
     }
 }
 
-impl LayerPaint for RenderRoot {
-    fn transform_config(
-        self_config: &LayerCompositionConfig<Affine2dCanvas>,
-        child_config: &LayerCompositionConfig<Affine2dCanvas>,
-    ) -> LayerCompositionConfig<Affine2dCanvas> {
-        todo!()
-    }
-}
+impl BoxSingleChildLayerPaint for RenderRoot {}
 
-impl CachedComposite for RenderRoot {
+impl BoxSingleChildCachedComposite for RenderRoot {
     type CompositionMemo = Arc<Affine2dEncoding>;
 
     fn composite_into_memo(
@@ -194,34 +125,23 @@ impl CachedComposite for RenderRoot {
     fn composite_from_cache_to(
         &self,
         _encoding: &mut Affine2dEncoding,
-        _cache: &Self::CompositionMemo,
+        _memo: &Self::CompositionMemo,
         _composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
         unreachable!()
     }
 }
 
-impl HitTest for RenderRoot {
-    fn hit_test_children(
+impl BoxSingleChildHitTest for RenderRoot {
+    fn hit_test_child(
         &self,
         ctx: &mut HitTestContext<Affine2dCanvas>,
         _size: &BoxSize,
         _offset: &BoxOffset,
         _memo: &Self::LayoutMemo,
-        children: &Option<ArcChildRenderObject<BoxProtocol>>,
+        child: &ArcBoxRenderObject,
         _adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
-        debug_assert!(
-            _adopted_children.is_empty(),
-            "Root layer does not take adoption"
-        );
-        children
-            .as_ref()
-            .map(|child| ctx.hit_test(child.clone()))
-            .unwrap_or_default()
+        ctx.hit_test(child.clone())
     }
-}
-
-impl Render for RenderRoot {
-    type Impl = RenderImpl<true, true, true, false>;
 }

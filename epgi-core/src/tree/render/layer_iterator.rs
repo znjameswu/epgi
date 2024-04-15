@@ -46,7 +46,7 @@ impl<'a, CC: Canvas> ChildLayerProducingIterator<'a, CC> {
                 .key
                 .is_some_and(|key| <dyn Key>::eq_key(adopter_key.as_ref(), key))
             {
-                if let Some(layer) = child.layer.clone().downcast_arc_adopted_layer::<CC>() {
+                if let Some(layer) = child.layer.clone().downcast_arc_child_layer::<CC>() {
                     let adopted_layer = RecordedChildLayer {
                         config: child.config,
                         layer,

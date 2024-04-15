@@ -3,8 +3,8 @@ use std::any::Any;
 use crate::{
     foundation::{
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref, Arc,
-        Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol, Protocol,
-        SyncMutex,
+        AsAny, Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol,
+        Protocol, SyncMutex,
     },
     sync::ImplComposite,
     tree::{ElementContextNode, LayerCache, LayerMark},
@@ -132,7 +132,7 @@ impl<R: FullRender> ChildRenderObject<R::ParentProtocol> for RenderObject<R> {
     }
 }
 
-pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
+pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send + Sync {
     fn element_context(&self) -> &ElementContextNode;
     fn detach_render_object(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
@@ -150,6 +150,8 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + Send + Sync {
     ) -> Option<AweakAnyLayerRenderObject>
     where
         Self: Sized;
+
+    fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any>;
 }
 
 impl<R: FullRender> AnyRenderObject for RenderObject<R> {
@@ -205,6 +207,23 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         } else {
             None
         }
+    }
+
+    fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any> {
+        Box::new(self as ArcChildRenderObject<R::ParentProtocol>)
+    }
+}
+
+pub trait ArcAnyRenderObjectExt {
+    fn downcast_arc_child<P: Protocol>(self) -> Option<ArcChildRenderObject<P>>;
+}
+
+impl ArcAnyRenderObjectExt for ArcAnyRenderObject {
+    fn downcast_arc_child<P: Protocol>(self) -> Option<ArcChildRenderObject<P>> {
+        self.as_any_arc_child()
+            .downcast::<Arc<dyn ChildRenderObject<P>>>()
+            .ok()
+            .map(|x| *x)
     }
 }
 
@@ -269,15 +288,24 @@ where
 }
 
 pub trait ArcAnyLayerRenderObjectExt {
-    fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcChildLayerRenderObject<C>>;
+    fn downcast_arc_child_layer<C: Canvas>(self) -> Option<ArcChildLayerRenderObject<C>>;
+
+    fn downcast_arc_child<P: Protocol>(self) -> Option<ArcChildRenderObject<P>>;
     // fn downcast_arc_parent_layer<C: Canvas>(self)
     //     -> Result<ArcParentLayerNode<C>, ArcAnyLayerNode>;
 }
 
 impl ArcAnyLayerRenderObjectExt for ArcAnyLayerRenderObject {
-    fn downcast_arc_adopted_layer<C: Canvas>(self) -> Option<ArcChildLayerRenderObject<C>> {
+    fn downcast_arc_child_layer<C: Canvas>(self) -> Option<ArcChildLayerRenderObject<C>> {
         self.as_any_arc_child_layer()
             .downcast::<Arc<dyn ChildLayerRenderObject<C>>>()
+            .ok()
+            .map(|x| *x)
+    }
+
+    fn downcast_arc_child<P: Protocol>(self) -> Option<ArcChildRenderObject<P>> {
+        self.as_any_arc_child()
+            .downcast::<Arc<dyn ChildRenderObject<P>>>()
             .ok()
             .map(|x| *x)
     }

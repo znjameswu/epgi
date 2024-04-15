@@ -91,12 +91,12 @@ impl ElementContextNode {
 
     pub(crate) fn new_for<E: Element>(
         node: AweakAnyElementNode,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         widget: &E::ArcWidget,
     ) -> Self {
         let provider = <E as Element>::Impl::option_get_provided_key_value_pair(widget)
             .map(|(provided, type_key)| Box::new(ProviderObject::new(provided, type_key)));
-        Self::new(node, Some(parent_context), provider)
+        Self::new(node, parent_context, provider)
     }
 
     #[inline(always)]

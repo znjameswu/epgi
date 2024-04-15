@@ -35,7 +35,7 @@ impl<E: FullElement> ElementNode<E> {
 
     pub(super) fn inflate_node_sync(
         widget: &E::ArcWidget,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         build_scheduler: &BuildScheduler,
     ) -> (
         Arc<ElementNode<E>>,
@@ -376,7 +376,7 @@ impl<E: FullElement> ElementNode<E> {
                             Keep(node) => node.visit_and_work_sync(job_ids, scope, build_scheduler),
                             Update(pair) => pair.rebuild_sync_box(job_ids, scope, build_scheduler),
                             Inflate(widget) => {
-                                widget.inflate_sync(self.context.clone(), build_scheduler)
+                                widget.inflate_sync(Some(self.context.clone()), build_scheduler)
                             }
                         }
                     });
@@ -442,10 +442,12 @@ impl<E: FullElement> ElementNode<E> {
 
         let (state, change) = match result {
             Ok((element, child_widgets)) => {
-                let results = child_widgets
-                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child_widget| {
-                        child_widget.inflate_sync(self.context.clone(), build_scheduler)
-                    });
+                let results = child_widgets.par_map_collect(
+                    &get_current_scheduler().sync_threadpool,
+                    |child_widget| {
+                        child_widget.inflate_sync(Some(self.context.clone()), build_scheduler)
+                    },
+                );
                 let (children, changes) = results.unzip_collect(|x| x);
 
                 debug_assert!(

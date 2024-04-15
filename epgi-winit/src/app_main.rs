@@ -1,16 +1,13 @@
 use epgi_2d::{
-    Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxProvider, BoxSize, RenderRoot,
-    RootElement, RootView,
+    Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxProvider, BoxSize, RootView,
 };
 use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
-    foundation::{unbounded_channel_sync, Arc, SyncMpscReceiver, SyncMutex},
+    foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
     hooks::{BuildContextHookExt, SetState},
     nodes::Function,
-    scheduler::{
-        get_current_scheduler, setup_scheduler, BuildScheduler, Scheduler, SchedulerHandle,
-    },
-    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, RenderObject},
+    scheduler::{get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle},
+    tree::{ArcChildWidget, LayoutResults},
 };
 use std::{
     num::NonZeroUsize,
@@ -259,9 +256,6 @@ impl<'a> MainState<'a> {
         app: ArcChildWidget<BoxProtocol>,
         rx: SyncMpscReceiver<PointerEvent>,
     ) {
-        // First we construct an empty root with no children. Later we will inject our application widget inside
-        let (element_node, render_object, widget_binding) = initialize_root();
-
         // Now we wrap the application in wrapper widgets that provides bindigns to basic functionalities,
         // such as window size and frame information.
         //
@@ -284,16 +278,16 @@ impl<'a> MainState<'a> {
 
         initialize_scheduler_handle();
 
-        // Now we call the scheduler to inject the wrapped widget
-        get_current_scheduler().create_sync_job(|job_builder| {
-            widget_binding.set(Some(child), job_builder);
-        });
-
-        let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
-
         let scheduler = Scheduler::new(
-            build_scheduler,
-            EpgiGlazierSchedulerExtension::new(render_object, rx),
+            Asc::new(RootView { child }),
+            LayoutResults {
+                constraints: BoxConstraints::default(),
+                size: BoxSize::INFINITY,
+                memo: (),
+            },
+            BoxOffset::ZERO,
+            get_current_scheduler(),
+            EpgiGlazierSchedulerExtension::new(rx),
         );
         let join_handle = std::thread::spawn(move || {
             scheduler.start_event_loop(get_current_scheduler());
@@ -301,47 +295,6 @@ impl<'a> MainState<'a> {
 
         self.scheduler_join_handle = Some(join_handle);
     }
-}
-
-fn initialize_root() -> (
-    Arc<ElementNode<RootElement>>,
-    Arc<RenderObject<RenderRoot>>,
-    SetState<Option<Arc<dyn ChildWidget<BoxProtocol>>>>,
-) {
-    // First we inflate a simple root widget by hand, with no children attached.
-    // This is to allow the injection of a child widget later on.
-    let root_widget = Arc::new(RootView {
-        build: Box::new(move |mut ctx| {
-            let (child, _) = ctx.use_state::<Option<ArcChildWidget<BoxProtocol>>>(None);
-            child
-        }),
-    });
-    let element = RootElement {};
-    let (element_node, render_object) = create_root_element::<RootElement, RenderRoot>(
-        root_widget,
-        element,
-        None,
-        RenderRoot {},
-        None,
-        HooksWithTearDowns {
-            array_hooks: [
-                Box::new(StateHookState::<Option<ArcChildWidget<BoxProtocol>>> { val: None }) as _,
-            ]
-            .into(),
-        },
-        BoxConstraints::default(),
-        BoxOffset::ZERO,
-        BoxSize::INFINITY,
-        (),
-    );
-
-    // Construct the widget injection binding by hand for later use.
-    let widget_binding = SetState::<Option<ArcChildWidget<BoxProtocol>>>::new(
-        Arc::downgrade(&element_node.context),
-        0,
-    );
-
-    (element_node, render_object, widget_binding)
 }
 
 fn initialize_scheduler_handle() {

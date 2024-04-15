@@ -3,14 +3,14 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::BuildScheduler,
     tree::{
-        ArcChildRenderObject, DryLayout, Layout, LayoutCache, LayoutResults, Render, RenderBase,
-        RenderImpl, RenderObject,
+        AnyLayerRenderObject, ArcChildRenderObject, DryLayout, Layout, LayoutCache, LayoutResults,
+        Render, RenderBase, RenderImpl, RenderObject,
     },
 };
 
 impl BuildScheduler {
-    pub(crate) fn perform_layout(&mut self) {
-        self.root_render_object.visit_and_layout();
+    pub(crate) fn perform_layout(&mut self, root_render_object: &dyn AnyLayerRenderObject) {
+        root_render_object.visit_and_layout();
     }
 }
 
@@ -105,11 +105,11 @@ where
             &constraints,
             &inner_reborrow.children,
         );
-        inner_reborrow.cache.insert_layout_cache(LayoutCache::new(
-            LayoutResults::new(constraints.clone(), size.clone(), memo),
-            None,
-            None,
-        ));
+        inner_reborrow.cache.insert_layout_results(LayoutResults {
+            constraints: constraints.clone(),
+            size: size.clone(),
+            memo,
+        });
 
         self.mark.clear_self_needs_layout();
         self.mark.set_parent_use_size();
@@ -132,11 +132,11 @@ where
             &constraints,
             &inner_reborrow.children,
         );
-        inner_reborrow.cache.insert_layout_cache(LayoutCache::new(
-            LayoutResults::new(constraints.clone(), size, memo),
-            None,
-            None,
-        ));
+        inner_reborrow.cache.insert_layout_results(LayoutResults {
+            constraints: constraints.clone(),
+            size: size,
+            memo,
+        });
         self.mark.clear_self_needs_layout();
         self.mark.clear_parent_use_size();
     }

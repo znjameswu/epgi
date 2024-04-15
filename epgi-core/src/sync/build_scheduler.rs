@@ -14,23 +14,12 @@ use crate::{
 
 pub struct BuildScheduler {
     lane_scheduler: LaneScheduler,
-    pub(super) root_element: ArcAnyElementNode,
-    pub(super) root_render_object: ArcAnyLayerRenderObject,
 }
 
 impl BuildScheduler {
-    pub fn new(root_element: ArcAnyElementNode, scheduler_handle: &SchedulerHandle) -> Self {
-        let root_render_object = root_element
-            .render_object()
-            .expect("The root render object should be initilialized and attached manually")
-            .downcast_arc_any_layer_render_object()
-            .expect("Root render object should have a layer");
-        scheduler_handle
-            .push_layer_render_objects_needing_paint(Arc::downgrade(&root_render_object));
+    pub fn new() -> Self {
         Self {
             lane_scheduler: LaneScheduler::new(),
-            root_element,
-            root_render_object,
         }
     }
 
@@ -38,9 +27,13 @@ impl BuildScheduler {
         self.lane_scheduler.get_commit_barrier_for(lane_pos)
     }
 
-    pub(crate) fn apply_batcher_result(&mut self, result: BatchResult) {
+    pub(crate) fn apply_batcher_result(
+        &mut self,
+        result: BatchResult,
+        root_element: &ArcAnyElementNode,
+    ) {
         self.lane_scheduler
-            .apply_batcher_result(result, &self.root_element);
+            .apply_batcher_result(result, root_element);
     }
 
     pub(crate) fn commit_completed_async_batches(
@@ -60,12 +53,15 @@ impl BuildScheduler {
         // }
     }
 
-    pub(crate) fn dispatch_sync_batch(&mut self) -> Option<BatchId> {
+    pub(crate) fn dispatch_sync_batch(
+        &mut self,
+        root_element: &ArcAnyElementNode,
+    ) -> Option<BatchId> {
         let Some(sync_batch) = self.lane_scheduler.sync_batch() else {
             return None;
         };
         rayon::scope(|scope| {
-            self.root_element
+            root_element
                 .clone()
                 .visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
         });

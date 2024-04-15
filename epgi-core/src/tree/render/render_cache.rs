@@ -30,11 +30,15 @@ impl<R: RenderBase, LC> RenderCache<R, LC> {
         self.0.as_mut()
     }
 
-    pub(crate) fn insert_layout_cache(
+    pub(crate) fn insert_layout_results(
         &mut self,
-        cache: LayoutCache<R::ParentProtocol, R::LayoutMemo, LC>,
+        layout_results: LayoutResults<R::ParentProtocol, R::LayoutMemo>,
     ) -> &mut LayoutCache<R::ParentProtocol, R::LayoutMemo, LC> {
-        self.0.insert(cache)
+        self.0.insert(LayoutCache {
+            layout_results,
+            paint_offset: None,
+            layer_cache: None,
+        })
     }
 
     #[inline(always)]
@@ -89,11 +93,11 @@ where
     }
 }
 
-pub(crate) struct LayoutResults<P: Protocol, M> {
-    pub(crate) constraints: P::Constraints,
+pub struct LayoutResults<P: Protocol, M> {
+    pub constraints: P::Constraints,
     // pub(crate) parent_use_size: bool,
-    pub(crate) size: P::Size,
-    pub(crate) memo: M,
+    pub size: P::Size,
+    pub memo: M,
 }
 
 impl<P, M> LayoutResults<P, M>

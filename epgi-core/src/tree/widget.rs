@@ -298,11 +298,11 @@ where
     type Pointee = T;
 
     fn as_ptr(&self) -> *const Self::Pointee {
-        todo!()
+        Arc::as_ptr(self)
     }
 
     unsafe fn from_raw(raw: *const Self::Pointee) -> Self {
-        todo!()
+        Arc::from_raw(raw)
     }
 }
 

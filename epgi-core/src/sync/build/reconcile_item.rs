@@ -59,7 +59,7 @@ where
 pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
     fn inflate_sync(
         self: Arc<Self>,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         build_scheduler: &BuildScheduler,
     ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
 }
@@ -70,7 +70,7 @@ where
 {
     fn inflate_sync(
         self: Arc<Self>,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         build_scheduler: &BuildScheduler,
     ) -> (
         ArcChildElementNode<<<T as Widget>::Element as ElementBase>::ParentProtocol>,
