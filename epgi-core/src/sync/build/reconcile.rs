@@ -98,10 +98,7 @@ enum VisitAction<E: FullElement> {
         // We also do not store the widget, because everytime we need to access it, (create render object)
         // we have to write the render object into the node anyway
         render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
-        // render_object: Option<
-        //     // This field is needed in case a new descendant render object pops up.
-        //     ArcRenderObjectOf<E>,
-        // >,
+        // Optimization parameter to let commit bail out early if the element is known to have suspended
         self_rebuild_suspended: bool,
     },
     /// End-of-visit is triggered when both the node and its descendants (i.e. entire subtree) does not need reconcile
@@ -723,6 +720,10 @@ pub(crate) mod sync_build_private {
 }
 
 pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
+    // Reason for this signature: we need to ensure the happy path (rebuild success with no suspense) 
+    // do not take lock since there is nothing to write.
+    // And there is a lot of cloned resources from visit_inspect that has no further use
+    // (since visit do not occupy node, it has no choice but to clone resource out)
     fn visit_commit(
         element_node: &ElementNode<E>,
         render_object: Self::OptionArcRenderObject,
@@ -735,6 +736,8 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
         lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
 
+    // Reason for this signature: there is going to be a write_back regardless
+    // You have to return the resources since they are moved out when we occupy the node, and later they need to move back
     fn rebuild_success_commit(
         element: &E,
         widget: &E::ArcWidget,

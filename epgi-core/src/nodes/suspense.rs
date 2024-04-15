@@ -45,9 +45,7 @@ impl<P: Protocol> ElementBase for SuspenseElement<P> {
     type ArcWidget = Asc<Suspense<P>>;
 
     type ParentProtocol = P;
-
     type ChildProtocol = P;
-
     type ChildContainer = EitherContainer<ArrayContainer<1>, ArrayContainer<2>>;
 
     fn perform_rebuild_element(

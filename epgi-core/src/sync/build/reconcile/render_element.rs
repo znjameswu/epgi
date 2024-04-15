@@ -514,6 +514,7 @@ where
     }
 }
 
+#[inline(always)]
 pub(super) fn update_children<R: RenderBase>(
     children: &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
     shuffle: Option<
