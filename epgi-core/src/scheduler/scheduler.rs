@@ -1,15 +1,18 @@
 use std::{any::Any, sync::Arc};
 
+use hashbrown::HashSet;
+
 use crate::{
-    foundation::{Asc, Protocol, SyncMpscSender, SyncRwLock},
+    foundation::{Asc, Protocol, PtrEq, SyncMpscSender, SyncRwLock},
     sync::{CommitBarrier, LaneScheduler, SubtreeRenderObjectChange},
     tree::{
-        ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakElementContextNode,
-        LayoutResults, Render, RenderElement, RenderObject, Widget, WorkContext, WorkHandle,
+        ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakAnyLayerRenderObject,
+        AweakElementContextNode, LayoutResults, Render, RenderElement, RenderObject, Widget,
+        WorkContext, WorkHandle,
     },
 };
 
-use super::{FrameResults, JobBatcher, SchedulerHandle};
+use super::{BatchId, BatchResult, FrameResults, JobBatcher, SchedulerHandle};
 
 // TODO: BuildAndLayout vs other event can be modeled as RwLock.
 pub(super) enum SchedulerTask {
@@ -43,6 +46,39 @@ pub struct BuildStates {
     scheduler: LaneScheduler,
     pub root_element: ArcAnyElementNode,
     pub root_render_object: ArcAnyLayerRenderObject,
+}
+
+impl BuildStates {
+    pub(crate) fn apply_batcher_result(&mut self, result: BatchResult) {
+        self.scheduler
+            .apply_batcher_result(result, &self.root_element)
+    }
+
+    pub(crate) fn dispatch_sync_batch(&mut self) -> Option<BatchId> {
+        self.scheduler.dispatch_sync_batch(&self.root_element)
+    }
+
+    pub(crate) fn perform_layout(&mut self) {
+        self.root_render_object.visit_and_layout();
+    }
+
+    pub(crate) fn perform_paint(
+        &self,
+        layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,
+    ) {
+        rayon::scope(|scope| {
+            for PtrEq(layer_render_object) in layer_render_objects {
+                let Some(layer_render_objects) = layer_render_object.upgrade() else {
+                    continue;
+                };
+                scope.spawn(move |_| layer_render_objects.repaint_if_attached());
+            }
+        })
+    }
+
+    pub(crate) fn perform_composite(&self) -> Asc<dyn Any + Send + Sync> {
+        self.root_render_object.recomposite_into_memo()
+    }
 }
 
 pub trait SchedulerExtension: Send {
@@ -112,7 +148,6 @@ where
                     requesters,
                 } => {
                     let mut build_states = self.build_states.write();
-                    let build_states_reborrow = &mut *build_states;
                     // let commited_async_batches = lane_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
@@ -124,14 +159,10 @@ where
                     };
                     self.job_batcher.update_with_new_jobs(new_jobs);
                     let updates = self.job_batcher.get_batch_updates();
-                    build_states_reborrow
-                        .scheduler
-                        .apply_batcher_result(updates, &build_states_reborrow.root_element);
+                    build_states.apply_batcher_result(updates);
                     // lane_scheduler.dispatch_async_batches();
-                    self.extension.on_frame_begin(&build_states_reborrow);
-                    let commited_sync_batch = build_states_reborrow
-                        .scheduler
-                        .dispatch_sync_batch(&build_states_reborrow.root_element);
+                    self.extension.on_frame_begin(&build_states);
+                    let commited_sync_batch = build_states.dispatch_sync_batch();
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
                     }
@@ -139,9 +170,7 @@ where
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
-                    build_states_reborrow
-                        .scheduler
-                        .perform_layout(build_states_reborrow.root_render_object.as_ref());
+                    build_states.perform_layout();
                     self.extension.on_layout_complete(&build_states);
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.
                     // TODO: Parking_lot owned downgradable guard
@@ -155,10 +184,8 @@ where
                     handle.sync_threadpool.spawn(move || {
                         let build_states = build_states.read();
                         paint_started_event.notify(usize::MAX);
-                        build_states.scheduler.perform_paint(layer_needing_repaint);
-                        let result = build_states
-                            .scheduler
-                            .perform_composite(build_states.root_render_object.as_ref());
+                        build_states.perform_paint(layer_needing_repaint);
+                        let result = build_states.perform_composite();
                         for requester in requesters {
                             let _ = requester.try_send(FrameResults {
                                 composited: result.clone(),

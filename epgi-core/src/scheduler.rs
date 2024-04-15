@@ -8,10 +8,10 @@ mod job;
 pub use job::*;
 
 mod job_batcher;
-pub use job_batcher::*;
+pub(crate) use job_batcher::*;
 
 mod lane;
 pub use lane::*;
 
-mod main_loop;
-pub use main_loop::*;
+mod scheduler;
+pub use scheduler::*;

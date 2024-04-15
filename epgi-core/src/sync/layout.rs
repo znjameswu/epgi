@@ -1,18 +1,11 @@
 use crate::{
     foundation::{Container, HktContainer, Protocol},
     scheduler::get_current_scheduler,
-    sync::LaneScheduler,
     tree::{
-        AnyLayerRenderObject, ArcChildRenderObject, DryLayout, Layout, LayoutResults, Render,
-        RenderBase, RenderImpl, RenderObject,
+        ArcChildRenderObject, DryLayout, Layout, LayoutResults, Render, RenderBase, RenderImpl,
+        RenderObject,
     },
 };
-
-impl LaneScheduler {
-    pub(crate) fn perform_layout(&mut self, root_render_object: &dyn AnyLayerRenderObject) {
-        root_render_object.visit_and_layout();
-    }
-}
 
 pub trait AnyRenderObjectLayoutExt {
     /// Walk the tree and initiate layout on any dirty relayout boundaries.

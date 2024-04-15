@@ -1,31 +1,12 @@
-use hashbrown::HashSet;
-
 use crate::{
-    foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
-    sync::LaneScheduler,
+    foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol},
     tree::{
-        ArcChildRenderObject, AweakAnyLayerRenderObject, ImplMaybeLayer, ImplRender, LayerCache,
-        LayerPaint, OrphanLayer, Paint, Render, RenderImpl, RenderObject,
+        ArcChildRenderObject, ImplMaybeLayer, ImplRender, LayerCache, LayerPaint, OrphanLayer,
+        Paint, Render, RenderImpl, RenderObject,
     },
 };
 
 use super::{ImplComposite, ImplHitTest};
-
-impl LaneScheduler {
-    pub(crate) fn perform_paint(
-        &self,
-        layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,
-    ) {
-        rayon::scope(|scope| {
-            for PtrEq(layer_render_object) in layer_render_objects {
-                let Some(layer_render_objects) = layer_render_object.upgrade() else {
-                    continue;
-                };
-                scope.spawn(move |_| layer_render_objects.repaint_if_attached());
-            }
-        })
-    }
-}
 
 pub trait AnyLayerRenderObjectPaintExt {
     fn repaint_if_attached(&self);

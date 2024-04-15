@@ -3,23 +3,12 @@ use std::any::Any;
 use crate::{
     foundation::{Arc, Asc, Canvas, LayerProtocol, Protocol},
     tree::{
-        AnyLayerRenderObject, CachedComposite, ChildLayerProducingIterator, Composite,
-        CompositeResults, CompositionCache, ImplRenderObject, LayerCache, LayerCompositionConfig,
-        LayerMark, LayerPaint, PaintResults, RecordedOrphanLayer, Render, RenderBase, RenderImpl,
+        CachedComposite, ChildLayerProducingIterator, Composite, CompositeResults,
+        CompositionCache, ImplRenderObject, LayerCache, LayerCompositionConfig, LayerMark,
+        LayerPaint, PaintResults, RecordedOrphanLayer, Render, RenderBase, RenderImpl,
         RenderObject,
     },
 };
-
-use super::LaneScheduler;
-
-impl LaneScheduler {
-    pub(crate) fn perform_composite(
-        &self,
-        root_render_object: &dyn AnyLayerRenderObject,
-    ) -> Asc<dyn Any + Send + Sync> {
-        root_render_object.recomposite_into_memo()
-    }
-}
 
 pub trait AnyLayerRenderObjectCompositeExt {
     fn recomposite_into_memo(&self) -> Asc<dyn Any + Send + Sync>;
