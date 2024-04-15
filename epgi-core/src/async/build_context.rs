@@ -8,7 +8,7 @@ pub(crate) struct AsyncBuildContext<'a> {
     pub(crate) element_context: &'a ArcElementContextNode,
 }
 
-pub(super) struct AsyncHookContext {
+pub(crate) struct AsyncHookContext {
     pub(crate) hooks: HooksWithEffects,
     pub(crate) index: usize,
     pub(crate) mode: WorkMode,

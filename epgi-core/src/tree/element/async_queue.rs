@@ -1,11 +1,12 @@
 use crate::{
-    foundation::{Asc, ContainerOf, InlinableUsizeVec, TryResult, TryResult::*, VecPushLastExt},
+    foundation::{
+        Asc, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec, TryResult, TryResult::*,
+        VecPushLastExt,
+    },
+    r#async::AsyncHookContext,
     scheduler::LanePos,
     sync::CommitBarrier,
-    tree::{
-        ArcElementContextNode, BuildResults, BuildSuspendResults, ElementBase, Work, WorkContext,
-        WorkHandle,
-    },
+    tree::{ArcElementContextNode, ElementBase, HooksWithEffects, Work, WorkContext, WorkHandle},
 };
 
 use super::ArcChildElementNode;
@@ -270,6 +271,38 @@ pub(crate) enum AsyncOutput<E: ElementBase> {
         results: BuildResults<E>,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     },
+}
+
+pub(crate) struct BuildSuspendResults {
+    // widget: E::ArcWidget,
+    hooks: HooksWithEffects,
+}
+
+impl BuildSuspendResults {
+    pub fn new(hooks_iter: AsyncHookContext) -> Self {
+        todo!()
+    }
+}
+
+pub(crate) struct BuildResults<E: ElementBase> {
+    hooks: HooksWithEffects,
+    element: E,
+    nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+    effects: Vec<u32>,
+    performed_inflate: bool,
+}
+
+impl<E> BuildResults<E>
+where
+    E: ElementBase,
+{
+    pub fn from_pieces(
+        hooks_iter: AsyncHookContext,
+        element: E,
+        nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+    ) -> Self {
+        todo!()
+    }
 }
 
 ///

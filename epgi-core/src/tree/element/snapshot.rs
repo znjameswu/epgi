@@ -3,14 +3,12 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use futures::task::ArcWake;
 
 use crate::{
-    foundation::{Asc, Container, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec},
+    foundation::{Asc, Container, ContainerOf},
     scheduler::{BatchId, LanePos},
-    tree::{AsyncInflating, HookContext, HooksWithEffects, HooksWithTearDowns},
+    tree::{AsyncInflating, HooksWithTearDowns},
 };
 
-use super::{
-    ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, Element, ElementBase, ImplElementNode,
-};
+use super::{ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, Element, ImplElementNode};
 
 pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
@@ -170,40 +168,8 @@ impl<E: Element, H> MainlineState<E, H> {
 //     }
 // }
 
-pub(crate) struct BuildResults<E: ElementBase> {
-    hooks: HooksWithEffects,
-    element: E,
-    nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-    effects: Vec<u32>,
-    performed_inflate: bool,
-}
-
-impl<E> BuildResults<E>
-where
-    E: ElementBase,
-{
-    pub fn from_pieces(
-        hooks_iter: HookContext,
-        element: E,
-        nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-    ) -> Self {
-        todo!()
-    }
-}
-
 // struct BuildSuspendHandle {
 // }
-
-pub(crate) struct BuildSuspendResults {
-    // widget: E::ArcWidget,
-    hooks: HooksWithEffects,
-}
-
-impl BuildSuspendResults {
-    pub fn new(hooks_iter: HookContext) -> Self {
-        todo!()
-    }
-}
 
 #[derive(Clone)]
 pub(crate) struct SuspendWaker {
