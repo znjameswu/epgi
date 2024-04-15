@@ -1,16 +1,50 @@
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
+    foundation::Arc,
     scheduler::JobBuilder,
-    tree::{AweakElementContextNode, Effect, Hook, HookIndex, HookState, Update},
+    tree::{AweakElementContextNode, BuildContext, Effect, Hook, HookIndex, HookState, Update},
 };
+
+impl<'a> BuildContext<'a> {
+    pub fn use_state_ref_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (&T, SetState<T>) {
+        let (hook_state, index, element_context) = self.use_hook(StateHook { init });
+        (
+            &hook_state.value,
+            SetState::new(Arc::downgrade(element_context), index),
+        )
+    }
+
+    pub fn use_state_ref<T: State>(&mut self, init: T) -> (&T, SetState<T>) {
+        self.use_state_ref_with(|| init)
+    }
+
+    pub fn use_state_ref_default<T: State + Default>(&mut self) -> (&T, SetState<T>) {
+        self.use_state_ref_with(T::default)
+    }
+
+    pub fn use_state_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (T, SetState<T>) {
+        let (state, set_state) = self.use_state_ref_with(init);
+        (state.clone(), set_state)
+    }
+
+    pub fn use_state<T: State>(&mut self, init: T) -> (T, SetState<T>) {
+        let (state, set_state) = self.use_state_ref(init);
+        (state.clone(), set_state)
+    }
+
+    pub fn use_state_default<T: State + Default>(&mut self) -> (T, SetState<T>) {
+        let (state, set_state) = self.use_state_ref_default::<T>();
+        (state.clone(), set_state)
+    }
+}
 
 pub trait State: 'static + Debug + Send + Sync + Clone {}
 
 impl<T> State for T where T: 'static + Debug + Send + Sync + Clone {}
 
-pub(super) struct StateHook<T: State, F: FnOnce() -> T> {
-    pub(super) init: F,
+struct StateHook<T: State, F: FnOnce() -> T> {
+    init: F,
 }
 
 impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
@@ -31,8 +65,8 @@ impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
 }
 
 #[derive(Clone)]
-pub(super) struct StateHookState<T: State> {
-    pub(super) value: T,
+struct StateHookState<T: State> {
+    value: T,
 }
 
 impl<T: State> HookState for StateHookState<T> {
@@ -52,7 +86,7 @@ impl<T> SetState<T>
 where
     T: State,
 {
-    pub(super) fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
+    fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
         Self {
             node,
             self_index,

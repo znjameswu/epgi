@@ -4,7 +4,7 @@ use epgi_2d::{
 use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
-    hooks::{BuildContextHookExt, SetState},
+    hooks::SetState,
     nodes::Function,
     scheduler::{get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle},
     tree::{ArcChildWidget, LayoutResults},
@@ -326,7 +326,7 @@ fn bind_frame_info(
         let frame_binding = frame_binding.clone();
         let child = child.clone();
         let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
-        ctx.use_effect(move || *frame_binding.lock() = Some(set_frame));
+        ctx.use_effect_nodep(move || *frame_binding.lock() = Some(set_frame));
         BoxProvider::value_inner(
             frame.frame_count,
             BoxProvider::value_inner(
@@ -351,9 +351,12 @@ fn bind_constraints(
     let child = Arc::new(Function(move |mut ctx| {
         let constraints_binding = constraints_binding.clone();
         let child = child.clone();
-        let (constraints, set_constraints) = ctx.use_state_with_default::<BoxConstraints>();
-        ctx.use_effect(move || *constraints_binding.lock() = Some(set_constraints));
-        Arc::new(ConstrainedBox { constraints, child })
+        let (constraints, set_constraints) = ctx.use_state_default::<BoxConstraints>();
+        ctx.use_effect_nodep(move || *constraints_binding.lock() = Some(set_constraints));
+        Arc::new(ConstrainedBox {
+            constraints: constraints.clone(),
+            child,
+        })
     }));
     (child, result)
 }
