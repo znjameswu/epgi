@@ -9,10 +9,7 @@ use crate::{
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
-        no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash,
-        ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
-        FullElement, Hooks, Mainline, ProviderElementMap, SubscriptionDiff, Work, WorkContext,
-        WorkHandle,
+        no_widget_update, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement, HooksWith, HooksWithEffects, Mainline, ProviderElementMap, SubscriptionDiff, Work, WorkContext, WorkHandle
     },
 };
 
@@ -22,7 +19,7 @@ pub(crate) struct AsyncRebuild<E: ElementBase> {
     pub(crate) work: Work<E::ArcWidget>,
     pub(crate) old_widget: E::ArcWidget,
     pub(crate) provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    pub(crate) states: Option<(Hooks, E)>,
+    pub(crate) states: Option<(HooksWithEffects, E)>,
 }
 
 pub(crate) struct AsyncSkip<E: ElementBase> {
@@ -231,7 +228,7 @@ impl<E: FullElement> ElementNode<E> {
                             provider_values,
                             barrier,
                             work,
-                            states: Some((hooks.clone(), element.clone())),
+                            states: todo!() //Some((hooks.clone(), element.clone())),
                         },
                     };
                     Success(Ok(rebuild))
@@ -325,7 +322,7 @@ impl<E: FullElement> ElementNode<E> {
         self: &Arc<Self>,
         widget: &E::ArcWidget,
         work_context: Asc<WorkContext>,
-        mut hooks: Hooks,
+        mut hooks: HooksWithEffects,
         element: E,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         handle: &WorkHandle,

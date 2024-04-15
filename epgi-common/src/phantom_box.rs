@@ -42,7 +42,7 @@ impl LeafElement for PhantomBoxElement {
 
     fn create_element(
         widget: &Self::ArcWidget,
-        ctx: epgi_core::tree::BuildContext<'_>,
+        ctx: epgi_core::tree::BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Self, BuildSuspendedError> {
         Ok(Self)

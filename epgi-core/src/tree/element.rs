@@ -25,9 +25,7 @@ use crate::foundation::{
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
-    ChildElementWidgetPair, ElementWidgetPair, FullRender, LayerPaint, LayoutCache, LayoutResults,
-    Render, RenderAction, RenderObject,
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext, ChildElementWidgetPair, ElementWidgetPair, FullRender, HooksWith, HooksWithTearDowns, LayerPaint, LayoutCache, LayoutResults, Render, RenderAction, RenderObject
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;
@@ -198,7 +196,7 @@ pub fn create_root_element<E, R>(
     element_children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     render: R,
     render_children: ContainerOf<R::ChildContainer, ArcChildRenderObject<E::ChildProtocol>>,
-    hooks: Hooks,
+    hooks: HooksWithTearDowns,
     constraints: <E::ParentProtocol as Protocol>::Constraints,
     offset: <E::ParentProtocol as Protocol>::Offset,
     size: <E::ParentProtocol as Protocol>::Size,

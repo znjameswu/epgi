@@ -13,6 +13,10 @@ Basic characteristics (in an async build context):
         1. A teardown is also usually susceptible to double-free bugs. Even if we force the users to provide a `Clone` teardown, it is not a good idea to clone it around. Might trigger a double-free somewhere.
     5. Therefore, a teardown should not be read from the element node and then kept during build phase, it should only be touched during sync commit phases.
     6. Therefore, *a teardown is definitely not a state*. 
+3. Keys
+    1. UseEffect hook needs keys to decide whether to discard previous effect. UseState does not need it.
+    2. Keys shares the same lifecycle as state
+    3. Keys can be made as state
 
 Therefore, our design should have *two* distinctive types used during build. One that can be read out of ElementNode, and one that can not.
 
@@ -35,8 +39,17 @@ Problem:
 
 
 ## Design
-Have a dedicated `Effect` trait for effect and `Hook` trait for states. The ElementNode holds `Vec<(Box<dyn Hook>, Option<Box<dyn Teardown>>)>`. The build context returns `Vec<(Box<dyn Hook>, Option<Box<dyn Effect>>)>`
+Have a dedicated `Effect` trait for effect and `Hook` trait for states. The ElementNode holds `Vec<(Box<dyn HookState>, Option<Box<dyn Teardown>>)>`. The build context returns `Vec<(Box<dyn HookState>, Option<Box<dyn HookEffect>>)>`
 1. Pure state hook does not return effect, so when they commit, they simply overwrite the hook. No virtual function!
 2. Effect hook returns an effect, so when they commit, they overwrite the hook, call the teardown, and fire the effect and overwrite the teardown.
 3. The commit always has one less virtual function cost compared to naive solution!
 4. Implementers no longer need to manage effect lifecycles
+
+## Refinement
+However, this tuple-based approach creates difficulty for our named hooks design. Because there exist two tuple types, it means we need to "field name to field type" mapping relations. And it will be even harder to correlate two different field types under the same field name.
+
+Solution: use generic parameter to represent the added-on effect/teardown field.
+
+
+## Can we directly fire effect without waiting for commit inside sync build?
+A major problem is that we don't know if there will be a suspend. (Doesn't seem to be a problem? Since we can always stash the result back immediately?)

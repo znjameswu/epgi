@@ -1,19 +1,50 @@
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
-    foundation::Arc,
     scheduler::JobBuilder,
-    tree::{AweakElementContextNode, BuildContext, Hook, Update},
+    tree::{AweakElementContextNode, Effect, Hook, HookIndex, HookState, Update},
 };
 
 pub trait State: 'static + Debug + Send + Sync + Clone {}
 
 impl<T> State for T where T: 'static + Debug + Send + Sync + Clone {}
 
+pub(super) struct StateHook<T: State, F: FnOnce() -> T> {
+    pub(super) init: F,
+}
+
+impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
+    type HookState = StateHookState<T>;
+
+    fn create_hook_state(self) -> (Self::HookState, Option<impl Effect>) {
+        (
+            StateHookState {
+                value: (self.init)(),
+            },
+            None::<()>,
+        )
+    }
+
+    fn update_hook_state(self, state: &mut Self::HookState) -> Option<impl Effect> {
+        None::<()>
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct StateHookState<T: State> {
+    pub(super) value: T,
+}
+
+impl<T: State> HookState for StateHookState<T> {
+    fn clone_box(&self) -> Box<dyn HookState> {
+        Box::new(self.clone())
+    }
+}
+
 #[derive(Clone)]
 pub struct SetState<T> {
     node: AweakElementContextNode,
-    self_index: usize,
+    self_index: HookIndex,
     phantom: PhantomData<T>,
 }
 
@@ -21,7 +52,7 @@ impl<T> SetState<T>
 where
     T: State,
 {
-    pub fn new(node: AweakElementContextNode, self_index: usize) -> Self {
+    pub(super) fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
         Self {
             node,
             self_index,
@@ -38,61 +69,26 @@ where
             mailbox
                 .entry(job_builder.id())
                 .or_default()
-                .push(Update::new::<StateHook<T>>(self.self_index, move |hook| {
-                    hook.val = value
-                }));
+                .push(Update::new::<StateHookState<T>>(
+                    self.self_index,
+                    move |hook| hook.value = value,
+                ));
         }
         return true;
     }
 }
 
-impl<'a> BuildContext<'a> {
-    pub fn use_state_ref_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (&T, SetState<T>) {
-        let (hook_ref, index) = self.hooks.use_hook(|| StateHook { val: init() });
-        (
-            &hook_ref.val,
-            SetState {
-                node: Arc::downgrade(self.element_context),
-                self_index: index,
-                phantom: PhantomData,
-            },
-        )
-    }
 
-    pub fn use_state_ref<T: State>(&mut self, init: T) -> (&T, SetState<T>) {
-        self.use_state_ref_with(|| init)
-    }
+// #[derive(Clone)]
+// pub struct StateHook<T> {
+//     pub val: T,
+// }
 
-    pub fn use_state_ref_with_default<T: State + Default>(&mut self) -> (&T, SetState<T>) {
-        self.use_state_ref_with(T::default)
-    }
-
-    pub fn use_state_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (T, SetState<T>) {
-        let (state_ref, set_state) = self.use_state_ref_with(init);
-        (state_ref.clone(), set_state)
-    }
-
-    pub fn use_state<T: State>(&mut self, init: T) -> (T, SetState<T>) {
-        let (state_ref, set_state) = self.use_state_ref(init);
-        (state_ref.clone(), set_state)
-    }
-
-    pub fn use_state_with_default<T: State + Default>(&mut self) -> (T, SetState<T>) {
-        let (state_ref, set_state) = self.use_state_ref_with_default::<T>();
-        (state_ref.clone(), set_state)
-    }
-}
-
-#[derive(Clone)]
-pub struct StateHook<T> {
-    pub val: T,
-}
-
-impl<T> Hook for StateHook<T>
-where
-    T: State,
-{
-    fn clone_box(&self) -> Box<dyn Hook> {
-        Box::new(self.clone())
-    }
-}
+// impl<T> HookState for StateHook<T>
+// where
+//     T: State,
+// {
+//     fn clone_box(&self) -> Box<dyn HookState> {
+//         Box::new(self.clone())
+//     }
+// }

@@ -5,12 +5,14 @@ use epgi_2d::{
 use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, SyncMpscReceiver, SyncMutex},
-    hooks::{SetState, StateHook},
+    hooks::{BuildContextHookExt, SetState},
     nodes::Function,
     scheduler::{
         get_current_scheduler, setup_scheduler, BuildScheduler, Scheduler, SchedulerHandle,
     },
-    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, Hooks, RenderObject},
+    tree::{
+        create_root_element, ArcChildWidget, ChildWidget, ElementNode, HooksWith, RenderObject,
+    },
 };
 use std::{
     num::NonZeroUsize,
@@ -323,9 +325,9 @@ fn initialize_root() -> (
         None,
         RenderRoot {},
         None,
-        Hooks {
+        HooksWithTearDowns {
             array_hooks: [
-                Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> { val: None }) as _,
+                Box::new(StateHookState::<Option<ArcChildWidget<BoxProtocol>>> { val: None }) as _,
             ]
             .into(),
         },

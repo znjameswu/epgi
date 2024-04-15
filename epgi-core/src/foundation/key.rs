@@ -5,7 +5,7 @@ use std::{
 };
 
 pub trait Key: Any + Debug + Send + Sync {
-    fn eq(&self, other: &dyn Key) -> bool;
+    fn eq_key(&self, other: &dyn Key) -> bool;
     fn hash(&self, state: &mut dyn std::hash::Hasher);
     fn as_any(&self) -> &dyn Any;
 }
@@ -18,7 +18,7 @@ impl Hash for dyn Key {
 
 impl PartialEq for dyn Key {
     fn eq(&self, other: &Self) -> bool {
-        self.eq(other)
+        self.eq_key(other)
     }
 }
 
@@ -28,7 +28,7 @@ impl<T> Key for T
 where
     T: Any + Debug + Hash + Eq + Send + Sync,
 {
-    fn eq(&self, other: &dyn Key) -> bool {
+    fn eq_key(&self, other: &dyn Key) -> bool {
         match other.as_any().downcast_ref::<T>() {
             Some(other) => self.eq(other),
             None => false,

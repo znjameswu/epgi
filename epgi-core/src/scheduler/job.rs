@@ -7,7 +7,7 @@ use hashbrown::{HashMap, HashSet};
 
 use crate::{
     foundation::{Inlinable64Vec, PtrEq},
-    tree::{AweakElementContextNode, Update},
+    tree::{AweakElementContextNode, HookIndex, Update},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -113,7 +113,7 @@ impl JobBuilder {
         &mut self,
         node: AweakElementContextNode,
         mailbox: &HashMap<JobId, Vec<Update>>,
-        index: usize,
+        index: HookIndex,
     ) {
         let id = self.id();
         self.conf.roots_mut().insert(PtrEq(node));

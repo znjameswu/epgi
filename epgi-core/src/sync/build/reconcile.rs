@@ -10,12 +10,13 @@ use crate::{
         LinearMapEntryExt, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{BuildScheduler, SubtreeRenderObjectChange},
+    sync::{BuildScheduler, SubtreeRenderObjectChange, SyncBuildContext, SyncHookContext},
     tree::{
         no_widget_update, ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext,
         ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementContextNode, ElementNode,
         ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, FullElement, HookContext,
-        Hooks, ImplElementNode, ImplProvide, Mainline, MainlineState,
+        HooksWith, HooksWithEffects, HooksWithTearDowns, ImplElementNode, ImplProvide, Mainline,
+        MainlineState,
     },
 };
 
@@ -66,7 +67,7 @@ impl<E: FullElement> ElementNode<E> {
         let subtree_results = Self::perform_inflate_node_sync::<true>(
             &node,
             widget,
-            HookContext::new_inflate(),
+            SyncHookContext::new_inflate(),
             consumed_values,
             build_scheduler,
         );
@@ -79,7 +80,7 @@ enum VisitAction<E: FullElement> {
         is_poll: bool,
         old_widget: E::ArcWidget,
         new_widget: Option<E::ArcWidget>,
-        state: MainlineState<E>,
+        state: MainlineState<E, HooksWithTearDowns>,
         cancel_async: Option<
             CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         >,
@@ -276,7 +277,7 @@ impl<E: FullElement> ElementNode<E> {
                             new_widget,
                             element,
                             children,
-                            HookContext::new_rebuild(hooks),
+                            SyncHookContext::new_rebuild(hooks),
                             render_object,
                             consumed_values,
                             job_ids,
@@ -300,7 +301,7 @@ impl<E: FullElement> ElementNode<E> {
                             new_widget,
                             element,
                             children,
-                            HookContext::new_rebuild(suspended_hooks),
+                            SyncHookContext::new_rebuild(suspended_hooks),
                             Default::default(),
                             consumed_values,
                             job_ids,
@@ -317,9 +318,9 @@ impl<E: FullElement> ElementNode<E> {
                         self.perform_inflate_node_sync::<false>(
                             new_widget,
                             if !is_poll {
-                                HookContext::new_inflate()
+                                SyncHookContext::new_inflate()
                             } else {
-                                HookContext::new_poll_inflate(suspended_hooks)
+                                SyncHookContext::new_poll_inflate(suspended_hooks)
                             },
                             consumed_values,
                             build_scheduler,
@@ -338,7 +339,7 @@ impl<E: FullElement> ElementNode<E> {
         widget: &E::ArcWidget,
         mut element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        mut hook_context: HookContext,
+        mut hook_context: SyncHookContext,
         old_render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
@@ -350,10 +351,11 @@ impl<E: FullElement> ElementNode<E> {
         let results = E::perform_rebuild_element(
             &mut element,
             &widget,
-            BuildContext {
+            SyncBuildContext {
                 hooks: &mut hook_context,
                 element_context: &self.context,
-            },
+            }
+            .into(),
             provider_values,
             children,
             &mut nodes_needing_unmount,
@@ -425,16 +427,17 @@ impl<E: FullElement> ElementNode<E> {
     fn perform_inflate_node_sync<const FIRST_INFLATE: bool>(
         self: &Arc<Self>,
         widget: &E::ArcWidget,
-        mut hook_context: HookContext,
+        mut hook_context: SyncHookContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         build_scheduler: &BuildScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let result = E::perform_inflate_element(
             &widget,
-            BuildContext {
+            SyncBuildContext {
                 hooks: &mut hook_context,
                 element_context: &self.context,
-            },
+            }
+            .into(),
             provider_values,
         );
 
@@ -489,7 +492,7 @@ impl<E: FullElement> ElementNode<E> {
     fn apply_updates_sync(
         element_context: &ElementContextNode,
         job_ids: &Inlinable64Vec<JobId>,
-        hooks: &mut Hooks,
+        hooks: &mut HooksWithTearDowns,
     ) {
         let mut jobs = {
             element_context
@@ -506,13 +509,19 @@ impl<E: FullElement> ElementNode<E> {
             .collect::<Vec<_>>();
 
         for update in updates {
-            (update.op)(hooks.array_hooks[update.hook_index].as_mut())
-                .ok()
-                .expect("We currently do not handle hook failure") //TODO
+            (update.op)(
+                hooks
+                    .get_mut(update.hook_index)
+                    .expect("Update should not contain an invalid index")
+                    .0
+                    .as_mut(),
+            )
+            .ok()
+            .expect("We currently do not handle hook failure") //TODO
         }
     }
 
-    fn commit_write_element(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_element(self: &Arc<Self>, state: MainlineState<E, HooksWithTearDowns>) {
         // Collecting async work is necessary, even if we are inflating!
         // Since it could be an InflateSuspended node and an async batch spawned a secondary root on this node.
         let async_work_needing_start = {
@@ -536,7 +545,10 @@ impl<E: FullElement> ElementNode<E> {
         }
     }
 
-    fn commit_write_element_first_inflate(self: &Arc<Self>, state: MainlineState<E>) {
+    fn commit_write_element_first_inflate(
+        self: &Arc<Self>,
+        state: MainlineState<E, HooksWithTearDowns>,
+    ) {
         let mut snapshot = self.snapshot.lock();
         let snapshot_reborrow = &mut *snapshot;
         let mainline = snapshot_reborrow

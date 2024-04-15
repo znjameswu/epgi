@@ -5,7 +5,10 @@ use futures::task::ArcWake;
 use crate::{
     foundation::{Asc, Container, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
-    tree::{AsyncInflating, Hook, HookContext},
+    tree::{
+        AsyncInflating, HookContext, HookState, HooksWith, HooksWithEffects, HooksWithTearDowns,
+        EffectCleanup,
+    },
 };
 
 use super::{
@@ -56,35 +59,30 @@ impl<E: Element> ElementSnapshotInner<E> {
 }
 
 pub(crate) struct Mainline<E: Element> {
-    pub(crate) state: Option<MainlineState<E>>,
+    pub(crate) state: Option<MainlineState<E, HooksWithTearDowns>>,
     pub(crate) async_queue: AsyncWorkQueue<E>,
 }
 
-pub(crate) enum MainlineState<E: Element> {
+pub(crate) enum MainlineState<E: Element, H> {
     Ready {
         element: E,
-        hooks: Hooks,
+        hooks: H,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object: <E::Impl as ImplElementNode<E>>::OptionArcRenderObject,
     },
     InflateSuspended {
-        suspended_hooks: Hooks,
+        suspended_hooks: H,
         waker: SuspendWaker,
     }, // The hooks may be partially initialized
     RebuildSuspended {
         element: E,
-        suspended_hooks: Hooks,
+        suspended_hooks: H,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         waker: SuspendWaker,
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }
 
-#[derive(Clone, Default)]
-pub struct Hooks {
-    pub array_hooks: Vec<Box<dyn Hook>>,
-}
-
-impl<E: Element> MainlineState<E> {
+impl<E: Element, H> MainlineState<E, H> {
     pub(crate) fn is_suspended(&self) -> bool {
         match self {
             MainlineState::Ready { .. } => false,
@@ -130,7 +128,7 @@ impl<E: Element> MainlineState<E> {
         }
     }
 
-    pub(crate) fn hooks(self) -> Option<Hooks> {
+    pub(crate) fn hooks(self) -> Option<H> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
             MainlineState::Ready { hooks, .. }
@@ -141,7 +139,7 @@ impl<E: Element> MainlineState<E> {
         }
     }
 
-    pub(crate) fn hooks_ref(&self) -> Option<&Hooks> {
+    pub(crate) fn hooks_ref(&self) -> Option<&H> {
         match self {
             MainlineState::InflateSuspended { .. } => None,
             MainlineState::Ready { hooks, .. }
@@ -169,8 +167,14 @@ impl<E: Element> MainlineState<E> {
     }
 }
 
+// impl<E:Element> MainlineState<E, HooksWithTearDowns> {
+//     fn read(&self) -> MainlineState<E, HooksWithEffects> {
+
+//     }
+// }
+
 pub struct BuildResults<E: ElementBase> {
-    hooks: Hooks,
+    hooks: HooksWithEffects,
     element: E,
     nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     effects: Vec<u32>,
@@ -195,7 +199,7 @@ where
 
 pub(crate) struct BuildSuspendResults {
     // widget: E::ArcWidget,
-    hooks: Hooks,
+    hooks: HooksWithEffects,
 }
 
 impl BuildSuspendResults {

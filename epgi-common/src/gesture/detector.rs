@@ -48,7 +48,7 @@ impl Widget for GestureDetector {
 }
 
 impl ComponentWidget<BoxProtocol> for GestureDetector {
-    fn build(&self, _ctx: BuildContext) -> ArcChildWidget<BoxProtocol> {
+    fn build(&self, _ctx: BuildContext<'_>) -> ArcChildWidget<BoxProtocol> {
         let mut recognizer_factories = Vec::new();
         if let Some(on_tap) = &self.on_tap {
             recognizer_factories.push(GestureRecognizerFactory::new::<TapGestureRecognizer>(
