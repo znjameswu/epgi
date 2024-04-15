@@ -144,7 +144,7 @@ impl<E: FullElement> ElementNode<E> {
         // Self has no work, but subtree has work. Visit
         if no_widget_update && no_mailbox_update && no_poll {
             use MainlineState::*;
-            match state {
+            return match state {
                 Ready {
                     children,
                     render_object,
