@@ -205,6 +205,21 @@ where
         )
     }
 
+    #[allow(unused_variables)]
+    fn hit_test_self(
+        render: &R,
+        position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<R::Protocol as Protocol>::Size,
+        offset: &<R::Protocol as Protocol>::Offset,
+        _memo: &(),
+    ) -> bool {
+        R::hit_test_self(render, position, size, offset)
+    }
+
+    fn hit_test_behavior(render: &R) -> HitTestBehavior {
+        R::hit_test_behavior(render)
+    }
+
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
     where
         R: Render,

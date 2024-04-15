@@ -86,7 +86,7 @@ pub trait TemplateDryLayout<R: RenderBase> {
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
     ) -> <R::ParentProtocol as Protocol>::Size;
 
-    fn compute_layout_memo(
+    fn perform_layout(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
         size: &<R::ParentProtocol as Protocol>::Size,
@@ -113,7 +113,7 @@ where
         size: &<Self::ParentProtocol as Protocol>::Size,
         children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
     ) -> Self::LayoutMemo {
-        R::Template::compute_layout_memo(self, constraints, size, children)
+        R::Template::perform_layout(self, constraints, size, children)
     }
 }
 

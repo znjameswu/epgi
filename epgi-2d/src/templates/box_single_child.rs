@@ -1,17 +1,30 @@
+use std::any::TypeId;
+
+use epgi_core::tree::RenderBase;
 use epgi_core::{
-    foundation::{Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Provide, TypeKey},
+    foundation::{
+        AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec,
+        Key, PaintContext, Protocol, Provide, TypeKey,
+    },
     template::{
-        ImplByTemplate, TemplateElement, TemplateElementBase, TemplateProvideElement,
+        ImplByTemplate, TemplateCachedComposite, TemplateComposite, TemplateDryLayout,
+        TemplateElement, TemplateElementBase, TemplateHitTest, TemplateLayerPaint, TemplateLayout,
+        TemplateOrphanLayer, TemplatePaint, TemplateProvideElement, TemplateRenderBase,
         TemplateRenderElement,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
+        ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        FullRender, ImplElement, RenderAction,
+        FullRender, HitTestBehavior, HitTestContext, HitTestResult, ImplElement,
+        LayerCompositionConfig, PaintResults, RecordedChildLayer, Render, RenderAction,
+        RenderObject,
     },
 };
 
-use crate::BoxProtocol;
+use crate::{
+    Affine2dCanvas, Affine2dEncoding, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol,
+    BoxSize, Point2d,
+};
 
 pub struct BoxSingleChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
 
@@ -161,5 +174,432 @@ where
 
     fn get_provided_value(widget: &<E as ElementBase>::ArcWidget) -> Arc<Self::Provided> {
         E::get_provided_value(widget)
+    }
+}
+
+pub struct BoxSingleChildRenderTemplate<
+    const DRY_LAYOUT: bool,
+    const LAYER_PAINT: bool,
+    const CACHED_COMPOSITE: bool,
+    const ORPHAN_LAYER: bool,
+>;
+
+pub trait BoxSingleChildRender: Send + Sync + Sized + 'static {
+    type LayoutMemo: Send + Sync;
+
+    fn detach(&mut self) {}
+    const NOOP_DETACH: bool = false;
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateRenderBase<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildRender,
+{
+    type ParentProtocol = BoxProtocol;
+    type ChildProtocol = BoxProtocol;
+    type ChildContainer = ArrayContainer<1>;
+
+    type LayoutMemo = R::LayoutMemo;
+
+    fn detach(render: &mut R) {
+        R::detach(render)
+    }
+
+    const NOOP_DETACH: bool = R::NOOP_DETACH;
+}
+
+/// Dry layout means that under all circumstances, this render object's size is solely determined
+/// by the constraints given by its parents.
+///
+/// Since the size of its children does not affect its own size,
+/// this render object will always serves as a relayout boundary.
+///
+/// Contrary to what you may assume, dry-layout itself does not bring
+/// any additional optimization during the actual layout visit.
+/// It still needs to layout its children if dirty or receiving a new constraints.
+/// It merely serves a boundary to halt relayout propagation.
+pub trait BoxSingleChildLayout: BoxSingleChildRender {
+    fn perform_layout(
+        &mut self,
+        constraints: &BoxConstraints,
+        child: &ArcBoxRenderObject,
+    ) -> (BoxSize, Self::LayoutMemo);
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateLayout<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildLayout,
+{
+    fn perform_layout(
+        render: &mut R,
+        constraints: &BoxConstraints,
+        [child]: &[ArcBoxRenderObject; 1],
+    ) -> (BoxSize, R::LayoutMemo) {
+        R::perform_layout(render, constraints, child)
+    }
+}
+
+pub trait BoxSingleChildDryLayout: BoxSingleChildRender {
+    fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize;
+
+    fn perform_layout(
+        &mut self,
+        constraints: &BoxConstraints,
+        size: &BoxSize,
+        child: &ArcBoxRenderObject,
+    ) -> Self::LayoutMemo;
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateDryLayout<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildDryLayout,
+{
+    fn compute_dry_layout(render: &R, constraints: &BoxConstraints) -> BoxSize {
+        R::compute_dry_layout(render, constraints)
+    }
+
+    fn perform_layout(
+        render: &mut R,
+        constraints: &BoxConstraints,
+        size: &BoxSize,
+        [child]: &[ArcBoxRenderObject; 1],
+    ) -> R::LayoutMemo {
+        R::perform_layout(render, constraints, size, child)
+    }
+}
+
+pub trait BoxSingleChildPaint: BoxSingleChildRender {
+    fn perform_paint(
+        &self,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
+        child: &ArcBoxRenderObject,
+        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+    );
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplatePaint<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildPaint,
+{
+    fn perform_paint(
+        render: &R,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &R::LayoutMemo,
+        [child]: &[ArcBoxRenderObject; 1],
+        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+    ) {
+        R::perform_paint(render, size, offset, memo, child, paint_ctx)
+    }
+}
+
+pub trait BoxSingleChildLayerPaint: BoxSingleChildRender {
+    fn paint_layer(&self, child: &ArcBoxRenderObject) -> PaintResults<Affine2dCanvas> {
+        Affine2dCanvas::paint_render_objects([child.clone()])
+    }
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
+        unimplemented!()
+    }
+
+    fn layer_key(&self) -> Option<&Arc<dyn Key>> {
+        None
+    }
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateLayerPaint<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildLayerPaint,
+{
+    fn paint_layer(render: &R, [child]: &[ArcBoxRenderObject; 1]) -> PaintResults<Affine2dCanvas> {
+        R::paint_layer(render, child)
+    }
+
+    fn transform_config(
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
+        R::transform_config(self_config, child_config)
+    }
+
+    fn layer_key(render: &R) -> Option<&Arc<dyn Key>> {
+        R::layer_key(render)
+    }
+}
+
+pub trait BoxSingleChildComposite: BoxSingleChildRender {
+    fn composite_to(
+        &self,
+        encoding: &mut Affine2dEncoding,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
+    );
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateComposite<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildComposite,
+{
+    fn composite_to(
+        render: &R,
+        encoding: &mut Affine2dEncoding,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) {
+        R::composite_to(render, encoding, child_iterator, composition_config)
+    }
+}
+
+pub trait BoxSingleChildCachedComposite: BoxSingleChildRender {
+    type CompositionMemo: Send + Sync + Clone + 'static;
+
+    fn composite_into_memo(
+        &self,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
+    ) -> Self::CompositionMemo;
+
+    fn composite_from_cache_to(
+        &self,
+        encoding: &mut Affine2dEncoding,
+        memo: &Self::CompositionMemo,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
+    );
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateCachedComposite<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildCachedComposite,
+{
+    type CompositionMemo = R::CompositionMemo;
+
+    fn composite_into_memo(
+        render: &R,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
+    ) -> R::CompositionMemo {
+        R::composite_into_memo(render, child_iterator)
+    }
+
+    fn composite_from_cache_to(
+        render: &R,
+        encoding: &mut Affine2dEncoding,
+        memo: &R::CompositionMemo,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) {
+        R::composite_from_cache_to(render, encoding, memo, composition_config)
+    }
+}
+
+pub trait BoxSingleChildOrphanLayer: BoxSingleChildLayerPaint {
+    fn adopter_key(&self) -> &Asc<dyn Key>;
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateOrphanLayer<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildOrphanLayer,
+{
+    fn adopter_key(render: &R) -> &Asc<dyn Key> {
+        R::adopter_key(render)
+    }
+}
+
+pub trait BoxSingleChildHitTest: BoxSingleChildRender {
+    /// The actual method that was invoked for hit-testing.
+    ///
+    /// Note however, this method is hard to impl directly. Therefore, if not for rare edge cases,
+    /// it is recommended to implement [HitTest::hit_test_children], [HitTest::hit_test_self],
+    /// and [HitTest::hit_test_behavior] instead. This method has a default impl that is composed on top of those method.
+    ///
+    /// If you do indeed overwrite the default impl of this method without using the other methods,
+    /// you can assume the other methods mentioned above are `unreachable!()`.
+    fn hit_test(
+        &self,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
+        child: &ArcBoxRenderObject,
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
+    ) -> HitTestResult {
+        use HitTestResult::*;
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
+        if !hit_self {
+            // Stop hit-test children if the hit is outside of parent
+            return NotHit;
+        }
+
+        let hit_children = self.hit_test_child(ctx, size, offset, memo, child, adopted_children);
+        if hit_children {
+            return Hit;
+        }
+
+        use HitTestBehavior::*;
+        match self.hit_test_behavior() {
+            DeferToChild => NotHit,
+            Transparent => HitThroughSelf,
+            Opaque => Hit,
+        }
+    }
+
+    /// Returns: If a child has claimed the hit
+    fn hit_test_child(
+        &self,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
+        child: &ArcBoxRenderObject,
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
+    ) -> bool;
+
+    // The reason we separate hit_test_self from hit_test_children is that we do not wish to leak hit_position into hit_test_children
+    // Therefore preventing implementer to perform transform on hit_position rather than recording it in
+    #[allow(unused_variables)]
+    fn hit_test_self(
+        &self,
+        position: &Point2d,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
+    ) -> bool {
+        BoxProtocol::position_in_shape(position, offset, size)
+    }
+
+    fn hit_test_behavior(&self) -> HitTestBehavior {
+        HitTestBehavior::DeferToChild
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
+    where
+        Self: Render,
+    {
+        &[]
+    }
+}
+
+impl<
+        R,
+        const DRY_LAYOUT: bool,
+        const LAYER_PAINT: bool,
+        const CACHED_COMPOSITE: bool,
+        const ORPHAN_LAYER: bool,
+    > TemplateHitTest<R>
+    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+where
+    R: ImplByTemplate<Template = Self>,
+    R: BoxSingleChildHitTest,
+{
+    fn hit_test(
+        render: &R,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &R::LayoutMemo,
+        [child]: &[ArcBoxRenderObject; 1],
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
+    ) -> HitTestResult {
+        R::hit_test(render, ctx, size, offset, memo, child, adopted_children)
+    }
+
+    /// Returns: If a child has claimed the hit
+    fn hit_test_children(
+        render: &R,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &R::LayoutMemo,
+        [child]: &[ArcBoxRenderObject; 1],
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
+    ) -> bool {
+        R::hit_test_child(render, ctx, size, offset, memo, child, adopted_children)
+    }
+
+    fn hit_test_self(
+        render: &R,
+        position: &Point2d,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &R::LayoutMemo,
+    ) -> bool {
+        R::hit_test_self(render, position, size, offset, memo)
+    }
+
+    fn hit_test_behavior(render: &R) -> HitTestBehavior {
+        R::hit_test_behavior(render)
+    }
+
+    fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
+    where
+        R: Render,
+    {
+        <R as BoxSingleChildHitTest>::all_hit_test_interfaces()
     }
 }
