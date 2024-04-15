@@ -25,12 +25,11 @@ where
             subtree_has_action: RenderAction::None,
         }
     }
-    pub fn is_suspended(&self) -> bool {
-        todo!()
-        // match self {
-        //     SubtreeRenderObjectChange::Suspended => true,
-        //     _ => false,
-        // }
+    pub fn is_suspend(&self) -> bool {
+        match self {
+            SubtreeRenderObjectChange::Suspend => true,
+            _ => false,
+        }
     }
 
     pub fn is_keep_render_object(&self) -> bool {

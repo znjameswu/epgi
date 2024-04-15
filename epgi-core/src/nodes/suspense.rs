@@ -122,8 +122,17 @@ impl<P: Protocol> Element for SuspenseElement<P> {
 }
 
 pub struct RenderSuspense<P: Protocol> {
-    is_suspended: bool,
+    pub is_suspended: bool,
     phantom_data: PhantomData<P>,
+}
+
+impl<P: Protocol> RenderSuspense<P> {
+    pub fn new(is_suspended: bool) -> Self {
+        Self {
+            is_suspended,
+            phantom_data: PhantomData,
+        }
+    }
 }
 
 impl<P: Protocol> ImplByTemplate for RenderSuspense<P> {

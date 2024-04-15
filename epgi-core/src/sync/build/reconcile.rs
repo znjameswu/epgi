@@ -233,9 +233,9 @@ impl<E: FullElement> ElementNode<E> {
                     &self,
                     render_object,
                     render_object_changes,
-                    self_rebuild_suspended,
-                    scope,
                     lane_scheduler,
+                    scope,
+                    self_rebuild_suspended,
                 );
             }
             VisitAction::Rebuild {
@@ -336,7 +336,7 @@ impl<E: FullElement> ElementNode<E> {
         mut element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         mut hook_context: SyncHookContext,
-        old_render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
+        mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
@@ -377,16 +377,18 @@ impl<E: FullElement> ElementNode<E> {
                             }
                         }
                     });
-                let (children, changes) = results.unzip_collect(|x| x);
+                let (mut children, changes) = results.unzip_collect(|x| x);
 
-                let (render_object, change) = <E as Element>::Impl::rebuild_success_commit(
+                let change = <E as Element>::Impl::rebuild_success_commit(
                     &element,
                     widget,
                     shuffle,
-                    &children,
-                    old_render_object,
+                    &mut children,
+                    &mut render_object,
                     changes,
                     &self.context,
+                    lane_scheduler,
+                    scope,
                     is_new_widget,
                 );
                 (
@@ -412,7 +414,7 @@ impl<E: FullElement> ElementNode<E> {
                         children,
                         waker: err.waker,
                     },
-                    <E as Element>::Impl::rebuild_suspend_commit(old_render_object),
+                    <E as Element>::Impl::rebuild_suspend_commit(render_object),
                 )
             }
         };
@@ -445,7 +447,7 @@ impl<E: FullElement> ElementNode<E> {
                         child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
                     },
                 );
-                let (children, changes) = results.unzip_collect(|x| x);
+                let (mut children, changes) = results.unzip_collect(|x| x);
 
                 debug_assert!(
                     !changes
@@ -457,8 +459,10 @@ impl<E: FullElement> ElementNode<E> {
                 let (render_object, change) = <E as Element>::Impl::inflate_success_commit(
                     &element,
                     widget,
-                    &self.context,
+                    &mut children,
                     changes,
+                    &self.context,
+                    lane_scheduler,
                 );
 
                 (
@@ -720,10 +724,10 @@ pub(crate) mod sync_build_private {
 }
 
 pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
-    // Reason for this signature: we need to ensure the happy path (rebuild success with no suspense) 
-    // do not take lock since there is nothing to write.
+    // Reason for this signature: we need to ensure the happy path (rebuild success with no suspense)
+    // do not require a lock since there is nothing to write.
     // And there is a lot of cloned resources from visit_inspect that has no further use
-    // (since visit do not occupy node, it has no choice but to clone resource out)
+    // (since visit do not occupy node, it has no choice but to clone resources out)
     fn visit_commit(
         element_node: &ElementNode<E>,
         render_object: Self::OptionArcRenderObject,
@@ -731,9 +735,9 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
             <E as ElementBase>::ChildContainer,
             SubtreeRenderObjectChange<<E as ElementBase>::ChildProtocol>,
         >,
-        self_rebuild_suspended: bool,
-        scope: &rayon::Scope<'_>,
         lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'_>,
+        self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
 
     // Reason for this signature: there is going to be a write_back regardless
@@ -742,18 +746,17 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
         element: &E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
-        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: Self::OptionArcRenderObject,
+        children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        render_object: &mut Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
+        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'_>,
         is_new_widget: bool,
-    ) -> (
-        Self::OptionArcRenderObject,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    );
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
 
     fn rebuild_suspend_commit(
         render_object: Self::OptionArcRenderObject,
@@ -762,11 +765,13 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
     fn inflate_success_commit(
         element: &E,
         widget: &E::ArcWidget,
-        element_context: &ArcElementContextNode,
+        children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
+        element_context: &ArcElementContextNode,
+        lane_scheduler: &LaneScheduler,
     ) -> (
         Self::OptionArcRenderObject,
         SubtreeRenderObjectChange<E::ParentProtocol>,

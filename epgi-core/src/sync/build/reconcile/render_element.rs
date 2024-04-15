@@ -25,9 +25,9 @@ where
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
-        self_rebuild_suspended: bool,
-        _scope: &rayon::Scope<'_>,
         _lane_scheduler: &LaneScheduler,
+        _scope: &rayon::Scope<'_>,
+        self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
@@ -57,19 +57,18 @@ where
         element: &E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
-        children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: Self::OptionArcRenderObject,
+        children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        render_object: &mut Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
+        _lane_scheduler: &LaneScheduler,
+        _scope: &rayon::Scope<'_>,
         is_new_widget: bool,
-    ) -> (
-        Self::OptionArcRenderObject,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
-        if let Some(render_object) = render_object {
+    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+        let (new_render_object, change) = if let Some(render_object) = render_object.take() {
             rebuild_success_process_attached(
                 widget,
                 shuffle,
@@ -81,11 +80,13 @@ where
             rebuild_success_process_detached(
                 element,
                 widget,
-                element_context,
                 children,
                 render_object_changes,
+                element_context,
             )
-        }
+        };
+        *render_object = new_render_object;
+        change
     }
 
     fn rebuild_suspend_commit(
@@ -98,11 +99,13 @@ where
     fn inflate_success_commit(
         element: &E,
         widget: &E::ArcWidget,
-        element_context: &ArcElementContextNode,
+        _children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
+        element_context: &ArcElementContextNode,
+        _lane_scheduler: &LaneScheduler,
     ) -> (
         Option<Arc<RenderObject<E::Render>>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
@@ -210,20 +213,24 @@ where
                 );
             use MainlineState::*;
             match state {
-                    Ready { render_object, .. } => *render_object = None,
-                    RebuildSuspended { .. } => panic!(
-                        "State corrupted. \
-                        This node has been previously visited and found to have attached render object. \
-                        However, when the visit returns, \
-                        it found the render object has been detached."
-                    ),
-                    InflateSuspended { .. } => panic!(
-                        "State corrupted. \
-                        This node has been previously designated to visit by a sync batch. \
-                        However, when the visit returns, \
-                        it found the node to be in an suspended inflated state."
-                    ),
+                Ready { render_object, .. } => {
+                    render_object
+                        .take()
+                        .map(|render_object| render_object.detach_render_object());
                 }
+                RebuildSuspended { .. } => panic!(
+                    "State corrupted. \
+                    This node has been previously visited and found to have attached render object. \
+                    However, when the visit returns, \
+                    it found the render object has been detached."
+                ),
+                InflateSuspended { .. } => panic!(
+                    "State corrupted. \
+                    This node has been previously designated to visit by a sync batch. \
+                    However, when the visit returns, \
+                    it found the node to be in an suspended inflated state."
+                ),
+            }
             return SubtreeRenderObjectChange::Suspend;
         }
     }
@@ -419,12 +426,12 @@ where
 fn rebuild_success_process_detached<E, const PROVIDE_ELEMENT: bool>(
     element: &E,
     widget: &E::ArcWidget,
-    element_context: &ArcElementContextNode,
-    children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     render_object_changes: ContainerOf<
         E::ChildContainer,
         SubtreeRenderObjectChange<E::ChildProtocol>,
     >,
+    element_context: &ArcElementContextNode,
 ) -> (
     Option<Arc<RenderObject<E::Render>>>,
     SubtreeRenderObjectChange<E::ParentProtocol>,
