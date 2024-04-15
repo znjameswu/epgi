@@ -25,7 +25,7 @@ impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
         )
     }
 
-    fn update_hook_state(self, state: &mut Self::HookState) -> Option<impl Effect> {
+    fn update_hook_state(self, _state: &mut Self::HookState) -> Option<impl Effect> {
         None::<()>
     }
 }

@@ -58,3 +58,13 @@ pub struct GlobalKey {
 pub struct UniqueKey {
     id: usize,
 }
+
+/// An alternate version of [Key].
+///
+/// It does not need cross-type `Eq`, does not need `Hash`, does not need `Debug`. But it does require `Clone`
+///
+/// Because you can't really be picky on what people will send into `use_memo` and `use_effect`.
+/// But you do need to clone them out before perform async rebuild.
+pub trait DependencyKey: PartialEq + Clone + Send + Sync + 'static {}
+
+impl<T> DependencyKey for T where T: PartialEq + Clone + Send + Sync + 'static {}

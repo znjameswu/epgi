@@ -30,14 +30,19 @@ impl<
     }
 
     fn update_hook_state(self, state: &mut Self::HookState) -> Option<impl Effect> {
-        (state.dependencies != self.dependencies).then_some(|| {
-            let cleanup = (self.effect)(self.dependencies);
-            if cleanup.is_noop() {
-                None
-            } else {
-                Some(Box::new(cleanup) as _)
-            }
-        })
+        if state.dependencies != self.dependencies {
+            state.dependencies = self.dependencies.clone();
+            Some(|| {
+                let cleanup = (self.effect)(self.dependencies);
+                if cleanup.is_noop() {
+                    None
+                } else {
+                    Some(Box::new(cleanup) as _)
+                }
+            })
+        } else {
+            None
+        }
     }
 }
 
