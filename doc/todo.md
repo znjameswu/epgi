@@ -1,5 +1,5 @@
 1. Use task-local storage to pass environmental variables such as is_self_sync to enforce certain invariants during debugging.
-2. NOW: Design BuildContext and effects
+2. ~~NOW: Design BuildContext and effects~~
 3. ~~NOW: Tree walks~~
 4. ~~NOW: Requeue async tasks~~
 5. ~~NOW: Interrupts~~
