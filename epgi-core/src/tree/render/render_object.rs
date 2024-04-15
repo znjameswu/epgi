@@ -102,7 +102,7 @@ impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRender
     type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>;
 }
 
-impl<R: Render, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CM> ImplRenderObject<R>
+impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CM> ImplRenderObject<R>
     for RenderImpl<DRY_LAYOUT, true, true, ORPHAN_LAYER>
 where
     R: CachedComposite<CompositionMemo = CM>,
