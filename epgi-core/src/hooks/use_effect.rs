@@ -1,138 +1,62 @@
-// use crate::{
-//     foundation::{Asc, SyncMutex},
-//     tree::{BuildContext, HookState},
-// };
+use crate::tree::{Effect, EffectCleanup, Hook, HookState};
 
-use crate::tree::{Effect, Hook};
+pub(super) struct EffectHook<E, D> {
+    pub(super) dependencies: D,
+    pub(super) effect: E,
+}
 
+impl<
+        E: FnOnce(D) -> C + Send + Sync + 'static,
+        C: EffectCleanup,
+        D: PartialEq + Clone + Send + Sync + 'static,
+    > Hook for EffectHook<E, D>
+{
+    type HookState = EffectHookState<D>;
 
+    fn create_hook_state(self) -> (Self::HookState, Option<impl Effect>) {
+        (
+            EffectHookState {
+                dependencies: self.dependencies.clone(),
+            },
+            Some(|| {
+                let cleanup = (self.effect)(self.dependencies);
+                if cleanup.is_noop() {
+                    None
+                } else {
+                    Some(Box::new(cleanup) as _)
+                }
+            }),
+        )
+    }
 
-// impl<'a> BuildContext<'a> {
-//     pub fn use_effect<E: FnOnce() -> T + Send + Sync + 'static, T: TearDown>(&mut self, effect: E) {
-//         let (hook, index) = self.hooks.use_hook(|| EffectHook {
-//             dependencies: (),
-//             effect: Asc::new(SyncMutex::new(EffectState {
-//                 inner: EffectStateInner::Hold {
-//                     fire: move || effect(),
-//                 },
-//             })),
-//         });
-//         let effect = hook.effect.clone();
-//         self.hooks.effects.push(effect)
-//     }
+    fn update_hook_state(self, state: &mut Self::HookState) -> Option<impl Effect> {
+        (state.dependencies != self.dependencies).then_some(|| {
+            let cleanup = (self.effect)(self.dependencies);
+            if cleanup.is_noop() {
+                None
+            } else {
+                Some(Box::new(cleanup) as _)
+            }
+        })
+    }
+}
 
-//     pub fn use_effect_with<
-//         E: FnOnce(D) -> T + Send + Sync + 'static,
-//         T: TearDown,
-//         D: PartialEq + Clone + Send + Sync + 'static,
-//     >(
-//         &mut self,
-//         effect: E,
-//         dependencies: D,
-//     ) {
-//         let (hook, index) = self.hooks.use_hook_with(
-//             (effect, dependencies),
-//             |(effect, dependencies)| {
-//                 let dependencies_clone = dependencies.clone();
-//                 EffectHook {
-//                     dependencies,
-//                     effect: Asc::new(SyncMutex::new(EffectState {
-//                         inner: EffectStateInner::Hold {
-//                             fire: move || effect(dependencies_clone),
-//                         },
-//                     })),
-//                 }
-//             },
-//             |hook, (effect, dependencies)| {
-//                 if hook.dependencies != dependencies {
-//                     let dependencies_clone = dependencies.clone();
-//                     hook.dependencies = dependencies;
-//                     hook.effect = Asc::new(SyncMutex::new(EffectState {
-//                         inner: EffectStateInner::Hold {
-//                             fire: move || effect(dependencies_clone),
-//                         },
-//                     }))
-//                 }
-//             },
-//         );
-//         let effect = hook.effect.clone();
-//         self.hooks.effects.push(effect)
-//     }
-// }
+#[derive(Clone)]
+pub(super) struct EffectHookState<D> {
+    dependencies: D,
+}
 
-// #[derive(Clone)]
-// pub struct EffectHook<D> {
-//     dependencies: D,
-//     // Use ref-counting to assure the persistence of fired effects and its tear-downs
-//     // Must be private to disallow leaking of ref-counts
-//     effect: Asc<SyncMutex<dyn Effect>>,
-// }
+impl<D: Clone + Send + Sync + 'static> HookState for EffectHookState<D> {
+    fn clone_box(&self) -> Box<dyn HookState> {
+        Box::new(self.clone())
+    }
+}
 
-// impl<D> HookState for EffectHook<D>
-// where
-//     D: Clone + Send + Sync + 'static,
-// {
-//     fn clone_box(&self) -> Box<dyn HookState> {
-//         Box::new(self.clone())
-//     }
-// }
+#[derive(Clone)]
+pub(super) struct NoDependency;
 
-// pub trait Effect: Send + Sync + 'static {
-//     fn fire(&mut self);
-//     fn tear_down(&mut self);
-// }
-
-// pub struct EffectState<F, T>
-// where
-//     F: FnOnce() -> T + Send + Sync + 'static,
-//     T: TearDown,
-// {
-//     inner: EffectStateInner<F, T>,
-// }
-
-// enum EffectStateInner<F, T> {
-//     Hold { fire: F },
-//     Fired { tear_down: T },
-//     TearDown,
-// }
-
-// impl<F, T> Effect for EffectState<F, T>
-// where
-//     F: FnOnce() -> T + Send + Sync + 'static,
-//     T: TearDown,
-// {
-//     fn fire(&mut self) {
-//         let inner = std::mem::replace(&mut self.inner, EffectStateInner::TearDown);
-//         use EffectStateInner::*;
-//         match inner {
-//             Hold { fire } => {
-//                 let tear_down = fire();
-//                 self.inner = EffectStateInner::Fired { tear_down };
-//             }
-//             Fired { .. } => {}
-//             TearDown => panic!(),
-//         }
-//     }
-
-//     fn tear_down(&mut self) {
-//         let inner = std::mem::replace(&mut self.inner, EffectStateInner::TearDown);
-//         use EffectStateInner::*;
-//         match inner {
-//             Hold { .. } => {}
-//             Fired { tear_down } => {
-//                 tear_down.teardown();
-//             }
-//             TearDown => {}
-//         }
-//     }
-// }
-
-// impl<F, T> Drop for EffectState<F, T>
-// where
-//     F: FnOnce() -> T + Send + Sync + 'static,
-//     T: TearDown,
-// {
-//     fn drop(&mut self) {
-//         self.tear_down()
-//     }
-// }
+impl PartialEq for NoDependency {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}

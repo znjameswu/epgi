@@ -1,9 +1,4 @@
-use crate::{
-    foundation::{AsAny, Asc, Error, InlinableDwsizeVec, Key, SyncMutex, VecPushLastExt},
-    scheduler::JobId,
-};
-
-use super::{AweakElementContextNode, ElementContextNode};
+use crate::foundation::{AsAny, Error};
 
 pub(crate) type HooksWithTearDowns = HooksWith<Option<Box<dyn EffectCleanup>>>;
 pub(crate) type HooksWithEffects = HooksWith<Option<Box<dyn Effect>>>;
@@ -60,18 +55,32 @@ pub trait Effect: Send + Sync + 'static {
     fn fire(self) -> Option<Box<dyn EffectCleanup>>;
 }
 
+/// Helper impl, if you have no effect to return but the signauter requires to specify a return type
 impl Effect for () {
     fn fire(self) -> Option<Box<dyn EffectCleanup>> {
         None
     }
 }
 
+impl<F> Effect for F
+where
+    F: FnOnce() -> Option<Box<dyn EffectCleanup>> + Send + Sync + 'static,
+{
+    fn fire(self) -> Option<Box<dyn EffectCleanup>> {
+        (self)()
+    }
+}
+
 pub trait EffectCleanup: Send + Sync + 'static {
+    fn is_noop(&self) -> bool;
     fn cleanup(self: Box<Self>);
 }
 
 impl EffectCleanup for () {
     fn cleanup(self: Box<Self>) {}
+    fn is_noop(&self) -> bool {
+        true
+    }
 }
 
 impl<F> EffectCleanup for F
@@ -80,6 +89,9 @@ where
 {
     fn cleanup(self: Box<Self>) {
         (self)()
+    }
+    fn is_noop(&self) -> bool {
+        false
     }
 }
 

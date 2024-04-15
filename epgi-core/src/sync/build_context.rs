@@ -1,9 +1,6 @@
 use crate::{
     foundation::VecPushLastExt,
-    tree::{
-        ArcElementContextNode,  BuildContext, Effect, Hook, HookIndex,
-        HooksWithTearDowns, WorkMode,
-    },
+    tree::{ArcElementContextNode, Effect, Hook, HookIndex, HooksWithTearDowns, WorkMode},
 };
 
 pub(crate) struct SyncBuildContext<'a> {

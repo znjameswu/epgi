@@ -60,40 +60,40 @@ impl<P: Protocol> SingleChildElement for ComponentElement<P> {
     }
 }
 
-// pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol>(
-//     pub F,
-// );
+pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol>(
+    pub F,
+);
 
-// impl<F, P> std::fmt::Debug for Function<F, P>
-// where
-//     P: Protocol,
-//     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
-// {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_tuple("Function").finish()
-//     }
-// }
+impl<F, P> std::fmt::Debug for Function<F, P>
+where
+    P: Protocol,
+    F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Function").finish()
+    }
+}
 
-// impl<F, P> Widget for Function<F, P>
-// where
-//     P: Protocol,
-//     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
-// {
-//     type ParentProtocol = P;
-//     type ChildProtocol = P;
-//     type Element = ComponentElement<P>;
+impl<F, P> Widget for Function<F, P>
+where
+    P: Protocol,
+    F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
+{
+    type ParentProtocol = P;
+    type ChildProtocol = P;
+    type Element = ComponentElement<P>;
 
-//     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
-//         self
-//     }
-// }
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+        self
+    }
+}
 
-// impl<F, P> ComponentWidget<P> for Function<F, P>
-// where
-//     P: Protocol,
-//     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
-// {
-//     fn build(&self, ctx: BuildContext<'_>) -> ArcChildWidget<P> {
-//         (self.0)(ctx)
-//     }
-// }
+impl<F, P> ComponentWidget<P> for Function<F, P>
+where
+    P: Protocol,
+    F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
+{
+    fn build(&self, ctx: BuildContext<'_>) -> ArcChildWidget<P> {
+        (self.0)(ctx)
+    }
+}

@@ -21,11 +21,13 @@ pub use r#impl::*;
 
 use crate::foundation::{
     Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, LayerProtocol,
-    Protocol, Provide, PtrEq, SyncMutex, TypeKey,
+    Protocol, Provide, PtrEq, TypeKey,
 };
 
 use super::{
-    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext, ChildElementWidgetPair, ElementWidgetPair, FullRender, HooksWith, HooksWithTearDowns, LayerPaint, LayoutCache, LayoutResults, Render, RenderAction, RenderObject
+    ArcAnyRenderObject, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
+    ChildElementWidgetPair, ElementWidgetPair, FullRender, HooksWithTearDowns, LayerPaint,
+    LayoutCache, LayoutResults, Render, RenderAction, RenderObject,
 };
 
 pub type ArcAnyElementNode = Arc<dyn AnyElementNode>;

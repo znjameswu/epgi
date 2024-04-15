@@ -10,9 +10,7 @@ use epgi_core::{
     scheduler::{
         get_current_scheduler, setup_scheduler, BuildScheduler, Scheduler, SchedulerHandle,
     },
-    tree::{
-        create_root_element, ArcChildWidget, ChildWidget, ElementNode, HooksWith, RenderObject,
-    },
+    tree::{create_root_element, ArcChildWidget, ChildWidget, ElementNode, RenderObject},
 };
 use std::{
     num::NonZeroUsize,

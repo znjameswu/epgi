@@ -5,10 +5,7 @@ use futures::task::ArcWake;
 use crate::{
     foundation::{Asc, Container, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec},
     scheduler::{BatchId, LanePos},
-    tree::{
-        AsyncInflating, HookContext, HookState, HooksWith, HooksWithEffects, HooksWithTearDowns,
-        EffectCleanup,
-    },
+    tree::{AsyncInflating, HookContext, HooksWithEffects, HooksWithTearDowns},
 };
 
 use super::{

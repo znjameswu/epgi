@@ -1,6 +1,6 @@
 use crate::sync::SyncBuildContext;
 
-use super::{ArcElementContextNode, Hook, HookContext, HookIndex, HookState};
+use super::{ArcElementContextNode, Hook, HookIndex};
 
 // pub trait BuildContext {
 //     fn use_hook<T: Hook>(
