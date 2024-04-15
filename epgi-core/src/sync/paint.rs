@@ -2,7 +2,7 @@ use hashbrown::HashSet;
 
 use crate::{
     foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, PtrEq},
-    sync::BuildScheduler,
+    sync::LaneScheduler,
     tree::{
         ArcChildRenderObject, AweakAnyLayerRenderObject, ImplMaybeLayer, ImplRender, LayerCache,
         LayerPaint, OrphanLayer, Paint, Render, RenderImpl, RenderObject,
@@ -11,7 +11,7 @@ use crate::{
 
 use super::{ImplComposite, ImplHitTest};
 
-impl BuildScheduler {
+impl LaneScheduler {
     pub(crate) fn perform_paint(
         &self,
         layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,

@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use epgi_core::template::TemplateRender;
-use epgi_core::tree::{HitTest, ImplRender, RenderBase, RenderImpl};
+use epgi_core::tree::{ImplRender, RenderBase, RenderImpl};
 use epgi_core::{
     foundation::{
         AnyRawPointer, Arc, ArrayContainer, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec,

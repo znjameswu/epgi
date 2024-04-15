@@ -2,15 +2,12 @@ use std::{any::Any, sync::Arc};
 
 use crate::{
     foundation::{Asc, Protocol, SyncMpscSender, SyncRwLock},
-    sync::{CommitBarrier, SubtreeRenderObjectChange},
+    sync::{CommitBarrier, LaneScheduler, SubtreeRenderObjectChange},
     tree::{
-        AnyElementNode, ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode,
-        AweakElementContextNode, LayoutResults, Render, RenderElement, RenderObject, Widget,
-        WorkContext, WorkHandle,
+        ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakElementContextNode,
+        LayoutResults, Render, RenderElement, RenderObject, Widget, WorkContext, WorkHandle,
     },
 };
-
-pub use crate::sync::BuildScheduler;
 
 use super::{FrameResults, JobBatcher, SchedulerHandle};
 
@@ -43,7 +40,7 @@ pub struct Scheduler<E: SchedulerExtension> {
 }
 
 pub struct BuildStates {
-    scheduler: BuildScheduler,
+    scheduler: LaneScheduler,
     pub root_element: ArcAnyElementNode,
     pub root_render_object: ArcAnyLayerRenderObject,
 }
@@ -69,9 +66,9 @@ where
         scheduler_handle: &SchedulerHandle,
         extension: E,
     ) -> Self {
-        let build_scheduler = BuildScheduler::new();
+        let lane_scheduler = LaneScheduler::new();
         use crate::sync::reconcile_item::ChildWidgetSyncInflateExt;
-        let (root_element, subtree_change) = root_widget.inflate_sync(None, &build_scheduler);
+        let (root_element, subtree_change) = root_widget.inflate_sync(None, &lane_scheduler);
 
         let SubtreeRenderObjectChange::New(root_render_object) = subtree_change else {
             panic!("Root widget inflate failed!");
@@ -93,7 +90,7 @@ where
             .push_layer_render_objects_needing_paint(Arc::downgrade(&root_render_object));
         Self {
             build_states: Asc::new(SyncRwLock::new(BuildStates {
-                scheduler: build_scheduler,
+                scheduler: lane_scheduler,
                 root_element: root_element.as_any_arc(),
                 root_render_object,
             })),
@@ -103,7 +100,7 @@ where
         }
     }
     pub fn start_event_loop(mut self, handle: &SchedulerHandle) {
-        // handle.push_layer_render_objects_needing_paint(self.build_scheduler.roo)
+        // handle.push_layer_render_objects_needing_paint(self.lane_scheduler.roo)
         let tasks = &handle.task_rx;
         loop {
             let task = tasks.recv();
@@ -116,7 +113,7 @@ where
                 } => {
                     let mut build_states = self.build_states.write();
                     let build_states_reborrow = &mut *build_states;
-                    // let commited_async_batches = build_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    // let commited_async_batches = lane_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
@@ -130,7 +127,7 @@ where
                     build_states_reborrow
                         .scheduler
                         .apply_batcher_result(updates, &build_states_reborrow.root_element);
-                    // build_scheduler.dispatch_async_batches();
+                    // lane_scheduler.dispatch_async_batches();
                     self.extension.on_frame_begin(&build_states_reborrow);
                     let commited_sync_batch = build_states_reborrow
                         .scheduler
@@ -138,7 +135,7 @@ where
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
                     }
-                    // let commited_async_batches = build_scheduler.commit_completed_async_batches(&mut self.job_batcher);
+                    // let commited_async_batches = lane_scheduler.commit_completed_async_batches(&mut self.job_batcher);
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }

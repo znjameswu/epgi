@@ -372,9 +372,9 @@ impl MainState {
             widget_binding.set(Some(child), job_builder);
         });
 
-        let build_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
+        let lane_scheduler = BuildScheduler::new(element_node, get_current_scheduler());
 
-        let scheduler = Scheduler::new(build_scheduler, EpgiGlazierSchedulerExtension::new());
+        let scheduler = Scheduler::new(lane_scheduler, EpgiGlazierSchedulerExtension::new());
         let join_handle = std::thread::spawn(move || {
             scheduler.start_event_loop(get_current_scheduler());
         });

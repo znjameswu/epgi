@@ -1,12 +1,19 @@
+mod commit_barrier;
+pub use commit_barrier::*;
+
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     foundation::{Asc, PtrEq},
-    scheduler::{BatchConf, BatchResult, LaneMask, LanePos},
-    tree::ArcAnyElementNode,
+    scheduler::{BatchConf, BatchId, BatchResult, JobBatcher, LaneMask, LanePos},
+    tree::{ArcAnyElementNode, AweakAnyElementNode, AweakElementContextNode},
 };
 
-use super::{CommitBarrier, CommitBarrierInner};
+pub struct LaneScheduler {
+    sync_lane: Option<LaneData>,
+    async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
+    queued_batches: Vec<Asc<BatchConf>>,
+}
 
 struct LaneData {
     batch: Asc<BatchConf>,
@@ -28,14 +35,8 @@ impl LaneData {
     }
 }
 
-pub(super) struct LaneScheduler {
-    sync_lane: Option<LaneData>,
-    async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
-    queued_batches: Vec<Asc<BatchConf>>,
-}
-
 impl LaneScheduler {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             sync_lane: None,
             async_lanes: [(); LaneMask::ASYNC_LANE_COUNT].map(|_| None),
@@ -53,13 +54,7 @@ impl LaneScheduler {
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
     }
 
-    pub(super) fn sync_batch(&self) -> Option<&BatchConf> {
-        self.sync_lane
-            .as_ref()
-            .map(|sync_lane| sync_lane.batch.as_ref())
-    }
-
-    pub(super) fn apply_batcher_result(
+    pub(crate) fn apply_batcher_result(
         &mut self,
         result: BatchResult,
         root_element: &ArcAnyElementNode,
@@ -115,7 +110,61 @@ impl LaneScheduler {
         }
     }
 
-    pub(crate) fn remove_commited_batch(&mut self, lane_pos: LanePos) {
+    pub(crate) fn commit_completed_async_batches(
+        &mut self,
+        job_batcher: &mut JobBatcher,
+    ) -> Vec<BatchId> {
+        todo!()
+        // todo!()
+        // for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
+        //     let Some(async_lane) = async_lane else {
+        //         continue;
+        //     };
+        //     if async_lane.barrier_inner.is_empty() {
+        //         todo!("Commit async lane");
+        //         job_batcher.remove_commited_batch(&async_lane.batch.id);
+        //     }
+        // }
+    }
+
+    pub(crate) fn dispatch_sync_batch(
+        &mut self,
+        root_element: &ArcAnyElementNode,
+    ) -> Option<BatchId> {
+        let Some(sync_batch) = self.sync_batch() else {
+            return None;
+        };
+        rayon::scope(|scope| {
+            root_element
+                .clone()
+                .visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
+        });
+        let batch_id = sync_batch.id;
+        self.remove_commited_batch(LanePos::Sync);
+        return Some(batch_id);
+    }
+
+    pub(crate) fn dispatch_async_batches(&self) {
+        // todo!()
+    }
+
+    pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {
+        node.upgrade().map(|node| node.reorder_async_work(self));
+    }
+
+    pub(crate) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
+        // todo!()
+    }
+}
+
+impl LaneScheduler {
+    fn sync_batch(&self) -> Option<&BatchConf> {
+        self.sync_lane
+            .as_ref()
+            .map(|sync_lane| sync_lane.batch.as_ref())
+    }
+
+    fn remove_commited_batch(&mut self, lane_pos: LanePos) {
         if lane_pos.is_sync() {
             self.sync_lane = None;
             return;

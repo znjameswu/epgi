@@ -1,5 +1,5 @@
 mod r#async;
-pub use r#async::*;
+pub(crate) use r#async::*;
 
 mod reconcile;
 pub use reconcile::*;

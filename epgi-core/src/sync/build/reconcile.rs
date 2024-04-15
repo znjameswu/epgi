@@ -10,7 +10,7 @@ use crate::{
         LinearMapEntryExt, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{BuildScheduler, SubtreeRenderObjectChange, SyncBuildContext, SyncHookContext},
+    sync::{LaneScheduler, SubtreeRenderObjectChange, SyncBuildContext, SyncHookContext},
     tree::{
         no_widget_update, ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue,
         ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementContextNode, ElementNode,
@@ -27,16 +27,16 @@ impl<E: FullElement> ElementNode<E> {
         widget: Option<E::ArcWidget>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        let visit_action = self.visit_inspect(widget, build_scheduler);
-        self.execute_visit(visit_action, job_ids, scope, build_scheduler)
+        let visit_action = self.visit_inspect(widget, lane_scheduler);
+        self.execute_visit(visit_action, job_ids, scope, lane_scheduler)
     }
 
     pub(super) fn inflate_node_sync(
         widget: &E::ArcWidget,
         parent_context: Option<ArcElementContextNode>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (
         Arc<ElementNode<E>>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
@@ -60,7 +60,7 @@ impl<E: FullElement> ElementNode<E> {
             E::get_consumed_types(widget),
             EMPTY_CONSUMED_TYPES,
             &node.context,
-            build_scheduler,
+            lane_scheduler,
         );
 
         let subtree_results = Self::perform_inflate_node_sync::<true>(
@@ -68,7 +68,7 @@ impl<E: FullElement> ElementNode<E> {
             widget,
             SyncHookContext::new_inflate(),
             consumed_values,
-            build_scheduler,
+            lane_scheduler,
         );
         return (node, subtree_results);
     }
@@ -112,7 +112,7 @@ impl<E: FullElement> ElementNode<E> {
     fn visit_inspect(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> VisitAction<E> {
         let no_new_widget = widget.is_none();
         let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::Sync);
@@ -179,7 +179,7 @@ impl<E: FullElement> ElementNode<E> {
             let cancel = Self::prepare_cancel_async_work(
                 mainline,
                 entry.work.context.lane_pos,
-                build_scheduler,
+                lane_scheduler,
             )
             .ok()
             .expect("Impossible to fail");
@@ -218,7 +218,7 @@ impl<E: FullElement> ElementNode<E> {
         visit_action: VisitAction<E>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let result = match visit_action {
             VisitAction::Visit {
@@ -228,7 +228,7 @@ impl<E: FullElement> ElementNode<E> {
             } => {
                 let results = children
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
-                        child.visit_and_work_sync(job_ids, scope, build_scheduler)
+                        child.visit_and_work_sync(job_ids, scope, lane_scheduler)
                     });
                 let (_children, render_object_changes) = results.unzip_collect(|x| x);
 
@@ -238,7 +238,7 @@ impl<E: FullElement> ElementNode<E> {
                     render_object_changes,
                     self_rebuild_suspended,
                     scope,
-                    build_scheduler,
+                    lane_scheduler,
                 );
             }
             VisitAction::Rebuild {
@@ -256,10 +256,10 @@ impl<E: FullElement> ElementNode<E> {
                     E::get_consumed_types(new_widget_ref),
                     E::get_consumed_types(&old_widget),
                     &self.context,
-                    build_scheduler,
+                    lane_scheduler,
                 );
                 if let Some(widget) = new_widget.as_ref() {
-                    Self::update_provided_value(&old_widget, widget, &self.context, build_scheduler)
+                    Self::update_provided_value(&old_widget, widget, &self.context, lane_scheduler)
                 }
                 let is_new_widget = new_widget.is_some();
                 let new_widget = &new_widget.unwrap_or(old_widget);
@@ -281,7 +281,7 @@ impl<E: FullElement> ElementNode<E> {
                             consumed_values,
                             job_ids,
                             scope,
-                            build_scheduler,
+                            lane_scheduler,
                             is_new_widget,
                         )
                     }
@@ -305,7 +305,7 @@ impl<E: FullElement> ElementNode<E> {
                             consumed_values,
                             job_ids,
                             scope,
-                            build_scheduler,
+                            lane_scheduler,
                             is_new_widget,
                         )
                     }
@@ -322,7 +322,7 @@ impl<E: FullElement> ElementNode<E> {
                                 SyncHookContext::new_poll_inflate(suspended_hooks)
                             },
                             consumed_values,
-                            build_scheduler,
+                            lane_scheduler,
                         )
                     }
                 }
@@ -343,7 +343,7 @@ impl<E: FullElement> ElementNode<E> {
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let mut nodes_needing_unmount = Default::default();
@@ -373,10 +373,10 @@ impl<E: FullElement> ElementNode<E> {
                     items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
                         use ElementReconcileItem::*;
                         match item {
-                            Keep(node) => node.visit_and_work_sync(job_ids, scope, build_scheduler),
-                            Update(pair) => pair.rebuild_sync_box(job_ids, scope, build_scheduler),
+                            Keep(node) => node.visit_and_work_sync(job_ids, scope, lane_scheduler),
+                            Update(pair) => pair.rebuild_sync_box(job_ids, scope, lane_scheduler),
                             Inflate(widget) => {
-                                widget.inflate_sync(Some(self.context.clone()), build_scheduler)
+                                widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
                             }
                         }
                     });
@@ -428,7 +428,7 @@ impl<E: FullElement> ElementNode<E> {
         widget: &E::ArcWidget,
         mut hook_context: SyncHookContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let result = E::perform_inflate_element(
             &widget,
@@ -445,7 +445,7 @@ impl<E: FullElement> ElementNode<E> {
                 let results = child_widgets.par_map_collect(
                     &get_current_scheduler().sync_threadpool,
                     |child_widget| {
-                        child_widget.inflate_sync(Some(self.context.clone()), build_scheduler)
+                        child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
                     },
                 );
                 let (children, changes) = results.unzip_collect(|x| x);
@@ -567,7 +567,7 @@ impl<E: FullElement> ElementNode<E> {
         old_widget: &E::ArcWidget,
         new_widget: &E::ArcWidget,
         element_context: &ElementContextNode,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) {
         if let Some(new_provided_value) =
             <E as Element>::Impl::diff_provided_value(old_widget, new_widget)
@@ -582,7 +582,7 @@ impl<E: FullElement> ElementNode<E> {
                 &get_current_scheduler().sync_threadpool,
                 |(lane_pos, node)| {
                     let node = node.upgrade().expect("ElementNode should be alive");
-                    node.restart_async_work(lane_pos, build_scheduler)
+                    node.restart_async_work(lane_pos, lane_scheduler)
                 },
             );
 
@@ -600,7 +600,7 @@ impl<E: FullElement> ElementNode<E> {
         new_consumed_types: &[TypeKey],
         old_consumed_types: &[TypeKey],
         element_context: &ArcElementContextNode,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> InlinableDwsizeVec<Arc<dyn Provide>> {
         let is_old_consumed_types = std::ptr::eq(new_consumed_types, old_consumed_types);
 
@@ -664,7 +664,7 @@ impl<E: FullElement> ElementNode<E> {
                     .element_node
                     .upgrade()
                     .expect("ElementNode should be alive");
-                node.restart_async_work(lane_pos, build_scheduler)
+                node.restart_async_work(lane_pos, lane_scheduler)
             },
         );
         return consumed_values;
@@ -681,7 +681,7 @@ pub(crate) mod sync_build_private {
             self: Arc<Self>,
             job_ids: &Inlinable64Vec<JobId>,
             scope: &rayon::Scope<'_>,
-            build_scheduler: &BuildScheduler,
+            lane_scheduler: &LaneScheduler,
         ) -> ArcAnyElementNode;
     }
 
@@ -690,9 +690,9 @@ pub(crate) mod sync_build_private {
             self: Arc<Self>,
             job_ids: &Inlinable64Vec<JobId>,
             scope: &rayon::Scope<'_>,
-            build_scheduler: &BuildScheduler,
+            lane_scheduler: &LaneScheduler,
         ) -> ArcAnyElementNode {
-            self.rebuild_node_sync(None, job_ids, scope, build_scheduler);
+            self.rebuild_node_sync(None, job_ids, scope, lane_scheduler);
             self
         }
     }
@@ -702,7 +702,7 @@ pub(crate) mod sync_build_private {
             self: Arc<Self>,
             job_ids: &Inlinable64Vec<JobId>,
             scope: &rayon::Scope<'_>,
-            build_scheduler: &BuildScheduler,
+            lane_scheduler: &LaneScheduler,
         ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
     }
 
@@ -711,12 +711,12 @@ pub(crate) mod sync_build_private {
             self: Arc<Self>,
             job_ids: &Inlinable64Vec<JobId>,
             scope: &rayon::Scope<'_>,
-            build_scheduler: &BuildScheduler,
+            lane_scheduler: &LaneScheduler,
         ) -> (
             ArcChildElementNode<E::ParentProtocol>,
             SubtreeRenderObjectChange<E::ParentProtocol>,
         ) {
-            let result = self.rebuild_node_sync(None, job_ids, scope, build_scheduler);
+            let result = self.rebuild_node_sync(None, job_ids, scope, lane_scheduler);
             (self, result)
         }
     }
@@ -732,7 +732,7 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
         >,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
 
     fn rebuild_success_commit(

@@ -3,9 +3,8 @@ use either::Either;
 use crate::{
     foundation::{Arc, Asc, EitherParallel, Protocol},
     nodes::{RenderSuspense, Suspense, SuspenseElement},
-    scheduler::BuildScheduler,
     sync::{
-        render_element::update_children, SubtreeRenderObjectChange,
+        render_element::update_children, LaneScheduler, SubtreeRenderObjectChange,
         SubtreeRenderObjectChangeSummary,
     },
     tree::{
@@ -27,7 +26,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
         >,
         self_rebuild_suspended: bool,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<P> {
         let render_object = render_object.expect("Suspense can never suspend");
         use Either::*;
@@ -77,7 +76,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                 };
 
                 let (fallback, change) =
-                    fallback.inflate_sync(Some(element_node.context.clone()), build_scheduler);
+                    fallback.inflate_sync(Some(element_node.context.clone()), lane_scheduler);
 
                 let SubtreeRenderObjectChange::New(fallback_render_object) = change else {
                     panic!(

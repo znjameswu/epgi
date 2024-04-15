@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Inlinable64Vec, Protocol},
-    scheduler::{BuildScheduler, JobId},
-    sync::SubtreeRenderObjectChange,
+    scheduler::JobId,
+    sync::{LaneScheduler, SubtreeRenderObjectChange},
     tree::{
         ArcChildElementNode, ArcElementContextNode, ElementBase, ElementNode, ElementWidgetPair,
         FullElement, Widget,
@@ -13,14 +13,14 @@ pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
         self,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
 
     fn rebuild_sync_box(
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
 }
 
@@ -32,14 +32,14 @@ where
         self,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
         let subtree_results =
             self.element
-                .rebuild_node_sync(Some(self.widget), job_ids, scope, build_scheduler);
+                .rebuild_node_sync(Some(self.widget), job_ids, scope, lane_scheduler);
         (self.element, subtree_results)
     }
 
@@ -47,12 +47,12 @@ where
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
     ) {
-        self.rebuild_sync(job_ids, scope, build_scheduler)
+        self.rebuild_sync(job_ids, scope, lane_scheduler)
     }
 }
 
@@ -60,7 +60,7 @@ pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
     fn inflate_sync(
         self: Arc<Self>,
         parent_context: Option<ArcElementContextNode>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
 }
 
@@ -71,7 +71,7 @@ where
     fn inflate_sync(
         self: Arc<Self>,
         parent_context: Option<ArcElementContextNode>,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> (
         ArcChildElementNode<<<T as Widget>::Element as ElementBase>::ParentProtocol>,
         SubtreeRenderObjectChange<<<T as Widget>::Element as ElementBase>::ParentProtocol>,
@@ -79,7 +79,7 @@ where
         let (node, results) = ElementNode::<T::Element>::inflate_node_sync(
             &self.into_arc_widget(),
             parent_context,
-            build_scheduler,
+            lane_scheduler,
         );
         (node as _, results)
     }

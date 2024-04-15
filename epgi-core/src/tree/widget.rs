@@ -97,12 +97,12 @@ where
     //     parent_context: &ArcElementContextNode,
     //     job_ids: &'a SmallSet<JobId>,
     //     scope: &'a rayon::Scope<'batch>,
-    //     build_scheduler: &'batch BuildScheduler,
+    //     lane_scheduler: &'batch BuildScheduler,
     // ) -> (
     //     ArcChildElementNode<<T::Element as Element>::SelfProtocol>,
     //     SubtreeCommitResult,
     // ) {
-    //     ChildWidgetInflateExt::inflate_sync(self, parent_context, job_ids, scope, build_scheduler)
+    //     ChildWidgetInflateExt::inflate_sync(self, parent_context, job_ids, scope, lane_scheduler)
     // }
 
     fn widget_type_id(&self) -> TypeId {

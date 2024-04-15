@@ -9,7 +9,7 @@ use crate::{
     foundation::{Arc, Container, ContainerOf},
     r#async::AsyncRebuild,
     scheduler::{get_current_scheduler, LanePos},
-    sync::BuildScheduler,
+    sync::LaneScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementNode, ElementSnapshot,
@@ -37,7 +37,7 @@ impl<E: FullElement> ElementNode<E> {
     // pub(super) fn cancel_async_work(
     //     self: &Arc<Self>,
     //     lane_pos: LanePos,
-    //     build_scheduler: &BuildScheduler,
+    //     lane_scheduler: &BuildScheduler,
     // ) {
     //     let remove_result = {
     //         let mut snapshot = self.snapshot.lock();
@@ -46,7 +46,7 @@ impl<E: FullElement> ElementNode<E> {
     //             .inner
     //             .mainline_mut()
     //             .expect("Cancel can only be called on mainline nodes");
-    //         Self::prepare_cancel_async_work(mainline, lane_pos, build_scheduler)
+    //         Self::prepare_cancel_async_work(mainline, lane_pos, lane_scheduler)
     //     };
 
     //     match remove_result {
@@ -62,7 +62,7 @@ impl<E: FullElement> ElementNode<E> {
     pub(in super::super) fn prepare_cancel_async_work(
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> Result<
         CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
@@ -84,7 +84,7 @@ impl<E: FullElement> ElementNode<E> {
                 handle.abort();
                 async_queue.push_backqueue(
                     work,
-                    build_scheduler
+                    lane_scheduler
                         .get_commit_barrier_for(lane_pos)
                         .expect("CommitBarrier should exist"),
                 );

@@ -10,9 +10,9 @@ use crate::{
     },
 };
 
-use super::BuildScheduler;
+use super::LaneScheduler;
 
-impl BuildScheduler {
+impl LaneScheduler {
     pub(crate) fn perform_composite(
         &self,
         root_render_object: &dyn AnyLayerRenderObject,

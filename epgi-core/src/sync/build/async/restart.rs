@@ -1,7 +1,7 @@
 use crate::{
     foundation::Arc,
     scheduler::LanePos,
-    sync::BuildScheduler,
+    sync::LaneScheduler,
     tree::{ElementNode, FullElement},
 };
 
@@ -14,7 +14,7 @@ impl<E: FullElement> ElementNode<E> {
         // This BuildScheduler is necessary!
         // Since we need to revert whatever state the work is in back to the initial state,
         // there is a possiblility that we need to generate the CommitBarrier for the initial state, and the Completed state lacks it
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) {
         let reorder = {
             let mut snapshot = self.snapshot.lock();
@@ -24,7 +24,7 @@ impl<E: FullElement> ElementNode<E> {
                 .mainline_mut()
                 .expect("Restart can only be called on mainline nodes");
 
-            let cancel = Self::prepare_cancel_async_work(mainline, lane_pos, build_scheduler)
+            let cancel = Self::prepare_cancel_async_work(mainline, lane_pos, lane_scheduler)
                 .ok()
                 .expect("Lane to be canceled must exist");
             let rebuild = self
@@ -44,16 +44,12 @@ impl<E: FullElement> ElementNode<E> {
 pub(crate) mod restart_private {
     use super::*;
     pub trait AnyElementNodeRestartAsyncExt {
-        fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, build_scheduler: &BuildScheduler);
+        fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, lane_scheduler: &LaneScheduler);
     }
 
     impl<E: FullElement> AnyElementNodeRestartAsyncExt for ElementNode<E> {
-        fn restart_async_work(
-            self: Arc<Self>,
-            lane_pos: LanePos,
-            build_scheduler: &BuildScheduler,
-        ) {
-            ElementNode::restart_async_work(&self, lane_pos, build_scheduler)
+        fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, lane_scheduler: &LaneScheduler) {
+            ElementNode::restart_async_work(&self, lane_pos, lane_scheduler)
         }
     }
 }

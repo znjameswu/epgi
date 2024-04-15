@@ -1,7 +1,6 @@
 use crate::{
     foundation::ArrayContainer,
-    scheduler::BuildScheduler,
-    sync::SubtreeRenderObjectChange,
+    sync::{LaneScheduler, SubtreeRenderObjectChange},
     tree::{
         ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, Element,
         ElementBase, ElementImpl, ElementNode, ImplElement,
@@ -25,7 +24,7 @@ where
         [render_object_change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
         _self_rebuild_suspended: bool,
         _scope: &rayon::Scope<'_>,
-        _build_scheduler: &BuildScheduler,
+        _lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         render_object_change
     }

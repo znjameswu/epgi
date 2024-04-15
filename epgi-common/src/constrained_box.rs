@@ -39,15 +39,15 @@ impl BoxSingleChildElement for ConstrainedBoxElement {
     type ArcWidget = Asc<ConstrainedBox>;
 
     fn get_child_widget(
-        element: Option<&mut Self>,
+        _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        _ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
-    fn create_element(widget: &Self::ArcWidget) -> Self {
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self
     }
 }

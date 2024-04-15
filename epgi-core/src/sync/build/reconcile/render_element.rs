@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, AsIterator, Container, ContainerOf},
-    scheduler::{get_current_scheduler, BuildScheduler},
-    sync::{SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
+    scheduler::get_current_scheduler,
+    sync::{LaneScheduler, SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
         ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElement,
@@ -27,7 +27,7 @@ where
         >,
         self_rebuild_suspended: bool,
         _scope: &rayon::Scope<'_>,
-        _build_scheduler: &BuildScheduler,
+        _lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,

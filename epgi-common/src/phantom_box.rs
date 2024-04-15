@@ -41,14 +41,14 @@ impl LeafElement for PhantomBoxElement {
     type Render = RenderPhantomBox;
 
     fn create_element(
-        widget: &Self::ArcWidget,
-        ctx: epgi_core::tree::BuildContext,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        _widget: &Self::ArcWidget,
+        _ctx: epgi_core::tree::BuildContext,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Self, BuildSuspendedError> {
         Ok(Self)
     }
 
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
+    fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
         RenderPhantomBox
     }
 
@@ -70,9 +70,9 @@ impl LeafRender for RenderPhantomBox {
 
     fn perform_paint(
         &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+        _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
     }
 }

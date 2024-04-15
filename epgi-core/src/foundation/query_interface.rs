@@ -202,11 +202,6 @@ impl dyn CastInterfaceByRawPtr {
     }
 }
 
-pub struct InterfaceQueryTableEntry<S> {
-    type_id: TypeId,
-    cast: fn(*mut S) -> AnyRawPointer,
-}
-
 #[macro_export]
 macro_rules! interface_query_table {
     ($name: ident, $type: ty, $($trait: ty),* $(,)?) => {

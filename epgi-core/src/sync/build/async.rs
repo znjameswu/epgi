@@ -1,11 +1,14 @@
 mod cancel;
-mod commit;
-mod reorder_work;
-mod restart;
-mod visit;
+pub(crate) use cancel::*;
 
-pub use cancel::*;
+mod commit;
 pub use commit::*;
-pub use reorder_work::*;
-pub use restart::*;
+
+mod reorder_work;
+pub(crate) use reorder_work::*;
+
+mod restart;
+pub(crate) use restart::*;
+
+mod visit;
 pub use visit::*;

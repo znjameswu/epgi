@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, ContainerOf},
     r#async::AsyncRebuild,
-    sync::BuildScheduler,
+    sync::LaneScheduler,
     tree::{ArcChildElementNode, ElementBase, ElementNode, FullElement, Mainline},
 };
 
@@ -14,7 +14,7 @@ pub(in super::super) struct ReorderAsync<E: ElementBase> {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    fn reorder_async_work(self: &Arc<Self>, build_scheduler: &BuildScheduler) {
+    fn reorder_async_work(self: &Arc<Self>, lane_scheduler: &LaneScheduler) {
         let try_reorder_result = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
@@ -22,7 +22,7 @@ impl<E: FullElement> ElementNode<E> {
                 .inner
                 .mainline_mut()
                 .expect("reorder_async_work should only be performed on mainline nodes");
-            self.prepare_reorder_async_work(mainline, &snapshot_reborrow.widget, build_scheduler)
+            self.prepare_reorder_async_work(mainline, &snapshot_reborrow.widget, lane_scheduler)
         };
 
         if let Some(reorder) = try_reorder_result {
@@ -34,7 +34,7 @@ impl<E: FullElement> ElementNode<E> {
         self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
-        build_scheduler: &BuildScheduler,
+        lane_scheduler: &LaneScheduler,
     ) -> Option<ReorderAsync<E>> {
         let async_queue = &mut mainline.async_queue;
 
@@ -63,7 +63,7 @@ impl<E: FullElement> ElementNode<E> {
         if let Some(ref curr) = current {
             let curr_lane_pos = curr.work.context.lane_pos;
             cancel = Some(
-                Self::prepare_cancel_async_work(mainline, curr_lane_pos, build_scheduler)
+                Self::prepare_cancel_async_work(mainline, curr_lane_pos, lane_scheduler)
                     .ok()
                     .expect("Impossible to fail"),
             );
@@ -132,12 +132,12 @@ impl<E: FullElement> ElementNode<E> {
 pub(crate) mod reorder_work_private {
     use super::*;
     pub trait AnyElementNodeReorderAsyncWorkExt {
-        fn reorder_async_work(self: Arc<Self>, build_scheduler: &BuildScheduler);
+        fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler);
     }
 
     impl<E: FullElement> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
-        fn reorder_async_work(self: Arc<Self>, build_scheduler: &BuildScheduler) {
-            ElementNode::reorder_async_work(&self, build_scheduler)
+        fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler) {
+            ElementNode::reorder_async_work(&self, lane_scheduler)
         }
     }
 }

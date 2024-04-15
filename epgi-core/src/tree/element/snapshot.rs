@@ -170,7 +170,7 @@ impl<E: Element, H> MainlineState<E, H> {
 //     }
 // }
 
-pub struct BuildResults<E: ElementBase> {
+pub(crate) struct BuildResults<E: ElementBase> {
     hooks: HooksWithEffects,
     element: E,
     nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,

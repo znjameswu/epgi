@@ -136,15 +136,15 @@ impl BoxSingleChildElement for RawGestureDetectorElement {
     type ArcWidget = Asc<RawGestureDetector>;
 
     fn get_child_widget(
-        element: Option<&mut Self>,
+        _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        _ctx: BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
-    fn create_element(widget: &Self::ArcWidget) -> Self {
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self
     }
 }
@@ -207,53 +207,6 @@ impl ProxyRender for RenderRawGestureDetector {
         RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE.as_slice()
     }
 }
-
-// impl ProxyWidget for RawGestureDetector {
-//     type Protocol = BoxProtocol;
-
-//     type RenderState = RawGestureDetectorState;
-
-//     fn child(&self) -> &ArcChildWidget<Self::Protocol> {
-//         &self.child
-//     }
-
-//     fn create_render_state(&self) -> Self::RenderState {
-//         RawGestureDetectorState {
-//             recognizers: self
-//                 .recognizer_factories
-//                 .iter()
-//                 .map(|factory| (factory.type_id, (factory.create)()))
-//                 .collect(),
-//         }
-//     }
-
-//     fn update_render_state(&self, render_state: &mut Self::RenderState) -> RenderAction {
-//         let new_recognizers = self
-//             .recognizer_factories
-//             .iter()
-//             .map(|factory| {
-//                 if let Some(recognizer) = render_state.recognizers.remove(&factory.type_id) {
-//                     (factory.update)(recognizer.as_ref());
-//                     (factory.type_id, recognizer)
-//                 } else {
-//                     (factory.type_id, (factory.create)())
-//                 }
-//             })
-//             .collect();
-//         let old_recognizers = std::mem::replace(&mut render_state.recognizers, new_recognizers);
-//         old_recognizers
-//             .values()
-//             .for_each(|recognizer| recognizer.on_detach());
-//         RenderAction::None
-//     }
-
-//     fn detach_render_state(render_state: &mut Self::RenderState) {
-//         render_state
-//             .recognizers
-//             .values()
-//             .for_each(|recognizer| recognizer.on_detach());
-//     }
-// }
 
 hit_test_interface_query_table!(
     RAW_GESTURE_DETECTOR_HIT_TEST_INTERFACE_TABLE,

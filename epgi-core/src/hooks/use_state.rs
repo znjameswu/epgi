@@ -77,17 +77,3 @@ where
         return true;
     }
 }
-
-// #[derive(Clone)]
-// pub struct StateHook<T> {
-//     pub val: T,
-// }
-
-// impl<T> HookState for StateHook<T>
-// where
-//     T: State,
-// {
-//     fn clone_box(&self) -> Box<dyn HookState> {
-//         Box::new(self.clone())
-//     }
-// }
