@@ -15,13 +15,17 @@ use epgi_core::{
     },
 };
 use hashbrown::HashMap;
+use typed_builder::TypedBuilder;
 
 use crate::{
     ArcCallback, GestureRecognizer, GestureRecognizerTeamPolicy, PointerEvent, PointerEventHandler,
     TapGestureRecognizer,
 };
 
+#[derive(TypedBuilder)]
+#[builder(build_method(into=Asc<GestureDetector>))]
 pub struct GestureDetector {
+    #[builder(default, setter(transform=|op: impl Fn() + Send + Sync + 'static| Some(Asc::new(op) as _)))]
     pub on_tap: Option<ArcCallback>,
     pub child: ArcChildWidget<BoxProtocol>,
 }

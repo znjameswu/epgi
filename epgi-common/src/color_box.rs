@@ -8,7 +8,10 @@ use epgi_core::{
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
 };
+use typed_builder::TypedBuilder;
 
+#[derive(TypedBuilder)]
+#[builder(build_method(into=Asc<ColorBox>))]
 #[derive(Debug)]
 pub struct ColorBox {
     pub color: Color,

@@ -17,3 +17,4 @@ smallvec = { version = "1.10", features = [
   "const_generics",
   "const_new",
 ] }
+typed-builder = { workspace = true }

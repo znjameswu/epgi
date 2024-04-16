@@ -6,11 +6,14 @@ use epgi_core::{
     template::{ImplByTemplate, LeafElement, LeafElementTemplate, LeafRender, LeafRenderTemplate},
     tree::{ElementBase, Widget},
 };
+use typed_builder::TypedBuilder;
 
 lazy_static! {
     static ref ARC_PHANTOM_BOX: Asc<PhantomBox> = Asc::new(PhantomBox {});
 }
 
+#[derive(TypedBuilder)]
+#[builder(build_method(into=Asc<PhantomBox>))]
 #[derive(Clone, Copy, Debug)]
 pub struct PhantomBox {}
 

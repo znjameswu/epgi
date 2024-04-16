@@ -9,7 +9,10 @@ use epgi_core::{
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
+use typed_builder::TypedBuilder;
 
+#[derive(TypedBuilder)]
+#[builder(build_method(into=Asc<ConstrainedBox>))]
 #[derive(Debug)]
 pub struct ConstrainedBox {
     pub constraints: BoxConstraints,
