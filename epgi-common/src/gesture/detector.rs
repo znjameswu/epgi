@@ -23,31 +23,13 @@ use crate::{
     TapGestureRecognizer,
 };
 
-// #[derive(Declarative)]
-#[derive(TypedBuilder)]
+#[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<GestureDetector>))]
 pub struct GestureDetector {
     #[builder(default, setter(transform=|op: impl Fn() + Send + Sync + 'static| Some(Asc::new(op) as _)))]
     pub on_tap: Option<ArcCallback>,
     pub child: ArcChildWidget<BoxProtocol>,
 }
-
-#[macro_export]
-        macro_rules! GestureDetector {
-            ($($key:ident $(= $value:expr)? ), * $(,)?) => {
-                {
-                    let builder = GestureDetector::builder();
-                    $(GestureDetector!(@setter_helper builder $key $($value)?);)*
-                    builder.build()
-                }
-            };
-            (@setter_helper $builder:ident $key:ident $value:expr) => {
-                let $builder = $builder.$key($value);
-            };
-            (@setter_helper $builder:ident $key:ident) => {
-                let $builder = $builder.$key($key);
-            };
-        }
 
 impl std::fmt::Debug for GestureDetector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
