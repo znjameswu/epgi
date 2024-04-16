@@ -8,6 +8,20 @@ pub(crate) struct SyncBuildContext<'a> {
     pub(super) element_context: &'a ArcElementContextNode,
 }
 
+impl<'a> SyncBuildContext<'a> {
+    pub(crate) fn use_hook<T: Hook>(
+        &mut self,
+        hook: T,
+    ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
+        let (hook_state, index) = self.hooks.use_hook(hook);
+        (hook_state, index, self.element_context)
+    }
+
+    pub(crate) fn element_context_ref(&self) -> &ArcElementContextNode {
+        self.element_context
+    }
+}
+
 pub(super) struct SyncHookContext {
     pub(crate) hooks: HooksWithTearDowns,
     pub(crate) index: usize,
@@ -96,15 +110,5 @@ impl SyncHookContext {
         } else {
             panic!("Hook reads should not be out of bound")
         }
-    }
-}
-
-impl<'a> SyncBuildContext<'a> {
-    pub(crate) fn use_hook<T: Hook>(
-        &mut self,
-        hook: T,
-    ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
-        let (hook_state, index) = self.hooks.use_hook(hook);
-        (hook_state, index, self.element_context)
     }
 }

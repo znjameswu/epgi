@@ -8,7 +8,9 @@ use crate::{
     tree::{AsyncInflating, HooksWithTearDowns},
 };
 
-use super::{ArcChildElementNode, AsyncWorkQueue, AweakAnyElementNode, Element, ImplElementNode};
+use super::{
+    ArcChildElementNode, AsyncWorkQueue, AweakElementContextNode, Element, ImplElementNode,
+};
 
 pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
@@ -173,32 +175,40 @@ impl<E: Element, H> MainlineState<E, H> {
 
 #[derive(Clone)]
 pub(crate) struct SuspendWaker {
-    inner: std::sync::Arc<SuspendWakerInner>,
+    pub(crate) inner: std::sync::Arc<SuspendWakerInner>,
 }
 
 impl SuspendWaker {
+    pub(crate) fn new_sync(node: AweakElementContextNode) -> Self {
+        Self {
+            inner: Asc::new(SuspendWakerInner {
+                aborted: AtomicBool::new(false),
+                node,
+                async_batch: None,
+            }),
+        }
+    }
+
+    pub(crate) fn new_async(
+        node: AweakElementContextNode,
+        lane_pos: LanePos,
+        batch_id: BatchId,
+    ) -> Self {
+        Self {
+            inner: Asc::new(SuspendWakerInner {
+                aborted: AtomicBool::new(false),
+                node,
+                async_batch: Some((lane_pos, batch_id)),
+            }),
+        }
+    }
+
+    pub(crate) fn into_waker(self) -> std::task::Waker {
+        futures::task::waker(self.inner)
+    }
+
     pub(crate) fn abort(&self) {
         self.inner.aborted.store(true, Relaxed);
-    }
-
-    fn new_sync(node: AweakAnyElementNode) -> Self {
-        Self {
-            inner: Asc::new(SuspendWakerInner {
-                aborted: AtomicBool::new(false),
-                node,
-                is_async_suspense: None,
-            }),
-        }
-    }
-
-    fn new_async(node: AweakAnyElementNode, lane_pos: LanePos, batch_id: BatchId) -> Self {
-        Self {
-            inner: Asc::new(SuspendWakerInner {
-                aborted: AtomicBool::new(false),
-                node,
-                is_async_suspense: Some((lane_pos, batch_id)),
-            }),
-        }
     }
 }
 
@@ -211,7 +221,7 @@ impl ArcWake for SuspendWakerInner {
 struct SuspendWakerInner {
     aborted: AtomicBool,
     // poll_permit: AtomicBool, // This has no use.
-    node: AweakAnyElementNode,
+    node: AweakElementContextNode,
     // lane: LanePos,
-    is_async_suspense: Option<(LanePos, BatchId)>,
+    async_batch: Option<(LanePos, BatchId)>,
 }

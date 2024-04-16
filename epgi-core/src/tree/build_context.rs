@@ -1,4 +1,7 @@
-use crate::sync::SyncBuildContext;
+use crate::{
+    scheduler::{BatchId, LanePos},
+    sync::SyncBuildContext,
+};
 
 use super::{ArcElementContextNode, Hook, HookIndex};
 
@@ -39,6 +42,18 @@ impl<'a> BuildContext<'a> {
     ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
         match &mut self.0 {
             _BuildContext::Sync(ctx) => ctx.use_hook(hook),
+        }
+    }
+
+    pub(crate) fn async_batch(&self) -> Option<(LanePos, BatchId)> {
+        match &self.0 {
+            _BuildContext::Sync(_) => None,
+        }
+    }
+
+    pub(crate) fn element_context_ref(&self) -> &ArcElementContextNode {
+        match &self.0 {
+            _BuildContext::Sync(context) => context.element_context_ref(),
         }
     }
 }

@@ -6,16 +6,24 @@ use crate::{
 use super::State;
 
 impl<'a> BuildContext<'a> {
-    pub fn use_memo<D: DependencyKey, T: State>(
+    pub fn use_memo_ref<D: DependencyKey, T: State>(
         &mut self,
         compute: impl FnOnce(D) -> T,
         dependencies: D,
     ) -> &T {
-        let (val_ref, _index, _element_context) = self.use_hook(MemoHook {
+        let (hook_state, _index, _element_context) = self.use_hook(MemoHook {
             dependencies,
             compute,
         });
-        &val_ref.memoized
+        &hook_state.memoized
+    }
+
+    pub fn use_memo<D: DependencyKey, T: State>(
+        &mut self,
+        compute: impl FnOnce(D) -> T,
+        dependencies: D,
+    ) -> T {
+        self.use_memo_ref(compute, dependencies).clone()
     }
 }
 
@@ -25,7 +33,7 @@ macro_rules! impl_use_memo {
             &mut self,
             compute: impl FnOnce($($input_type),*) -> T,
             $($input: $input_type),*
-        ) -> &T {
+        ) -> T {
             self.use_memo(|($($input),*)| compute($($input),*), ($($input),*))
         }
     };

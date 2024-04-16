@@ -122,6 +122,7 @@ where
             .insert_layout_results(initial_layout)
             .paint_offset
             .insert(initial_offset);
+
         scheduler_handle
             .push_layer_render_objects_needing_paint(Arc::downgrade(&root_render_object));
         Self {
