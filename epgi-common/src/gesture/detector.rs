@@ -14,6 +14,7 @@ use epgi_core::{
         Widget,
     },
 };
+use epgi_macro::Declarative;
 use hashbrown::HashMap;
 use typed_builder::TypedBuilder;
 
@@ -22,6 +23,7 @@ use crate::{
     TapGestureRecognizer,
 };
 
+// #[derive(Declarative)]
 #[derive(TypedBuilder)]
 #[builder(build_method(into=Asc<GestureDetector>))]
 pub struct GestureDetector {
@@ -29,6 +31,23 @@ pub struct GestureDetector {
     pub on_tap: Option<ArcCallback>,
     pub child: ArcChildWidget<BoxProtocol>,
 }
+
+#[macro_export]
+        macro_rules! GestureDetector {
+            ($($key:ident $(= $value:expr)? ), * $(,)?) => {
+                {
+                    let builder = GestureDetector::builder();
+                    $(GestureDetector!(@setter_helper builder $key $($value)?);)*
+                    builder.build()
+                }
+            };
+            (@setter_helper $builder:ident $key:ident $value:expr) => {
+                let $builder = $builder.$key($value);
+            };
+            (@setter_helper $builder:ident $key:ident) => {
+                let $builder = $builder.$key($key);
+            };
+        }
 
 impl std::fmt::Debug for GestureDetector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

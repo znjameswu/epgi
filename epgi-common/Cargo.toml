@@ -18,3 +18,4 @@ smallvec = { version = "1.10", features = [
   "const_new",
 ] }
 typed-builder = { workspace = true }
+epgi-macro = { workspace = true }

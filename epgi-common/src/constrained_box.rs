@@ -9,8 +9,10 @@ use epgi_core::{
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
+use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
+#[derive(Declarative)]
 #[derive(TypedBuilder)]
 #[builder(build_method(into=Asc<ConstrainedBox>))]
 #[derive(Debug)]

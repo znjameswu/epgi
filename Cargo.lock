@@ -961,6 +961,7 @@ dependencies = [
  "bitflags 2.4.2",
  "epgi-2d",
  "epgi-core",
+ "epgi-macro",
  "glazier",
  "hashbrown",
  "lazy_static",
@@ -985,6 +986,17 @@ dependencies = [
  "rayon",
  "replace_with",
  "smallvec",
+]
+
+[[package]]
+name = "epgi-macro"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "paste",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]

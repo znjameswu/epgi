@@ -8,8 +8,10 @@ use epgi_core::{
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
 };
+use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
+#[derive(Declarative)]
 #[derive(TypedBuilder)]
 #[builder(build_method(into=Asc<ColorBox>))]
 #[derive(Debug)]

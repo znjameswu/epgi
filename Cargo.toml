@@ -8,6 +8,7 @@ members = [
     "epgi-winit",
     # We have to manually expand each sub-item to exclude defunt glazier example https://github.com/rust-lang/cargo/issues/6745
     "examples/winit-simple",
+    "epgi-macro",
 ]
 resolver = "2"
 
@@ -37,6 +38,10 @@ path = "./epgi-common"
 [workspace.dependencies.epgi-winit]
 package = "epgi-winit"
 path = "./epgi-winit"
+
+[workspace.dependencies.epgi-macro]
+package = "epgi-macro"
+path = "./epgi-macro"
 
 
 [workspace.dependencies]
