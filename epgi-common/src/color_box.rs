@@ -9,7 +9,7 @@ use epgi_core::{
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
 };
 
-#[derive(Debug, optargs::OptStructArc)]
+#[derive(Debug)]
 pub struct ColorBox {
     pub color: Color,
     pub child: ArcChildWidget<BoxProtocol>,
