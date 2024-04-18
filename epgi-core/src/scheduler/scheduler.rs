@@ -1,4 +1,7 @@
-use std::{any::Any, sync::Arc};
+use std::{
+    any::Any,
+    sync::{atomic::Ordering::*, Arc},
+};
 
 use hashbrown::HashSet;
 
@@ -6,9 +9,9 @@ use crate::{
     foundation::{Asc, Protocol, PtrEq, SyncMpscSender, SyncRwLock},
     sync::{CommitBarrier, LaneScheduler, SubtreeRenderObjectChange},
     tree::{
-        ArcAnyElementNode, ArcAnyLayerRenderObject, AweakAnyElementNode, AweakAnyLayerRenderObject,
-        AweakElementContextNode, LayoutResults, Render, RenderElement, RenderObject, Widget,
-        WorkContext, WorkHandle,
+        ArcAnyElementNode, ArcAnyLayerRenderObject, AsyncSuspendWaker, AweakAnyElementNode,
+        AweakAnyLayerRenderObject, AweakElementContextNode, LayoutResults, Render, RenderElement,
+        RenderObject, Widget, WorkContext, WorkHandle,
     },
 };
 
@@ -19,6 +22,9 @@ pub(super) enum SchedulerTask {
     NewFrame {
         frame_id: u64,
         requesters: Vec<SyncMpscSender<FrameResults>>,
+    },
+    SuspendReady {
+        waker: std::sync::Arc<AsyncSuspendWaker>,
     },
     ReorderAsyncWork {
         node: AweakAnyElementNode,
@@ -153,13 +159,25 @@ where
                     // for commited_async_batch in commited_async_batches {
                     //     self.job_batcher.remove_commited_batch(&commited_async_batch)
                     // }
-                    let new_jobs = {
+                    let (new_jobs, point_rebuilds) = {
                         let _guard = handle.global_sync_job_build_lock.write();
                         handle.job_id_counter.increment_frame();
-                        std::mem::take(&mut *handle.accumulated_jobs.lock())
+                        (
+                            std::mem::take(&mut *handle.accumulated_jobs.lock()),
+                            std::mem::take(&mut *handle.accumulated_point_rebuilds.lock()),
+                        )
                     };
-                    self.job_batcher.update_with_new_jobs(new_jobs);
-                    let updates = self.job_batcher.get_batch_updates();
+                    let updates = self.job_batcher.update_with_new_jobs(
+                        new_jobs,
+                        point_rebuilds.into_iter().filter_map(|point_rebuild| {
+                            // We can perform the relaxed load here, because the other only setter is the commit phase and now we hold the sync lock
+                            if !point_rebuild.aborted.load(Relaxed) {
+                                Some(point_rebuild.node.clone())
+                            } else {
+                                None
+                            }
+                        }),
+                    );
                     build_states.apply_batcher_result(updates);
                     // lane_scheduler.dispatch_async_batches();
                     self.extension.on_frame_begin(&build_states);
@@ -200,6 +218,7 @@ where
                     paint_started.wait();
                     drop(read_guard);
                 }
+                SuspendReady { waker } => {}
                 ReorderAsyncWork { node } => {
                     let build_states = self.build_states.clone();
                     handle.sync_threadpool.spawn(move || {

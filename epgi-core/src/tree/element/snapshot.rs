@@ -1,16 +1,9 @@
-use std::sync::atomic::{AtomicBool, Ordering::*};
-
-use futures::task::ArcWake;
-
 use crate::{
-    foundation::{Asc, Container, ContainerOf},
-    scheduler::{BatchId, LanePos},
+    foundation::{Container, ContainerOf},
     tree::{AsyncInflating, HooksWithTearDowns},
 };
 
-use super::{
-    ArcChildElementNode, AsyncWorkQueue, AweakElementContextNode, Element, ImplElementNode,
-};
+use super::{ArcChildElementNode, AsyncWorkQueue, Element, ImplElementNode, SuspendWaker};
 
 pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
@@ -162,66 +155,4 @@ impl<E: Element, H> MainlineState<E, H> {
             | MainlineState::RebuildSuspended { waker, .. } => Some(waker),
         }
     }
-}
-
-// impl<E:Element> MainlineState<E, HooksWithTearDowns> {
-//     fn read(&self) -> MainlineState<E, HooksWithEffects> {
-
-//     }
-// }
-
-// struct BuildSuspendHandle {
-// }
-
-#[derive(Clone)]
-pub(crate) struct SuspendWaker {
-    pub(crate) inner: std::sync::Arc<SuspendWakerInner>,
-}
-
-impl SuspendWaker {
-    pub(crate) fn new_sync(node: AweakElementContextNode) -> Self {
-        Self {
-            inner: Asc::new(SuspendWakerInner {
-                aborted: AtomicBool::new(false),
-                node,
-                async_batch: None,
-            }),
-        }
-    }
-
-    pub(crate) fn new_async(
-        node: AweakElementContextNode,
-        lane_pos: LanePos,
-        batch_id: BatchId,
-    ) -> Self {
-        Self {
-            inner: Asc::new(SuspendWakerInner {
-                aborted: AtomicBool::new(false),
-                node,
-                async_batch: Some((lane_pos, batch_id)),
-            }),
-        }
-    }
-
-    pub(crate) fn into_waker(self) -> std::task::Waker {
-        futures::task::waker(self.inner)
-    }
-
-    pub(crate) fn abort(&self) {
-        self.inner.aborted.store(true, Relaxed);
-    }
-}
-
-impl ArcWake for SuspendWakerInner {
-    fn wake_by_ref(arc_self: &std::sync::Arc<Self>) {
-        todo!()
-    }
-}
-
-struct SuspendWakerInner {
-    aborted: AtomicBool,
-    // poll_permit: AtomicBool, // This has no use.
-    node: AweakElementContextNode,
-    // lane: LanePos,
-    async_batch: Option<(LanePos, BatchId)>,
 }

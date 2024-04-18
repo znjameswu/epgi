@@ -16,7 +16,7 @@ use crate::{
     sync::CommitBarrier,
     tree::{
         AweakAnyElementNode, AweakAnyLayerRenderObject, AweakAnyRenderObject,
-        AweakElementContextNode, WorkContext, WorkHandle,
+        AweakElementContextNode, SuspendWaker, SyncSuspendWaker, WorkContext, WorkHandle,
     },
 };
 
@@ -54,6 +54,7 @@ pub struct SchedulerHandle {
     nodes_needing_layout: MpscQueue<AweakAnyRenderObject>,
 
     pub(super) accumulated_jobs: SyncMutex<Vec<JobBuilder>>,
+    pub(super) accumulated_point_rebuilds: SyncMutex<Vec<std::sync::Arc<SyncSuspendWaker>>>,
     // pub(super) boundaries_needing_relayout: SyncMutex<HashSet<PtrEq<AweakAnyRenderObject>>>,
     pub(super) layer_needing_repaint: SyncMutex<HashSet<PtrEq<AweakAnyLayerRenderObject>>>,
 }
@@ -70,6 +71,7 @@ impl SchedulerHandle {
             nodes_needing_paint: Default::default(),
             nodes_needing_layout: Default::default(),
             accumulated_jobs: Default::default(),
+            accumulated_point_rebuilds: Default::default(),
             // boundaries_needing_relayout: Default::default(),
             layer_needing_repaint: Default::default(),
         }
@@ -104,6 +106,10 @@ impl SchedulerHandle {
                 .lock()
                 .push(job_builder);
         }
+    }
+
+    pub(crate) fn push_point_rebuild(&self, waker: std::sync::Arc<SyncSuspendWaker>) {
+        self.accumulated_point_rebuilds.lock().push(waker);
     }
 
     pub fn request_new_frame(&self) -> SyncMpscReceiver<FrameResults> {

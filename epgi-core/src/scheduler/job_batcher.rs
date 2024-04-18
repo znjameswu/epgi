@@ -4,7 +4,7 @@ use hashbrown::{HashMap, HashSet};
 use smallvec::smallvec;
 
 use crate::{
-    foundation::{Asc, Inlinable64Vec, InlinableUsizeVec, MpscQueue, SyncMutex},
+    foundation::{Asc, Inlinable64Vec, InlinableUsizeVec, MpscQueue, PtrEq, SyncMutex},
     tree::AweakElementContextNode,
 };
 
@@ -77,7 +77,11 @@ impl JobBatcher {
         }
     }
 
-    pub(super) fn update_with_new_jobs(&mut self, job_builders: Vec<JobBuilder>) {
+    pub(super) fn update_with_new_jobs(
+        &mut self,
+        job_builders: impl IntoIterator<Item = JobBuilder>,
+        point_rebuilds: impl IntoIterator<Item = AweakElementContextNode>,
+    ) -> BatchResult {
         #[cfg(debug_assertions)]
         self.debug_validate_state_integrity();
 
@@ -111,6 +115,7 @@ impl JobBatcher {
                 }
             }
         }
+        self.get_batch_updates(point_rebuilds)
     }
     pub(crate) fn remove_commited_batch(&mut self, commited_batch: &BatchId) {
         let commited_batch_confs = self
@@ -135,7 +140,10 @@ impl JobBatcher {
         }
     }
 
-    pub(super) fn get_batch_updates(&mut self) -> BatchResult {
+    pub(super) fn get_batch_updates(
+        &mut self,
+        point_rebuilds: impl IntoIterator<Item = AweakElementContextNode>,
+    ) -> BatchResult {
         #[cfg(debug_assertions)]
         self.debug_validate_state_integrity();
         // #[cfg(debug_assertions)]
@@ -249,13 +257,17 @@ impl JobBatcher {
             })
             .collect::<Inlinable64Vec<_>>();
         let new_sync_batch = if let Some(sync_job_priority) = sync_job_priority {
-            let sync_batch = Asc::new(bfs_visit(
+            let mut sync_batch = bfs_visit(
                 sync_job_ids,
                 &mut self.job_datas,
                 sync_batch_id,
                 sync_job_priority,
                 JobData::is_sync,
-            ));
+            );
+            sync_batch
+                .roots
+                .extend(point_rebuilds.into_iter().map(PtrEq));
+            let sync_batch = Asc::new(sync_batch);
             debug_assert!(sync_batch.is_sync());
             self.batches.insert(sync_batch_id, sync_batch.clone());
             Some(sync_batch)

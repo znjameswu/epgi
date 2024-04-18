@@ -19,6 +19,9 @@ pub(crate) use provider::*;
 mod snapshot;
 pub(crate) use snapshot::*;
 
+mod waker;
+pub(crate) use waker::*;
+
 use crate::foundation::{
     Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
     Provide, PtrEq, TypeKey,
