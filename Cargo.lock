@@ -977,6 +977,7 @@ dependencies = [
  "crossbeam",
  "derivative",
  "either",
+ "epgi-macro",
  "event-listener 2.5.3",
  "futures",
  "hashbrown",
@@ -986,6 +987,7 @@ dependencies = [
  "rayon",
  "replace_with",
  "smallvec",
+ "typed-builder",
 ]
 
 [[package]]

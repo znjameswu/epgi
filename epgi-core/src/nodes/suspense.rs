@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
 use either::Either;
+use epgi_macro::Declarative;
+use typed_builder::TypedBuilder;
 
 use crate::{
     foundation::{
@@ -14,10 +16,13 @@ use crate::{
     },
 };
 
+#[derive(Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<Suspense<P>>))]
 #[derive(Debug)]
 pub struct Suspense<P: Protocol> {
     pub child: ArcChildWidget<P>,
     pub fallback: ArcChildWidget<P>,
+    #[builder(default, setter(transform=|key: impl Key| Some(Box::new(key) as _)))]
     pub key: Option<Box<dyn Key>>,
 }
 

@@ -1,5 +1,8 @@
 use std::{any::TypeId, marker::PhantomData};
 
+use epgi_macro::Declarative;
+use typed_builder::TypedBuilder;
+
 use crate::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Protocol, Provide},
     template::{ImplByTemplate, SingleChildElement, SingleChildElementTemplate},
@@ -60,9 +63,11 @@ impl<P: Protocol> SingleChildElement for ComponentElement<P> {
     }
 }
 
-pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol>(
-    pub F,
-);
+#[derive(Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<Function<F, P>>))]
+pub struct Function<F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol> {
+    pub builder: F,
+}
 
 impl<F, P> std::fmt::Debug for Function<F, P>
 where
@@ -94,6 +99,6 @@ where
     F: Fn(BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
 {
     fn build(&self, ctx: BuildContext<'_>) -> ArcChildWidget<P> {
-        (self.0)(ctx)
+        (self.builder)(ctx)
     }
 }

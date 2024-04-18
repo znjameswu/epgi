@@ -1,5 +1,8 @@
 use std::marker::PhantomData;
 
+use epgi_macro::Declarative;
+use typed_builder::TypedBuilder;
+
 use crate::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
     template::{
@@ -8,6 +11,8 @@ use crate::{
     tree::{ArcChildWidget, BuildContext, Widget},
 };
 
+#[derive(Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<Provider<T, P>>))]
 pub struct Provider<T: Provide, P: Protocol> {
     pub init: Box<dyn Fn() -> Asc<T> + Send + Sync>,
     pub child: ArcChildWidget<P>,

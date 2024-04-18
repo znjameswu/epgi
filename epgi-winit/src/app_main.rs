@@ -322,19 +322,21 @@ fn bind_frame_info(
     let frame_binding = Arc::new(SyncMutex::<Option<SetState<FrameInfo>>>::new(None));
     let result = frame_binding.clone();
 
-    let child = Arc::new(Function(move |mut ctx| {
-        let frame_binding = frame_binding.clone();
-        let child = child.clone();
-        let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
-        ctx.use_effect_nodep(move || *frame_binding.lock() = Some(set_frame));
-        BoxProvider::value_inner(
-            frame.frame_count,
+    let child = Arc::new(Function {
+        builder: move |mut ctx| {
+            let frame_binding = frame_binding.clone();
+            let child = child.clone();
+            let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
+            ctx.use_effect_nodep(move || *frame_binding.lock() = Some(set_frame));
             BoxProvider::value_inner(
-                frame.system_time,
-                BoxProvider::value_inner(frame.instant, child),
-            ),
-        )
-    }));
+                frame.frame_count,
+                BoxProvider::value_inner(
+                    frame.system_time,
+                    BoxProvider::value_inner(frame.instant, child),
+                ),
+            )
+        },
+    });
     (child, result)
 }
 
@@ -348,15 +350,17 @@ fn bind_constraints(
     let constraints_binding = Arc::new(SyncMutex::<Option<SetState<BoxConstraints>>>::new(None));
     let result = constraints_binding.clone();
 
-    let child = Arc::new(Function(move |mut ctx| {
-        let constraints_binding = constraints_binding.clone();
-        let child = child.clone();
-        let (constraints, set_constraints) = ctx.use_state_default::<BoxConstraints>();
-        ctx.use_effect_nodep(move || *constraints_binding.lock() = Some(set_constraints));
-        Arc::new(ConstrainedBox {
-            constraints: constraints.clone(),
-            child,
-        })
-    }));
+    let child = Arc::new(Function {
+        builder: move |mut ctx| {
+            let constraints_binding = constraints_binding.clone();
+            let child = child.clone();
+            let (constraints, set_constraints) = ctx.use_state_default::<BoxConstraints>();
+            ctx.use_effect_nodep(move || *constraints_binding.lock() = Some(set_constraints));
+            Arc::new(ConstrainedBox {
+                constraints: constraints.clone(),
+                child,
+            })
+        },
+    });
     (child, result)
 }

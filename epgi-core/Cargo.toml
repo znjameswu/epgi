@@ -28,4 +28,5 @@ smallvec = { version = "1.13", features = [
   "const_new",
 ] }
 lazy_static = "1.4"
-# vello_encoding = { workspace = true }
+typed-builder = { workspace = true }
+epgi-macro = { workspace = true }
