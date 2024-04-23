@@ -7,6 +7,4 @@ pub use rebuild::*;
 mod inflate;
 pub use inflate::*;
 
-mod visit;
-
 mod provider;

@@ -32,15 +32,12 @@ where
         parent_handle: WorkHandle,
         barrier: CommitBarrier,
     ) {
-        todo!()
-        // let _ = self.element.rebuild_node_async(
-        //     Work {
-        //         widget: Some(self.widget),
-        //         context: work_context,
-        //     },
-        //     parent_handle,
-        //     barrier,
-        // );
+        let _ = self.element.reconcile_node_async(
+            Some(self.widget),
+            work_context,
+            parent_handle,
+            barrier,
+        );
     }
 
     fn rebuild_async_box(

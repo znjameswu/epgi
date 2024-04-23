@@ -6,7 +6,7 @@ use crate::{
     tree::{
         ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, ChildElementWidgetPair,
         ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
-        FullElement, Widget, WorkContext, WorkHandle,
+        ElementWidgetPair, FullElement, Widget, WorkContext, WorkHandle,
     },
 };
 
@@ -14,7 +14,7 @@ pub trait ChildWidgetAsyncInflateExt<PP: Protocol> {
     fn inflate_async(
         self: Arc<Self>,
         work_context: Asc<WorkContext>,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         barrier: CommitBarrier,
         handle: WorkHandle,
     ) -> Box<dyn ChildElementWidgetPair<PP>>;
@@ -27,23 +27,22 @@ where
     fn inflate_async(
         self: Arc<Self>,
         work_context: Asc<WorkContext>,
-        parent_context: ArcElementContextNode,
+        parent_context: Option<ArcElementContextNode>,
         barrier: CommitBarrier,
         handle: WorkHandle,
     ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as ElementBase>::ParentProtocol>>
     {
-        todo!()
-        // let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
-        //     self.clone().into_arc_widget(),
-        //     work_context,
-        //     parent_context,
-        //     handle,
-        //     barrier,
-        // );
-        // return Box::new(ElementWidgetPair {
-        //     widget: self.into_arc_widget(),
-        //     element: node,
-        // });
+        let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
+            self.clone().into_arc_widget(),
+            work_context,
+            parent_context,
+            handle,
+            barrier,
+        );
+        return Box::new(ElementWidgetPair {
+            widget: self.into_arc_widget(),
+            element: node,
+        });
     }
 }
 
