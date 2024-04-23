@@ -1,8 +1,10 @@
 use crate::{
-    foundation::{Arc, Asc, InlinableDwsizeVec, Protocol, Provide},
+    foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Protocol, Provide},
+    r#async::{AsyncBuildContext, AsyncHookContext},
     sync::CommitBarrier,
     tree::{
-        ElementNode, ElementWidgetPair, FullElement, HooksWithEffects, WorkContext, WorkHandle,
+        ArcChildElementNode, AsyncOutput, BuildResults, BuildSuspendResults, ElementNode,
+        ElementReconcileItem, ElementWidgetPair, FullElement, WorkContext, WorkHandle,
     },
 };
 
@@ -54,66 +56,67 @@ impl<E: FullElement> ElementNode<E> {
     pub(super) fn perform_rebuild_node_async(
         self: &Arc<Self>,
         widget: &E::ArcWidget,
-        work_context: Asc<WorkContext>,
-        mut hooks: HooksWithEffects,
-        element: E,
+        mut element: E,
+        mut hook_context: AsyncHookContext,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+        work_context: Asc<WorkContext>,
         handle: &WorkHandle,
         barrier: CommitBarrier,
     ) {
-        let lane_pos = work_context.lane_pos;
+        let mut nodes_needing_unmount = Default::default();
+        let results = E::perform_rebuild_element(
+            &mut element,
+            &widget,
+            AsyncBuildContext {
+                hooks: &mut hook_context,
+                element_context: &self.context,
+            }
+            .into(),
+            provider_values,
+            children,
+            &mut nodes_needing_unmount,
+        );
 
-        let mut jobs = {
-            self.context
-                .mailbox
-                .lock()
-                .iter()
-                .filter_map(|(job_id, update)| {
-                    work_context
-                        .job_ids()
-                        .contains(job_id)
-                        .then_some((*job_id, update.clone()))
-                })
-                .collect::<Vec<_>>()
+        let output = match results {
+            Ok((items, shuffle)) => {
+                let (new_children, pair) = items.unzip_collect(|item| {
+                    use ElementReconcileItem::*;
+                    match item {
+                        Keep(node) => (node, todo!()),
+                        Update(pair) => {
+                            pair.rebuild_async_box(todo!(), todo!(), todo!());
+                            (pair.element(), pair)
+                        }
+                        Inflate(widget) => {
+                            let pair = widget.inflate_async(
+                                todo!(),
+                                Some(self.context.clone()),
+                                todo!(),
+                                todo!(),
+                            );
+                            (pair.element(), pair)
+                        }
+                    }
+                });
+
+                AsyncOutput::Completed {
+                    children: new_children,
+                    results: BuildResults::from_pieces(
+                        hook_context,
+                        element,
+                        nodes_needing_unmount,
+                        shuffle,
+                    ),
+                }
+            }
+            Err((children, err)) => AsyncOutput::Suspended {
+                suspend: Some(BuildSuspendResults::new(hook_context)),
+                barrier: todo!(),
+            },
         };
-        jobs.sort_by_key(|(job_id, ..)| *job_id);
 
-        let updates = jobs
-            .into_iter()
-            .flat_map(|(_, updates)| updates)
-            .collect::<Vec<_>>();
-
-        // let mut hooks = state.hooks;
-
-        for update in updates {
-            todo!()
-        }
-
-        // let mut hooks_iter = HookContext::new_rebuild(hooks);
-        // let mut child_tasks = Default::default();
-        // let mut nodes_needing_unmount = Default::default();
-        // let reconciler = AsyncReconciler {
-        //     host_handle: handle,
-        //     work_context,
-        //     child_tasks: &mut child_tasks,
-        //     barrier,
-        //     host_context: &self.context,
-        //     hooks: &mut hooks_iter,
-        //     nodes_needing_unmount: &mut nodes_needing_unmount,
-        // };
-        // let results = element.perform_rebuild_element(widget, provider_values, reconciler);
-        // let new_stash = match results {
-        //     Ok(element) => AsyncOutput::Completed {
-        //         children: element.children(),
-        //         results: BuildResults::from_pieces(hooks_iter, element, nodes_needing_unmount),
-        //     },
-        //     Err(err) => AsyncOutput::Suspended {
-        //         suspend: Some(BuildSuspendResults::new(hooks_iter)),
-        //         barrier: None,
-        //     },
-        // };
-
-        // self.write_back_build_results::<false>(new_stash, lane_pos, handle, todo!());
+        self.write_back_build_results::<false>(output, work_context.lane_pos, handle, todo!());
         todo!("Child Tasks");
     }
 }

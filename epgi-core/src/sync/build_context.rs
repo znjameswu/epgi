@@ -23,9 +23,9 @@ impl<'a> SyncBuildContext<'a> {
 }
 
 pub(super) struct SyncHookContext {
-    pub(crate) hooks: HooksWithTearDowns,
-    pub(crate) index: usize,
-    pub(crate) mode: WorkMode,
+    hooks: HooksWithTearDowns,
+    index: usize,
+    mode: WorkMode,
 }
 
 impl SyncHookContext {
@@ -54,8 +54,15 @@ impl SyncHookContext {
         }
     }
 
-    fn has_finished(&mut self) -> bool {
+    fn has_finished(&self) -> bool {
         self.index == self.hooks.array_hooks.len()
+    }
+
+    pub(crate) fn take_hooks(self, suspended: bool) -> HooksWithTearDowns {
+        if !suspended {
+            debug_assert!(self.has_finished());
+        }
+        self.hooks
     }
 
     fn use_hook<T: Hook>(&mut self, hook: T) -> (&mut T::HookState, HookIndex) {

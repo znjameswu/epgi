@@ -125,7 +125,7 @@ impl<E: FullElement> ElementNode<E> {
                 (
                     MainlineState::Ready {
                         element,
-                        hooks: hook_context.hooks,
+                        hooks: hook_context.take_hooks(false),
                         children,
                         render_object,
                     },
@@ -140,7 +140,7 @@ impl<E: FullElement> ElementNode<E> {
 
                 (
                     MainlineState::RebuildSuspended {
-                        suspended_hooks: hook_context.hooks,
+                        suspended_hooks: hook_context.take_hooks(true),
                         element,
                         children,
                         waker: err.waker,

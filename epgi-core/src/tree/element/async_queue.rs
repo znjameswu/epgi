@@ -6,7 +6,7 @@ use crate::{
     tree::{ArcElementContextNode, ElementBase, HooksWithEffects, WorkContext, WorkHandle},
 };
 
-use super::ArcChildElementNode;
+use super::{ArcChildElementNode, ChildRenderObjectsUpdateCallback};
 
 pub(crate) struct AsyncWorkQueue<E: ElementBase> {
     pub(crate) inner: Option<Box<AsyncWorkQueueInner<E>>>,
@@ -282,7 +282,7 @@ pub(crate) struct BuildSuspendResults {
 }
 
 impl BuildSuspendResults {
-    pub fn new(hooks_iter: AsyncHookContext) -> Self {
+    pub fn new(hooks_context: AsyncHookContext) -> Self {
         todo!()
     }
 }
@@ -291,7 +291,7 @@ pub(crate) struct BuildResults<E: ElementBase> {
     hooks: HooksWithEffects,
     element: E,
     nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-    effects: Vec<u32>,
+    shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
     performed_inflate: bool,
 }
 
@@ -300,9 +300,10 @@ where
     E: ElementBase,
 {
     pub fn from_pieces(
-        hooks_iter: AsyncHookContext,
+        hooks_context: AsyncHookContext,
         element: E,
         nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+        shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
     ) -> Self {
         todo!()
     }

@@ -524,14 +524,7 @@ where
 #[inline(always)]
 pub(super) fn update_children<R: RenderBase>(
     children: &mut ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-    shuffle: Option<
-        Box<
-            dyn FnOnce(
-                ContainerOf<R::ChildContainer, ArcChildRenderObject<R::ChildProtocol>>,
-            )
-                -> ContainerOf<R::ChildContainer, RenderObjectSlots<R::ChildProtocol>>,
-        >,
-    >,
+    shuffle: Option<ChildRenderObjectsUpdateCallback<R::ChildContainer, R::ChildProtocol>>,
     render_object_changes: ContainerOf<
         R::ChildContainer,
         SubtreeRenderObjectChange<R::ChildProtocol>,

@@ -1,12 +1,14 @@
 use futures::stream::Aborted;
 
 use crate::{
-    foundation::{Arc, Asc, InlinableDwsizeVec, Provide},
-    scheduler::{get_current_scheduler, LanePos},
+    foundation::{Arc, Asc, ContainerOf, Inlinable64Vec, InlinableDwsizeVec, Provide},
+    r#async::AsyncHookContext,
+    scheduler::{get_current_scheduler, JobId, LanePos},
     sync::CommitBarrier,
     tree::{
-        no_widget_update, AsyncOutput, Element, ElementBase, ElementNode, FullElement,
-        HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
+        apply_hook_updates, no_widget_update, ArcChildElementNode, AsyncOutput, Element,
+        ElementBase, ElementContextNode, ElementNode, FullElement, HooksWithEffects, ImplProvide,
+        Mainline, WorkContext, WorkHandle,
     },
 };
 
@@ -60,7 +62,11 @@ pub(crate) struct AsyncReconcile<E: ElementBase> {
     pub(crate) barrier: CommitBarrier,
     pub(crate) old_widget: E::ArcWidget,
     pub(crate) provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    pub(crate) states: Option<(HooksWithEffects, E)>,
+    pub(crate) states: Option<(
+        E,
+        HooksWithEffects,
+        ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    )>,
 }
 
 enum PrepareAsyncReconcileResult<E: ElementBase> {
@@ -222,10 +228,16 @@ impl<E: FullElement> ElementNode<E> {
                         barrier,
                         states: None,
                     },
-                    Ready { hooks, element, .. }
-                    | RebuildSuspended {
-                        suspended_hooks: hooks,
+                    Ready {
                         element,
+                        hooks,
+                        children,
+                        ..
+                    }
+                    | RebuildSuspended {
+                        element,
+                        suspended_hooks: hooks,
+                        children,
                         ..
                     } => AsyncReconcile {
                         handle,
@@ -267,13 +279,15 @@ impl<E: FullElement> ElementNode<E> {
             states,
         } = rebuild;
 
-        if let Some((hooks, last_element)) = states {
+        if let Some((last_element, mut hooks, children)) = states {
+            apply_hook_updates(&self.context, work_context.job_ids(), &mut hooks);
             self.perform_rebuild_node_async(
                 widget.as_ref().unwrap_or(&old_widget),
-                work_context,
-                hooks,
                 last_element,
+                AsyncHookContext::new_rebuild(hooks),
+                children,
                 provider_values,
+                work_context,
                 &handle,
                 barrier,
             )
@@ -297,7 +311,7 @@ impl<E: FullElement> ElementNode<E> {
             .spawn(move || self.execute_reconcile_async(rebuild))
     }
 
-    fn write_back_build_results<const IS_NEW_INFLATE: bool>(
+    pub(super) fn write_back_build_results<const IS_NEW_INFLATE: bool>(
         self: &Arc<Self>,
         new_stash: AsyncOutput<E>,
         lane_pos: LanePos,

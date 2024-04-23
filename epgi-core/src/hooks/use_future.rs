@@ -101,7 +101,7 @@ where
     }
 }
 
-struct FutureHookState<D, Fut: Future<Output = T>, T: Clone> {
+struct FutureHookState<D, Fut: Future, T: Clone> {
     dependencies: D,
     maybe_done: MaybeDone<futures::future::Shared<Fut>, T>,
 }

@@ -119,7 +119,9 @@ where
 /// which will be handled by Suspense's specialized function pointers.
 #[allow(type_alias_bounds)]
 pub type ChildRenderObjectsUpdateCallback<C, CP> = Box<
-    dyn FnOnce(ContainerOf<C, ArcChildRenderObject<CP>>) -> ContainerOf<C, RenderObjectSlots<CP>>,
+    dyn FnOnce(ContainerOf<C, ArcChildRenderObject<CP>>) -> ContainerOf<C, RenderObjectSlots<CP>>
+        + Send
+        + Sync,
 >;
 
 pub enum RenderObjectSlots<P: Protocol> {

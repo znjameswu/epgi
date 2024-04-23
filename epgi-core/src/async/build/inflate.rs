@@ -20,7 +20,7 @@ pub trait ChildWidgetAsyncInflateExt<PP: Protocol> {
     ) -> Box<dyn ChildElementWidgetPair<PP>>;
 }
 
-impl<T> ChildWidgetAsyncInflateExt<<<T as Widget>::Element as ElementBase>::ParentProtocol> for T
+impl<T> ChildWidgetAsyncInflateExt<<T::Element as ElementBase>::ParentProtocol> for T
 where
     T: Widget,
 {
@@ -30,7 +30,7 @@ where
         parent_context: Option<ArcElementContextNode>,
         barrier: CommitBarrier,
         handle: WorkHandle,
-    ) -> Box<dyn ChildElementWidgetPair<<<T as Widget>::Element as ElementBase>::ParentProtocol>>
+    ) -> Box<dyn ChildElementWidgetPair<<T::Element as ElementBase>::ParentProtocol>>
     {
         let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
             self.clone().into_arc_widget(),

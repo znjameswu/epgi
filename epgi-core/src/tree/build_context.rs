@@ -1,4 +1,5 @@
 use crate::{
+    r#async::AsyncBuildContext,
     scheduler::{BatchId, LanePos},
     sync::SyncBuildContext,
 };
@@ -26,12 +27,18 @@ pub struct BuildContext<'a>(_BuildContext<'a>);
 
 enum _BuildContext<'a> {
     Sync(SyncBuildContext<'a>),
-    // Async(AsyncBuildContext)
+    Async(AsyncBuildContext<'a>),
 }
 
 impl<'a> From<SyncBuildContext<'a>> for BuildContext<'a> {
     fn from(value: SyncBuildContext<'a>) -> Self {
         Self(_BuildContext::Sync(value))
+    }
+}
+
+impl<'a> From<AsyncBuildContext<'a>> for BuildContext<'a> {
+    fn from(value: AsyncBuildContext<'a>) -> Self {
+        Self(_BuildContext::Async(value))
     }
 }
 
@@ -42,18 +49,21 @@ impl<'a> BuildContext<'a> {
     ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
         match &mut self.0 {
             _BuildContext::Sync(ctx) => ctx.use_hook(hook),
+            _BuildContext::Async(_) => todo!(),
         }
     }
 
     pub(crate) fn async_batch(&self) -> Option<(LanePos, BatchId)> {
         match &self.0 {
             _BuildContext::Sync(_) => None,
+            _BuildContext::Async(_) => todo!(),
         }
     }
 
     pub(crate) fn element_context_ref(&self) -> &ArcElementContextNode {
         match &self.0 {
             _BuildContext::Sync(context) => context.element_context_ref(),
+            _BuildContext::Async(ctx) => todo!(),
         }
     }
 }

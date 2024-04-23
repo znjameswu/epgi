@@ -3,8 +3,7 @@ use crate::{
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{LaneScheduler, SubtreeRenderObjectChange, SyncHookContext},
     tree::{
-        no_widget_update, ArcChildElementNode, Element, ElementContextNode, ElementNode,
-        FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
+        apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementContextNode, ElementNode, FullElement, HooksWithTearDowns, ImplElementNode, MainlineState
     },
 };
 
@@ -235,7 +234,7 @@ impl<E: FullElement> ElementNode<E> {
                 render_object,
             } => {
                 assert!(!is_poll, "A non-suspended node should not be polled");
-                apply_updates_sync(&self.context, job_ids, &mut hooks);
+                apply_hook_updates(&self.context, job_ids, &mut hooks);
                 self.perform_rebuild_node_sync(
                     new_widget,
                     element,
@@ -258,7 +257,7 @@ impl<E: FullElement> ElementNode<E> {
                 waker.set_completed();
                 // If it is not poll, then it means a new job occurred on this previously suspended node
                 if !is_poll {
-                    apply_updates_sync(&self.context, job_ids, &mut suspended_hooks);
+                    apply_hook_updates(&self.context, job_ids, &mut suspended_hooks);
                 }
                 self.perform_rebuild_node_sync(
                     new_widget,
@@ -290,37 +289,5 @@ impl<E: FullElement> ElementNode<E> {
                 )
             }
         }
-    }
-}
-
-fn apply_updates_sync(
-    element_context: &ElementContextNode,
-    job_ids: &Inlinable64Vec<JobId>,
-    hooks: &mut HooksWithTearDowns,
-) {
-    let mut jobs = {
-        element_context
-            .mailbox
-            .lock()
-            .extract_if(|job_id, _| job_ids.contains(job_id))
-            .collect::<Vec<_>>()
-    };
-    jobs.sort_by_key(|(job_id, ..)| *job_id);
-
-    let updates = jobs
-        .into_iter()
-        .flat_map(|(_, updates)| updates)
-        .collect::<Vec<_>>();
-
-    for update in updates {
-        (update.op)(
-            hooks
-                .get_mut(update.hook_index)
-                .expect("Update should not contain an invalid index")
-                .0
-                .as_mut(),
-        )
-        .ok()
-        .expect("We currently do not handle hook failure") //TODO
     }
 }

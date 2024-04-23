@@ -1,4 +1,6 @@
-use crate::foundation::{AsAny, Error};
+use crate::{foundation::{AsAny, Error, Inlinable64Vec}, scheduler::JobId};
+
+use super::ElementContextNode;
 
 pub(crate) type HooksWithTearDowns = HooksWith<Option<Box<dyn EffectCleanup>>>;
 pub(crate) type HooksWithEffects = HooksWith<Option<Box<dyn Effect>>>;
@@ -146,4 +148,36 @@ pub(crate) enum WorkMode {
     Rebuild,
     PollInflate,
     // Retry,
+}
+
+pub(crate) fn apply_hook_updates<T>(
+    element_context: &ElementContextNode,
+    job_ids: &Inlinable64Vec<JobId>,
+    hooks: &mut HooksWith<T>,
+) {
+    let mut jobs = {
+        element_context
+            .mailbox
+            .lock()
+            .extract_if(|job_id, _| job_ids.contains(job_id))
+            .collect::<Vec<_>>()
+    };
+    jobs.sort_by_key(|(job_id, ..)| *job_id);
+
+    let updates = jobs
+        .into_iter()
+        .flat_map(|(_, updates)| updates)
+        .collect::<Vec<_>>();
+
+    for update in updates {
+        (update.op)(
+            hooks
+                .get_mut(update.hook_index)
+                .expect("Update should not contain an invalid index")
+                .0
+                .as_mut(),
+        )
+        .ok()
+        .expect("We currently do not handle hook failure") //TODO
+    }
 }
