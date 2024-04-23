@@ -119,7 +119,7 @@ where
 
 pub trait ChildElementWidgetPair<P: Protocol>:
     crate::sync::ChildElementWidgetPairSyncBuildExt<P>
-    + crate::r#async::reconcile_item::ChildElementWidgetPairAsyncBuildExt<P>
+    + crate::r#async::ChildElementWidgetPairAsyncBuildExt<P>
     + Send
     + Sync
     + 'static

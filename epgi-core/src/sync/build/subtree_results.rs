@@ -77,16 +77,8 @@ where
         res
     }
 }
-// impl<P> Default for SubtreeRenderObjectCommitResult<P>
-// where
-//     P: Protocol,
-// {
-//     fn default() -> Self {
-//         SubtreeRenderObjectCommitResult::KeepRenderObject(RerenderAction::None)
-//     }
-// }
 
-// struct CommitResult
+/// An optimiaztion helper struct, which aims to cache a summary version of all commited results, to avoid repetitive queries on commited results
 #[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Debug)]
 pub(crate) enum SubtreeRenderObjectChangeSummary {
     KeepAll {
