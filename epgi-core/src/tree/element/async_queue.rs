@@ -1,12 +1,9 @@
 use crate::{
-    foundation::{
-        Asc, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec, TryResult, TryResult::*,
-        VecPushLastExt,
-    },
+    foundation::{Asc, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec, VecPushLastExt},
     r#async::AsyncHookContext,
     scheduler::LanePos,
     sync::CommitBarrier,
-    tree::{ArcElementContextNode, ElementBase, HooksWithEffects, Work, WorkContext, WorkHandle},
+    tree::{ArcElementContextNode, ElementBase, HooksWithEffects, WorkContext, WorkHandle},
 };
 
 use super::ArcChildElementNode;
@@ -21,7 +18,8 @@ pub(crate) struct AsyncWorkQueueInner<E: ElementBase> {
 }
 
 pub(crate) struct AsyncQueueCurrentEntry<E: ElementBase> {
-    pub(crate) work: Work<E::ArcWidget>,
+    pub(crate) widget: Option<E::ArcWidget>,
+    pub(crate) work_context: Asc<WorkContext>,
     pub(crate) stash: AsyncStash<E>,
 }
 
@@ -42,7 +40,8 @@ pub(crate) struct AsyncStash<E: ElementBase> {
 }
 
 pub(crate) struct AsyncQueueBackqueueEntry<ArcWidget> {
-    pub(crate) work: Work<ArcWidget>,
+    pub(crate) widget: Option<ArcWidget>,
+    pub(crate) work_context: Asc<WorkContext>,
     pub(crate) barrier: CommitBarrier,
 }
 
@@ -86,11 +85,18 @@ where
             .and_then(|inner| (&mut inner.current).take()) // rust-analyzer#14933
     }
 
-    pub(crate) fn push_backqueue(&mut self, work: Work<E::ArcWidget>, barrier: CommitBarrier) {
+    pub(crate) fn push_backqueue(
+        &mut self,
+        widget: Option<E::ArcWidget>,
+        work_context: Asc<WorkContext>,
+        barrier: CommitBarrier,
+    ) {
         let inner = self.get_inner_or_create();
-        inner
-            .backqueue
-            .push(AsyncQueueBackqueueEntry { work, barrier });
+        inner.backqueue.push(AsyncQueueBackqueueEntry {
+            widget,
+            work_context,
+            barrier,
+        });
     }
 
     pub(crate) fn backqueue_mut(
@@ -114,14 +120,14 @@ where
     fn contains(&self, lane_pos: LanePos) -> bool {
         if let Some(inner) = &self.inner {
             if let Some(current) = &inner.current {
-                if current.work.context.lane_pos == lane_pos {
+                if current.work_context.lane_pos == lane_pos {
                     return true;
                 }
             }
             if inner
                 .backqueue
                 .iter()
-                .find(|entry| entry.work.context.lane_pos == lane_pos)
+                .find(|entry| entry.work_context.lane_pos == lane_pos)
                 .is_some()
             {
                 return true;
@@ -141,7 +147,8 @@ where
                 if let Some(barrier) = predicate(current) {
                     let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
                     let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
-                        work: taken.work.clone(),
+                        widget: taken.widget.clone(),
+                        work_context: taken.work_context.clone(),
                         barrier,
                     });
                     return Some(taken);
@@ -160,7 +167,8 @@ where
                 // rust-analyzer#14933
                 let barrier = get_commit_barrier(&taken);
                 let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
-                    work: taken.work.clone(),
+                    widget: taken.widget.clone(),
+                    work_context: taken.work_context.clone(),
                     barrier,
                 });
                 return Some(taken);
@@ -171,38 +179,33 @@ where
 
     pub(crate) fn try_push_front(
         &mut self,
-        work: &Work<E::ArcWidget>,
+        widget: &Option<E::ArcWidget>,
+        work_context: &Asc<WorkContext>,
         barrier: &CommitBarrier,
         subscription_diff: SubscriptionDiff,
         reserved_provider_write: bool,
-    ) -> TryResult<WorkHandle, ()> {
+    ) -> Result<WorkHandle, &AsyncQueueCurrentEntry<E>> {
         let inner = self.get_inner_or_create();
+        let current = &mut inner.current;
 
-        if let Some(current) = &inner.current {
-            if current.work.context.batch.priority <= work.context.batch.priority {
-                Yielded(())
-            } else {
-                Blocked(())
-            }
-        } else {
-            let output = AsyncOutput::Uninitiated {
-                barrier: barrier.clone(),
-            };
-            let handle = WorkHandle::new();
-            self.inner = Some(Box::new(AsyncWorkQueueInner {
-                current: Some(AsyncQueueCurrentEntry {
-                    work: work.clone(),
-                    stash: AsyncStash {
-                        handle: handle.clone(),
-                        subscription_diff,
-                        reserved_provider_write,
-                        output,
-                    },
-                }),
-                backqueue: Default::default(),
-            }));
-            Success(handle)
+        if let Some(current) = current {
+            return Err(current);
         }
+        let output = AsyncOutput::Uninitiated {
+            barrier: barrier.clone(),
+        };
+        let handle = WorkHandle::new();
+        *current = Some(AsyncQueueCurrentEntry {
+            widget: widget.clone(),
+            work_context: work_context.clone(),
+            stash: AsyncStash {
+                handle: handle.clone(),
+                subscription_diff,
+                reserved_provider_write,
+                output,
+            },
+        });
+        return Ok(handle);
     }
 
     fn get_inner_or_create(&mut self) -> &mut Box<AsyncWorkQueueInner<E>> {
@@ -219,7 +222,7 @@ where
             return AsyncDequeueResult::NotFound;
         };
         if let Some(entry) = &inner.current {
-            if entry.work.context.lane_pos == lane_pos {
+            if entry.work_context.lane_pos == lane_pos {
                 let current = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
                 return AsyncDequeueResult::FoundCurrent(current);
             }
@@ -227,7 +230,7 @@ where
         if let Some(index) = inner
             .backqueue
             .iter()
-            .position(|entry| entry.work.context.lane_pos == lane_pos)
+            .position(|entry| entry.work_context.lane_pos == lane_pos)
         {
             let result = inner.backqueue.swap_remove(index);
             if inner.current.is_none() && inner.backqueue.is_empty() {

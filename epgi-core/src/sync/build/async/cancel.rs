@@ -7,7 +7,7 @@
 /// We do not try to requeue anything in the subtree root.
 use crate::{
     foundation::{Arc, Container, ContainerOf},
-    r#async::AsyncRebuild,
+    r#async::AsyncReconcile,
     scheduler::{get_current_scheduler, LanePos},
     sync::LaneScheduler,
     tree::{
@@ -29,7 +29,7 @@ pub(in super::super) struct RemoveAsync<E: ElementBase> {
         CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     >,
-    start: Option<AsyncRebuild<E>>,
+    start: Option<AsyncReconcile<E>>,
 }
 
 impl<E: FullElement> ElementNode<E> {
@@ -79,11 +79,13 @@ impl<E: FullElement> ElementNode<E> {
                         reserved_provider_write,
                         output,
                     },
-                work,
+                widget,
+                work_context,
             }) => {
                 handle.abort();
                 async_queue.push_backqueue(
-                    work,
+                    widget,
+                    work_context,
                     lane_scheduler
                         .get_commit_barrier_for(lane_pos)
                         .expect("CommitBarrier should exist"),
@@ -158,7 +160,7 @@ impl<E: FullElement> ElementNode<E> {
 
         if let Some(start) = start {
             let node = self.clone();
-            node.execute_rebuild_node_async_detached(start);
+            node.execute_reconcile_node_async_detached(start);
         }
     }
 
@@ -420,7 +422,7 @@ impl<E: FullElement> ElementNode<E> {
 
         if let Some(start) = start {
             let node = self.clone();
-            node.execute_rebuild_node_async_detached(start);
+            node.execute_reconcile_node_async_detached(start);
         }
     }
 }

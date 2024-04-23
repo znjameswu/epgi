@@ -1,6 +1,6 @@
 use crate::{
     foundation::{Arc, ContainerOf},
-    r#async::AsyncRebuild,
+    r#async::AsyncReconcile,
     sync::LaneScheduler,
     tree::{ArcChildElementNode, ElementBase, ElementNode, FullElement, Mainline},
 };
@@ -10,7 +10,7 @@ use super::cancel::CancelAsync;
 pub(in super::super) struct ReorderAsync<E: ElementBase> {
     pub(in super::super) cancel:
         Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
-    pub(in super::super) start: AsyncRebuild<E>,
+    pub(in super::super) start: AsyncReconcile<E>,
 }
 
 impl<E: FullElement> ElementNode<E> {
@@ -46,14 +46,14 @@ impl<E: FullElement> ElementNode<E> {
             .iter()
             .rev()
             .enumerate()
-            .min_by_key(|(_, entry)| entry.work.context.batch.priority)
+            .min_by_key(|(_, entry)| entry.work_context.batch.priority)
         else {
             return None;
         };
 
-        let backqueue_priority = entry.work.context.batch.priority;
+        let backqueue_priority = entry.work_context.batch.priority;
         if let Some(ref curr) = current {
-            if backqueue_priority >= curr.work.context.batch.priority {
+            if backqueue_priority >= curr.work_context.batch.priority {
                 return None;
             }
         }
@@ -61,26 +61,34 @@ impl<E: FullElement> ElementNode<E> {
         let backqueue_candidate = backqueue.swap_remove(index);
         let mut cancel = None;
         if let Some(ref curr) = current {
-            let curr_lane_pos = curr.work.context.lane_pos;
+            let curr_lane_pos = curr.work_context.lane_pos;
             cancel = Some(
                 Self::prepare_cancel_async_work(mainline, curr_lane_pos, lane_scheduler)
                     .ok()
                     .expect("Impossible to fail"),
             );
         }
-        let rebuild = self
-            .prepare_rebuild_async(
-                mainline,
-                old_widget,
-                backqueue_candidate.work,
-                backqueue_candidate.barrier,
-            )
-            .expect("Impossible to fail")
-            .ok()
-            .expect("The candidate should not produce a SkipRebuild result");
+        // Why it can't Skip?
+        // Because the backqueue_candidate previous tried to occupy this node (hence the entry)
+        // Suppose now it comes back with Skip, the only thing that could have caused this change is that the widget has been changed since then.
+        // It means that, previously the backqueue_candidate determines there is a widget update, now there isn't.
+        // In order to achieve this, the backqueue_candidate needs to have an explicit new widget (otherwise there will always be no widget update)
+        // Which means the backqueue_candidate must be a child work of a parent work (only root work can have no explicit new widget)
+        // But since the widget has changed since then, it means another committed work must have an explicit new widget and changed it during commit.
+        // Then backqueue_candidate would have already conflict with that hypothetical work in the parent node, and must have already been cancelled.
+        // Conflict! Therefore it can't return Skip now.
+        let Ok(reconcile) = self.prepare_occupy_async(
+            mainline,
+            old_widget,
+            backqueue_candidate.widget,
+            backqueue_candidate.work_context,
+            backqueue_candidate.barrier,
+        ) else {
+            panic!("Impossible to fail")
+        };
         return Some(ReorderAsync {
             cancel,
-            start: rebuild,
+            start: reconcile,
         });
     }
 
@@ -90,14 +98,14 @@ impl<E: FullElement> ElementNode<E> {
             self.perform_cancel_async_work(remove)
         }
         let node = self.clone();
-        node.execute_rebuild_node_async_detached(start);
+        node.execute_reconcile_node_async_detached(start);
     }
 
     pub(in super::super) fn prepare_execute_backqueue(
         self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
-    ) -> Option<AsyncRebuild<E>> {
+    ) -> Option<AsyncReconcile<E>> {
         let async_queue = &mut mainline.async_queue;
         let Some(backqueue) = async_queue.backqueue_mut() else {
             return None;
@@ -107,25 +115,32 @@ impl<E: FullElement> ElementNode<E> {
             .iter()
             .rev()
             .enumerate()
-            .min_by_key(|(_, entry)| entry.work.context.batch.priority)
+            .min_by_key(|(_, entry)| entry.work_context.batch.priority)
         else {
             return None;
         };
 
         let backqueue_candidate = backqueue.swap_remove(index);
 
-        let rebuild = self
-            .prepare_rebuild_async(
-                mainline,
-                old_widget,
-                backqueue_candidate.work,
-                backqueue_candidate.barrier,
-            )
-            .expect("Execute_backqueue should not be performed on an occupied node")
-            .ok()
-            .expect("The candidate should not produce a SkipRebuild result");
-
-        return Some(rebuild);
+        // Why it can't be Skip?
+        // Because the backqueue_candidate previous tried to occupy this node (hence the entry)
+        // Suppose now it comes back with Skip, the only thing that could have caused this change is that the widget has been changed since then.
+        // It means that, previously the backqueue_candidate determines there is a widget update, now there isn't.
+        // In order to achieve this, the backqueue_candidate needs to have an explicit new widget (otherwise there will always be no widget update)
+        // Which means the backqueue_candidate must be a child work of a parent work (only root work can have no explicit new widget)
+        // But since the widget has changed since then, it means another committed work must have an explicit new widget and changed it during commit.
+        // Then backqueue_candidate would have already conflict with that hypothetical work in the parent node, and must have already been cancelled.
+        // Conflict! Therefore it can't return Skip now.
+        let Ok(reconcile) = self.prepare_occupy_async(
+            mainline,
+            old_widget,
+            backqueue_candidate.widget,
+            backqueue_candidate.work_context,
+            backqueue_candidate.barrier,
+        ) else {
+            panic!("Impossible to fail")
+        };
+        return Some(reconcile);
     }
 }
 

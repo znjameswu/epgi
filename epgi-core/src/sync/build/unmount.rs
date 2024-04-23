@@ -37,7 +37,7 @@ impl<E: FullElement> ElementNode<E> {
                 .expect("Unmount should only be called on mainline nodes");
             let purge = if let Some(entry) = mainline.async_queue.current() {
                 Some(
-                    Self::prepare_purge_async_work_mainline(mainline, entry.work.context.lane_pos)
+                    Self::prepare_purge_async_work_mainline(mainline, entry.work_context.lane_pos)
                         .ok()
                         .expect("Impossible to fail"),
                 )

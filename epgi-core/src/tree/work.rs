@@ -8,12 +8,6 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub(crate) struct Work<ArcWidget> {
-    pub(crate) widget: Option<ArcWidget>,
-    pub(crate) context: Asc<WorkContext>,
-}
-
-#[derive(Clone)]
 pub struct WorkContext {
     pub lane_pos: LanePos,
     pub(crate) batch: Asc<BatchConf>,

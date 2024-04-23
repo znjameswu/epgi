@@ -31,9 +31,6 @@ pub use query_interface::*;
 mod threadpool;
 pub use threadpool::*;
 
-mod try_result;
-pub use try_result::*;
-
 mod type_key;
 pub use type_key::*;
 

@@ -1,111 +1,129 @@
 use futures::stream::Aborted;
 
 use crate::{
-    foundation::{Arc, InlinableDwsizeVec, Provide, TryResult},
+    foundation::{Arc, Asc, InlinableDwsizeVec, Provide},
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
-        no_widget_update, AsyncOutput, ElementBase, ElementNode, FullElement, HooksWithEffects,
-        Mainline, Work, WorkHandle,
+        no_widget_update, AsyncOutput, Element, ElementBase, ElementNode, FullElement,
+        HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
     },
 };
 
-pub(crate) struct AsyncRebuild<E: ElementBase> {
+impl<E: FullElement> ElementNode<E> {
+    pub(super) fn reconcile_node_async(
+        self: &Arc<Self>,
+        widget: Option<E::ArcWidget>,
+        work_context: Asc<WorkContext>,
+        parent_handle: WorkHandle,
+        barrier: CommitBarrier,
+    ) -> Result<(), Aborted> {
+        let prepare_result =
+            self.prepare_reconcile_async(widget, work_context, parent_handle, barrier)?;
+
+        use PrepareAsyncReconcileResult::*;
+        match prepare_result {
+            Reconcile(Ok(reconcile)) => Self::execute_reconcile_async(&self, reconcile),
+            SkipAndVisit {
+                barrier,
+                work_context,
+                parent_handle,
+            } => {
+                // Why do we need yield to scheduler to continue visit descendant roots?
+                // Because visiting a subtree needs to access each node's children,
+                // and the only way for async code to access children of a node is to occupy it (unlike sync code).
+                // Occupy every node along the line is doable and would even improve the async batch performance.
+                // But more likely than not, it would cause more interference, often severe interference, with sync batch.
+                // Therefore, it is better to not occupy, and yield to scheduler to walk the tree in sync mode.
+                get_current_scheduler().schedule_async_yield_subtree(
+                    Arc::downgrade(self) as _,
+                    work_context,
+                    parent_handle,
+                    barrier,
+                );
+            }
+            SkipAndReturn => {}
+            Reconcile(Err(OccupyError::Blocked)) => {
+                get_current_scheduler().schedule_reorder_async_work(Arc::downgrade(self) as _);
+                return Err(Aborted);
+            }
+            Reconcile(Err(OccupyError::Yielded)) => {}
+        };
+        Ok(())
+    }
+}
+
+pub(crate) struct AsyncReconcile<E: ElementBase> {
+    pub(crate) widget: Option<E::ArcWidget>,
+    pub(crate) work_context: Asc<WorkContext>,
     pub(crate) handle: WorkHandle,
     pub(crate) barrier: CommitBarrier,
-    pub(crate) work: Work<E::ArcWidget>,
     pub(crate) old_widget: E::ArcWidget,
     pub(crate) provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     pub(crate) states: Option<(HooksWithEffects, E)>,
 }
 
-pub(crate) struct AsyncSkip<E: ElementBase> {
-    barrier: CommitBarrier,
-    work: Work<E::ArcWidget>,
+enum PrepareAsyncReconcileResult<E: ElementBase> {
+    Reconcile(Result<AsyncReconcile<E>, OccupyError>),
+    SkipAndVisit {
+        barrier: CommitBarrier,
+        parent_handle: WorkHandle,
+        work_context: Asc<WorkContext>,
+    },
+    SkipAndReturn,
 }
 
-pub(super) enum TryAsyncRebuild<E: ElementBase> {
-    Success(AsyncRebuild<E>),
-    Skip {
-        barrier: CommitBarrier,
-        work: Work<E::ArcWidget>,
-    },
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum OccupyError {
+    Yielded,
     Blocked,
-    Backqueued,
 }
 
 impl<E: FullElement> ElementNode<E> {
-    pub(super) fn rebuild_node_async(
+    fn prepare_reconcile_async(
         self: &Arc<Self>,
-        work: Work<E::ArcWidget>,
+        widget: Option<E::ArcWidget>,
+        work_context: Asc<WorkContext>,
         parent_handle: WorkHandle,
         barrier: CommitBarrier,
-    ) -> Result<(), Aborted> {
-        let rebuild = {
-            let mut snapshot = self.snapshot.lock();
-            let snapshot_reborrow = &mut *snapshot;
-            if parent_handle.is_aborted() {
-                return Err(Aborted);
-            }
-            let mainline = snapshot_reborrow
-                .inner
-                .mainline_mut()
-                .expect("A nonmainline node should not be reachable by a rebuild!");
-
-            self.prepare_rebuild_async(mainline, &snapshot_reborrow.widget, work, barrier)
-            // if let Some(get_provided_types) = E::GET_PROVIDED_VALUE {
-
-            // }
-        };
-
-        use TryResult::*;
-        match rebuild {
-            Success(Ok(rebuild)) => Self::execute_rebuild_node_async(&self, rebuild),
-            Success(Err(AsyncSkip { barrier, work })) => {
-                get_current_scheduler().schedule_async_yield_subtree(
-                    Arc::downgrade(self) as _,
-                    work.context,
-                    parent_handle,
-                    barrier,
-                );
-            }
-            Blocked(_) => {
-                get_current_scheduler().schedule_reorder_async_work(Arc::downgrade(self) as _);
-                return Err(Aborted);
-            }
-            Yielded(_) => {}
-        };
-        Ok(())
-    }
-
-    pub(crate) fn prepare_rebuild_async(
-        self: &Arc<Self>,
-        mainline: &mut Mainline<E>,
-        old_widget: &E::ArcWidget,
-        work: Work<E::ArcWidget>,
-        barrier: CommitBarrier,
-    ) -> TryResult<Result<AsyncRebuild<E>, AsyncSkip<E>>> {
-        use TryResult::*;
-
-        let Mainline { state, async_queue } = mainline;
-
-        // Occupied by an sync operation, do not retry. The sync operation will dispatch queued async works in the end
-        let Some(state) = state else {
-            return Blocked(());
-        };
-
-        let no_mailbox_update = !self.context.mailbox_lanes().contains(work.context.lane_pos);
+    ) -> Result<PrepareAsyncReconcileResult<E>, Aborted> {
+        use PrepareAsyncReconcileResult::*;
+        let no_new_widget = widget.is_none();
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(work_context.lane_pos);
         let no_consumer_root = !self
             .context
             .consumer_root_lanes()
-            .contains(work.context.lane_pos);
+            .contains(work_context.lane_pos);
         let no_descendant_lanes = !self
             .context
             .descendant_lanes()
-            .contains(work.context.lane_pos);
-        let no_widget_update = no_widget_update::<E>(work.widget.as_ref(), old_widget);
+            .contains(work_context.lane_pos);
 
-        if no_mailbox_update && no_descendant_lanes && no_descendant_lanes && no_widget_update {
+        if no_new_widget && no_mailbox_update && no_consumer_root {
+            // Skips rebuilding entirely by not occupying the node.
+            if no_descendant_lanes {
+                return Ok(SkipAndReturn);
+            }
+            return Ok(SkipAndVisit {
+                barrier,
+                parent_handle,
+                work_context,
+            });
+        }
+
+        let mut snapshot = self.snapshot.lock();
+        let snapshot_reborrow = &mut *snapshot;
+        if parent_handle.is_aborted() {
+            return Err(Aborted);
+        }
+        let mainline = snapshot_reborrow
+            .inner
+            .mainline_mut()
+            .expect("A nonmainline node should not be reachable by a rebuild!");
+        let no_widget_update =
+            no_widget_update::<E>(widget.as_ref(), &mut snapshot_reborrow.widget);
+
+        if no_widget_update && no_mailbox_update && no_consumer_root {
             // Skips rebuilding entirely by not occupying the node.
             // Safety of not occupying the node:
             // 1. If we reconciled with a widget (whether new or not, i.e. an Update), then we are confident that no other batch will update the widget while the parent work of this work is still alive.
@@ -113,105 +131,137 @@ impl<E: FullElement> ElementNode<E> {
             //      If we have a widget to reconcile, then we are also the direct child of another work.
             //      Therefore, if another work updated the widget, it must have already content with our parent work.
             // 2. If we do not have a widget to reconcile (i.e., a pure refresh), then we have no reason to fear for another batch to change our widget.
-            return Success(Err(AsyncSkip { barrier, work }));
-        } else {
-            let old_consumed_types = E::get_consumed_types(old_widget);
-            let new_widget_ref = work.widget.as_ref().unwrap_or(old_widget);
-            let new_consumed_types = E::get_consumed_types(new_widget_ref);
-            let subscription_diff = Self::calc_subscription_diff(
-                new_consumed_types,
-                old_consumed_types,
-                &work.context.reserved_provider_values,
-                &self.context.provider_map,
-            );
-            let mut provider_value_to_write = None;
-            todo!();
-            // if let Some(get_provided_value) = E::GET_PROVIDED_VALUE {
-            //     let old_provided_value = get_provided_value(&old_widget);
-            //     let new_provided_value = get_provided_value(new_widget_ref);
-            //     if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
-            //         && !old_provided_value.eq_sized(new_provided_value.as_ref())
-            //     {
-            //         provider_value_to_write = Some(new_provided_value);
-            //     }
-            // };
-            // Cannot use `TryReuslt::map` due to lifetime problems from the limited closure expressiveness.
-            match async_queue.try_push_front(
-                &work,
-                &barrier,
-                subscription_diff,
-                provider_value_to_write.is_some(),
-            ) {
-                Success(handle) => {
-                    let provider_values = self.read_consumed_values_async(
-                        new_consumed_types,
-                        old_consumed_types,
-                        &work.context,
+            if no_descendant_lanes {
+                return Ok(SkipAndReturn);
+            }
+            return Ok(SkipAndVisit {
+                barrier,
+                parent_handle,
+                work_context,
+            });
+        }
+
+        Ok(Reconcile(self.prepare_occupy_async(
+            mainline,
+            &snapshot_reborrow.widget,
+            widget,
+            work_context,
+            barrier,
+        )))
+    }
+
+    /// A piece of logic that is shared by async build and reorder.
+    pub(crate) fn prepare_occupy_async(
+        self: &Arc<Self>,
+        mainline: &mut Mainline<E>,
+        old_widget: &E::ArcWidget,
+        widget: Option<E::ArcWidget>,
+        work_context: Asc<WorkContext>,
+        barrier: CommitBarrier,
+    ) -> Result<AsyncReconcile<E>, OccupyError> {
+        let Mainline { state, async_queue } = mainline;
+
+        let Some(state) = state else {
+            // Occupied by an sync operation, do not retry. The sync operation will dispatch queued async works in the end
+            async_queue.push_backqueue(widget, work_context, barrier);
+            return Err(OccupyError::Blocked);
+        };
+
+        let old_consumed_types = E::get_consumed_types(old_widget);
+        let new_widget_ref = widget.as_ref().unwrap_or(old_widget);
+        let new_consumed_types = E::get_consumed_types(new_widget_ref);
+        let subscription_diff = Self::calc_subscription_diff(
+            new_consumed_types,
+            old_consumed_types,
+            &work_context.reserved_provider_values,
+            &self.context.provider_map,
+        );
+        let provider_value_to_write =
+            <E as Element>::Impl::diff_provided_value(old_widget, new_widget_ref);
+
+        match async_queue.try_push_front(
+            &widget,
+            &work_context,
+            &barrier,
+            subscription_diff,
+            provider_value_to_write.is_some(),
+        ) {
+            Ok(handle) => {
+                let provider_values = self.read_consumed_values_async(
+                    new_consumed_types,
+                    old_consumed_types,
+                    &work_context,
+                    &barrier,
+                );
+                if let Some(provider_value_to_write) = provider_value_to_write {
+                    let mainline_readers = self.context.reserve_write_async(
+                        work_context.lane_pos,
+                        provider_value_to_write,
                         &barrier,
                     );
-                    if let Some(provider_value_to_write) = provider_value_to_write {
-                        let mainline_readers = self.context.reserve_write_async(
-                            work.context.lane_pos,
-                            provider_value_to_write,
-                            &barrier,
+                    for mainline_reader in mainline_readers.into_iter() {
+                        let mainline_reader =
+                            mainline_reader.upgrade().expect("Readers should be alive");
+                        mainline_reader.mark_consumer_root(
+                            work_context.lane_pos,
+                            mainline_reader.assert_not_unmounted(),
                         );
-                        for mainline_reader in mainline_readers.into_iter() {
-                            let mainline_reader =
-                                mainline_reader.upgrade().expect("Readers should be alive");
-                            mainline_reader.mark_consumer_root(
-                                work.context.lane_pos,
-                                mainline_reader.assert_not_unmounted(),
-                            );
-                        }
                     }
-                    use crate::tree::MainlineState::*;
-                    let rebuild = match state {
-                        InflateSuspended {
-                            suspended_hooks: last_hooks,
-                            waker,
-                        } => AsyncRebuild {
-                            handle,
-                            old_widget: old_widget.clone(),
-                            provider_values,
-                            barrier,
-                            work,
-                            states: None,
-                        },
-                        Ready { hooks, element, .. }
-                        | RebuildSuspended {
-                            suspended_hooks: hooks,
-                            element,
-                            ..
-                        } => AsyncRebuild {
-                            handle,
-                            old_widget: old_widget.clone(),
-                            provider_values,
-                            barrier,
-                            work,
-                            states: todo!(), //Some((hooks.clone(), element.clone())),
-                        },
-                    };
-                    Success(Ok(rebuild))
                 }
-                Blocked(_) => {
-                    mainline.async_queue.push_backqueue(work, barrier);
-                    Blocked(())
-                }
-                Yielded(_) => {
-                    mainline.async_queue.push_backqueue(work, barrier);
-                    Yielded(())
+                use crate::tree::MainlineState::*;
+                let reconcile = match state {
+                    InflateSuspended {
+                        suspended_hooks: last_hooks,
+                        waker,
+                    } => AsyncReconcile {
+                        handle,
+                        widget,
+                        work_context,
+                        old_widget: old_widget.clone(),
+                        provider_values,
+                        barrier,
+                        states: None,
+                    },
+                    Ready { hooks, element, .. }
+                    | RebuildSuspended {
+                        suspended_hooks: hooks,
+                        element,
+                        ..
+                    } => AsyncReconcile {
+                        handle,
+                        widget,
+                        work_context,
+                        old_widget: old_widget.clone(),
+                        provider_values,
+                        barrier,
+                        states: todo!(), //Some((hooks.clone(), element.clone())),
+                    },
+                };
+                Ok(reconcile)
+            }
+            Err(current) => {
+                let should_yield_to_current =
+                    current.work_context.batch.priority < work_context.batch.priority;
+                mainline
+                    .async_queue
+                    .push_backqueue(widget, work_context, barrier);
+                if should_yield_to_current {
+                    Err(OccupyError::Yielded)
+                } else {
+                    Err(OccupyError::Blocked)
                 }
             }
         }
     }
 
-    pub(super) fn execute_rebuild_node_async(self: &Arc<Self>, rebuild: AsyncRebuild<E>) {
+    pub(super) fn execute_reconcile_async(self: &Arc<Self>, rebuild: AsyncReconcile<E>) {
         //TODO: Merge updates and bypass clean nodes.
 
-        let AsyncRebuild {
+        let AsyncReconcile {
             handle,
             barrier,
-            work,
+            widget,
+            work_context,
             old_widget,
             provider_values,
             states,
@@ -219,8 +269,8 @@ impl<E: FullElement> ElementNode<E> {
 
         if let Some((hooks, last_element)) = states {
             self.perform_rebuild_node_async(
-                work.widget.as_ref().unwrap_or(&old_widget),
-                work.context,
+                widget.as_ref().unwrap_or(&old_widget),
+                work_context,
                 hooks,
                 last_element,
                 provider_values,
@@ -229,8 +279,8 @@ impl<E: FullElement> ElementNode<E> {
             )
         } else {
             self.perform_inflate_node_async::<false>(
-                &work.widget.unwrap_or(old_widget),
-                work.context,
+                &widget.unwrap_or(old_widget),
+                work_context,
                 provider_values,
                 &handle,
                 barrier,
@@ -238,10 +288,13 @@ impl<E: FullElement> ElementNode<E> {
         }
     }
 
-    pub(crate) fn execute_rebuild_node_async_detached(self: Arc<Self>, rebuild: AsyncRebuild<E>) {
+    pub(crate) fn execute_reconcile_node_async_detached(
+        self: Arc<Self>,
+        rebuild: AsyncReconcile<E>,
+    ) {
         get_current_scheduler()
             .async_threadpool
-            .spawn(move || self.execute_rebuild_node_async(rebuild))
+            .spawn(move || self.execute_reconcile_async(rebuild))
     }
 
     fn write_back_build_results<const IS_NEW_INFLATE: bool>(
@@ -265,7 +318,7 @@ impl<E: FullElement> ElementNode<E> {
                 .current_mut()
                 .expect("Async work should be still alive");
             assert_eq!(
-                entry.work.context.lane_pos, lane_pos,
+                entry.work_context.lane_pos, lane_pos,
                 "The same async work should be still alive"
             );
             &mut entry.stash.output

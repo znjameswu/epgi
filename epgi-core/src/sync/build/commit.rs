@@ -35,7 +35,7 @@ impl<E: FullElement> ElementNode<E> {
 
         if let Some(async_work_needing_start) = async_work_needing_start {
             let node = self.clone();
-            node.execute_rebuild_node_async_detached(async_work_needing_start);
+            node.execute_reconcile_node_async_detached(async_work_needing_start);
         }
     }
 
