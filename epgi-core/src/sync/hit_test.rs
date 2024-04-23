@@ -41,7 +41,7 @@ impl<R: FullRender> RenderObject<R> {
         ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
         let inner = self.inner.lock();
-        let no_relayout_token = self.mark.assume_not_needing_layout(); // TODO: Do we really need to check this
+        let no_relayout_token = self.mark.assert_not_needing_layout(); // TODO: Do we really need to check this
         let layout_cache = inner
             .cache
             .layout_cache_ref(no_relayout_token)
@@ -158,7 +158,7 @@ where
     ) -> Option<&'a [RecordedChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
     {
         layer_cache
-            .composite_results_ref(layer_mark.assume_not_needing_composite())
+            .composite_results_ref(layer_mark.assert_not_needing_composite())
             .map(|composition_results| composition_results.adopted_layers.as_ref())
     }
 
@@ -198,7 +198,7 @@ where
     ) -> Option<&'a [RecordedChildLayer<<<R as RenderBase>::ChildProtocol as Protocol>::Canvas>]>
     {
         layer_cache
-            .composite_results_ref(layer_mark.assume_not_needing_composite())
+            .composite_results_ref(layer_mark.assert_not_needing_composite())
             .map(|composition_results| composition_results.adopted_layers.as_ref())
     }
 

@@ -23,8 +23,8 @@ where
     R::ChildProtocol: LayerProtocol,
 {
     fn recomposite_into_memo(&self) -> Asc<dyn Any + Send + Sync> {
-        let no_relayout_token = self.mark.assume_not_needing_layout();
-        let _no_detach_token = self.mark.assume_not_detached();
+        let no_relayout_token = self.mark.assert_not_needing_layout();
+        let _no_detach_token = self.mark.assert_not_detached();
         let needs_composite = self.layer_mark.needs_composite();
         if let Err(no_recomposite_token) = needs_composite {
             let inner = self.inner.lock();
@@ -84,7 +84,7 @@ where
         encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> Vec<RecordedOrphanLayer<<R::ParentProtocol as Protocol>::Canvas>> {
-        let no_relayout_token = self.mark.assume_not_needing_layout();
+        let no_relayout_token = self.mark.assert_not_needing_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
         let layer_cache = inner_reborrow

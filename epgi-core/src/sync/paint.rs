@@ -24,7 +24,7 @@ where
         let Err(_token) = self.mark.is_detached() else {
             return;
         };
-        let no_relayout_token = self.mark.assume_not_needing_layout();
+        let no_relayout_token = self.mark.assert_not_needing_layout();
         let mut inner = self.inner.lock();
 
         let paint_results = inner.render.paint_layer(&inner.children);
@@ -102,7 +102,7 @@ where
     ) {
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let token = self.mark.assume_not_needing_layout();
+        let token = self.mark.assert_not_needing_layout();
         let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
             panic!("Paint should only be called after layout has finished")
         };

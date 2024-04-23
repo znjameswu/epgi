@@ -20,7 +20,7 @@ pub struct ElementContextNode {
     pub(crate) unmounted: AtomicBool,
     pub(crate) depth: usize,
     // The context tree points upward, so a strong pointer
-    pub(crate) parent: Option<ArcElementContextNode>,
+    parent: Option<ArcElementContextNode>,
 
     pub(crate) mark: ElementMark,
     pub(crate) mailbox: SyncMutex<HashMap<JobId, Vec<Update>>>,
@@ -34,26 +34,10 @@ pub struct ElementContextNode {
     // pub(crate) has_render: bool,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct NotUnmountedToken(());
+
 impl ElementContextNode {
-    // #[inline(always)]
-    // pub(crate) fn new_with_provide<T: Provide>(
-    //     node: AweakAnyElementNode,
-    //     parent_context: ArcElementContextNode,
-    //     render_context: Option<AscRenderContextNode>,
-    //     provider_value: Arc<T>,
-    // ) -> Self {
-    //     Self::new(node, Some(parent_context), render_context, None)
-    // }
-
-    // #[inline(always)]
-    // pub(crate) fn new_no_provide(
-    //     node: AweakAnyElementNode,
-    //     parent_context: ArcElementContextNode,
-    //     render_context: Option<AscRenderContextNode>,
-    // ) -> Self {
-    //     Self::new(node, Some(parent_context), render_context, None)
-    // }
-
     pub(crate) fn new_root(node: AweakAnyElementNode) -> Self {
         Self::new(node, None, None)
     }
@@ -122,7 +106,26 @@ impl ElementContextNode {
         // t
     }
 
-    pub fn is_unmounted(&self) -> bool {
-        self.unmounted.load(Relaxed)
+    pub fn is_unmounted(&self) -> Result<(), NotUnmountedToken> {
+        if self.unmounted.load(Relaxed) {
+            Ok(())
+        } else {
+            Err(NotUnmountedToken(()))
+        }
+    }
+
+    pub fn assert_not_unmounted(&self) -> NotUnmountedToken {
+        debug_assert!(
+            !self.unmounted.load(Relaxed),
+            "We assumed this element to not be unmounted"
+        );
+        NotUnmountedToken(())
+    }
+
+    pub(crate) fn parent(
+        &self,
+        not_unmounted: NotUnmountedToken,
+    ) -> &Option<ArcElementContextNode> {
+        &self.parent
     }
 }

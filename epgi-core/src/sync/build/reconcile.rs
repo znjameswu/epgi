@@ -592,10 +592,9 @@ impl<E: FullElement> ElementNode<E> {
 
             // This is the a operation, we do not fear any inconsistencies caused by cancellation.
             for reader in contending_readers.mainline {
-                reader
-                    .upgrade()
-                    .expect("Readers should be alive")
-                    .mark_consumer_root(LanePos::Sync);
+                let reader: ArcElementContextNode =
+                    reader.upgrade().expect("Readers should be alive");
+                reader.mark_consumer_root(LanePos::Sync, reader.assert_not_unmounted());
             }
         }
     }

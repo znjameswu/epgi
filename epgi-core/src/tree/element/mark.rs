@@ -5,6 +5,8 @@ use crate::{
     tree::ElementContextNode,
 };
 
+use super::NotUnmountedToken;
+
 pub(crate) struct ElementMark {
     /// Lanes that are present in the mailbox
     pub(super) mailbox_lanes: AtomicLaneMask,
@@ -44,36 +46,23 @@ impl ElementContextNode {
         self.mark.needs_poll.load(Relaxed)
     }
 
-    pub(crate) fn mark_root(&self, lane_pos: LanePos) {
+    pub(crate) fn mark_root(&self, lane_pos: LanePos, not_unmounted: NotUnmountedToken) {
         self.mark
             .mailbox_lanes
             .fetch_insert_single(lane_pos, Relaxed);
-        self.mark_up(lane_pos)
+        self.mark_up(lane_pos, not_unmounted)
     }
 
-    pub(crate) fn mark_point_rebuild(&self) {
+    pub(crate) fn mark_point_rebuild(&self, not_unmounted: NotUnmountedToken) {
         self.mark.needs_poll.store(true, Relaxed);
-        self.mark_up(LanePos::Sync)
+        self.mark_up(LanePos::Sync, not_unmounted)
     }
 
-    fn mark_up(&self, lane_pos: LanePos) {
-        let mut curr = self;
-        loop {
-            let Some(parent) = &curr.parent else {
-                break;
-            };
-            curr = parent.as_ref();
-            let old_descendant_lanes = curr
-                .mark
-                .descendant_lanes
-                .fetch_insert_single(lane_pos, Relaxed);
-            if old_descendant_lanes.contains(lane_pos) {
-                break;
-            }
-        }
-    }
-
-    pub(crate) fn mark_consumer_root(&self, lane_pos: LanePos) -> bool {
+    pub(crate) fn mark_consumer_root(
+        &self,
+        lane_pos: LanePos,
+        not_unmounted: NotUnmountedToken,
+    ) -> bool {
         let old_consumer_root_lanes = self
             .mark
             .consumer_root_lanes
@@ -81,9 +70,14 @@ impl ElementContextNode {
         if old_consumer_root_lanes.contains(lane_pos) {
             return false;
         }
+        self.mark_up(lane_pos, not_unmounted);
+        return true;
+    }
+
+    fn mark_up(&self, lane_pos: LanePos, not_unmounted: NotUnmountedToken) {
         let mut curr = self;
         loop {
-            let Some(parent) = &curr.parent else {
+            let Some(parent) = curr.parent(not_unmounted) else {
                 break;
             };
             curr = parent.as_ref();
@@ -95,7 +89,6 @@ impl ElementContextNode {
                 break;
             }
         }
-        return true;
     }
 
     pub(crate) fn purge_lane(&self, lane_pos: LanePos) {

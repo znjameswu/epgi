@@ -201,10 +201,12 @@ impl<E: FullElement> ElementNode<E> {
                             &barrier,
                         );
                         for mainline_reader in mainline_readers.into_iter() {
-                            mainline_reader
-                                .upgrade()
-                                .expect("Readers should be alive")
-                                .mark_consumer_root(work.context.lane_pos);
+                            let mainline_reader =
+                                mainline_reader.upgrade().expect("Readers should be alive");
+                            mainline_reader.mark_consumer_root(
+                                work.context.lane_pos,
+                                mainline_reader.assert_not_unmounted(),
+                            );
                         }
                     }
                     use crate::tree::MainlineState::*;

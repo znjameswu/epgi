@@ -185,31 +185,27 @@ impl LaneScheduler {
 }
 
 fn mark_batch(batch_conf: &BatchConf, lane_pos: LanePos) {
+    let mark_root = |PtrEq(node): &PtrEq<AweakElementContextNode>| {
+        let Some(node) = node.upgrade() else { return };
+        if let Err(not_unmounted) = node.is_unmounted() {
+            node.mark_root(lane_pos, not_unmounted);
+        }
+        return;
+    };
+
     if batch_conf.roots.len() <= 100 {
-        batch_conf.roots.iter().for_each(|PtrEq(node)| {
-            let Some(node) = node.upgrade() else { return };
-            if node.is_unmounted() {
-                return;
-            }
-            node.mark_root(lane_pos);
-        });
+        batch_conf.roots.iter().for_each(mark_root);
     } else {
-        batch_conf.roots.par_iter().for_each(|PtrEq(node)| {
-            let Some(node) = node.upgrade() else { return };
-            if node.is_unmounted() {
-                return;
-            }
-            node.mark_root(lane_pos);
-        })
+        batch_conf.roots.par_iter().for_each(mark_root)
     }
 }
 
 fn mark_point_rebuilds(point_rebuilds: &HashSet<PtrEq<AweakElementContextNode>>) {
     point_rebuilds.iter().for_each(|PtrEq(node)| {
         let Some(node) = node.upgrade() else { return };
-        if node.is_unmounted() {
-            return;
+        if let Err(not_unmounted) = node.is_unmounted() {
+            node.mark_point_rebuild(not_unmounted);
         }
-        node.mark_point_rebuild();
+        return;
     });
 }

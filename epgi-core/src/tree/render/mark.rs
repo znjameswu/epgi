@@ -40,7 +40,7 @@ impl RenderMark {
         }
     }
 
-    pub(crate) fn assume_not_detached(&self) -> NotDetachedToken {
+    pub(crate) fn assert_not_detached(&self) -> NotDetachedToken {
         debug_assert!(
             !self.is_detached.load(Relaxed),
             "We assumed this render object to be attached"
@@ -72,7 +72,7 @@ impl RenderMark {
         }
     }
 
-    pub(crate) fn assume_not_needing_layout(&self) -> NoRelayoutToken {
+    pub(crate) fn assert_not_needing_layout(&self) -> NoRelayoutToken {
         debug_assert!(
             !self.needs_layout.load(Relaxed),
             "We assumed this render object to be not needing relayout"
@@ -122,7 +122,7 @@ impl LayerMark {
         }
     }
 
-    pub(crate) fn assume_not_needing_composite(&self) -> NoRecompositeToken {
+    pub(crate) fn assert_not_needing_composite(&self) -> NoRecompositeToken {
         debug_assert!(
             !self.needs_composite.load(Relaxed),
             "We assumed this render object to be not needing recomposite"
