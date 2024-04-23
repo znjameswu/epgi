@@ -12,7 +12,7 @@ use super::State;
 impl<'a> BuildContext<'a> {
     pub fn use_future_ref<
         D: DependencyKey,
-        Fut: Future<Output = T> + Send + Sync + 'static,
+        Fut: Future<Output = T> + Unpin + Send + Sync + 'static,
         T: State,
     >(
         &mut self,
@@ -35,7 +35,7 @@ impl<'a> BuildContext<'a> {
 
     pub fn use_future<
         D: DependencyKey,
-        Fut: Future<Output = T> + Send + Sync + 'static,
+        Fut: Future<Output = T> + Unpin + Send + Sync + 'static,
         T: State,
     >(
         &mut self,
@@ -51,7 +51,7 @@ macro_rules! impl_use_future {
     ($name: ident, $($input: ident : $input_type: ident),*) => {
         pub fn $name<
             $($input_type: DependencyKey),*,
-            Fut: Future<Output = T> + Send + Sync + 'static,
+            Fut: Future<Output = T> + Unpin + Send + Sync + 'static,
             T: State
         >(
             &mut self,
@@ -137,7 +137,7 @@ where
 
 impl<D: DependencyKey, Fut, T> FutureHookState<D, Fut, T>
 where
-    Fut: Future<Output = T> + Send + Sync + 'static,
+    Fut: Future<Output = T> + Unpin + Send + Sync + 'static,
     T: State,
 {
     fn poll(&mut self, waker: SuspendWaker) -> Result<&T, BuildSuspendedError> {
@@ -147,13 +147,14 @@ where
             MaybeDone::Future(fut) => {
                 let future_waker = waker.clone().into_waker();
                 let mut context = std::task::Context::from_waker(&future_waker);
-                let poll_result = std::pin::pin!(fut.clone()).as_mut().poll(&mut context);
+                let poll_result = std::pin::pin!(fut).poll(&mut context);
                 match poll_result {
                     std::task::Poll::Ready(value) => {
                         *maybe_done = MaybeDone::Done(value);
                         let MaybeDone::Done(value) = maybe_done else {
                             panic!("Impossible to fail")
                         };
+                        waker.set_completed();
                         Ok(value)
                     }
                     std::task::Poll::Pending => Err(BuildSuspendedError { waker }),

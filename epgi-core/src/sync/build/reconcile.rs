@@ -117,6 +117,9 @@ impl<E: FullElement> ElementNode<E> {
         let no_poll = !self.context.needs_poll();
         let no_descendant_lanes = !self.context.descendant_lanes().contains(LanePos::Sync);
 
+        if !no_poll {
+            std::hint::black_box(1);
+        }
         // Subtree has no work, end of visit
         if no_new_widget && no_mailbox_update && no_consumer_root && no_poll && no_descendant_lanes
         {
@@ -288,7 +291,7 @@ impl<E: FullElement> ElementNode<E> {
                         mut suspended_hooks,
                         waker,
                     } => {
-                        waker.abort();
+                        waker.set_completed();
                         // If it is not poll, then it means a new job occurred on this previously suspended node
                         if !is_poll {
                             Self::apply_updates_sync(&self.context, job_ids, &mut suspended_hooks);
@@ -310,7 +313,7 @@ impl<E: FullElement> ElementNode<E> {
                         suspended_hooks,
                         waker,
                     } => {
-                        waker.abort();
+                        waker.set_completed();
                         self.perform_inflate_node_sync::<false>(
                             new_widget,
                             if !is_poll {

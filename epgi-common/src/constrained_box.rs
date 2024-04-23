@@ -12,8 +12,7 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-#[derive(Declarative)]
-#[derive(TypedBuilder)]
+#[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<ConstrainedBox>))]
 #[derive(Debug)]
 pub struct ConstrainedBox {

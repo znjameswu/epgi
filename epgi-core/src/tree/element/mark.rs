@@ -48,6 +48,15 @@ impl ElementContextNode {
         self.mark
             .mailbox_lanes
             .fetch_insert_single(lane_pos, Relaxed);
+        self.mark_up(lane_pos)
+    }
+
+    pub(crate) fn mark_point_rebuild(&self) {
+        self.mark.needs_poll.store(true, Relaxed);
+        self.mark_up(LanePos::Sync)
+    }
+
+    fn mark_up(&self, lane_pos: LanePos) {
         let mut curr = self;
         loop {
             let Some(parent) = &curr.parent else {

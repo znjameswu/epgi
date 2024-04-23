@@ -5,7 +5,7 @@ use epgi_common::{ConstrainedBox, PointerEvent};
 use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
     hooks::SetState,
-    nodes::Function,
+    nodes::Builder,
     scheduler::{get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle},
     tree::{ArcChildWidget, LayoutResults},
 };
@@ -13,6 +13,7 @@ use std::{
     num::NonZeroUsize,
     time::{Instant, SystemTime},
 };
+use typed_builder::TypedBuilder;
 use vello::{
     kurbo::Affine,
     peniko::Color,
@@ -27,9 +28,13 @@ use winit::{
 
 use crate::{EpgiGlazierSchedulerExtension, WinitPointerEventConverter};
 
+#[derive(TypedBuilder)]
 pub struct AppLauncher {
+    #[builder(default="epgi app".into(), setter(into))]
     title: String,
     app: ArcChildWidget<BoxProtocol>,
+    sync_threadpool_builder: rayon::ThreadPool,
+    async_threadpool_builder: rayon::ThreadPool,
 }
 
 struct MainState<'a> {
@@ -48,18 +53,6 @@ struct MainState<'a> {
 }
 
 impl AppLauncher {
-    pub fn new(app: ArcChildWidget<BoxProtocol>) -> Self {
-        Self {
-            title: "epgi app".into(),
-            app,
-        }
-    }
-
-    pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.title = title.into();
-        self
-    }
-
     pub fn run(self) {
         pretty_env_logger::init();
         let event_loop = EventLoop::new().unwrap();
@@ -75,6 +68,14 @@ impl AppLauncher {
         let mut main_state = MainState::new(window);
 
         let (tx, rx) = unbounded_channel_sync();
+        let window = main_state.window.clone();
+        initialize_scheduler_handle(
+            self.sync_threadpool_builder,
+            self.async_threadpool_builder,
+            move || {
+                window.request_redraw();
+            },
+        );
         main_state.start_scheduler_with(self.app, rx);
         let mut pointer_event_converter = WinitPointerEventConverter::new(tx);
 
@@ -276,8 +277,6 @@ impl<'a> MainState<'a> {
         let (child, constraints_binding) = bind_constraints(child);
         self.constraints_binding = constraints_binding;
 
-        initialize_scheduler_handle();
-
         let scheduler = Scheduler::new(
             Asc::new(RootView { child }),
             LayoutResults {
@@ -297,16 +296,33 @@ impl<'a> MainState<'a> {
     }
 }
 
-fn initialize_scheduler_handle() {
-    let sync_threadpool = rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
-        .build()
-        .unwrap();
-    let async_threadpool = rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
-        .build()
-        .unwrap();
-    let scheduler_handle = SchedulerHandle::new(sync_threadpool, async_threadpool);
+fn initialize_scheduler_handle(
+    sync_threadpool_builder: rayon::ThreadPool,
+    async_threadpool_builder: rayon::ThreadPool,
+    reqeust_redraw: impl Fn() + Send + Sync + 'static,
+) {
+    // let sync_threadpool_builder = rayon::ThreadPoolBuilder::new()
+    //     .num_threads(1)
+    //     .build()
+    //     .unwrap();
+    // let async_threadpool_builder = rayon::ThreadPoolBuilder::new()
+    //     .num_threads(1)
+    //     .build()
+    //     .unwrap();
+    // #[cfg(tokio)]
+    // {
+    //     let tokio_rt = tokio::runtime::Builder::new_multi_thread()
+    //         .worker_threads(1)
+    //         .build()
+    //         .unwrap();
+    //     let tokio_handle = tokio_rt.handle();
+    //     // sync_threadpool_builder.broadcast(|_| )
+    // }
+    let scheduler_handle = SchedulerHandle::new(
+        sync_threadpool_builder,
+        async_threadpool_builder,
+        Box::new(reqeust_redraw),
+    );
     unsafe {
         setup_scheduler(scheduler_handle);
     }
@@ -322,7 +338,7 @@ fn bind_frame_info(
     let frame_binding = Arc::new(SyncMutex::<Option<SetState<FrameInfo>>>::new(None));
     let result = frame_binding.clone();
 
-    let child = Arc::new(Function {
+    let child = Arc::new(Builder {
         builder: move |mut ctx| {
             let frame_binding = frame_binding.clone();
             let child = child.clone();
@@ -350,7 +366,7 @@ fn bind_constraints(
     let constraints_binding = Arc::new(SyncMutex::<Option<SetState<BoxConstraints>>>::new(None));
     let result = constraints_binding.clone();
 
-    let child = Arc::new(Function {
+    let child = Arc::new(Builder {
         builder: move |mut ctx| {
             let constraints_binding = constraints_binding.clone();
             let child = child.clone();

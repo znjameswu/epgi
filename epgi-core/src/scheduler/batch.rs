@@ -24,7 +24,3 @@ impl BatchConf {
         self.priority.is_sync()
     }
 }
-
-pub struct BatchData {
-    pub conf: BatchConf,
-}

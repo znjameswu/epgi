@@ -16,7 +16,7 @@ use crate::{
     sync::CommitBarrier,
     tree::{
         AweakAnyElementNode, AweakAnyLayerRenderObject, AweakAnyRenderObject,
-        AweakElementContextNode, SuspendWaker, SyncSuspendWaker, WorkContext, WorkHandle,
+        AweakElementContextNode, SyncSuspendWaker, WorkContext, WorkHandle,
     },
 };
 
@@ -44,6 +44,8 @@ pub struct SchedulerHandle {
     pub sync_threadpool: rayon::ThreadPool,
     pub async_threadpool: rayon::ThreadPool,
 
+    request_redraw: Box<dyn Fn() + Send + Sync>,
+
     pub(super) task_rx: SchedulerTaskReceiver,
 
     pub(super) global_sync_job_build_lock: SyncRwLock<()>,
@@ -60,10 +62,15 @@ pub struct SchedulerHandle {
 }
 
 impl SchedulerHandle {
-    pub fn new(sync_threadpool: rayon::ThreadPool, async_threadpool: rayon::ThreadPool) -> Self {
+    pub fn new(
+        sync_threadpool: rayon::ThreadPool,
+        async_threadpool: rayon::ThreadPool,
+        request_redraw: Box<dyn Fn() + Send + Sync>,
+    ) -> Self {
         Self {
             sync_threadpool,
             async_threadpool,
+            request_redraw,
             task_rx: SchedulerTaskReceiver::new(),
             global_sync_job_build_lock: SyncRwLock::new(()),
             job_id_counter: AtomicJobIdCounter::new(),
@@ -75,6 +82,11 @@ impl SchedulerHandle {
             // boundaries_needing_relayout: Default::default(),
             layer_needing_repaint: Default::default(),
         }
+    }
+
+    pub fn broadcast(&self, op: impl Fn() + Sync) {
+        self.sync_threadpool.broadcast(|_| op());
+        self.async_threadpool.broadcast(|_| op());
     }
 
     pub fn create_sync_job(&self, builder: impl FnOnce(&mut JobBuilder)) {
@@ -91,6 +103,7 @@ impl SchedulerHandle {
                 .accumulated_jobs
                 .lock()
                 .push(job_builder);
+            (self.request_redraw)();
         }
         drop(guard);
     }
@@ -105,11 +118,13 @@ impl SchedulerHandle {
                 .accumulated_jobs
                 .lock()
                 .push(job_builder);
+            (self.request_redraw)();
         }
     }
 
     pub(crate) fn push_point_rebuild(&self, waker: std::sync::Arc<SyncSuspendWaker>) {
         self.accumulated_point_rebuilds.lock().push(waker);
+        (self.request_redraw)();
     }
 
     pub fn request_new_frame(&self) -> SyncMpscReceiver<FrameResults> {

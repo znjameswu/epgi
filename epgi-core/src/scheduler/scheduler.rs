@@ -1,7 +1,4 @@
-use std::{
-    any::Any,
-    sync::{atomic::Ordering::*, Arc},
-};
+use std::{any::Any, sync::Arc};
 
 use hashbrown::HashSet;
 
@@ -55,9 +52,13 @@ pub struct BuildStates {
 }
 
 impl BuildStates {
-    pub(crate) fn apply_batcher_result(&mut self, result: BatchResult) {
+    pub(crate) fn apply_batcher_result(
+        &mut self,
+        result: BatchResult,
+        point_rebuilds: HashSet<PtrEq<AweakElementContextNode>>,
+    ) {
         self.scheduler
-            .apply_batcher_result(result, &self.root_element)
+            .apply_batcher_result(result, point_rebuilds, &self.root_element)
     }
 
     pub(crate) fn dispatch_sync_batch(&mut self) -> Option<BatchId> {
@@ -110,7 +111,9 @@ where
     ) -> Self {
         let lane_scheduler = LaneScheduler::new();
         use crate::sync::reconcile_item::ChildWidgetSyncInflateExt;
-        let (root_element, subtree_change) = root_widget.inflate_sync(None, &lane_scheduler);
+        let (root_element, subtree_change) = scheduler_handle
+            .sync_threadpool
+            .scope(|_| root_widget.inflate_sync(None, &lane_scheduler));
 
         let SubtreeRenderObjectChange::New(root_render_object) = subtree_change else {
             panic!("Root widget inflate failed!");
@@ -167,18 +170,15 @@ where
                             std::mem::take(&mut *handle.accumulated_point_rebuilds.lock()),
                         )
                     };
-                    let updates = self.job_batcher.update_with_new_jobs(
-                        new_jobs,
-                        point_rebuilds.into_iter().filter_map(|point_rebuild| {
-                            // We can perform the relaxed load here, because the other only setter is the commit phase and now we hold the sync lock
-                            if !point_rebuild.aborted.load(Relaxed) {
-                                Some(point_rebuild.node.clone())
-                            } else {
-                                None
-                            }
-                        }),
+                    let updates = self.job_batcher.update_with_new_jobs(new_jobs);
+                    build_states.apply_batcher_result(
+                        updates,
+                        point_rebuilds
+                            .into_iter()
+                            .filter(|waker| !waker.completed())
+                            .map(|waker| PtrEq(waker.node.clone()))
+                            .collect(),
                     );
-                    build_states.apply_batcher_result(updates);
                     // lane_scheduler.dispatch_async_batches();
                     self.extension.on_frame_begin(&build_states);
                     let commited_sync_batch = build_states.dispatch_sync_batch();

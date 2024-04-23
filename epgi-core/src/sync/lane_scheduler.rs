@@ -1,6 +1,7 @@
 mod commit_barrier;
 pub use commit_barrier::*;
 
+use hashbrown::HashSet;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
@@ -10,12 +11,17 @@ use crate::{
 };
 
 pub struct LaneScheduler {
-    sync_lane: Option<LaneData>,
-    async_lanes: [Option<LaneData>; LaneMask::ASYNC_LANE_COUNT],
+    sync_lane: Option<SyncLaneData>,
+    async_lanes: [Option<AsyncLaneData>; LaneMask::ASYNC_LANE_COUNT],
     queued_batches: Vec<Asc<BatchConf>>,
 }
 
-struct LaneData {
+struct SyncLaneData {
+    batch: Asc<BatchConf>,
+    pub point_rebuilds: HashSet<PtrEq<AweakElementContextNode>>,
+}
+
+struct AsyncLaneData {
     batch: Asc<BatchConf>,
     lane_pos: LanePos,
     // top_level_roots:
@@ -24,7 +30,7 @@ struct LaneData {
     blocked_by: LaneMask,
 }
 
-impl LaneData {
+impl AsyncLaneData {
     fn new(lane_pos: LanePos, batch: Asc<BatchConf>) -> Self {
         Self {
             lane_pos,
@@ -57,6 +63,7 @@ impl LaneScheduler {
     pub(crate) fn apply_batcher_result(
         &mut self,
         result: BatchResult,
+        point_rebuilds: HashSet<PtrEq<AweakElementContextNode>>,
         root_element: &ArcAnyElementNode,
     ) {
         debug_assert!(
@@ -85,7 +92,11 @@ impl LaneScheduler {
 
         if let Some(sync_batch) = new_sync_batch {
             mark_batch(&sync_batch, LanePos::Sync);
-            self.sync_lane = Some(LaneData::new(LanePos::Sync, sync_batch));
+            mark_point_rebuilds(&point_rebuilds);
+            self.sync_lane = Some(SyncLaneData {
+                batch: sync_batch,
+                point_rebuilds,
+            });
         }
 
         if !new_async_batches.is_empty() {
@@ -104,7 +115,7 @@ impl LaneScheduler {
                 };
                 let lane_pos = LanePos::Async(lane_index as u8);
                 mark_batch(&new_async_batch, lane_pos);
-                *async_lane = Some(LaneData::new(lane_pos, new_async_batch));
+                *async_lane = Some(AsyncLaneData::new(lane_pos, new_async_batch));
                 todo!()
             }
         }
@@ -191,4 +202,14 @@ fn mark_batch(batch_conf: &BatchConf, lane_pos: LanePos) {
             node.mark_root(lane_pos);
         })
     }
+}
+
+fn mark_point_rebuilds(point_rebuilds: &HashSet<PtrEq<AweakElementContextNode>>) {
+    point_rebuilds.iter().for_each(|PtrEq(node)| {
+        let Some(node) = node.upgrade() else { return };
+        if node.is_unmounted() {
+            return;
+        }
+        node.mark_point_rebuild();
+    });
 }
