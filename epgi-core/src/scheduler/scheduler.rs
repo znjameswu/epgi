@@ -110,7 +110,7 @@ where
         extension: E,
     ) -> Self {
         let lane_scheduler = LaneScheduler::new();
-        use crate::sync::reconcile_item::ChildWidgetSyncInflateExt;
+        use crate::sync::ChildWidgetSyncInflateExt;
         let (root_element, subtree_change) = scheduler_handle
             .sync_threadpool
             .scope(|_| root_widget.inflate_sync(None, &lane_scheduler));

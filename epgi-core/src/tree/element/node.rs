@@ -36,7 +36,7 @@ impl<E: Element> ElementNode<E> {
 
 pub trait AnyElementNode:
     crate::sync::cancel_private::AnyElementNodeAsyncCancelExt
-    + crate::sync::sync_build_private::AnyElementSyncReconcileExt
+    + crate::sync::AnyElementSyncReconcileExt
     + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
     + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
     + crate::sync::unmount::AnyElementNodeUnmountExt
@@ -51,11 +51,7 @@ pub trait AnyElementNode:
 }
 
 pub trait ChildElementNode<PP: Protocol>:
-    AnyElementNode
-    + crate::sync::sync_build_private::ChildElementSyncReconcileExt<PP>
-    + Send
-    + Sync
-    + 'static
+    AnyElementNode + crate::sync::ChildElementSyncReconcileExt<PP> + Send + Sync + 'static
 {
     fn context(&self) -> &ElementContextNode;
 

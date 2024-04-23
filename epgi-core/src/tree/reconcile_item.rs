@@ -118,7 +118,7 @@ where
 }
 
 pub trait ChildElementWidgetPair<P: Protocol>:
-    crate::sync::reconcile_item::ChildElementWidgetPairSyncBuildExt<P>
+    crate::sync::ChildElementWidgetPairSyncBuildExt<P>
     + crate::r#async::reconcile_item::ChildElementWidgetPairAsyncBuildExt<P>
     + Send
     + Sync

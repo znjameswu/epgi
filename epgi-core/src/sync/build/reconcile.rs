@@ -1,81 +1,33 @@
-pub(crate) mod component_element;
-pub(crate) mod render_element;
-pub(crate) mod suspense_element;
-
-use linear_map::LinearMap;
-
 use crate::{
-    foundation::{
-        Arc, AsIterator, Container, ContainerOf, Inlinable64Vec, InlinableDwsizeVec,
-        LinearMapEntryExt, Provide, SyncMutex, TypeKey, EMPTY_CONSUMED_TYPES,
-    },
+    foundation::{Arc, Container, ContainerOf, Inlinable64Vec},
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{LaneScheduler, SubtreeRenderObjectChange, SyncBuildContext, SyncHookContext},
+    sync::{LaneScheduler, SubtreeRenderObjectChange, SyncHookContext},
     tree::{
-        no_widget_update, ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue,
-        ChildRenderObjectsUpdateCallback, Element, ElementBase, ElementContextNode, ElementNode,
-        ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, FullElement,
-        HooksWithTearDowns, ImplElementNode, ImplProvide, Mainline, MainlineState,
+        no_widget_update, ArcChildElementNode, Element, ElementContextNode, ElementNode,
+        FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
     },
 };
 
-use super::CancelAsync;
+use super::{
+    provider::{read_and_update_subscriptions_sync, update_provided_value},
+    CancelAsync, ImplReconcileCommit,
+};
 
 impl<E: FullElement> ElementNode<E> {
-    pub(super) fn rebuild_node_sync(
+    pub(super) fn reconcile_node_sync(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
         lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        let visit_action = self.visit_inspect(widget, lane_scheduler);
-        self.execute_visit(visit_action, job_ids, scope, lane_scheduler)
-    }
-
-    pub(super) fn inflate_node_sync(
-        widget: &E::ArcWidget,
-        parent_context: Option<ArcElementContextNode>,
-        lane_scheduler: &LaneScheduler,
-    ) -> (
-        Arc<ElementNode<E>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
-        let node = Arc::new_cyclic(|weak| ElementNode {
-            context: Arc::new(ElementContextNode::new_for::<E>(
-                weak.clone() as _,
-                parent_context,
-                widget,
-            )),
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget: widget.clone(),
-                inner: ElementSnapshotInner::Mainline(Mainline {
-                    state: None,
-                    async_queue: AsyncWorkQueue::new_empty(),
-                }),
-            }),
-        });
-
-        let consumed_values = Self::read_and_update_subscriptions_sync(
-            E::get_consumed_types(widget),
-            EMPTY_CONSUMED_TYPES,
-            &node.context,
-            lane_scheduler,
-        );
-
-        let subtree_results = Self::perform_inflate_node_sync::<true>(
-            &node,
-            widget,
-            SyncHookContext::new_inflate(),
-            consumed_values,
-            lane_scheduler,
-        );
-        return (node, subtree_results);
+        let visit_action = self.prepare_reconcile(widget, lane_scheduler);
+        self.execute_reconcile(visit_action, job_ids, scope, lane_scheduler)
     }
 }
 
-enum VisitAction<E: FullElement> {
-    Rebuild {
+enum ReconcileAction<E: FullElement> {
+    Reconcile {
         is_poll: bool,
         old_widget: E::ArcWidget,
         new_widget: Option<E::ArcWidget>,
@@ -90,7 +42,7 @@ enum VisitAction<E: FullElement> {
     /// The visit variant will under no circumstance change the mainline state.
     /// Therefore, this variant won't occupy the element node. As a result, exisiting async work won't be interrupted
     /// However, the visit variant WILL have other commit effects, such as createing/updating/detaching render object.
-    Visit {
+    KeepAndVisitChildren {
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         // This has two variant in case the render object is detached
         // We do not store MaybeSuspendeChildRenderObject, because everytime we need to access it, (update children suspend state)
@@ -102,28 +54,25 @@ enum VisitAction<E: FullElement> {
         self_rebuild_suspended: bool,
     },
     /// End-of-visit is triggered when both the node and its descendants (i.e. entire subtree) does not need reconcile
-    EndOfVisit,
+    KeepAndReturn,
 }
 
 impl<E: FullElement> ElementNode<E> {
-    fn visit_inspect(
+    fn prepare_reconcile(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         lane_scheduler: &LaneScheduler,
-    ) -> VisitAction<E> {
+    ) -> ReconcileAction<E> {
         let no_new_widget = widget.is_none();
         let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::Sync);
         let no_consumer_root = !self.context.consumer_root_lanes().contains(LanePos::Sync);
         let no_poll = !self.context.needs_poll();
         let no_descendant_lanes = !self.context.descendant_lanes().contains(LanePos::Sync);
 
-        if !no_poll {
-            std::hint::black_box(1);
-        }
         // Subtree has no work, end of visit
         if no_new_widget && no_mailbox_update && no_consumer_root && no_poll && no_descendant_lanes
         {
-            return VisitAction::EndOfVisit;
+            return ReconcileAction::KeepAndReturn;
         }
 
         let mut snapshot = self.snapshot.lock();
@@ -149,12 +98,12 @@ impl<E: FullElement> ElementNode<E> {
                     children,
                     render_object,
                     ..
-                } => VisitAction::Visit::<E> {
+                } => ReconcileAction::KeepAndVisitChildren::<E> {
                     children: children.map_ref_collect(Clone::clone),
                     render_object: render_object.clone(),
                     self_rebuild_suspended: false,
                 },
-                RebuildSuspended { children, .. } => VisitAction::Visit {
+                RebuildSuspended { children, .. } => ReconcileAction::KeepAndVisitChildren {
                     children: children.map_ref_collect(Clone::clone),
                     render_object: Default::default(),
                     self_rebuild_suspended: true,
@@ -168,7 +117,7 @@ impl<E: FullElement> ElementNode<E> {
                         2. Subtree has work. \
                         3. Self suspended during the last inflate attempt."
                     );
-                    VisitAction::EndOfVisit
+                    ReconcileAction::KeepAndReturn
                 }
             };
         }
@@ -190,7 +139,7 @@ impl<E: FullElement> ElementNode<E> {
 
         // Cannot skip work but can skip rebuild, meaning there is a polling work here.
         if no_widget_update && no_mailbox_update {
-            return VisitAction::Rebuild {
+            return ReconcileAction::Reconcile {
                 is_poll: true,
                 old_widget: old_widget.clone(),
                 new_widget: widget,
@@ -203,7 +152,7 @@ impl<E: FullElement> ElementNode<E> {
         } else {
             old_widget.clone()
         };
-        return VisitAction::Rebuild {
+        return ReconcileAction::Reconcile {
             is_poll: false,
             old_widget,
             new_widget: widget,
@@ -213,15 +162,15 @@ impl<E: FullElement> ElementNode<E> {
     }
 
     #[inline(always)]
-    fn execute_visit(
+    fn execute_reconcile(
         self: &Arc<Self>,
-        visit_action: VisitAction<E>,
+        visit_action: ReconcileAction<E>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'_>,
         lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let result = match visit_action {
-            VisitAction::Visit {
+            ReconcileAction::KeepAndVisitChildren {
                 children,
                 render_object,
                 self_rebuild_suspended,
@@ -241,7 +190,7 @@ impl<E: FullElement> ElementNode<E> {
                     self_rebuild_suspended,
                 );
             }
-            VisitAction::Rebuild {
+            ReconcileAction::Reconcile {
                 is_poll,
                 old_widget,
                 new_widget,
@@ -252,14 +201,14 @@ impl<E: FullElement> ElementNode<E> {
                     self.perform_cancel_async_work(cancel_async)
                 }
                 let new_widget_ref = new_widget.as_ref().unwrap_or(&old_widget);
-                let consumed_values = Self::read_and_update_subscriptions_sync(
+                let consumed_values = read_and_update_subscriptions_sync(
                     E::get_consumed_types(new_widget_ref),
                     E::get_consumed_types(&old_widget),
                     &self.context,
                     lane_scheduler,
                 );
                 if let Some(widget) = new_widget.as_ref() {
-                    Self::update_provided_value(&old_widget, widget, &self.context, lane_scheduler)
+                    update_provided_value::<E>(&old_widget, widget, &self.context, lane_scheduler)
                 }
                 let is_new_widget = new_widget.is_some();
                 let new_widget = &new_widget.unwrap_or(old_widget);
@@ -271,7 +220,7 @@ impl<E: FullElement> ElementNode<E> {
                         render_object,
                     } => {
                         assert!(!is_poll, "A non-suspended node should not be polled");
-                        Self::apply_updates_sync(&self.context, job_ids, &mut hooks);
+                        apply_updates_sync(&self.context, job_ids, &mut hooks);
                         self.perform_rebuild_node_sync(
                             new_widget,
                             element,
@@ -294,7 +243,7 @@ impl<E: FullElement> ElementNode<E> {
                         waker.set_completed();
                         // If it is not poll, then it means a new job occurred on this previously suspended node
                         if !is_poll {
-                            Self::apply_updates_sync(&self.context, job_ids, &mut suspended_hooks);
+                            apply_updates_sync(&self.context, job_ids, &mut suspended_hooks);
                         }
                         self.perform_rebuild_node_sync(
                             new_widget,
@@ -327,455 +276,41 @@ impl<E: FullElement> ElementNode<E> {
                     }
                 }
             }
-            VisitAction::EndOfVisit => SubtreeRenderObjectChange::new_no_update(),
+            ReconcileAction::KeepAndReturn => SubtreeRenderObjectChange::new_no_update(),
         };
         self.context.purge_lane(LanePos::Sync);
         return result;
     }
-
-    fn perform_rebuild_node_sync(
-        self: &Arc<Self>,
-        widget: &E::ArcWidget,
-        mut element: E,
-        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        mut hook_context: SyncHookContext,
-        mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
-        is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        let mut nodes_needing_unmount = Default::default();
-        let results = E::perform_rebuild_element(
-            &mut element,
-            &widget,
-            SyncBuildContext {
-                hooks: &mut hook_context,
-                element_context: &self.context,
-            }
-            .into(),
-            provider_values,
-            children,
-            &mut nodes_needing_unmount,
-        );
-
-        let (state, change) = match results {
-            Ok((items, shuffle)) => {
-                // Starting the unmounting as early as possible.
-                // Unmount before updating render object can cause render object to hold reference to detached children,
-                // Therfore, we need to ensure we do not read into render objects before the batch commit is done
-                for node_needing_unmount in nodes_needing_unmount {
-                    scope.spawn(|scope| node_needing_unmount.unmount(scope))
-                }
-
-                let results =
-                    items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
-                        use ElementReconcileItem::*;
-                        match item {
-                            Keep(node) => node.visit_and_work_sync(job_ids, scope, lane_scheduler),
-                            Update(pair) => pair.rebuild_sync_box(job_ids, scope, lane_scheduler),
-                            Inflate(widget) => {
-                                widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
-                            }
-                        }
-                    });
-                let (mut children, changes) = results.unzip_collect(|x| x);
-
-                let change = <E as Element>::Impl::rebuild_success_commit(
-                    &element,
-                    widget,
-                    shuffle,
-                    &mut children,
-                    &mut render_object,
-                    changes,
-                    &self.context,
-                    lane_scheduler,
-                    scope,
-                    is_new_widget,
-                );
-                (
-                    MainlineState::Ready {
-                        element,
-                        hooks: hook_context.hooks,
-                        children,
-                        render_object,
-                    },
-                    change,
-                )
-            }
-            Err((children, err)) => {
-                debug_assert!(
-                    nodes_needing_unmount.is_empty(),
-                    "An element that suspends itself should not request unmounting any child nodes"
-                );
-
-                (
-                    MainlineState::RebuildSuspended {
-                        suspended_hooks: hook_context.hooks,
-                        element,
-                        children,
-                        waker: err.waker,
-                    },
-                    <E as Element>::Impl::rebuild_suspend_commit(render_object),
-                )
-            }
-        };
-        self.commit_write_element(state);
-        return change;
-    }
-
-    fn perform_inflate_node_sync<const FIRST_INFLATE: bool>(
-        self: &Arc<Self>,
-        widget: &E::ArcWidget,
-        mut hook_context: SyncHookContext,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        lane_scheduler: &LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
-        let result = E::perform_inflate_element(
-            &widget,
-            SyncBuildContext {
-                hooks: &mut hook_context,
-                element_context: &self.context,
-            }
-            .into(),
-            provider_values,
-        );
-
-        let (state, change) = match result {
-            Ok((element, child_widgets)) => {
-                let results = child_widgets.par_map_collect(
-                    &get_current_scheduler().sync_threadpool,
-                    |child_widget| {
-                        child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
-                    },
-                );
-                let (mut children, changes) = results.unzip_collect(|x| x);
-
-                debug_assert!(
-                    !changes
-                        .as_iter()
-                        .any(SubtreeRenderObjectChange::is_keep_render_object),
-                    "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
-                );
-
-                let (render_object, change) = <E as Element>::Impl::inflate_success_commit(
-                    &element,
-                    widget,
-                    &mut children,
-                    changes,
-                    &self.context,
-                    lane_scheduler,
-                );
-
-                (
-                    MainlineState::Ready {
-                        element,
-                        hooks: hook_context.hooks,
-                        children,
-                        render_object,
-                    },
-                    change,
-                )
-            }
-            Err(err) => (
-                MainlineState::InflateSuspended {
-                    suspended_hooks: hook_context.hooks,
-                    waker: err.waker,
-                },
-                SubtreeRenderObjectChange::Suspend,
-            ),
-        };
-        if FIRST_INFLATE {
-            self.commit_write_element_first_inflate(state);
-        } else {
-            self.commit_write_element(state)
-        }
-        return change;
-    }
-
-    fn apply_updates_sync(
-        element_context: &ElementContextNode,
-        job_ids: &Inlinable64Vec<JobId>,
-        hooks: &mut HooksWithTearDowns,
-    ) {
-        let mut jobs = {
-            element_context
-                .mailbox
-                .lock()
-                .extract_if(|job_id, _| job_ids.contains(job_id))
-                .collect::<Vec<_>>()
-        };
-        jobs.sort_by_key(|(job_id, ..)| *job_id);
-
-        let updates = jobs
-            .into_iter()
-            .flat_map(|(_, updates)| updates)
-            .collect::<Vec<_>>();
-
-        for update in updates {
-            (update.op)(
-                hooks
-                    .get_mut(update.hook_index)
-                    .expect("Update should not contain an invalid index")
-                    .0
-                    .as_mut(),
-            )
-            .ok()
-            .expect("We currently do not handle hook failure") //TODO
-        }
-    }
-
-    fn commit_write_element(self: &Arc<Self>, state: MainlineState<E, HooksWithTearDowns>) {
-        // Collecting async work is necessary, even if we are inflating!
-        // Since it could be an InflateSuspended node and an async batch spawned a secondary root on this node.
-        let async_work_needing_start = {
-            let mut snapshot = self.snapshot.lock();
-            let snapshot_reborrow = &mut *snapshot;
-            let mainline = snapshot_reborrow
-                .inner
-                .mainline_mut()
-                .expect("An unmounted element node should not be reachable by a rebuild!");
-            debug_assert!(
-                mainline.async_queue.current().is_none(),
-                "An async work should not be executing alongside a sync work"
-            );
-            mainline.state = Some(state);
-            self.prepare_execute_backqueue(mainline, &snapshot_reborrow.widget)
-        };
-
-        if let Some(async_work_needing_start) = async_work_needing_start {
-            let node = self.clone();
-            node.execute_rebuild_node_async_detached(async_work_needing_start);
-        }
-    }
-
-    fn commit_write_element_first_inflate(
-        self: &Arc<Self>,
-        state: MainlineState<E, HooksWithTearDowns>,
-    ) {
-        let mut snapshot = self.snapshot.lock();
-        let snapshot_reborrow = &mut *snapshot;
-        let mainline = snapshot_reborrow
-            .inner
-            .mainline_mut()
-            .expect("An unmounted element node should not be reachable by a rebuild!");
-        debug_assert!(
-            mainline.async_queue.is_empty(),
-            "The first-time inflate should not see have any other async work"
-        );
-        mainline.state = Some(state);
-    }
-
-    fn update_provided_value(
-        old_widget: &E::ArcWidget,
-        new_widget: &E::ArcWidget,
-        element_context: &ElementContextNode,
-        lane_scheduler: &LaneScheduler,
-    ) {
-        if let Some(new_provided_value) =
-            <E as Element>::Impl::diff_provided_value(old_widget, new_widget)
-        {
-            let contending_readers = element_context
-                .provider
-                .as_ref()
-                .expect("Element with a provided value should have a provider")
-                .write_sync(new_provided_value);
-
-            contending_readers.non_mainline.par_for_each(
-                &get_current_scheduler().sync_threadpool,
-                |(lane_pos, node)| {
-                    let node = node.upgrade().expect("ElementNode should be alive");
-                    node.restart_async_work(lane_pos, lane_scheduler)
-                },
-            );
-
-            // This is the a operation, we do not fear any inconsistencies caused by cancellation.
-            for reader in contending_readers.mainline {
-                let reader: ArcElementContextNode =
-                    reader.upgrade().expect("Readers should be alive");
-                reader.mark_consumer_root(LanePos::Sync, reader.assert_not_unmounted());
-            }
-        }
-    }
-
-    fn read_and_update_subscriptions_sync(
-        new_consumed_types: &[TypeKey],
-        old_consumed_types: &[TypeKey],
-        element_context: &ArcElementContextNode,
-        lane_scheduler: &LaneScheduler,
-    ) -> InlinableDwsizeVec<Arc<dyn Provide>> {
-        let is_old_consumed_types = std::ptr::eq(new_consumed_types, old_consumed_types);
-
-        // Unregister
-        for consumed in old_consumed_types.iter() {
-            if !new_consumed_types.contains(consumed) {
-                let removed = element_context
-                    .provider_map
-                    .get(consumed)
-                    .expect("ProviderMap should be consistent")
-                    .provider
-                    .as_ref()
-                    .expect("Element should provide types according to ProviderMap")
-                    .unregister_read(&Arc::downgrade(element_context));
-                debug_assert!(removed)
-            }
-        }
-
-        // Why do we need to restart contending async writers at all?
-        // Because if we are registering a new read, they will be unaware of us as a secondary root.
-
-        // We only need to cancel contending async writers only if this is a new subscription.
-        // Because a contending async writer on an old subsciption will naturally find this node as a secondary root.
-
-        // We only need to cancel the topmost contending writes from a single lane. Because all its subtree will be purged.
-        let mut async_work_needs_restarting = LinearMap::<LanePos, ArcElementContextNode>::new();
-
-        let consumed_values = new_consumed_types
-            .iter()
-            .map(|consumed| {
-                let is_old = is_old_consumed_types || old_consumed_types.contains(consumed);
-                let subscription = element_context
-                    .provider_map
-                    .get(consumed)
-                    .expect("Requested provider should exist");
-                let provider = subscription
-                    .provider
-                    .as_ref()
-                    .expect("Element should provide types according to ProviderMap");
-                if !is_old {
-                    let contending_writer = provider.register_read(Arc::downgrade(element_context));
-                    if let Some(contending_lane) = contending_writer {
-                        async_work_needs_restarting
-                            .entry(contending_lane)
-                            .and_modify(|v| {
-                                if v.depth < subscription.depth {
-                                    *v = subscription.clone()
-                                }
-                            })
-                            .or_insert_with(|| subscription.clone());
-                    }
-                }
-                provider.read()
-            })
-            .collect();
-        let async_work_needs_restarting: Vec<_> = async_work_needs_restarting.into();
-        async_work_needs_restarting.par_for_each(
-            &get_current_scheduler().sync_threadpool,
-            |(lane_pos, context)| {
-                let node = context
-                    .element_node
-                    .upgrade()
-                    .expect("ElementNode should be alive");
-                node.restart_async_work(lane_pos, lane_scheduler)
-            },
-        );
-        return consumed_values;
-    }
 }
 
-pub(crate) mod sync_build_private {
-    use crate::{foundation::Protocol, tree::ArcAnyElementNode};
+fn apply_updates_sync(
+    element_context: &ElementContextNode,
+    job_ids: &Inlinable64Vec<JobId>,
+    hooks: &mut HooksWithTearDowns,
+) {
+    let mut jobs = {
+        element_context
+            .mailbox
+            .lock()
+            .extract_if(|job_id, _| job_ids.contains(job_id))
+            .collect::<Vec<_>>()
+    };
+    jobs.sort_by_key(|(job_id, ..)| *job_id);
 
-    use super::*;
+    let updates = jobs
+        .into_iter()
+        .flat_map(|(_, updates)| updates)
+        .collect::<Vec<_>>();
 
-    pub trait AnyElementSyncReconcileExt {
-        fn visit_and_work_sync_any(
-            self: Arc<Self>,
-            job_ids: &Inlinable64Vec<JobId>,
-            scope: &rayon::Scope<'_>,
-            lane_scheduler: &LaneScheduler,
-        ) -> ArcAnyElementNode;
+    for update in updates {
+        (update.op)(
+            hooks
+                .get_mut(update.hook_index)
+                .expect("Update should not contain an invalid index")
+                .0
+                .as_mut(),
+        )
+        .ok()
+        .expect("We currently do not handle hook failure") //TODO
     }
-
-    impl<E: FullElement> AnyElementSyncReconcileExt for ElementNode<E> {
-        fn visit_and_work_sync_any(
-            self: Arc<Self>,
-            job_ids: &Inlinable64Vec<JobId>,
-            scope: &rayon::Scope<'_>,
-            lane_scheduler: &LaneScheduler,
-        ) -> ArcAnyElementNode {
-            self.rebuild_node_sync(None, job_ids, scope, lane_scheduler);
-            self
-        }
-    }
-
-    pub trait ChildElementSyncReconcileExt<PP: Protocol> {
-        fn visit_and_work_sync(
-            self: Arc<Self>,
-            job_ids: &Inlinable64Vec<JobId>,
-            scope: &rayon::Scope<'_>,
-            lane_scheduler: &LaneScheduler,
-        ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
-    }
-
-    impl<E: FullElement> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNode<E> {
-        fn visit_and_work_sync(
-            self: Arc<Self>,
-            job_ids: &Inlinable64Vec<JobId>,
-            scope: &rayon::Scope<'_>,
-            lane_scheduler: &LaneScheduler,
-        ) -> (
-            ArcChildElementNode<E::ParentProtocol>,
-            SubtreeRenderObjectChange<E::ParentProtocol>,
-        ) {
-            let result = self.rebuild_node_sync(None, job_ids, scope, lane_scheduler);
-            (self, result)
-        }
-    }
-}
-
-pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
-    // Reason for this signature: we need to ensure the happy path (rebuild success with no suspense)
-    // do not require a lock since there is nothing to write.
-    // And there is a lot of cloned resources from visit_inspect that has no further use
-    // (since visit do not occupy node, it has no choice but to clone resources out)
-    fn visit_commit(
-        element_node: &ElementNode<E>,
-        render_object: Self::OptionArcRenderObject,
-        render_object_changes: ContainerOf<
-            <E as ElementBase>::ChildContainer,
-            SubtreeRenderObjectChange<<E as ElementBase>::ChildProtocol>,
-        >,
-        lane_scheduler: &LaneScheduler,
-        scope: &rayon::Scope<'_>,
-        self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
-
-    // Reason for this signature: there is going to be a write_back regardless
-    // You have to return the resources since they are moved out when we occupy the node, and later they need to move back
-    fn rebuild_success_commit(
-        element: &E,
-        widget: &E::ArcWidget,
-        shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
-        children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: &mut Self::OptionArcRenderObject,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-        element_context: &ArcElementContextNode,
-        lane_scheduler: &LaneScheduler,
-        scope: &rayon::Scope<'_>,
-        is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
-
-    fn rebuild_suspend_commit(
-        render_object: Self::OptionArcRenderObject,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
-
-    fn inflate_success_commit(
-        element: &E,
-        widget: &E::ArcWidget,
-        children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
-        >,
-        element_context: &ArcElementContextNode,
-        lane_scheduler: &LaneScheduler,
-    ) -> (
-        Self::OptionArcRenderObject,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    );
 }
