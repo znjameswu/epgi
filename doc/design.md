@@ -236,6 +236,8 @@ This is a stupid question. It MUST be associated type.
                          │Committed│
                          └─────────┘
 ```
+Meaning of phases
+1. Executing: In the top roots of the batch, either the node is occupied by the batch, or there exist a backqueue entry of the batch.
 
 # How to store the state of suspended new element?
 There are two ways to store them: in work nodes representing pending operations without merging them into the element tree, or introduce a "suspended" state in the element node.

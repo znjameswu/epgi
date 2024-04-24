@@ -97,6 +97,18 @@ pub trait Container:
         f: impl FnMut(&<Self as Container>::Item) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
+    fn map_collect_with<T: Send + Clone, R: Send + Sync>(
+        self,
+        init: T,
+        f: impl FnMut(T, <Self as Container>::Item) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R>;
+
+    fn map_ref_collect_with<T: Send + Clone, R: Send + Sync>(
+        &self,
+        init: T,
+        f: impl FnMut(&<Self as Container>::Item) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R>;
+
     /// This differs from a normal iterator zip!!!
     ///
     /// 1. It collects into the same container
@@ -224,6 +236,7 @@ where
         // std::array::each_ref
         std::array::from_fn::<_, N, _>(|i| f(&self[i]))
     }
+    
 
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
         self,

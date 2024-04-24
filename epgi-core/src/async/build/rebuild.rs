@@ -1,6 +1,7 @@
 use crate::{
     foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Protocol, Provide},
     r#async::{AsyncBuildContext, AsyncHookContext},
+    scheduler::get_current_scheduler,
     sync::CommitBarrier,
     tree::{
         ArcChildElementNode, AsyncOutput, BuildResults, BuildSuspendResults, ElementNode,
@@ -80,13 +81,16 @@ impl<E: FullElement> ElementNode<E> {
 
         let output = match results {
             Ok((items, shuffle)) => {
-                let (new_children, pair) = items.unzip_collect(|item| {
+                let async_threadpool = &get_current_scheduler().async_threadpool;
+                let new_children = items.map_collect(|item| {
                     use ElementReconcileItem::*;
                     match item {
-                        Keep(node) => (node, todo!()),
+                        Keep(node) => node,
                         Update(pair) => {
-                            pair.rebuild_async_box(todo!(), todo!(), todo!());
-                            (pair.element(), pair)
+                            let node = pair.element();
+                            async_threadpool
+                                .spawn(|| pair.rebuild_async_box(todo!(), todo!(), todo!()));
+                            node
                         }
                         Inflate(widget) => {
                             let pair = widget.inflate_async(
@@ -95,7 +99,9 @@ impl<E: FullElement> ElementNode<E> {
                                 todo!(),
                                 todo!(),
                             );
-                            (pair.element(), pair)
+                            let node = pair.element();
+                            todo!();
+                            node
                         }
                     }
                 });
@@ -118,5 +124,14 @@ impl<E: FullElement> ElementNode<E> {
 
         self.write_back_build_results::<false>(output, work_context.lane_pos, handle, todo!());
         todo!("Child Tasks");
+    }
+}
+
+
+fn a<const N: usize>(arr: [i32;N]) {
+    match arr {
+        [.., last] => {
+
+        }
     }
 }
