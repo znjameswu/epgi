@@ -177,35 +177,19 @@ where
         return None;
     }
 
-    pub(crate) fn try_push_front(
+    pub(crate) fn try_push_front_with<R>(
         &mut self,
-        widget: &Option<E::ArcWidget>,
-        work_context: &Asc<WorkContext>,
-        barrier: &CommitBarrier,
-        subscription_diff: SubscriptionDiff,
-        reserved_provider_write: bool,
-    ) -> Result<WorkHandle, &AsyncQueueCurrentEntry<E>> {
+        f: impl FnOnce() -> (AsyncQueueCurrentEntry<E>, R),
+    ) -> Result<R, &AsyncQueueCurrentEntry<E>> {
         let inner = self.get_inner_or_create();
         let current = &mut inner.current;
 
         if let Some(current) = current {
             return Err(current);
         }
-        let output = AsyncOutput::Uninitiated {
-            barrier: barrier.clone(),
-        };
-        let handle = WorkHandle::new();
-        *current = Some(AsyncQueueCurrentEntry {
-            widget: widget.clone(),
-            work_context: work_context.clone(),
-            stash: AsyncStash {
-                handle: handle.clone(),
-                subscription_diff,
-                reserved_provider_write,
-                output,
-            },
-        });
-        return Ok(handle);
+        let (new_current, result) = f();
+        let current = current.insert(new_current);
+        return Ok(result);
     }
 
     fn get_inner_or_create(&mut self) -> &mut Box<AsyncWorkQueueInner<E>> {

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     foundation::{
         Arc, Asc, InlinableDwsizeVec, Protocol, Provide, SyncMutex, EMPTY_CONSUMED_TYPES,
@@ -15,8 +17,8 @@ pub trait ChildWidgetAsyncInflateExt<PP: Protocol> {
         self: Arc<Self>,
         work_context: Asc<WorkContext>,
         parent_context: Option<ArcElementContextNode>,
-        barrier: CommitBarrier,
         handle: WorkHandle,
+        barrier: CommitBarrier,
     ) -> Box<dyn ChildElementWidgetPair<PP>>;
 }
 
@@ -28,10 +30,9 @@ where
         self: Arc<Self>,
         work_context: Asc<WorkContext>,
         parent_context: Option<ArcElementContextNode>,
-        barrier: CommitBarrier,
         handle: WorkHandle,
-    ) -> Box<dyn ChildElementWidgetPair<<T::Element as ElementBase>::ParentProtocol>>
-    {
+        barrier: CommitBarrier,
+    ) -> Box<dyn ChildElementWidgetPair<<T::Element as ElementBase>::ParentProtocol>> {
         let node = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
             self.clone().into_arc_widget(),
             work_context,
@@ -63,7 +64,7 @@ impl<E: FullElement> ElementNode<E> {
             let subscription_diff = Self::calc_subscription_diff(
                 E::get_consumed_types(&widget),
                 EMPTY_CONSUMED_TYPES,
-                &work_context.reserved_provider_values,
+                &work_context.recorded_provider_values,
                 &element_context.provider_map,
             );
             Self {
@@ -105,7 +106,7 @@ impl<E: FullElement> ElementNode<E> {
             let provider_values = self.read_consumed_values_async(
                 E::get_consumed_types(&snapshot_reborrow.widget),
                 EMPTY_CONSUMED_TYPES,
-                &work_context,
+                &mut Cow::Borrowed(&work_context),
                 &barrier,
             );
             (provider_values, snapshot.widget.clone())

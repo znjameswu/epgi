@@ -106,7 +106,7 @@ pub trait Container:
     fn map_ref_collect_with<T: Send + Clone, R: Send + Sync>(
         &self,
         init: T,
-        f: impl FnMut(&<Self as Container>::Item) -> R,
+        f: impl FnMut(T, &<Self as Container>::Item) -> R,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
     /// This differs from a normal iterator zip!!!
@@ -167,6 +167,34 @@ where
 
     fn map_ref_collect<R: Send + Sync>(&self, f: impl FnMut(&T) -> R) -> Vec<R> {
         self.as_iter().map(f).collect()
+    }
+
+    fn map_collect_with<T1: Send + Clone, R: Send + Sync>(
+        mut self,
+        init: T1,
+        mut f: impl FnMut(T1, <Self as Container>::Item) -> R,
+    ) -> Vec<R> {
+        let mut result = Vec::with_capacity(self.len());
+        let Some(last) = self.pop() else {
+            return Vec::new();
+        };
+        result.extend(self.into_iter().map(|item| f(init.clone(), item)));
+        result.push(f(init, last));
+        result
+    }
+
+    fn map_ref_collect_with<T1: Send + Clone, R: Send + Sync>(
+        &self,
+        init: T1,
+        mut f: impl FnMut(T1, &<Self as Container>::Item) -> R,
+    ) -> Vec<R> {
+        let mut result = Vec::with_capacity(self.len());
+        let Some((last, rest)) = self.split_last() else {
+            return Vec::new();
+        };
+        result.extend(rest.into_iter().map(|item| f(init.clone(), item)));
+        result.push(f(init, last));
+        result
     }
 
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
@@ -236,7 +264,124 @@ where
         // std::array::each_ref
         std::array::from_fn::<_, N, _>(|i| f(&self[i]))
     }
-    
+
+    fn map_collect_with<T1: Send + Clone, R: Send + Sync>(
+        self,
+        init: T1,
+        mut f: impl FnMut(T1, <Self as Container>::Item) -> R,
+    ) -> [R; N] {
+        unsafe {
+            let self_data: [MaybeUninit<T>; N] = self.map(|x| MaybeUninit::new(x));
+            let result: [MaybeUninit<R>; N] = MaybeUninit::uninit().assume_init();
+            // Guard types to ensure drops are properly executed in case of a panic unwind
+            struct Guard<T, R, const N: usize> {
+                index: usize,
+                self_data: [MaybeUninit<T>; N],
+                result: [MaybeUninit<R>; N],
+            }
+
+            impl<T, R, const N: usize> Drop for Guard<T, R, N> {
+                // Drop resources when unwinded.
+                fn drop(&mut self) {
+                    // If index == N, it means we must have successfully exited the loop
+                    // It also means we must have successfully taken out the result. Therefore, we do not need to drop the result.
+                    // Also, by this check, we avoid a negative length range indexing problem
+                    unsafe {
+                        if self.index < N {
+                            // The panic must have happened after we read the indexed elements out from the sources.
+                            // Therefore, drop from the element after it. Do not include the current element.
+                            let self_slice = self.self_data.get_unchecked_mut(self.index + 1..N);
+                            // The panic must have happened before we write the indexed element into the result.
+                            // Therefore, drop until the element before it. Do not include the current element.
+                            let result_slice = self.result.get_unchecked_mut(0..self.index);
+                            std::ptr::drop_in_place(slice_assume_init_mut(self_slice));
+                            std::ptr::drop_in_place(slice_assume_init_mut(result_slice));
+                        }
+                    }
+                }
+            }
+
+            let mut guard = Guard {
+                index: 0,
+                self_data,
+                result,
+            };
+
+            while guard.index + 1 < N {
+                let elem = f(
+                    init.clone(),
+                    guard
+                        .self_data
+                        .get_unchecked(guard.index)
+                        .assume_init_read(),
+                );
+                guard.result.get_unchecked_mut(guard.index).write(elem);
+                guard.index += 1;
+            }
+            if guard.index + 1 == N {
+                let elem = f(
+                    init,
+                    guard
+                        .self_data
+                        .get_unchecked(guard.index)
+                        .assume_init_read(),
+                );
+                guard.result.get_unchecked_mut(guard.index).write(elem);
+                guard.index += 1;
+            }
+            debug_assert!(guard.index == N);
+            // We bit copy the result out, while the guard and the MaybeUninit field all forget about dropping. Mission accomplished.
+            return std::mem::transmute_copy(&guard.result);
+        }
+    }
+
+    fn map_ref_collect_with<T1: Send + Clone, R: Send + Sync>(
+        &self,
+        init: T1,
+        mut f: impl FnMut(T1, &<Self as Container>::Item) -> R,
+    ) -> [R; N] {
+        unsafe {
+            let result: [MaybeUninit<R>; N] = MaybeUninit::uninit().assume_init();
+            // Guard types to ensure drops are properly executed in case of a panic unwind
+            struct Guard<R, const N: usize> {
+                index: usize,
+                result: [MaybeUninit<R>; N],
+            }
+
+            impl<R, const N: usize> Drop for Guard<R, N> {
+                // Drop resources when unwinded.
+                fn drop(&mut self) {
+                    // If index == N, it means we must have successfully exited the loop
+                    // It also means we must have successfully taken out the result. Therefore, we do not need to drop the result.
+                    // Also, by this check, we avoid a negative length range indexing problem
+                    unsafe {
+                        if self.index < N {
+                            // The panic must have happened before we write the indexed element into the result.
+                            // Therefore, drop until the element before it. Do not include the current element.
+                            let result_slice = self.result.get_unchecked_mut(0..self.index);
+                            std::ptr::drop_in_place(slice_assume_init_mut(result_slice));
+                        }
+                    }
+                }
+            }
+
+            let mut guard = Guard { index: 0, result };
+
+            while guard.index + 1 < N {
+                let elem = f(init.clone(), self.get_unchecked(guard.index));
+                guard.result.get_unchecked_mut(guard.index).write(elem);
+                guard.index += 1;
+            }
+            if guard.index + 1 == N {
+                let elem = f(init.clone(), self.get_unchecked(guard.index));
+                guard.result.get_unchecked_mut(guard.index).write(elem);
+                guard.index += 1;
+            }
+            debug_assert!(guard.index == N);
+            // We bit copy the result out, while the guard and the MaybeUninit field all forget about dropping. Mission accomplished.
+            return std::mem::transmute_copy(&guard.result);
+        }
+    }
 
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
         self,
@@ -484,6 +629,22 @@ where
         self.as_ref().map(f)
     }
 
+    fn map_collect_with<T1: Send + Clone, R: Send + Sync>(
+        self,
+        init: T1,
+        mut f: impl FnMut(T1, <Self as Container>::Item) -> R,
+    ) -> Option<R> {
+        self.map(|x| f(init, x))
+    }
+
+    fn map_ref_collect_with<T1: Send + Clone, R: Send + Sync>(
+        &self,
+        init: T1,
+        mut f: impl FnMut(T1, &<Self as Container>::Item) -> R,
+    ) -> Option<R> {
+        self.as_ref().map(|x| f(init, x))
+    }
+
     fn zip_collect<T1: Send + Sync, R: Send + Sync>(
         self,
         other: Option<T1>,
@@ -630,6 +791,30 @@ where
         match &self.0 {
             Left(x) => EitherParallel(Left(x.map_ref_collect(f))),
             Right(x) => EitherParallel(Right(x.map_ref_collect(f))),
+        }
+    }
+
+    fn map_collect_with<T1: Send + Clone, R: Send + Sync>(
+        self,
+        init: T1,
+        f: impl FnMut(T1, <Self as Container>::Item) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        use either::Either::*;
+        match self.0 {
+            Left(x) => EitherParallel(Left(x.map_collect_with(init, f))),
+            Right(x) => EitherParallel(Right(x.map_collect_with(init, f))),
+        }
+    }
+
+    fn map_ref_collect_with<T1: Send + Clone, R: Send + Sync>(
+        &self,
+        init: T1,
+        f: impl FnMut(T1, &<Self as Container>::Item) -> R,
+    ) -> <Self::HktContainer as HktContainer>::Container<R> {
+        use either::Either::*;
+        match &self.0 {
+            Left(x) => EitherParallel(Left(x.map_ref_collect_with(init, f))),
+            Right(x) => EitherParallel(Right(x.map_ref_collect_with(init, f))),
         }
     }
 

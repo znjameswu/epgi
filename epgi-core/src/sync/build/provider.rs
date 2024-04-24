@@ -87,7 +87,7 @@ pub(super) fn update_provided_value<E: FullElement>(
     element_context: &ElementContextNode,
     lane_scheduler: &LaneScheduler,
 ) {
-    if let Some(new_provided_value) =
+    if let Some((new_provided_value, _, true)) =
         <E as Element>::Impl::diff_provided_value(old_widget, new_widget)
     {
         let contending_readers = element_context

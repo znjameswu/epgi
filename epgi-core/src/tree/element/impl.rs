@@ -31,7 +31,7 @@ pub trait ImplProvide<E: ElementBase> {
     fn diff_provided_value(
         old_widget: &E::ArcWidget,
         new_widget: &E::ArcWidget,
-    ) -> Option<Arc<dyn Provide>>;
+    ) -> Option<(Arc<dyn Provide>, TypeKey, bool)>;
 }
 
 impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
@@ -48,7 +48,7 @@ impl<E: ElementBase, const RENDER_ELEMENT: bool> ImplProvide<E>
     fn diff_provided_value(
         _old_widget: &E::ArcWidget,
         _new_widget: &E::ArcWidget,
-    ) -> Option<Arc<dyn Provide>> {
+    ) -> Option<(Arc<dyn Provide>, TypeKey, bool)> {
         None
     }
 }
@@ -69,16 +69,17 @@ where
     fn diff_provided_value(
         old_widget: &E::ArcWidget,
         new_widget: &E::ArcWidget,
-    ) -> Option<Arc<dyn Provide>> {
+    ) -> Option<(Arc<dyn Provide>, TypeKey, bool)> {
         let old_provided_value = E::get_provided_value(&old_widget);
         let new_provided_value = E::get_provided_value(new_widget);
-        if !Asc::ptr_eq(&old_provided_value, &new_provided_value)
-            && !old_provided_value.eq_sized(new_provided_value.as_ref())
-        {
-            Some(new_provided_value)
-        } else {
-            None
-        }
+        let is_new_value = !Asc::ptr_eq(&old_provided_value, &new_provided_value)
+            && !old_provided_value.eq_sized(new_provided_value.as_ref());
+
+        Some((
+            new_provided_value,
+            TypeKey::of::<E::Provided>(),
+            is_new_value,
+        ))
     }
 }
 

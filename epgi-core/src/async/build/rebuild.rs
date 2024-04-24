@@ -61,8 +61,8 @@ impl<E: FullElement> ElementNode<E> {
         mut hook_context: AsyncHookContext,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        work_context: Asc<WorkContext>,
-        handle: &WorkHandle,
+        child_work_context: Asc<WorkContext>,
+        handle: WorkHandle,
         barrier: CommitBarrier,
     ) {
         let mut nodes_needing_unmount = Default::default();
@@ -79,32 +79,38 @@ impl<E: FullElement> ElementNode<E> {
             &mut nodes_needing_unmount,
         );
 
+        let lane_pos = child_work_context.lane_pos;
+
         let output = match results {
             Ok((items, shuffle)) => {
                 let async_threadpool = &get_current_scheduler().async_threadpool;
-                let new_children = items.map_collect(|item| {
-                    use ElementReconcileItem::*;
-                    match item {
-                        Keep(node) => node,
-                        Update(pair) => {
-                            let node = pair.element();
-                            async_threadpool
-                                .spawn(|| pair.rebuild_async_box(todo!(), todo!(), todo!()));
-                            node
+                let new_children = items.map_collect_with(
+                    (child_work_context, handle.clone(), barrier),
+                    |(child_work_context, handle, barrier), item| {
+                        use ElementReconcileItem::*;
+                        match item {
+                            Keep(node) => node,
+                            Update(pair) => {
+                                let node = pair.element();
+                                async_threadpool.spawn(move || {
+                                    pair.rebuild_async_box(child_work_context, handle, barrier)
+                                });
+                                node
+                            }
+                            Inflate(widget) => {
+                                let pair = widget.inflate_async(
+                                    child_work_context,
+                                    Some(self.context.clone()),
+                                    handle,
+                                    barrier,
+                                );
+                                let node = pair.element();
+                                todo!();
+                                node
+                            }
                         }
-                        Inflate(widget) => {
-                            let pair = widget.inflate_async(
-                                todo!(),
-                                Some(self.context.clone()),
-                                todo!(),
-                                todo!(),
-                            );
-                            let node = pair.element();
-                            todo!();
-                            node
-                        }
-                    }
-                });
+                    },
+                );
 
                 AsyncOutput::Completed {
                     children: new_children,
@@ -122,16 +128,6 @@ impl<E: FullElement> ElementNode<E> {
             },
         };
 
-        self.write_back_build_results::<false>(output, work_context.lane_pos, handle, todo!());
-        todo!("Child Tasks");
-    }
-}
-
-
-fn a<const N: usize>(arr: [i32;N]) {
-    match arr {
-        [.., last] => {
-
-        }
+        self.write_back_build_results::<false>(output, lane_pos, &handle, todo!());
     }
 }

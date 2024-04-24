@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use hashbrown::HashMap;
 
 use crate::{
@@ -69,7 +71,7 @@ impl<E: FullElement> ElementNode<E> {
         self: &Arc<Self>,
         new_consumed_types: &[TypeKey],
         old_consumed_types: &[TypeKey],
-        work_context: &WorkContext,
+        work_context: &mut Cow<'_, WorkContext>,
         barrier: &CommitBarrier,
     ) -> InlinableDwsizeVec<Arc<dyn Provide>> {
         let is_old_consumed_types = std::ptr::eq(new_consumed_types, old_consumed_types);
@@ -77,30 +79,33 @@ impl<E: FullElement> ElementNode<E> {
         let consumed_values = new_consumed_types
             .iter()
             .map(|consumed_type| {
-                work_context
-                    .reserved_provider_values
+                if let Some(value) = work_context.recorded_provider_values.get(consumed_type) {
+                    return value.clone();
+                }
+
+                let providing_element_context = self
+                    .context
+                    .provider_map
                     .get(consumed_type)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        let subscription = self
-                            .context
-                            .provider_map
-                            .get(consumed_type)
-                            .expect("The context node of the requested provider should exist");
-                        if is_old_consumed_types || old_consumed_types.contains(consumed_type) {
-                            subscription
-                                .provider
-                                .as_ref()
-                                .expect("The requested provider should exist")
-                                .read()
-                        } else {
-                            subscription.reserve_read(
-                                Arc::downgrade(self) as _,
-                                work_context.lane_pos,
-                                barrier,
-                            )
-                        }
-                    })
+                    .expect("The context node of the requested provider should exist");
+                let value = if is_old_consumed_types || old_consumed_types.contains(consumed_type) {
+                    providing_element_context
+                        .provider
+                        .as_ref()
+                        .expect("The requested provider should exist")
+                        .read()
+                } else {
+                    providing_element_context.reserve_read(
+                        Arc::downgrade(self) as _,
+                        work_context.lane_pos,
+                        barrier,
+                    )
+                };
+                work_context
+                    .to_mut()
+                    .recorded_provider_values
+                    .insert(consumed_type.clone(), value.clone());
+                value
             })
             .collect();
         return consumed_values;
