@@ -329,9 +329,10 @@ impl<E: FullElement> ElementNode<E> {
         } else {
             self.perform_inflate_node_async::<false>(
                 &widget.unwrap_or(old_widget),
-                child_work_context,
+                AsyncHookContext::new_inflate(),
                 provider_values,
-                &handle,
+                child_work_context,
+                handle,
                 barrier,
             )
         }
@@ -351,8 +352,8 @@ impl<E: FullElement> ElementNode<E> {
         new_stash: AsyncOutput<E>,
         lane_pos: LanePos,
         handle: &WorkHandle,
-        // When this is true, it means that we are inflating a new suspense above this suspended node. And we should commit the suspended result as-is rather than wait for it.
-        allow_suspend: bool,
+        // // When this is true, it means that we are inflating a new suspense above this suspended node. And we should commit the suspended result as-is rather than wait for it.
+        // allow_suspend: bool,
     ) {
         let mut snapshot = self.snapshot.lock();
         if handle.is_aborted() {

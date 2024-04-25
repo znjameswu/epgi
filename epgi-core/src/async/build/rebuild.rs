@@ -98,14 +98,19 @@ impl<E: FullElement> ElementNode<E> {
                                 node
                             }
                             Inflate(widget) => {
-                                let pair = widget.inflate_async(
-                                    child_work_context,
+                                let (pair, child_handle) = widget.inflate_async_placeholder(
+                                    child_work_context.clone(),
                                     Some(self.context.clone()),
-                                    handle,
-                                    barrier,
+                                    barrier.clone(),
                                 );
                                 let node = pair.element();
-                                todo!();
+                                async_threadpool.spawn(move || {
+                                    pair.inflate_async_box(
+                                        child_work_context,
+                                        child_handle,
+                                        barrier,
+                                    )
+                                });
                                 node
                             }
                         }
@@ -124,10 +129,10 @@ impl<E: FullElement> ElementNode<E> {
             }
             Err((children, err)) => AsyncOutput::Suspended {
                 suspend: Some(BuildSuspendResults::new(hook_context)),
-                barrier: todo!(),
+                barrier: Some(barrier),
             },
         };
 
-        self.write_back_build_results::<false>(output, lane_pos, &handle, todo!());
+        self.write_back_build_results::<false>(output, lane_pos, &handle);
     }
 }
