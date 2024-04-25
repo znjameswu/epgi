@@ -177,18 +177,38 @@ where
         return None;
     }
 
+    // The method is designed in such a way that no one can construct a emtpy queue with inner.is_some()
+    // while enabling zero-clone code
     pub(crate) fn try_push_front_with<R>(
         &mut self,
-        f: impl FnOnce() -> (AsyncQueueCurrentEntry<E>, R),
-    ) -> Result<R, &AsyncQueueCurrentEntry<E>> {
+        widget: Option<E::ArcWidget>,
+        work_context: Asc<WorkContext>,
+        barrier: CommitBarrier,
+        f: impl FnOnce(
+            Option<E::ArcWidget>,
+            Asc<WorkContext>,
+            CommitBarrier,
+        ) -> (AsyncQueueCurrentEntry<E>, R),
+    ) -> Result<
+        R,
+        (
+            &AsyncQueueCurrentEntry<E>,
+            &AsyncQueueBackqueueEntry<E::ArcWidget>,
+        ),
+    > {
         let inner = self.get_inner_or_create();
         let current = &mut inner.current;
 
         if let Some(current) = current {
-            return Err(current);
+            let backqueue = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
+                widget,
+                work_context,
+                barrier,
+            });
+            return Err((current, backqueue));
         }
-        let (new_current, result) = f();
-        let current = current.insert(new_current);
+        let (new_current, result) = f(widget, work_context, barrier);
+        *current = Some(new_current);
         return Ok(result);
     }
 

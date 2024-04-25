@@ -3,14 +3,14 @@ use std::borrow::Cow;
 use futures::stream::Aborted;
 
 use crate::{
-    foundation::{Arc, Asc, ContainerOf, Inlinable64Vec, InlinableDwsizeVec, Provide},
+    foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Provide},
     r#async::AsyncHookContext,
-    scheduler::{get_current_scheduler, JobId, LanePos},
+    scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
         apply_hook_updates, no_widget_update, ArcChildElementNode, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementContextNode, ElementNode,
-        FullElement, HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
+        AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementNode, FullElement,
+        HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
     },
 };
 
@@ -175,135 +175,130 @@ impl<E: FullElement> ElementNode<E> {
             return Err(OccupyError::Blocked);
         };
 
-        let old_consumed_types = E::get_consumed_types(old_widget);
-        let new_widget_ref = widget.as_ref().unwrap_or(old_widget);
-        let new_consumed_types = E::get_consumed_types(new_widget_ref);
-        let subscription_diff = Self::calc_subscription_diff(
-            new_consumed_types,
-            old_consumed_types,
-            &work_context.recorded_provider_values,
-            &self.context.provider_map,
-        );
+        let try_push_result = async_queue.try_push_front_with(
+            widget.clone(),
+            work_context,
+            barrier.clone(),
+            |widget, work_context, barrier| {
+                let old_consumed_types = E::get_consumed_types(old_widget);
+                let new_widget_ref = widget.as_ref().unwrap_or(old_widget);
+                let new_consumed_types = E::get_consumed_types(new_widget_ref);
+                let subscription_diff = Self::calc_subscription_diff(
+                    new_consumed_types,
+                    old_consumed_types,
+                    &work_context.recorded_provider_values,
+                    &self.context.provider_map,
+                );
 
-        let try_push_result = async_queue.try_push_front_with(|| {
-            let output = AsyncOutput::Uninitiated {
-                barrier: barrier.clone(),
-            };
+                let provided_value_update =
+                    <E as Element>::Impl::diff_provided_value(old_widget, new_widget_ref);
 
-            let provided_value_update =
-                <E as Element>::Impl::diff_provided_value(old_widget, new_widget_ref);
-
-            let mut child_work_context = Cow::Borrowed(work_context.as_ref());
-            let provider_values = self.read_consumed_values_async(
-                new_consumed_types,
-                old_consumed_types,
-                &mut child_work_context,
-                &barrier,
-            );
-            if let Some((new_provided_value, type_key, is_new_value)) = provided_value_update {
-                child_work_context
-                    .to_mut()
-                    .recorded_provider_values
-                    .insert(type_key, new_provided_value.clone());
-                if is_new_value {
-                    let mainline_readers = self.context.reserve_write_async(
-                        work_context.lane_pos,
-                        new_provided_value,
-                        &barrier,
-                    );
-                    for mainline_reader in mainline_readers.into_iter() {
-                        let mainline_reader =
-                            mainline_reader.upgrade().expect("Readers should be alive");
-                        mainline_reader.mark_consumer_root(
+                let mut child_work_context = Cow::Borrowed(work_context.as_ref());
+                let provider_values = self.read_consumed_values_async(
+                    new_consumed_types,
+                    old_consumed_types,
+                    &mut child_work_context,
+                    &barrier,
+                );
+                let mut reserved_provider_write = false;
+                if let Some((new_provided_value, type_key, is_new_value)) = provided_value_update {
+                    child_work_context
+                        .to_mut()
+                        .recorded_provider_values
+                        .insert(type_key, new_provided_value.clone());
+                    if is_new_value {
+                        reserved_provider_write = true;
+                        let mainline_readers = self.context.reserve_write_async(
                             work_context.lane_pos,
-                            mainline_reader.assert_not_unmounted(),
+                            new_provided_value,
+                            &barrier,
                         );
+                        for mainline_reader in mainline_readers.into_iter() {
+                            let mainline_reader =
+                                mainline_reader.upgrade().expect("Readers should be alive");
+                            mainline_reader.mark_consumer_root(
+                                work_context.lane_pos,
+                                mainline_reader.assert_not_unmounted(),
+                            );
+                        }
                     }
                 }
-            }
+                let child_work_context = match child_work_context {
+                    Cow::Borrowed(_) => work_context.clone(),
+                    Cow::Owned(work_context) => Asc::new(work_context),
+                };
+                let handle = WorkHandle::new();
 
-            let handle = WorkHandle::new();
-            (
-                AsyncQueueCurrentEntry {
-                    widget: widget.clone(),
-                    work_context: work_context.clone(),
-                    stash: AsyncStash {
-                        handle: handle.clone(),
-                        subscription_diff,
-                        reserved_provider_write,
-                        output,
+                (
+                    AsyncQueueCurrentEntry {
+                        widget,
+                        work_context,
+                        stash: AsyncStash {
+                            handle: handle.clone(),
+                            subscription_diff,
+                            reserved_provider_write,
+                            output: AsyncOutput::Uninitiated { barrier },
+                        },
                     },
-                },
-                (),
-            )
-        });
+                    (handle, provider_values, child_work_context),
+                )
+            },
+        );
 
         match try_push_result {
-            Err(current) => {
-                let should_yield_to_current =
-                    current.work_context.batch.priority < work_context.batch.priority;
-                mainline
-                    .async_queue
-                    .push_backqueue(widget, work_context, barrier);
-                if should_yield_to_current {
-                    return Err(OccupyError::Yielded);
-                } else {
-                    return Err(OccupyError::Blocked);
-                }
+            Ok((handle, provider_values, child_work_context)) => {
+                use crate::tree::MainlineState::*;
+                let reconcile = match state {
+                    InflateSuspended {
+                        suspended_hooks: last_hooks,
+                        waker,
+                    } => AsyncReconcile {
+                        handle,
+                        widget,
+                        child_work_context,
+                        old_widget: old_widget.clone(),
+                        provider_values,
+                        barrier,
+                        states: None,
+                    },
+                    Ready {
+                        element,
+                        hooks,
+                        children,
+                        ..
+                    }
+                    | RebuildSuspended {
+                        element,
+                        suspended_hooks: hooks,
+                        children,
+                        ..
+                    } => AsyncReconcile {
+                        handle,
+                        widget,
+                        child_work_context,
+                        old_widget: old_widget.clone(),
+                        provider_values,
+                        barrier,
+                        states: Some((
+                            element.clone(),
+                            hooks.read(|| None),
+                            children.map_ref_collect(Clone::clone),
+                        )),
+                    },
+                };
+                return Ok(reconcile);
             }
-            Ok(_) => todo!(),
+            Err((current, backqueue)) => {
+                let should_yield_to_current =
+                    current.work_context.batch.priority < backqueue.work_context.batch.priority;
+
+                return if should_yield_to_current {
+                    Err(OccupyError::Yielded)
+                } else {
+                    Err(OccupyError::Blocked)
+                };
+            }
         }
-        if !push_success {}
-
-        todo!()
-
-        //  {
-        //     Ok(handle) => {
-        //         let child_work_context = match child_work_context {
-        //             Cow::Borrowed(_) => work_context,
-        //             Cow::Owned(work_context) => Asc::new(work_context),
-        //         };
-        //         use crate::tree::MainlineState::*;
-        //         let reconcile = match state {
-        //             InflateSuspended {
-        //                 suspended_hooks: last_hooks,
-        //                 waker,
-        //             } => AsyncReconcile {
-        //                 handle,
-        //                 widget,
-        //                 child_work_context,
-        //                 old_widget: old_widget.clone(),
-        //                 provider_values,
-        //                 barrier,
-        //                 states: None,
-        //             },
-        //             Ready {
-        //                 element,
-        //                 hooks,
-        //                 children,
-        //                 ..
-        //             }
-        //             | RebuildSuspended {
-        //                 element,
-        //                 suspended_hooks: hooks,
-        //                 children,
-        //                 ..
-        //             } => AsyncReconcile {
-        //                 handle,
-        //                 widget,
-        //                 child_work_context,
-        //                 old_widget: old_widget.clone(),
-        //                 provider_values,
-        //                 barrier,
-        //                 states: todo!(), //Some((hooks.clone(), element.clone())),
-        //             },
-        //         };
-        //         Ok(reconcile)
-        //     }
-        //     Err(current) => {
-
-        //     }
-        // }
     }
 
     pub(super) fn execute_reconcile_async(self: &Arc<Self>, rebuild: AsyncReconcile<E>) {

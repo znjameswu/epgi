@@ -11,7 +11,7 @@ pub struct HooksWith<T> {
 }
 
 impl<T> HooksWith<T> {
-    fn read<R>(&self, mut init: impl FnMut() -> R) -> HooksWith<R> {
+    pub(crate) fn read<R>(&self, mut init: impl FnMut() -> R) -> HooksWith<R> {
         HooksWith {
             array_hooks: self
                 .array_hooks
