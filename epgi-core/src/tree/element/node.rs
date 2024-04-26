@@ -40,6 +40,7 @@ pub trait AnyElementNode:
     + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
     + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
     + crate::sync::unmount::AnyElementNodeUnmountExt
+    + crate::sync::AnyElementAsyncCommitExt
     + Send
     + Sync
     + 'static
@@ -51,7 +52,12 @@ pub trait AnyElementNode:
 }
 
 pub trait ChildElementNode<PP: Protocol>:
-    AnyElementNode + crate::sync::ChildElementSyncReconcileExt<PP> + Send + Sync + 'static
+    AnyElementNode
+    + crate::sync::ChildElementSyncReconcileExt<PP>
+    + crate::sync::ChildElementAsyncCommitExt<PP>
+    + Send
+    + Sync
+    + 'static
 {
     fn context(&self) -> &ElementContextNode;
 

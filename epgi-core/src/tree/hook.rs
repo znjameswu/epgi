@@ -1,4 +1,7 @@
-use crate::{foundation::{AsAny, Error, Inlinable64Vec}, scheduler::JobId};
+use crate::{
+    foundation::{AsAny, Error, Inlinable64Vec},
+    scheduler::JobId,
+};
 
 use super::ElementContextNode;
 
@@ -30,6 +33,23 @@ impl<T> HooksWith<T> {
     }
 }
 
+impl HooksWithEffects {
+    pub(crate) fn fire_effects(self) -> HooksWithTearDowns {
+        HooksWith {
+            array_hooks: self
+                .array_hooks
+                .into_iter()
+                .map(|(hook_state, effect)| {
+                    (
+                        hook_state.clone(),
+                        effect.and_then(|effect| effect.fire_box()),
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct HookIndex {
     pub(crate) index: usize,
@@ -55,11 +75,16 @@ impl Clone for Box<dyn HookState> {
 
 pub trait Effect: Send + Sync + 'static {
     fn fire(self) -> Option<Box<dyn EffectCleanup>>;
+    fn fire_box(self: Box<Self>) -> Option<Box<dyn EffectCleanup>>;
 }
 
 /// Helper impl, if you have no effect to return but the signauter requires to specify a return type
 impl Effect for () {
     fn fire(self) -> Option<Box<dyn EffectCleanup>> {
+        None
+    }
+
+    fn fire_box(self: Box<Self>) -> Option<Box<dyn EffectCleanup>> {
         None
     }
 }
@@ -70,6 +95,10 @@ where
 {
     fn fire(self) -> Option<Box<dyn EffectCleanup>> {
         (self)()
+    }
+
+    fn fire_box(self: Box<Self>) -> Option<Box<dyn EffectCleanup>> {
+        self.fire()
     }
 }
 

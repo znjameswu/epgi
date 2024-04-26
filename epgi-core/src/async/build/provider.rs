@@ -95,6 +95,7 @@ impl<E: FullElement> ElementNode<E> {
                         .expect("The requested provider should exist")
                         .read()
                 } else {
+                    // Not recorded, not old, then must be reserve. See SubscriptionDiff doc
                     providing_element_context.reserve_read(
                         Arc::downgrade(self) as _,
                         work_context.lane_pos,

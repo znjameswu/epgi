@@ -3,7 +3,8 @@ use crate::{
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{LaneScheduler, SubtreeRenderObjectChange, SyncHookContext},
     tree::{
-        apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementContextNode, ElementNode, FullElement, HooksWithTearDowns, ImplElementNode, MainlineState
+        apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementContextNode,
+        ElementNode, FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
     },
 };
 
@@ -21,8 +22,9 @@ impl<E: FullElement> ElementNode<E> {
         lane_scheduler: &LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let prepare_result = self.prepare_reconcile(widget, lane_scheduler);
+        use PrepareReconcileResult::*;
         let change = match prepare_result {
-            PrepareReconcileResult::SkipAndVisitChildren {
+            SkipAndVisitChildren {
                 children,
                 render_object,
                 self_rebuild_suspended,
@@ -42,10 +44,10 @@ impl<E: FullElement> ElementNode<E> {
                     self_rebuild_suspended,
                 );
             }
-            PrepareReconcileResult::Reconcile(reconcile) => {
+            Reconcile(reconcile) => {
                 self.execute_reconcile(reconcile, job_ids, scope, lane_scheduler)
             }
-            PrepareReconcileResult::SkipAndReturn => SubtreeRenderObjectChange::new_no_update(),
+            SkipAndReturn => SubtreeRenderObjectChange::new_no_update(),
         };
 
         self.context.purge_lane(LanePos::Sync);

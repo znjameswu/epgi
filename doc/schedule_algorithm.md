@@ -166,7 +166,7 @@ There are several ways to solve it:
             1. Provider problem is actually the only case where simultaneous occupation on the same piece of state from multiple lanes is allowed in the algorithm, in contrast with the one occupier only strategy for local states.
             2. Therefore, there are multiple strategies to handle it
                 1. Race-to-commit strategy: This strategy actually won't cause deadlock. But will cause livelock.
-                2. Strick RwLock semantics based on priority. The suspended sync consumer have be a special case under this strategy and would probably need to use race-to-commit strategy anyway (Or if we regard sync uncommited as commited? (What about suspended rebuild?)).
+                2. Strict RwLock semantics based on priority. The suspended sync consumer have be a special case under this strategy and would probably need to use race-to-commit strategy anyway (Or if we regard sync uncommited as commited? (What about suspended rebuild?)).
                     1. Flaw: The subscription can only be determined at the runtime. A re-execution may yield different subscriptions. Thus a re-execution must first clear all previous subscriptions and then re-register every single subscription. (Static subscription)
                     2. There are following impls
                         1. Blocking flavor. Violations to priorities are solve by interrupting the existing ones and blocking the unspawned ones.
@@ -176,7 +176,8 @@ There are several ways to solve it:
                             3. Advantage: Can implement reinflate optimization in case of high priority provider update (actually, reinflate optimization is very hard).
                             4. Advantage: Can implement nearest ancestor re-execution optimization in case of high priority new consumer.
                         Decision: barrier flavor
-            Temporary desicion: Use race-to-commit .
+            ~~Temporary desicion: Use race-to-commit .~~
+            Decision: Strict RwLock semantics with barrier flavor
 
 3. Eager resumption: when a unit of work is either committed or destroyed, if it has interrupt stashes on the same node, it will immediately and unconditionally resume the interrupt stash with the earliest priority.
 

@@ -117,15 +117,13 @@ impl<E: FullElement> ElementNode<E> {
                     },
                 );
 
-                AsyncOutput::Completed {
-                    children: new_children,
-                    results: BuildResults::from_pieces(
-                        hook_context,
-                        element,
-                        nodes_needing_unmount,
-                        shuffle,
-                    ),
-                }
+                AsyncOutput::Completed(BuildResults::new_rebuild(
+                    hook_context,
+                    element,
+                    new_children,
+                    nodes_needing_unmount,
+                    shuffle,
+                ))
             }
             Err((children, err)) => AsyncOutput::Suspended {
                 suspend: Some(BuildSuspendResults::new(hook_context)),

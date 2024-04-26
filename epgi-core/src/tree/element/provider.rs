@@ -1,6 +1,7 @@
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
+    debug::{debug_assert_sync_phase, debug_assert_sync_threadpool},
     foundation::{
         Arc, BoolExpectExt, MapEntryExtenision, MapOccupiedEntryExtension, Provide, PtrEq,
         PtrEqExt, SyncMutex, SyncRwLock, TypeKey,
@@ -267,6 +268,23 @@ impl ProviderObject {
         }
         return None;
     }
+
+    /// The entire lane of the reserving work will be removed from the occupier.
+    /// A lane may have multiple reserving work on this provider. Therefore, it is okay if the lane has already been removed by a previous call from the same lane.
+    pub(crate) fn register_reserved_read(&self, subscriber: AweakElementContextNode, lane_pos: LanePos) -> Option<LanePos> {
+        let mut inner = self.inner.lock();
+        inner.consumers.insert(PtrEq(subscriber));
+        use AsyncProviderOccupation::*;
+        if let Reading {
+            backqueue_writer: Some((lane_pos, ..)),
+            ..
+        } = &inner.occupation
+        {
+            return Some(*lane_pos);
+        }
+        return None;
+    }
+
 
     pub(crate) fn unregister_read(&self, subscriber: &AweakElementContextNode) -> bool {
         self.inner

@@ -6,7 +6,7 @@ use crate::{
     tree::{ArcElementContextNode, ElementBase, HooksWithEffects, WorkContext, WorkHandle},
 };
 
-use super::{ArcChildElementNode, ChildRenderObjectsUpdateCallback};
+use super::{ArcChildElementNode, AsyncSuspendWaker, ChildRenderObjectsUpdateCallback};
 
 pub(crate) struct AsyncWorkQueue<E: ElementBase> {
     pub(crate) inner: Option<Box<AsyncWorkQueueInner<E>>>,
@@ -274,15 +274,13 @@ pub(crate) enum AsyncOutput<E: ElementBase> {
         /// None means this async work is allowed to be commited as suspended.
         barrier: Option<CommitBarrier>,
     },
-    Completed {
-        results: BuildResults<E>,
-        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-    },
+    Completed(BuildResults<E>),
 }
 
 pub(crate) struct BuildSuspendResults {
     // widget: E::ArcWidget,
-    hooks: HooksWithEffects,
+    pub(crate) hooks: HooksWithEffects,
+    pub(crate) waker: AsyncSuspendWaker,
 }
 
 impl BuildSuspendResults {
@@ -292,24 +290,51 @@ impl BuildSuspendResults {
 }
 
 pub(crate) struct BuildResults<E: ElementBase> {
-    hooks: HooksWithEffects,
-    element: E,
-    nodes_needing_unmount: InlinableUsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-    shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
-    performed_inflate: bool,
+    pub(crate) hooks: HooksWithEffects,
+    pub(crate) element: E,
+    pub(crate) children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    pub(crate) rebuild_state: Option<BuildResultsRebuild<E>>,
+}
+
+pub(crate) struct BuildResultsRebuild<E: ElementBase> {
+    pub(crate) nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+    pub(crate) shuffle:
+        Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
 }
 
 impl<E> BuildResults<E>
 where
     E: ElementBase,
 {
-    pub fn from_pieces(
+    pub fn new_inflate(
         hooks_context: AsyncHookContext,
         element: E,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    ) -> Self {
+        Self {
+            hooks: hooks_context.hooks,
+            element,
+            children,
+            rebuild_state: None,
+        }
+    }
+
+    pub fn new_rebuild(
+        hooks_context: AsyncHookContext,
+        element: E,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
     ) -> Self {
-        todo!()
+        Self {
+            hooks: hooks_context.hooks,
+            element,
+            children,
+            rebuild_state: Some(BuildResultsRebuild {
+                nodes_needing_unmount,
+                shuffle,
+            }),
+        }
     }
 }
 
@@ -323,7 +348,7 @@ where
 /// │     │    │read-only│    │
 /// │     └────┼──────┬──┘    │
 /// │          │remove│       │
-/// └─Reserved─┼──────┘ remove│
+/// └─Recorded─┼──────┘ remove│
 ///            │              │
 ///            └─Old Consumed─┘
 /// ```

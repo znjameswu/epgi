@@ -8,10 +8,10 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::CommitBarrier,
     tree::{
-        ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash,
-        BuildResults, BuildSuspendResults, ChildElementWidgetPair, ElementBase, ElementContextNode,
-        ElementNode, ElementSnapshot, ElementSnapshotInner, ElementWidgetPair, FullElement, Widget,
-        WorkContext, WorkHandle,
+        ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildResults,
+        BuildSuspendResults, ChildElementWidgetPair, ElementBase, ElementContextNode, ElementNode,
+        ElementSnapshot, ElementSnapshotInner, ElementWidgetPair, FullElement, Widget, WorkContext,
+        WorkHandle,
     },
 };
 
@@ -218,15 +218,7 @@ impl<E: FullElement> ElementNode<E> {
                         node
                     },
                 );
-                AsyncOutput::Completed {
-                    children,
-                    results: BuildResults::from_pieces(
-                        hook_context,
-                        element,
-                        Default::default(),
-                        None,
-                    ),
-                }
+                AsyncOutput::Completed(BuildResults::new_inflate(hook_context, element, children))
             }
             Err(err) => AsyncOutput::Suspended {
                 suspend: Some(BuildSuspendResults::new(hook_context)),
@@ -234,6 +226,6 @@ impl<E: FullElement> ElementNode<E> {
             },
         };
 
-        self.write_back_build_results::<true>(output, lane_pos, &handle);
+        self.write_back_build_results::<IS_NEW_INFLATE>(output, lane_pos, &handle);
     }
 }

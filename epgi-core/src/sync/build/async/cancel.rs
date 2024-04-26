@@ -95,7 +95,7 @@ impl<E: FullElement> ElementNode<E> {
                     reserved_provider_write,
                     subscription_diff,
                     non_mainline_children: match output {
-                        Completed { children, .. } => Some(children),
+                        Completed(results) => Some(results.children),
                         _ => None,
                     },
                 })
@@ -275,7 +275,7 @@ impl<E: FullElement> ElementNode<E> {
             reserved_provider_write: *reserved_provider_write,
             subscription_diff,
             non_mainline_children: match output {
-                Completed { children, .. } => Some(children),
+                Completed(results) => Some(results.children),
                 _ => None,
             },
         })
@@ -308,7 +308,7 @@ impl<E: FullElement> ElementNode<E> {
                     reserved_provider_write,
                     subscription_diff,
                     non_mainline_children: match output {
-                        Completed { children, .. } => Some(children),
+                        Completed(results) => Some(results.children),
                         _ => None,
                     },
                 })
