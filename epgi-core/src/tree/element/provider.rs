@@ -118,6 +118,8 @@ impl ElementContextNode {
         subscriber: &AweakAnyElementNode,
         lane_pos: LanePos,
     ) {
+        debug_assert_sync_phase();
+
         let provider = self
             .provider
             .as_ref()
@@ -157,10 +159,10 @@ impl ElementContextNode {
                 }
             }
             Writing {
-                backqueue_new_readers: backqueue_new_consumers,
+                backqueue_new_readers,
                 ..
             } => {
-                backqueue_new_consumers
+                backqueue_new_readers
                     .entry(lane_pos)
                     .occupied()
                     .expect("The lane of the reservation to be removed should exist")
@@ -259,32 +261,35 @@ impl ProviderObject {
         let mut inner = self.inner.lock();
         inner.consumers.insert(PtrEq(subscriber));
         use AsyncProviderOccupation::*;
-        if let Reading {
-            backqueue_writer: Some((lane_pos, ..)),
-            ..
-        } = &inner.occupation
-        {
-            return Some(*lane_pos);
+        match &inner.occupation {
+            Reading {
+                backqueue_writer: Some((writer, ..)),
+                ..
+            }
+            | Writing { writer, .. } => Some(*writer),
+            _ => None,
         }
-        return None;
     }
 
     /// The entire lane of the reserving work will be removed from the occupier.
     /// A lane may have multiple reserving work on this provider. Therefore, it is okay if the lane has already been removed by a previous call from the same lane.
-    pub(crate) fn register_reserved_read(&self, subscriber: AweakElementContextNode, lane_pos: LanePos) -> Option<LanePos> {
+    pub(crate) fn register_reserved_read(
+        &self,
+        subscriber: AweakElementContextNode,
+        lane_pos: LanePos,
+    ) -> Option<LanePos> {
         let mut inner = self.inner.lock();
         inner.consumers.insert(PtrEq(subscriber));
         use AsyncProviderOccupation::*;
-        if let Reading {
-            backqueue_writer: Some((lane_pos, ..)),
-            ..
-        } = &inner.occupation
-        {
-            return Some(*lane_pos);
+        match &inner.occupation {
+            Reading {
+                backqueue_writer: Some((writer, ..)),
+                ..
+            }
+            | Writing { writer, .. } => Some(*writer),
+            _ => None,
         }
-        return None;
     }
-
 
     pub(crate) fn unregister_read(&self, subscriber: &AweakElementContextNode) -> bool {
         self.inner

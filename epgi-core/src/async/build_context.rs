@@ -1,6 +1,6 @@
 use crate::{
     foundation::VecPushLastExt,
-    tree::{ArcElementContextNode, Hook, HookIndex, HooksWithEffects, WorkMode},
+    tree::{ArcElementContextNode, Hook, HookIndex, HooksWithEffects, HookContextMode},
 };
 
 pub(crate) struct AsyncBuildContext<'a> {
@@ -11,7 +11,7 @@ pub(crate) struct AsyncBuildContext<'a> {
 pub(crate) struct AsyncHookContext {
     pub(crate) hooks: HooksWithEffects,
     pub(crate) index: usize,
-    pub(crate) mode: WorkMode,
+    pub(crate) mode: HookContextMode,
 }
 
 impl AsyncHookContext {
@@ -19,7 +19,7 @@ impl AsyncHookContext {
         Self {
             hooks,
             index: 0,
-            mode: WorkMode::Rebuild,
+            mode: HookContextMode::Rebuild,
         }
     }
 
@@ -27,7 +27,7 @@ impl AsyncHookContext {
         Self {
             hooks: Default::default(),
             index: 0,
-            mode: WorkMode::Inflate,
+            mode: HookContextMode::Inflate,
             // layout_effects: Default::default(),
         }
     }
@@ -36,7 +36,7 @@ impl AsyncHookContext {
         Self {
             hooks,
             index: 0,
-            mode: WorkMode::PollInflate,
+            mode: HookContextMode::PollInflate,
         }
     }
 
@@ -50,7 +50,7 @@ impl AsyncHookContext {
         if self.index < hooks_len {
             debug_assert!(matches!(
                 self.mode,
-                WorkMode::Rebuild | WorkMode::PollInflate
+                HookContextMode::Rebuild | HookContextMode::PollInflate
             ));
             let (hook_state, effect) = self
                 .hooks
@@ -71,7 +71,7 @@ impl AsyncHookContext {
         } else if self.index == hooks_len {
             debug_assert!(matches!(
                 self.mode,
-                WorkMode::Inflate | WorkMode::PollInflate
+                HookContextMode::Inflate | HookContextMode::PollInflate
             ));
             let (hook_state, new_effect) = hook.create_hook_state();
             let new_effect = new_effect.map(|effect| Box::new(effect) as _);

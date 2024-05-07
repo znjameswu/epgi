@@ -212,6 +212,18 @@ where
         return Ok(result);
     }
 
+    pub(crate) fn try_pop_front_if(
+        &mut self,
+        predicate: impl FnOnce(&AsyncQueueCurrentEntry<E>) -> bool,
+    ) -> Option<AsyncQueueCurrentEntry<E>> {
+        let current = &mut self.inner.as_mut()?.current;
+        if predicate(current.as_ref()?) {
+            current.take()
+        } else {
+            None
+        }
+    }
+
     fn get_inner_or_create(&mut self) -> &mut Box<AsyncWorkQueueInner<E>> {
         self.inner.get_or_insert(Box::new(AsyncWorkQueueInner {
             current: None,
@@ -275,6 +287,7 @@ pub(crate) enum AsyncOutput<E: ElementBase> {
         barrier: Option<CommitBarrier>,
     },
     Completed(BuildResults<E>),
+    Gone,
 }
 
 pub(crate) struct BuildSuspendResults {

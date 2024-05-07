@@ -50,6 +50,42 @@ impl HooksWithEffects {
     }
 }
 
+impl HooksWithTearDowns {
+    pub(crate) fn merge_with(
+        &mut self,
+        new_hooks: HooksWithEffects,
+        suspended: bool,
+        mode: HookContextMode,
+    ) {
+        let mut self_array = self.array_hooks.iter_mut();
+        let mut new_array = new_hooks.array_hooks.into_iter();
+        while let Some((hook_state, tear_down)) = self_array.next() {
+            let Some((new_hook_state, new_effect)) = new_array.next() else {
+                // The new hooks does not cover all existing hooks
+                debug_assert!(
+                    suspended,
+                    "All hooks must be called in a build unless it suspended"
+                );
+                break;
+            };
+            *hook_state = new_hook_state;
+            if let Some(new_effect) = new_effect {
+                tear_down.take().map(|tear_down| tear_down.cleanup());
+                *tear_down = new_effect.fire_box()
+            }
+        }
+        while let Some((new_hook_state, new_effect)) = new_array.next() {
+            // The new hooks is longer than exisiting hooks
+            debug_assert!(matches!(
+                mode,
+                HookContextMode::Inflate | HookContextMode::PollInflate
+            ));
+            self.array_hooks
+                .push((new_hook_state, new_effect.and_then(Effect::fire_box)));
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct HookIndex {
     pub(crate) index: usize,
@@ -172,7 +208,7 @@ impl Clone for Box<dyn HookCallback> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum WorkMode {
+pub(crate) enum HookContextMode {
     Inflate,
     Rebuild,
     PollInflate,

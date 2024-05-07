@@ -118,27 +118,27 @@ impl<E: Element, H> MainlineState<E, H> {
         }
     }
 
-    pub(crate) fn hooks(self) -> Option<H> {
-        match self {
-            MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { hooks, .. }
-            | MainlineState::RebuildSuspended {
-                suspended_hooks: hooks,
-                ..
-            } => Some(hooks),
-        }
-    }
+    // pub(crate) fn hooks(self) -> Option<H> {
+    //     match self {
+    //         MainlineState::InflateSuspended { .. } => None,
+    //         MainlineState::Ready { hooks, .. }
+    //         | MainlineState::RebuildSuspended {
+    //             suspended_hooks: hooks,
+    //             ..
+    //         } => Some(hooks),
+    //     }
+    // }
 
-    pub(crate) fn hooks_ref(&self) -> Option<&H> {
-        match self {
-            MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { hooks, .. }
-            | MainlineState::RebuildSuspended {
-                suspended_hooks: hooks,
-                ..
-            } => Some(hooks),
-        }
-    }
+    // pub(crate) fn hooks_ref(&self) -> Option<&H> {
+    //     match self {
+    //         MainlineState::InflateSuspended { .. } => None,
+    //         MainlineState::Ready { hooks, .. }
+    //         | MainlineState::RebuildSuspended {
+    //             suspended_hooks: hooks,
+    //             ..
+    //         } => Some(hooks),
+    //     }
+    // }
 
     pub(crate) fn waker(self) -> Option<SuspendWaker> {
         match self {

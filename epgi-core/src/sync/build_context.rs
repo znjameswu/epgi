@@ -1,6 +1,6 @@
 use crate::{
     foundation::VecPushLastExt,
-    tree::{ArcElementContextNode, Effect, Hook, HookIndex, HooksWithTearDowns, WorkMode},
+    tree::{ArcElementContextNode, Effect, Hook, HookIndex, HooksWithTearDowns, HookContextMode},
 };
 
 pub(crate) struct SyncBuildContext<'a> {
@@ -25,7 +25,7 @@ impl<'a> SyncBuildContext<'a> {
 pub(super) struct SyncHookContext {
     hooks: HooksWithTearDowns,
     index: usize,
-    mode: WorkMode,
+    mode: HookContextMode,
 }
 
 impl SyncHookContext {
@@ -33,7 +33,7 @@ impl SyncHookContext {
         Self {
             hooks,
             index: 0,
-            mode: WorkMode::Rebuild,
+            mode: HookContextMode::Rebuild,
         }
     }
 
@@ -41,7 +41,7 @@ impl SyncHookContext {
         Self {
             hooks: Default::default(),
             index: 0,
-            mode: WorkMode::Inflate,
+            mode: HookContextMode::Inflate,
             // layout_effects: Default::default(),
         }
     }
@@ -50,7 +50,7 @@ impl SyncHookContext {
         Self {
             hooks,
             index: 0,
-            mode: WorkMode::PollInflate,
+            mode: HookContextMode::PollInflate,
         }
     }
 
@@ -71,7 +71,7 @@ impl SyncHookContext {
         if self.index < hooks_len {
             debug_assert!(matches!(
                 self.mode,
-                WorkMode::Rebuild | WorkMode::PollInflate
+                HookContextMode::Rebuild | HookContextMode::PollInflate
             ));
             let (hook_state, tear_down) = self
                 .hooks
@@ -86,9 +86,7 @@ impl SyncHookContext {
             let new_effect = hook.update_hook_state(hook_state);
 
             if let Some(new_effect) = new_effect {
-                if let Some(tear_down) = tear_down.take() {
-                    tear_down.cleanup()
-                }
+                tear_down.take().map(|tear_down| tear_down.cleanup());
                 *tear_down = new_effect.fire();
             }
             let index = self.index;
@@ -97,11 +95,11 @@ impl SyncHookContext {
         } else if self.index == hooks_len {
             debug_assert!(matches!(
                 self.mode,
-                WorkMode::Inflate | WorkMode::PollInflate
+                HookContextMode::Inflate | HookContextMode::PollInflate
             ));
             let (hook_state, effect) = hook.create_hook_state();
 
-            let tear_down = effect.and_then(|effect| effect.fire());
+            let tear_down = effect.and_then(Effect::fire);
 
             let (hook_state, _tear_down) = self
                 .hooks

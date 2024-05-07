@@ -109,10 +109,10 @@ impl<E: FullElement> ElementNode<E> {
                         child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
                     },
                 );
-                let (mut children, changes) = results.unzip_collect(|x| x);
+                let (mut children, render_object_changes) = results.unzip_collect(|x| x);
 
                 debug_assert!(
-                    !changes
+                    !render_object_changes
                         .as_iter()
                         .any(SubtreeRenderObjectChange::is_keep_render_object),
                     "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
@@ -122,7 +122,7 @@ impl<E: FullElement> ElementNode<E> {
                     &element,
                     widget,
                     &mut children,
-                    changes,
+                    render_object_changes,
                     &self.context,
                     lane_scheduler,
                 );

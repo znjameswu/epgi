@@ -167,17 +167,23 @@ There are several ways to solve it:
             2. Therefore, there are multiple strategies to handle it
                 1. Race-to-commit strategy: This strategy actually won't cause deadlock. But will cause livelock.
                 2. Strict RwLock semantics based on priority. The suspended sync consumer have be a special case under this strategy and would probably need to use race-to-commit strategy anyway (Or if we regard sync uncommited as commited? (What about suspended rebuild?)).
-                    1. Flaw: The subscription can only be determined at the runtime. A re-execution may yield different subscriptions. Thus a re-execution must first clear all previous subscriptions and then re-register every single subscription. (Static subscription)
+                    1. ~~Flaw: The subscription can only be determined at the runtime. A re-execution may yield different subscriptions. Thus a re-execution must first clear all previous subscriptions and then re-register every single subscription.~~ (Solved by static subscription)
                     2. There are following impls
                         1. Blocking flavor. Violations to priorities are solve by interrupting the existing ones and blocking the unspawned ones.
                         2. Barrier flavor. Low priority ones gives their commit barrier to the provider and execute as normal, they just can't commit before this barrier is dropped. Whoever gets commited triggers re-execution on the other one.
                             1. Disadvantage. More CPU time. If N consumers are contending the same provider, the provider update will be re-executed by up to N time. (Racing! There are no cooperative flags for a re-execution root (but does not matter?))
                             2. Advantage: Easier to implement, less state. 
                             3. Advantage: Can implement reinflate optimization in case of high priority provider update (actually, reinflate optimization is very hard).
-                            4. Advantage: Can implement nearest ancestor re-execution optimization in case of high priority new consumer.
+                                1. Reinflate optimization means to reuse some results from the should-be-aborted inflate (because now the state it keeps is stale), without throwing everything out during abortion. Ideally we would perform a rebuild on a previous inflate result.
+                                2. Difficulty: you would run into problems such as rebuild on a AsyncInflate node.
+                            4. Advantage: Can implement new consumer re-execution optimization in case of high priority new consumer.
+                                1. New consumer re-execution optimization optimization means that, when a provider is being updated and new consumer is committed and added, instead of re-execute the entire provider update work, we only re-execute to reflect the provider update on the new consumer.
+                            5. ADVANTAGE: NO NEED TO UNBLOCK! WOW!
+                                1. If a work gets cancelled, there is no need to unblock potentially blocked 
                         Decision: barrier flavor
             ~~Temporary desicion: Use race-to-commit .~~
-            Decision: Strict RwLock semantics with barrier flavor
+            Decision: Strict RwLock semantics with barrier flavor (with optimizations not implemented)
+            Rationale: This is a precious parallelism oppurtunity not presented in local state contention (due to one single mutex state being used). Provider contention can support this.
 
 3. Eager resumption: when a unit of work is either committed or destroyed, if it has interrupt stashes on the same node, it will immediately and unconditionally resume the interrupt stash with the earliest priority.
 
