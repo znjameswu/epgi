@@ -64,35 +64,30 @@ where
         let prepare_result = self.prepare_visit_and_commit_async(finished_lanes);
         use PrepareCommitAsyncResult::*;
         match prepare_result {
-            SkipAndVisitChildren {
-                children,
-                render_object,
-                self_rebuild_suspended,
-            } => {
+            VisitChildrenAnd { children, next } => {
                 let render_object_changes = children
                     .par_map_collect(&get_current_scheduler().async_threadpool, |child| {
                         child.visit_and_commit_async(finished_lanes, scope, lane_scheduler)
                     });
-                return <E as Element>::Impl::visit_commit(
-                    &self,
-                    render_object,
-                    render_object_changes,
-                    lane_scheduler,
-                    scope,
-                    self_rebuild_suspended,
-                );
-            }
-            VisitChildrenAndCommit { children } => {
-                let render_object_changes = children
-                    .par_map_collect(&get_current_scheduler().async_threadpool, |child| {
-                        child.visit_and_commit_async(finished_lanes, scope, lane_scheduler)
-                    });
-                self.execute_commit_async(
-                    render_object_changes,
-                    finished_lanes,
-                    scope,
-                    lane_scheduler,
-                )
+                match next {
+                    NextAction::Return {
+                        render_object,
+                        self_rebuild_suspended,
+                    } => <E as Element>::Impl::visit_commit(
+                        &self,
+                        render_object,
+                        render_object_changes,
+                        lane_scheduler,
+                        scope,
+                        self_rebuild_suspended,
+                    ),
+                    NextAction::Commit => self.execute_commit_async(
+                        render_object_changes,
+                        finished_lanes,
+                        scope,
+                        lane_scheduler,
+                    ),
+                }
             }
             InflateSuspended => SubtreeRenderObjectChange::Suspend,
             SkipAndReturn => SubtreeRenderObjectChange::new_no_update(),
@@ -101,17 +96,21 @@ where
 }
 
 enum PrepareCommitAsyncResult<E: Element> {
-    VisitChildrenAndCommit {
+    VisitChildrenAnd {
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        next: NextAction<E>,
     },
     InflateSuspended,
-    SkipAndVisitChildren {
-        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    SkipAndReturn,
+}
+
+enum NextAction<E: Element> {
+    Return {
         render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         // Optimization parameter carried over from sync commit (Because the infrasturcture is build around sync commit)
         self_rebuild_suspended: bool,
     },
-    SkipAndReturn,
+    Commit,
 }
 
 impl<E> ElementNode<E>
@@ -142,8 +141,9 @@ where
                             results.rebuild_state.is_none(),
                             "Async inflate node should not have a rebuild results"
                         );
-                        return VisitChildrenAndCommit {
+                        return VisitChildrenAnd {
                             children: results.children.map_ref_collect(Clone::clone),
+                            next: NextAction::Commit,
                         };
                     }
                     AsyncOutput::Suspended {
@@ -191,17 +191,24 @@ where
                 // };
                 match current {
                     Some(current) if finished_lanes.contains(current.work_context.lane_pos) => {
-                        return VisitChildrenAndCommit {
+                        return VisitChildrenAnd {
                             children: state.children_cloned().expect(
                                 "Async commit walk should not walk into a \
                                 inflate suspended node that it has no work on. \
                                 Inflate suspended node has no children \
                                 and therefore impossible to have work in its descendants",
                             ),
+                            next: NextAction::Commit,
                         }
                     }
                     _ => {
-                        // No work in this node, skip and visit children instead
+                        // No work in this node, check descendant
+                        let no_descendant_lanes =
+                            !self.context.descendant_lanes().overlaps(finished_lanes);
+                        if no_descendant_lanes {
+                            return SkipAndReturn;
+                        }
+                        // Skip and visit children
                         use MainlineState::*;
                         let (children, render_object, self_rebuild_suspended) = match state {
                             Ready {
@@ -219,10 +226,12 @@ where
                                 and therefore impossible to have work in its descendants"
                             ),
                         };
-                        return SkipAndVisitChildren {
+                        return VisitChildrenAnd {
                             children: children.map_ref_collect(Clone::clone),
-                            render_object,
-                            self_rebuild_suspended,
+                            next: NextAction::Return {
+                                render_object,
+                                self_rebuild_suspended,
+                            },
                         };
                     }
                 }

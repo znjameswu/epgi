@@ -3,8 +3,8 @@ use crate::{
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{LaneScheduler, SubtreeRenderObjectChange, SyncHookContext},
     tree::{
-        apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementContextNode,
-        ElementNode, FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
+        apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementNode,
+        FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
     },
 };
 
