@@ -18,18 +18,18 @@ where
     >,
     Self: ImplElement<E, OptionArcRenderObject = ()>,
 {
-    fn visit_commit(
+    fn visit_commit<'batch>(
         _element_node: &ElementNode<E>,
         _render_object: (),
         [render_object_change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
-        _lane_scheduler: &LaneScheduler,
-        _scope: &rayon::Scope<'_>,
+        _lane_scheduler: &'batch LaneScheduler,
+        _scope: &rayon::Scope<'batch>,
         _self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         render_object_change
     }
 
-    fn rebuild_success_commit(
+    fn rebuild_success_commit<'batch>(
         _element: &E,
         _widget: &E::ArcWidget,
         _shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
@@ -37,8 +37,8 @@ where
         _render_object: &mut (),
         [render_object_change]: [SubtreeRenderObjectChange<E::ChildProtocol>; 1],
         _element_context: &ArcElementContextNode,
-        _lane_scheduler: &LaneScheduler,
-        _scope: &rayon::Scope<'_>,
+        _lane_scheduler: &'batch LaneScheduler,
+        _scope: &rayon::Scope<'batch>,
         _is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         render_object_change

@@ -90,7 +90,7 @@ impl<E: FullElement> ElementNode<E> {
                     .expect("The context node of the requested provider should exist");
                 let value = if is_old_consumed_types || old_consumed_types.contains(consumed_type) {
                     providing_element_context
-                        .provider
+                        .provider_object
                         .as_ref()
                         .expect("The requested provider should exist")
                         .read()
@@ -99,6 +99,7 @@ impl<E: FullElement> ElementNode<E> {
                     providing_element_context.reserve_read(
                         Arc::downgrade(self) as _,
                         work_context.lane_pos,
+                        work_context.batch.as_ref(),
                         barrier,
                     )
                 };

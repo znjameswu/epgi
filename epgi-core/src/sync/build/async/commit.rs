@@ -1,30 +1,33 @@
 use crate::{
     foundation::{Arc, Container, ContainerOf, Protocol},
-    scheduler::{get_current_scheduler, LaneMask},
-    sync::{ImplReconcileCommit, LaneScheduler, SubtreeRenderObjectChange},
+    scheduler::{get_current_scheduler, LaneMask, LanePos},
+    sync::{
+        build::provider::AsyncWorkNeedsRestarting, ImplReconcileCommit, LaneScheduler,
+        SubtreeRenderObjectChange,
+    },
     tree::{
         ArcAnyElementNode, ArcChildElementNode, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element, ElementNode,
         ElementSnapshotInner, FullElement, HookContextMode, HooksWithTearDowns, ImplElementNode,
-        Mainline, MainlineState, SubscriptionDiff,
+        ImplProvide, Mainline, MainlineState, SubscriptionDiff,
     },
 };
 
 pub trait AnyElementAsyncCommitExt {
-    fn visit_and_commit_async_any(
+    fn visit_and_commit_async_any<'batch>(
         self: Arc<Self>,
         finished_lanes: LaneMask,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> ArcAnyElementNode;
 }
 
 impl<E: FullElement> AnyElementAsyncCommitExt for ElementNode<E> {
-    fn visit_and_commit_async_any(
+    fn visit_and_commit_async_any<'batch>(
         self: Arc<Self>,
         finished_lanes: LaneMask,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> ArcAnyElementNode {
         self.visit_and_commit_async_impl(finished_lanes, scope, lane_scheduler);
         self
@@ -32,20 +35,20 @@ impl<E: FullElement> AnyElementAsyncCommitExt for ElementNode<E> {
 }
 
 pub trait ChildElementAsyncCommitExt<PP: Protocol> {
-    fn visit_and_commit_async(
+    fn visit_and_commit_async<'batch>(
         self: Arc<Self>,
         finished_lanes: LaneMask,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> SubtreeRenderObjectChange<PP>;
 }
 
 impl<E: FullElement> ChildElementAsyncCommitExt<E::ParentProtocol> for ElementNode<E> {
-    fn visit_and_commit_async(
+    fn visit_and_commit_async<'batch>(
         self: Arc<Self>,
         finished_lanes: LaneMask,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         self.visit_and_commit_async_impl(finished_lanes, scope, lane_scheduler)
     }
@@ -55,11 +58,11 @@ impl<E> ElementNode<E>
 where
     E: FullElement,
 {
-    fn visit_and_commit_async_impl(
+    fn visit_and_commit_async_impl<'batch>(
         &self,
         finished_lanes: LaneMask,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let prepare_result = self.prepare_visit_and_commit_async(finished_lanes);
         use PrepareCommitAsyncResult::*;
@@ -239,15 +242,15 @@ where
         }
     }
 
-    fn execute_commit_async(
+    fn execute_commit_async<'batch>(
         &self,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         finished_lanes: LaneMask,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let mut snapshot = self.snapshot.lock();
         // https://bevy-cheatbook.github.io/pitfalls/split-borrows.html
@@ -318,14 +321,14 @@ where
 
                 let AsyncQueueCurrentEntry {
                     widget,
-                    work_context: _,
+                    work_context,
                     stash,
                 } = current;
 
                 let AsyncStash {
                     handle: _,
                     subscription_diff,
-                    reserved_provider_write,
+                    updated_consumers,
                     output,
                 } = stash;
 
@@ -339,9 +342,20 @@ where
                     is_new_widget = true;
                 }
 
-                self.apply_subscription_registrations(subscription_diff);
-                if reserved_provider_write {
-                    todo!()
+                self.apply_subscription_registrations(
+                    subscription_diff,
+                    work_context.lane_pos,
+                    lane_scheduler,
+                );
+                if <E as Element>::Impl::PROVIDE_ELEMENT {
+                    if let Some(_updated_consumers) = updated_consumers {
+                        let provider = self.context.provider_object.as_ref().expect(
+                            "Provider element should have a provider in its element context node",
+                        );
+                        provider.commit_async_write(work_context.lane_pos, work_context.batch.id);
+                    }
+                } else {
+                    debug_assert!(updated_consumers.is_none());
                 }
 
                 match output {
@@ -431,7 +445,7 @@ where
         todo!()
     }
 
-    fn perform_commit_rebuild_success_async(
+    fn perform_commit_rebuild_success_async<'batch>(
         &self,
         mut results: BuildResults<E>,
         render_object_changes: ContainerOf<
@@ -442,8 +456,8 @@ where
         mut hooks: HooksWithTearDowns,
         mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         mainline: &mut Mainline<E>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let rebuild_state = results
@@ -453,7 +467,7 @@ where
 
         // We mimic the order in sync rebuild: first apply hook update, then unmount nodes, then commit into render object
         for node_needing_unmount in rebuild_state.nodes_needing_unmount {
-            scope.spawn(|scope| node_needing_unmount.unmount(scope))
+            scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
         }
 
         let change = <E as Element>::Impl::rebuild_success_commit(
@@ -479,7 +493,12 @@ where
         return change;
     }
 
-    fn apply_subscription_registrations(&self, subscription_diff: SubscriptionDiff) {
+    fn apply_subscription_registrations(
+        &self,
+        subscription_diff: SubscriptionDiff,
+        lane_pos: LanePos,
+        lane_scheduler: &LaneScheduler,
+    ) {
         let SubscriptionDiff {
             register,
             reserve,
@@ -492,30 +511,44 @@ where
 
         let weak_element_context = Arc::downgrade(&self.context);
 
+        let mut async_work_needs_restarting = AsyncWorkNeedsRestarting::new();
+
         for providing_element_context in reserve {
             // providing_element_context.register
             let provider = providing_element_context
-                .provider
+                .provider_object
                 .as_ref()
                 .expect("Recorded providers should exist");
-            provider.register_read(weak_element_context.clone());
+            let contending_writer =
+                provider.register_reserved_read(weak_element_context.clone(), lane_pos);
+            if let Some(contending_lane) = contending_writer {
+                async_work_needs_restarting.push(contending_lane, providing_element_context)
+            }
         }
 
         for providing_element_context in register {
             let provider = providing_element_context
-                .provider
+                .provider_object
                 .as_ref()
                 .expect("Recorded providers should exist");
-            provider.register_read(weak_element_context.clone());
+            let contending_writer = provider.register_read(weak_element_context.clone());
+            if let Some(contending_lane) = contending_writer {
+                async_work_needs_restarting.push(contending_lane, providing_element_context)
+            }
         }
 
         for providing_element_context in remove {
             let provider = providing_element_context
-                .provider
+                .provider_object
                 .as_ref()
                 .expect("Recorded providers should exist");
-            provider.unregister_read(&weak_element_context);
+            let contending_writer = provider.unregister_read(&weak_element_context);
+            if let Some(contending_lane) = contending_writer {
+                async_work_needs_restarting.push(contending_lane, providing_element_context)
+            }
         }
+
+        async_work_needs_restarting.execute_restarts(lane_scheduler);
     }
 
     // fn commit_async_inflating(

@@ -6,7 +6,10 @@ use crate::{
     tree::{ArcElementContextNode, ElementBase, HooksWithEffects, WorkContext, WorkHandle},
 };
 
-use super::{ArcChildElementNode, AsyncSuspendWaker, ChildRenderObjectsUpdateCallback};
+use super::{
+    ArcChildElementNode, AsyncSuspendWaker, AweakElementContextNode,
+    ChildRenderObjectsUpdateCallback,
+};
 
 pub(crate) struct AsyncWorkQueue<E: ElementBase> {
     pub(crate) inner: Option<Box<AsyncWorkQueueInner<E>>>,
@@ -35,7 +38,7 @@ pub(crate) struct AsyncStash<E: ElementBase> {
     /// 3. Prevent spawning staled child work.
     pub(crate) handle: WorkHandle,
     pub(crate) subscription_diff: SubscriptionDiff,
-    pub(crate) reserved_provider_write: bool,
+    pub(crate) updated_consumers: Option<Vec<AweakElementContextNode>>,
     pub(crate) output: AsyncOutput<E>,
 }
 

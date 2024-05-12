@@ -18,15 +18,15 @@ where
     E: Element<Impl = Self>,
     Self: ImplElement<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
-    fn visit_commit(
+    fn visit_commit<'batch>(
         element_node: &ElementNode<E>,
         render_object: Option<Arc<RenderObject<E::Render>>>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
-        _lane_scheduler: &LaneScheduler,
-        _scope: &rayon::Scope<'_>,
+        _lane_scheduler: &'batch LaneScheduler,
+        _scope: &rayon::Scope<'batch>,
         self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         debug_assert!(
@@ -53,7 +53,7 @@ where
         }
     }
 
-    fn rebuild_success_commit(
+    fn rebuild_success_commit<'batch>(
         element: &E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
@@ -64,8 +64,8 @@ where
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
-        _lane_scheduler: &LaneScheduler,
-        _scope: &rayon::Scope<'_>,
+        _lane_scheduler: &'batch LaneScheduler,
+        _scope: &rayon::Scope<'batch>,
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let (new_render_object, change) = if let Some(render_object) = render_object.take() {

@@ -30,7 +30,7 @@ pub struct ElementContextNode {
     // // Loop references.............
     // // Abandon this optimization. Provider widget usually has only one child anyway
     // pub provider_map_for_child: Asc<ProviderElementMap>,
-    pub(crate) provider: Option<Box<ProviderObject>>,
+    pub(crate) provider_object: Option<Box<ProviderObject>>,
     // pub(crate) has_render: bool,
 }
 
@@ -56,7 +56,7 @@ impl ElementContextNode {
                 mark: ElementMark::new(),
                 mailbox: Default::default(),
                 provider_map: parent_context.get_provider_map_for_child(),
-                provider,
+                provider_object: provider,
                 parent: Some(parent_context),
             }
         } else {
@@ -67,7 +67,7 @@ impl ElementContextNode {
                 mark: ElementMark::new(),
                 mailbox: Default::default(),
                 provider_map: Default::default(),
-                provider,
+                provider_object: provider,
                 parent: None,
             }
         }
@@ -85,7 +85,7 @@ impl ElementContextNode {
 
     #[inline(always)]
     fn get_provider_map_for_child(self: &Arc<ElementContextNode>) -> Asc<ProviderElementMap> {
-        if let Some(provider) = self.provider.as_ref() {
+        if let Some(provider) = self.provider_object.as_ref() {
             let mut provider_map = self.provider_map.as_ref().clone();
             provider_map.insert(provider.type_key, self.clone());
             Asc::new(provider_map)

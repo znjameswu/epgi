@@ -62,21 +62,21 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
     // do not require a lock since there is nothing to write.
     // And there is a lot of cloned resources from visit_inspect that has no further use
     // (since visit do not occupy node, it has no choice but to clone resources out)
-    fn visit_commit(
+    fn visit_commit<'batch>(
         element_node: &ElementNode<E>,
         render_object: Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
             <E as ElementBase>::ChildContainer,
             SubtreeRenderObjectChange<<E as ElementBase>::ChildProtocol>,
         >,
-        lane_scheduler: &LaneScheduler,
-        scope: &rayon::Scope<'_>,
+        lane_scheduler: &'batch LaneScheduler,
+        scope: &rayon::Scope<'batch>,
         self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
 
     // Reason for this signature: there is going to be a write_back regardless
     // You have to return the resources since they are moved out when we occupy the node, and later they need to move back
-    fn rebuild_success_commit(
+    fn rebuild_success_commit<'batch>(
         element: &E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
@@ -87,8 +87,8 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
             SubtreeRenderObjectChange<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
-        lane_scheduler: &LaneScheduler,
-        scope: &rayon::Scope<'_>,
+        lane_scheduler: &'batch LaneScheduler,
+        scope: &rayon::Scope<'batch>,
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
 

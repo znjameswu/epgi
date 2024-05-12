@@ -14,12 +14,12 @@ use super::{
 };
 
 impl<E: FullElement> ElementNode<E> {
-    pub(super) fn reconcile_node_sync(
+    pub(super) fn reconcile_node_sync<'batch>(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let prepare_result = self.prepare_reconcile(widget, lane_scheduler);
         use PrepareReconcileResult::*;
@@ -198,12 +198,12 @@ impl<E: FullElement> ElementNode<E> {
     }
 
     #[inline(always)]
-    fn execute_reconcile(
+    fn execute_reconcile<'batch>(
         self: &Arc<Self>,
         reconcile: SyncReconcile<E>,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let SyncReconcile {
             is_poll,

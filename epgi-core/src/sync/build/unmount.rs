@@ -1,23 +1,38 @@
 use crate::{
     foundation::Arc,
+    sync::LaneScheduler,
     tree::{ElementNode, FullElement, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 
+use super::provider::AsyncWorkNeedsRestarting;
+
 pub trait AnyElementNodeUnmountExt {
-    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>);
+    fn unmount<'batch>(
+        self: Arc<Self>,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
+    );
 }
 
 impl<E: FullElement> AnyElementNodeUnmountExt for ElementNode<E> {
-    fn unmount(self: Arc<Self>, scope: &rayon::Scope<'_>) {
-        ElementNode::unmount(&self, scope)
+    fn unmount<'batch>(
+        self: Arc<Self>,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
+    ) {
+        ElementNode::unmount(&self, scope, lane_scheduler)
     }
 }
 
 impl<E: FullElement> ElementNode<E> {
     // We could require a BuildScheduler in parameter to ensure the global lock
     // However, doing so on a virtual function incurs additional overhead.
-    fn unmount(self: &Arc<Self>, scope: &rayon::Scope<'_>) {
+    fn unmount<'batch>(
+        self: &Arc<Self>,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
+    ) {
         self.context.unmounted.store(true, Relaxed);
         let (children, widget, purge) = {
             // How do we ensure no one else will occupy/lane-mark this node after we unmount it?
@@ -60,18 +75,23 @@ impl<E: FullElement> ElementNode<E> {
             self.perform_purge_async_work(purge)
         }
 
+        let mut async_work_needs_restarting = AsyncWorkNeedsRestarting::new();
         for consumed_type in E::get_consumed_types(&widget) {
-            let removed = self
+            let provider_node = self
                 .context
                 .provider_map
                 .get(consumed_type)
-                .unwrap()
-                .provider
+                .expect("ProviderMap should be consistent");
+            let contending_writer = provider_node
+                .provider_object
                 .as_ref()
-                .unwrap()
+                .expect("Element should provide types according to ProviderMap")
                 .unregister_read(&Arc::downgrade(&self.context));
-            debug_assert!(removed)
+            if let Some(contending_lane) = contending_writer {
+                async_work_needs_restarting.push_ref(contending_lane, provider_node)
+            }
         }
+        async_work_needs_restarting.execute_restarts(lane_scheduler);
 
         // // We just need to ensure the scheduler perform adequate unmount checks before performing below operations
         // todo!("Remove from batch data");
@@ -81,9 +101,9 @@ impl<E: FullElement> ElementNode<E> {
             let mut it = children.into_iter();
             if it.len() == 1 {
                 let child = it.next().unwrap();
-                child.unmount(scope)
+                child.unmount(scope, lane_scheduler)
             } else {
-                it.for_each(|child| scope.spawn(|s| child.unmount(s)))
+                it.for_each(|child| scope.spawn(|s| child.unmount(s, lane_scheduler)))
             }
             // children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
             //     child.unmount()

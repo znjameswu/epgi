@@ -14,15 +14,15 @@ use crate::{
 use super::ImplReconcileCommit;
 
 impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, false> {
-    fn visit_commit(
+    fn visit_commit<'batch>(
         element_node: &ElementNode<SuspenseElement<P>>,
         render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
         render_object_changes: EitherParallel<
             [SubtreeRenderObjectChange<P>; 1],
             [SubtreeRenderObjectChange<P>; 2],
         >,
-        lane_scheduler: &LaneScheduler,
-        scope: &rayon::Scope<'_>,
+        lane_scheduler: &'batch LaneScheduler,
+        scope: &rayon::Scope<'batch>,
         self_rebuild_suspended: bool,
     ) -> SubtreeRenderObjectChange<P> {
         debug_assert!(
@@ -109,7 +109,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                     replace_suspended_primary_child(children, fallback)
                 };
 
-                scope.spawn(|scope| old_child.unmount(scope));
+                scope.spawn(|scope| old_child.unmount(scope, lane_scheduler));
 
                 return change;
             }
@@ -146,7 +146,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                 };
 
                 scope.spawn(|scope| {
-                    old_fallback_child.unmount(scope);
+                    old_fallback_child.unmount(scope, lane_scheduler);
                     if let New(fallback_render_object) = fallback_change {
                         fallback_render_object.detach_render_object();
                     }
@@ -157,7 +157,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
         };
     }
 
-    fn rebuild_success_commit(
+    fn rebuild_success_commit<'batch>(
         _element: &SuspenseElement<P>,
         widget: &Asc<Suspense<P>>,
         _shuffle: Option<
@@ -173,8 +173,8 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
             [SubtreeRenderObjectChange<P>; 2],
         >,
         element_context: &ArcElementContextNode,
-        lane_scheduler: &LaneScheduler,
-        scope: &rayon::Scope<'_>,
+        lane_scheduler: &'batch LaneScheduler,
+        scope: &rayon::Scope<'batch>,
         _is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<P> {
         debug_assert!(_shuffle.is_none(), "Suspense cannot shuffle its child");
@@ -248,7 +248,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                 let old_fallback_child = replace_fallback_child(children);
 
                 scope.spawn(|scope| {
-                    old_fallback_child.unmount(scope);
+                    old_fallback_child.unmount(scope, lane_scheduler);
                     if let New(fallback_render_object) = fallback_change {
                         fallback_render_object.detach_render_object();
                     }

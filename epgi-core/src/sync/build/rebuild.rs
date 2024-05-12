@@ -13,18 +13,18 @@ use crate::{
 use super::ImplReconcileCommit;
 
 pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
-    fn rebuild_sync(
+    fn rebuild_sync<'batch>(
         self,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
 
-    fn rebuild_sync_box(
+    fn rebuild_sync_box<'batch>(
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
 }
 
@@ -32,11 +32,11 @@ impl<E> ChildElementWidgetPairSyncBuildExt<E::ParentProtocol> for ElementWidgetP
 where
     E: FullElement,
 {
-    fn rebuild_sync(
+    fn rebuild_sync<'batch>(
         self,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
@@ -47,11 +47,11 @@ where
         (self.element, subtree_results)
     }
 
-    fn rebuild_sync_box(
+    fn rebuild_sync_box<'batch>(
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
         SubtreeRenderObjectChange<E::ParentProtocol>,
@@ -61,7 +61,7 @@ where
 }
 
 impl<E: FullElement> ElementNode<E> {
-    pub(super) fn perform_rebuild_node_sync(
+    pub(super) fn perform_rebuild_node_sync<'batch>(
         self: &Arc<Self>,
         widget: &E::ArcWidget,
         mut element: E,
@@ -70,8 +70,8 @@ impl<E: FullElement> ElementNode<E> {
         mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
-        scope: &rayon::Scope<'_>,
-        lane_scheduler: &LaneScheduler,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
         is_new_widget: bool,
     ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
         let mut nodes_needing_unmount = Default::default();
@@ -94,7 +94,7 @@ impl<E: FullElement> ElementNode<E> {
                 // Unmount before updating render object can cause render object to hold reference to detached children,
                 // Therfore, we need to ensure we do not read into render objects before the batch commit is done
                 for node_needing_unmount in nodes_needing_unmount {
-                    scope.spawn(|scope| node_needing_unmount.unmount(scope))
+                    scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
                 }
 
                 let results =

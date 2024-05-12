@@ -200,20 +200,20 @@ impl<E: FullElement> ElementNode<E> {
                     &mut child_work_context,
                     &barrier,
                 );
-                let mut reserved_provider_write = false;
+                let mut updated_consumers = None;
                 if let Some((new_provided_value, type_key, is_new_value)) = provided_value_update {
                     child_work_context
                         .to_mut()
                         .recorded_provider_values
                         .insert(type_key, new_provided_value.clone());
                     if is_new_value {
-                        reserved_provider_write = true;
                         let mainline_readers = self.context.reserve_write_async(
                             work_context.lane_pos,
                             new_provided_value,
+                            work_context.batch.as_ref(),
                             &barrier,
                         );
-                        for mainline_reader in mainline_readers.into_iter() {
+                        for mainline_reader in mainline_readers.iter() {
                             let mainline_reader =
                                 mainline_reader.upgrade().expect("Readers should be alive");
                             mainline_reader.mark_consumer_root(
@@ -221,6 +221,7 @@ impl<E: FullElement> ElementNode<E> {
                                 mainline_reader.assert_not_unmounted(),
                             );
                         }
+                        updated_consumers = Some(mainline_readers);
                     }
                 }
                 let child_work_context = match child_work_context {
@@ -236,7 +237,7 @@ impl<E: FullElement> ElementNode<E> {
                         stash: AsyncStash {
                             handle: handle.clone(),
                             subscription_diff,
-                            reserved_provider_write,
+                            updated_consumers,
                             output: AsyncOutput::Uninitiated { barrier },
                         },
                     },

@@ -12,14 +12,15 @@ use crate::{
     sync::LaneScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff,
+        AsyncQueueCurrentEntry, AsyncStash, AweakElementContextNode, Element, ElementBase,
+        ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement, ImplProvide, Mainline,
+        SubscriptionDiff,
     },
 };
 
 pub(in super::super) struct CancelAsync<I> {
     pub(super) lane_pos: LanePos,
-    pub(super) reserved_provider_write: bool,
+    pub(super) updated_consumers: Option<Vec<AweakElementContextNode>>,
     pub(super) subscription_diff: SubscriptionDiff,
     pub(super) non_mainline_children: Option<I>,
 }
@@ -76,7 +77,7 @@ impl<E: FullElement> ElementNode<E> {
                     AsyncStash {
                         handle,
                         subscription_diff,
-                        reserved_provider_write,
+                        updated_consumers,
                         output,
                     },
                 widget,
@@ -92,7 +93,7 @@ impl<E: FullElement> ElementNode<E> {
                 );
                 Ok(CancelAsync {
                     lane_pos,
-                    reserved_provider_write,
+                    updated_consumers,
                     subscription_diff,
                     non_mainline_children: match output {
                         Completed(results) => Some(results.children),
@@ -114,12 +115,12 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let CancelAsync {
             lane_pos,
-            reserved_provider_write,
+            updated_consumers,
             subscription_diff,
             non_mainline_children,
         } = cancel;
 
-        self.perform_purge_async_work_local(reserved_provider_write, subscription_diff, lane_pos);
+        self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
         if let Some(non_mainline_children) = non_mainline_children {
             non_mainline_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
@@ -251,10 +252,11 @@ impl<E: FullElement> ElementNode<E> {
                 AsyncStash {
                     handle,
                     subscription_diff,
-                    reserved_provider_write,
+                    updated_consumers,
                     output,
                 },
         } = async_inflating;
+        debug_assert!(updated_consumers.is_none());
         assert!(
             work_context.lane_pos == lane_pos,
             "A tree walk should not witness unmounted nodes from other lanes"
@@ -272,7 +274,7 @@ impl<E: FullElement> ElementNode<E> {
         use AsyncOutput::*;
         Ok(CancelAsync {
             lane_pos,
-            reserved_provider_write: *reserved_provider_write,
+            updated_consumers: None,
             subscription_diff,
             non_mainline_children: match output {
                 Completed(results) => Some(results.children),
@@ -297,7 +299,7 @@ impl<E: FullElement> ElementNode<E> {
                     AsyncStash {
                         handle,
                         subscription_diff,
-                        reserved_provider_write,
+                        updated_consumers: reserved_provider_write,
                         output,
                     },
                 ..
@@ -305,7 +307,7 @@ impl<E: FullElement> ElementNode<E> {
                 handle.abort();
                 Ok(CancelAsync {
                     lane_pos,
-                    reserved_provider_write,
+                    updated_consumers: reserved_provider_write,
                     subscription_diff,
                     non_mainline_children: match output {
                         Completed(results) => Some(results.children),
@@ -323,27 +325,28 @@ impl<E: FullElement> ElementNode<E> {
 
     pub(super) fn perform_purge_async_work_local(
         self: &Arc<Self>,
-        reserved_provider_write: bool,
+        updated_consumers: Option<Vec<AweakElementContextNode>>,
         subscription_diff: SubscriptionDiff,
         lane_pos: LanePos,
     ) {
         if <E as Element>::Impl::PROVIDE_ELEMENT {
-            if reserved_provider_write {
+            if let Some(updated_consumers) = updated_consumers {
                 self.context.unreserve_write_async(lane_pos);
-                // // We choose relaxed lane marking without unmarking
-                // for mainline_consumer in mainline_consumers {
-                //     let deactivated = mainline_consumer
-                //         .upgrade()
-                //         .expect("Readers should be alive")
-                //         .dec_secondary_root(lane_pos);
-                //     if deactivated {
-                //         todo!("Record deactivated secondary root")
-                //     }
-                // }
+                // We choose relaxed lane marking without unmarking
+                for write_affected_consumer in updated_consumers {
+                    todo!();
+                    // let deactivated = write_affected_consumer
+                    //     .upgrade()
+                    //     .expect("Readers should be alive")
+                    //     .dec_secondary_root(lane_pos);
+                    // if deactivated {
+                    //     todo!("Record deactivated secondary root")
+                    // }
+                }
             }
         } else {
-            debug_assert_eq!(
-                reserved_provider_write, false,
+            debug_assert!(
+                updated_consumers.is_none(),
                 "An Element without declaring provider should not reserve a write"
             )
         }
@@ -359,7 +362,7 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let CancelAsync {
             lane_pos,
-            reserved_provider_write,
+            updated_consumers: reserved_provider_write,
             subscription_diff,
             non_mainline_children,
         } = cancel;
@@ -395,7 +398,7 @@ impl<E: FullElement> ElementNode<E> {
             Ok(purge) => {
                 let CancelAsync {
                     lane_pos,
-                    reserved_provider_write,
+                    updated_consumers: reserved_provider_write,
                     subscription_diff,
                     non_mainline_children,
                 } = purge;

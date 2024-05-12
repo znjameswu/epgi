@@ -124,7 +124,9 @@ impl<E: FullElement> ElementNode<E> {
 
         // Why it can't be Skip?
         // Because the backqueue_candidate previous tried to occupy this node (hence the entry)
-        // Suppose now it comes back with Skip, the only thing that could have caused this change is that the widget has been changed since then.
+        // ~~Suppose now it comes back with Skip, the only thing that could have caused this change is that the widget has been changed since then.~~
+        // (???? A subscription could also have been cancelled)
+        // (Decision: we also revert the work at the provider if we cancel a subscription)
         // It means that, previously the backqueue_candidate determines there is a widget update, now there isn't.
         // In order to achieve this, the backqueue_candidate needs to have an explicit new widget (otherwise there will always be no widget update)
         // Which means the backqueue_candidate must be a child work of a parent work (only root work can have no explicit new widget)
