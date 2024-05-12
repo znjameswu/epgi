@@ -299,7 +299,7 @@ impl<E: FullElement> ElementNode<E> {
                     AsyncStash {
                         handle,
                         subscription_diff,
-                        updated_consumers: reserved_provider_write,
+                        updated_consumers,
                         output,
                     },
                 ..
@@ -307,7 +307,7 @@ impl<E: FullElement> ElementNode<E> {
                 handle.abort();
                 Ok(CancelAsync {
                     lane_pos,
-                    updated_consumers: reserved_provider_write,
+                    updated_consumers,
                     subscription_diff,
                     non_mainline_children: match output {
                         Completed(results) => Some(results.children),
