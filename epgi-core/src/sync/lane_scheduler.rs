@@ -51,7 +51,7 @@ impl LaneScheduler {
     }
 
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
-        let LanePos::Async(pos) = lane_pos else {
+        let Some(pos) = lane_pos.async_lane_pos() else {
             panic!("Only async lanes have commit barriers");
         };
         let Some(async_lane) = &self.async_lanes[pos as usize] else {
@@ -91,7 +91,7 @@ impl LaneScheduler {
         }
 
         if let Some(sync_batch) = new_sync_batch {
-            mark_batch(&sync_batch, LanePos::Sync);
+            mark_batch(&sync_batch, LanePos::SYNC);
             mark_point_rebuilds(&point_rebuilds);
             self.sync_lane = Some(SyncLaneData {
                 batch: sync_batch,
@@ -113,7 +113,7 @@ impl LaneScheduler {
                 let Some(new_async_batch) = self.queued_batches.pop() else {
                     break;
                 };
-                let lane_pos = LanePos::Async(lane_index as u8);
+                let lane_pos = LanePos::new_async(lane_index as u8);
                 mark_batch(&new_async_batch, lane_pos);
                 *async_lane = Some(AsyncLaneData::new(lane_pos, new_async_batch));
                 todo!()
@@ -151,7 +151,7 @@ impl LaneScheduler {
                 .visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
         });
         let batch_id = sync_batch.id;
-        self.remove_commited_batch(LanePos::Sync);
+        self.remove_commited_batch(LanePos::SYNC);
         return Some(batch_id);
     }
 

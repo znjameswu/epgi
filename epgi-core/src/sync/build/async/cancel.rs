@@ -1,6 +1,8 @@
 /// Basic concepts:
 ///
-/// 1. Purge: Simple wipe the existence of this lane by stopping its executiong, removing it from backqueue, reverting all effects it has left on the tree.
+/// 1. Purge: Simple wipe the existence and stop any execution of this lane, disregarding any lane mark consistencies. 
+///     1. Destroys lane mark consistency under the subtree.
+///     2. Only suitable for batch retirement or subtree unmount, when the subtree is certainly not going to be revisited by the given batch.
 /// 2. Remove: Purge the subtree of this lane, then requeueing any other lane that is unblocked by the purging.
 /// Surprisingly, remove is remarkably similar to the reorder operation
 /// 3. Cancel: Remove this lane in the **descendants**. For the subtree root, we first purge this lane and then put it into backqueue.
@@ -362,12 +364,12 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let CancelAsync {
             lane_pos,
-            updated_consumers: reserved_provider_write,
+            updated_consumers,
             subscription_diff,
             non_mainline_children,
         } = cancel;
 
-        self.perform_purge_async_work_local(reserved_provider_write, subscription_diff, lane_pos);
+        self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
         if let Some(non_mainline_children) = non_mainline_children {
             non_mainline_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
@@ -427,6 +429,13 @@ impl<E: FullElement> ElementNode<E> {
             let node = self.clone();
             node.execute_reconcile_node_async_detached(start);
         }
+    }
+}
+
+impl<E: FullElement> ElementNode<E> {
+
+    pub fn setup_async_work_retire(self: Arc<Self>) {
+        
     }
 }
 

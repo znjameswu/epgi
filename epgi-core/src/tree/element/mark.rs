@@ -1,6 +1,8 @@
 use core::sync::atomic::{AtomicBool, Ordering::*};
+use std::ops::{AddAssign, SubAssign};
 
 use crate::{
+    foundation::{SmallMap, SyncMutex},
     scheduler::{AtomicLaneMask, LaneMask, LanePos},
     tree::ElementContextNode,
 };
@@ -11,7 +13,11 @@ pub(crate) struct ElementMark {
     /// Lanes that are present in the mailbox
     pub(super) mailbox_lanes: AtomicLaneMask,
 
-    pub(super) consumer_root_lanes: AtomicLaneMask,
+    pub(super) consumer_root_lanes: AtomicLaneMask, // ConsumerRootRefCount,
+
+    pub(super) async_consumer_root_lane_update_pending: AtomicBool,
+
+    pub(super) async_consumer_root_refcount: SyncMutex<SmallMap<u8, u8>>,
 
     pub(super) descendant_lanes: AtomicLaneMask,
     /// Indicate whether this node requested for a sync poll
@@ -23,6 +29,8 @@ impl ElementMark {
         Self {
             mailbox_lanes: AtomicLaneMask::new(LaneMask::new()),
             consumer_root_lanes: AtomicLaneMask::new(LaneMask::new()),
+            async_consumer_root_lane_update_pending: AtomicBool::new(false),
+            async_consumer_root_refcount: Default::default(),
             descendant_lanes: AtomicLaneMask::new(LaneMask::new()),
             needs_poll: AtomicBool::new(false),
         }
@@ -55,7 +63,7 @@ impl ElementContextNode {
 
     pub(crate) fn mark_point_rebuild(&self, not_unmounted: NotUnmountedToken) {
         self.mark.needs_poll.store(true, Relaxed);
-        self.mark_up(LanePos::Sync, not_unmounted)
+        self.mark_up(LanePos::SYNC, not_unmounted)
     }
 
     pub(crate) fn mark_consumer_root(
@@ -67,6 +75,14 @@ impl ElementContextNode {
             .mark
             .consumer_root_lanes
             .fetch_insert_single(lane_pos, Relaxed);
+        if let Some(pos) = lane_pos.async_lane_pos() {
+            self.mark
+                .async_consumer_root_refcount
+                .lock()
+                .entry(pos)
+                .or_insert(0)
+                .add_assign(1);
+        }
         if old_consumer_root_lanes.contains(lane_pos) {
             return false;
         }
@@ -91,6 +107,21 @@ impl ElementContextNode {
         }
     }
 
+    pub(crate) fn dec_async_consumer_root(&self, pos: u8) {
+        let mut lock = self.mark.async_consumer_root_refcount.lock();
+        let linear_map::Entry::Occupied(mut entry) = lock.entry(pos) else {
+            panic!("Tried to decrement ref count on non-existing ref count.")
+        };
+        let ref_count = entry.get_mut();
+        ref_count.sub_assign(1);
+        if *ref_count == 0 {
+            self.mark
+                .async_consumer_root_lane_update_pending
+                .store(true, Relaxed);
+            entry.remove();
+        }
+    }
+
     pub(crate) fn purge_lane(&self, lane_pos: LanePos) {
         self.mark
             .mailbox_lanes
@@ -101,7 +132,13 @@ impl ElementContextNode {
         self.mark
             .descendant_lanes
             .fetch_remove_single(lane_pos, Relaxed);
-        if lane_pos.is_sync() {
+        if let Some(pos) = lane_pos.async_lane_pos() {
+            if let Some(_) = self.mark.async_consumer_root_refcount.lock().remove(&pos) {
+                self.mark
+                    .async_consumer_root_lane_update_pending
+                    .store(true, Relaxed);
+            }
+        } else {
             self.mark.needs_poll.store(false, Relaxed)
         }
     }

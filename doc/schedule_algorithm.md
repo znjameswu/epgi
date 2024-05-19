@@ -64,10 +64,30 @@ Some unit of work will spawn secondary root unit of work deep down their subtree
 
 The reference count can be replaced by storing the spawned root in the **first** spawner that actually spawns it.
 
-## (Update) Expansion on the auxilliary marking algorithm
-Non-intrusive node design gives us the ability to fold on children's lane marks during the return phase of a visit. That usually happens during commit or cancellation (what?).
+Decision: Auxilliary mark with ref-counting.
 
+## Alternative to the lane unmarking algorithm
+Non-intrusive node design gives us the ability to fold on children's lane marks during the return phase of a visit. That usually happens during commit or cancellation (what?).
+ 
 In short, it gives us the ability to sum over children's lane mark most of the time.
+
+Detailed explanation:
+1. Why do we need lane unmark in the first place?
+    - Other work may eventually result in loss of consumers subscribing to the current provider, either by changing widget, or unmounting some ancestor element to that consumer. (What about the other work writes the same value into the current provider and thus nullifies this provider update?)
+    - Loss of consumers may result in loss of consumer roots, which may results in smaller and fewer work regions, which is important for subtree bypassing (consider a scenario where other work constantly spawns and remove new consumers). 
+    - Therefore we need some sort of consistency-keeping mechanism to reflect changes caused by loss of consumers
+    - On the other hand, adding new consumers is of no concern. We can just mark again and it is self-healing.
+    - If the other work doesn't change consumer nodes at all, then it is even less of a concern.
+    - "Unmark-and-later-remark" is just one of the easiest mechanism to reason about. It completely annihilates any side effect of a work and later recompute the side effects of that work from scratch, no matter if the interfering work is adding or removing consumers.
+2. We can make the interrupter lane responsible for restoring lane marking consistency of the interrupted lane (with ref-counting)
+2. The interrupter could only interrupt/occupy the writer lane because
+    1. Either widget update, or event update, or subscription update
+
+Impact:
+1. This means allowing inconsistent (excessive) lane marking state to exist. We only guarantee consistency of *a given lane* in the *currently occupied* or *occupiable* work regions *of that lane*.
+2. What if the interrupting work itself gets interrupted again?
+    1. The new interrupter, if we task it with unmarking the original lane, may skip and not visiting some consumers needs to be unmarked
+    2. ~~Therefore, we implicitly mandate that the interrupter work, under any circumstance, must execute before the interrupted, which means a total order between batches. ~~ (This is nonsense. All problems comes because the interrupter work being interrupter. If the interrupter yields then there is no need for lane unmarking to start with )
 
 ### Self + subtree marking vs Self + descendant marking?
 Recurrence relation:

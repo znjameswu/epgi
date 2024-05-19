@@ -50,7 +50,7 @@ impl<E: FullElement> ElementNode<E> {
             SkipAndReturn => SubtreeRenderObjectChange::new_no_update(),
         };
 
-        self.context.purge_lane(LanePos::Sync);
+        self.context.purge_lane(LanePos::SYNC);
         return change;
     }
 }
@@ -95,10 +95,10 @@ impl<E: FullElement> ElementNode<E> {
     ) -> PrepareReconcileResult<E> {
         // An oppurtunistic probe to allow bypass lock.
         let no_new_widget = widget.is_none();
-        let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::Sync);
-        let no_consumer_root = !self.context.consumer_root_lanes().contains(LanePos::Sync);
+        let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::SYNC);
+        let no_consumer_root = !self.context.consumer_root_lanes().contains(LanePos::SYNC);
         let no_poll = !self.context.needs_poll();
-        let no_descendant_lanes = !self.context.descendant_lanes().contains(LanePos::Sync);
+        let no_descendant_lanes = !self.context.descendant_lanes().contains(LanePos::SYNC);
 
         if no_new_widget && no_mailbox_update && no_consumer_root && no_poll && no_descendant_lanes
         {

@@ -4,14 +4,23 @@ use std::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LanePos {
-    Sync,
-    Async(u8),
-}
+pub struct LanePos(u8);
 
 impl LanePos {
+    pub const SYNC: Self = Self(LaneMask::ASYNC_LANE_COUNT_U8);
+    pub fn new_async(pos: u8) -> Self {
+        debug_assert_ne!(pos, LaneMask::ASYNC_LANE_COUNT_U8);
+        Self(pos)
+    }
     pub fn is_sync(&self) -> bool {
-        matches!(self, LanePos::Sync)
+        self.0 == LaneMask::ASYNC_LANE_COUNT_U8
+    }
+    pub fn async_lane_pos(self) -> Option<u8> {
+        if self.is_sync() {
+            None
+        } else {
+            Some(self.0)
+        }
     }
 }
 
@@ -24,6 +33,8 @@ pub struct AtomicLaneMask(AtomicUsize);
 impl LaneMask {
     pub const LANE_COUNT: usize = std::mem::size_of::<usize>() * 8;
     pub const ASYNC_LANE_COUNT: usize = Self::LANE_COUNT - 1;
+    pub const LANE_COUNT_U8: u8 = (std::mem::size_of::<usize>() * 8) as u8;
+    pub const ASYNC_LANE_COUNT_U8: u8 = Self::LANE_COUNT_U8 - 1;
 
     pub const NONE: LaneMask = LaneMask(0);
     pub const ALL: LaneMask = LaneMask(usize::MAX);
@@ -32,13 +43,8 @@ impl LaneMask {
 
     #[inline(always)]
     pub const fn new_single(lane_pos: LanePos) -> Self {
-        match lane_pos {
-            LanePos::Sync => Self::SINGLE_SYNC,
-            LanePos::Async(pos) => {
-                debug_assert!((pos as usize) < Self::ASYNC_LANE_COUNT);
-                Self(1 << pos)
-            }
-        }
+        debug_assert!(lane_pos.0 <= Self::ASYNC_LANE_COUNT_U8);
+        Self(1 << lane_pos.0)
     }
 
     pub const fn new() -> Self {
@@ -155,18 +161,18 @@ impl Iterator for LaneMaskIterator {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.0.is_empty() {
-            return None;
-        }
-        if self.0.overlaps(LaneMask::SINGLE_SYNC) {
-            self.0 = self.0 & LaneMask::ALL_ASYNC;
-            return Some(LanePos::Sync);
-        }
-        match self.0 .0.trailing_zeros() as usize {
-            LaneMask::LANE_COUNT => None,
+        // if self.0.is_empty() {
+        //     return None;
+        // }
+        // if self.0.overlaps(LaneMask::SINGLE_SYNC) {
+        //     self.0 = self.0 & LaneMask::ALL_ASYNC;
+        //     return Some(LanePos::Sync);
+        // }
+        match self.0 .0.trailing_zeros() as u8 {
+            LaneMask::LANE_COUNT_U8 => None,
             pos => {
                 self.0 .0 &= !(1 << pos);
-                Some(LanePos::Async(pos as u8))
+                Some(LanePos(pos))
             }
         }
     }
