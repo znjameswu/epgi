@@ -26,7 +26,7 @@ impl<E: FullElement> ElementNode<E> {
                 .mainline_mut()
                 .expect("An unmounted element node should not be reachable by a rebuild!");
             debug_assert!(
-                mainline.async_queue.current().is_none(),
+                mainline.async_queue.current_ref().is_none(),
                 "An async work should not be executing alongside a sync work"
             );
             mainline.state = Some(state);

@@ -75,17 +75,11 @@ where
     //     })
     // }
 
-    pub(crate) fn current(&self) -> Option<&AsyncQueueCurrentEntry<E>> {
+    pub(crate) fn current_ref(&self) -> Option<&AsyncQueueCurrentEntry<E>> {
         self.inner.as_ref().and_then(|inner| inner.current.as_ref())
     }
     pub(crate) fn current_mut(&mut self) -> Option<&mut AsyncQueueCurrentEntry<E>> {
         self.inner.as_mut().and_then(|inner| inner.current.as_mut())
-    }
-
-    pub(crate) fn remove_current(&mut self) -> Option<AsyncQueueCurrentEntry<E>> {
-        self.inner
-            .as_mut()
-            .and_then(|inner| (&mut inner.current).take()) // rust-analyzer#14933
     }
 
     pub(crate) fn push_backqueue(
@@ -106,6 +100,18 @@ where
         &mut self,
     ) -> Option<&mut Vec<AsyncQueueBackqueueEntry<E::ArcWidget>>> {
         self.inner.as_mut().map(|inner| &mut inner.backqueue)
+    }
+
+    pub(crate) fn current_and_backqueue(
+        self,
+    ) -> (
+        Option<AsyncQueueCurrentEntry<E>>,
+        Vec<AsyncQueueBackqueueEntry<E::ArcWidget>>,
+    ) {
+        let Some(inner) = self.inner else {
+            return (None, Vec::new());
+        };
+        (inner.current, inner.backqueue)
     }
 
     pub(crate) fn current_and_backqueue_mut(
@@ -215,7 +221,11 @@ where
         return Ok(result);
     }
 
-    pub(crate) fn try_pop_front_if(
+    pub(crate) fn remove_current(&mut self) -> Option<AsyncQueueCurrentEntry<E>> {
+        self.inner.as_mut()?.current.take()
+    }
+
+    pub(crate) fn remove_current_if(
         &mut self,
         predicate: impl FnOnce(&AsyncQueueCurrentEntry<E>) -> bool,
     ) -> Option<AsyncQueueCurrentEntry<E>> {
@@ -314,6 +324,7 @@ pub(crate) struct BuildResults<E: ElementBase> {
 
 pub(crate) struct BuildResultsRebuild<E: ElementBase> {
     pub(crate) nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+    pub(crate) nodes_inflating: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     pub(crate) shuffle:
         Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
 }
@@ -340,6 +351,7 @@ where
         element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+        nodes_inflating: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
     ) -> Self {
         Self {
@@ -348,6 +360,7 @@ where
             children,
             rebuild_state: Some(BuildResultsRebuild {
                 nodes_needing_unmount,
+                nodes_inflating,
                 shuffle,
             }),
         }

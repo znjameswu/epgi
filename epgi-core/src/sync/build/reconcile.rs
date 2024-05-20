@@ -160,7 +160,7 @@ impl<E: FullElement> ElementNode<E> {
 
         let state = (&mut mainline.state).take().expect("Impossible to fail"); // rust-analyzer#14933
                                                                                // Not able to use `Option::map` due to closure lifetime problem.
-        let cancel_async = if let Some(entry) = mainline.async_queue.current() {
+        let cancel_async = if let Some(entry) = mainline.async_queue.current_ref() {
             let cancel = Self::prepare_cancel_async_work(
                 mainline,
                 entry.work_context.lane_pos,

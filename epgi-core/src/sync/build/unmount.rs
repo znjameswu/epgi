@@ -33,8 +33,11 @@ impl<E: FullElement> ElementNode<E> {
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     ) {
-        self.context.unmounted.store(true, Relaxed);
-        let (children, widget, purge) = {
+        let unmounted = self.context.unmounted.swap(true, Relaxed);
+        if unmounted {
+            return;
+        }
+        let (children, widget, cancel_async) = {
             // How do we ensure no one else will occupy/lane-mark this node after we unmount it?
             // 1. Ways of async batch to occupy this node
             //      1. Async reconciling down from the parent, which is occupied by the caller of this method
@@ -50,15 +53,7 @@ impl<E: FullElement> ElementNode<E> {
                 .inner
                 .mainline_mut()
                 .expect("Unmount should only be called on mainline nodes");
-            let purge = if let Some(entry) = mainline.async_queue.current() {
-                Some(
-                    Self::prepare_purge_async_work_mainline(mainline, entry.work_context.lane_pos)
-                        .ok()
-                        .expect("Impossible to fail"),
-                )
-            } else {
-                None
-            };
+            let cancel_async = Self::setup_unmount_async_work_mainline(mainline);
             // Drop backqueue.
             mainline.async_queue.backqueue_mut().map(Vec::clear);
             // Read mainline children and drop suspended work.
@@ -68,11 +63,11 @@ impl<E: FullElement> ElementNode<E> {
                 .expect("A mainline tree walk should not encounter another sync work");
             let children = state.children_cloned();
             state.waker_ref().map(SuspendWaker::set_completed);
-            (children, snapshot.widget.clone(), purge)
+            (children, snapshot.widget.clone(), cancel_async)
         };
 
-        if let Some(purge) = purge {
-            self.perform_purge_async_work(purge)
+        if let Some(cancel_async) = cancel_async {
+            self.execute_unmount_async_work(cancel_async, scope, lane_scheduler)
         }
 
         let mut async_work_needs_restarting = AsyncWorkNeedsRestarting::new();
@@ -94,20 +89,17 @@ impl<E: FullElement> ElementNode<E> {
         async_work_needs_restarting.execute_restarts(lane_scheduler);
 
         // // We just need to ensure the scheduler perform adequate unmount checks before performing below operations
-        // todo!("Remove from batch data");
         // todo!("Prevent stale scheduler calls");
 
         if let Some(children) = children {
             let mut it = children.into_iter();
+            // Single child optimization
             if it.len() == 1 {
                 let child = it.next().unwrap();
                 child.unmount(scope, lane_scheduler)
             } else {
                 it.for_each(|child| scope.spawn(|s| child.unmount(s, lane_scheduler)))
             }
-            // children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-            //     child.unmount()
-            // })
         }
     }
 }

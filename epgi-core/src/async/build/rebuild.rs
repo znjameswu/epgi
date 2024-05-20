@@ -84,6 +84,7 @@ impl<E: FullElement> ElementNode<E> {
         let output = match results {
             Ok((items, shuffle)) => {
                 let async_threadpool = &get_current_scheduler().async_threadpool;
+                let mut nodes_inflating = InlinableDwsizeVec::new();
                 let new_children = items.map_collect_with(
                     (child_work_context, handle.clone(), barrier),
                     |(child_work_context, handle, barrier), item| {
@@ -111,6 +112,7 @@ impl<E: FullElement> ElementNode<E> {
                                         barrier,
                                     )
                                 });
+                                nodes_inflating.push(node.clone());
                                 node
                             }
                         }
@@ -122,6 +124,7 @@ impl<E: FullElement> ElementNode<E> {
                     element,
                     new_children,
                     nodes_needing_unmount,
+                    nodes_inflating,
                     shuffle,
                 ))
             }

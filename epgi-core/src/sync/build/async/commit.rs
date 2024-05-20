@@ -309,7 +309,7 @@ where
                 // After we are finished with the commit, the scheduler will proceed to reorder work.
                 let current = mainline
                     .async_queue
-                    .try_pop_front_if(|current| {
+                    .remove_current_if(|current| {
                         finished_lanes.contains(current.work_context.lane_pos)
                     })
                     .expect(

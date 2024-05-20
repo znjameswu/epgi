@@ -1,6 +1,6 @@
 /// Basic concepts:
 ///
-/// 1. Purge: Simple wipe the existence and stop any execution of this lane, disregarding any lane mark consistencies. 
+/// 1. Purge: Simple wipe the existence and stop any execution of this lane, disregarding any lane mark consistencies.
 ///     1. Destroys lane mark consistency under the subtree.
 ///     2. Only suitable for batch retirement or subtree unmount, when the subtree is certainly not going to be revisited by the given batch.
 /// 2. Remove: Purge the subtree of this lane, then requeueing any other lane that is unblocked by the purging.
@@ -11,12 +11,12 @@ use crate::{
     foundation::{Arc, Container, ContainerOf},
     r#async::AsyncReconcile,
     scheduler::{get_current_scheduler, LanePos},
-    sync::LaneScheduler,
+    sync::{lane_scheduler, LaneScheduler},
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, AweakElementContextNode, Element, ElementBase,
-        ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement, ImplProvide, Mainline,
-        SubscriptionDiff,
+        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode, Element,
+        ElementBase, ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement, ImplProvide,
+        Mainline, SubscriptionDiff,
     },
 };
 
@@ -24,7 +24,7 @@ pub(in super::super) struct CancelAsync<I> {
     pub(super) lane_pos: LanePos,
     pub(super) updated_consumers: Option<Vec<AweakElementContextNode>>,
     pub(super) subscription_diff: SubscriptionDiff,
-    pub(super) non_mainline_children: Option<I>,
+    pub(super) new_children: Option<I>,
 }
 
 pub(in super::super) struct RemoveAsync<E: ElementBase> {
@@ -97,7 +97,7 @@ impl<E: FullElement> ElementNode<E> {
                     lane_pos,
                     updated_consumers,
                     subscription_diff,
-                    non_mainline_children: match output {
+                    new_children: match output {
                         Completed(results) => Some(results.children),
                         _ => None,
                     },
@@ -119,13 +119,13 @@ impl<E: FullElement> ElementNode<E> {
             lane_pos,
             updated_consumers,
             subscription_diff,
-            non_mainline_children,
+            new_children,
         } = cancel;
 
         self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
-        if let Some(non_mainline_children) = non_mainline_children {
-            non_mainline_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+        if let Some(new_children) = new_children {
+            new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.remove_async_work_in_subtree(lane_pos)
             })
         }
@@ -278,7 +278,7 @@ impl<E: FullElement> ElementNode<E> {
             lane_pos,
             updated_consumers: None,
             subscription_diff,
-            non_mainline_children: match output {
+            new_children: match output {
                 Completed(results) => Some(results.children),
                 _ => None,
             },
@@ -311,7 +311,7 @@ impl<E: FullElement> ElementNode<E> {
                     lane_pos,
                     updated_consumers,
                     subscription_diff,
-                    non_mainline_children: match output {
+                    new_children: match output {
                         Completed(results) => Some(results.children),
                         _ => None,
                     },
@@ -366,13 +366,13 @@ impl<E: FullElement> ElementNode<E> {
             lane_pos,
             updated_consumers,
             subscription_diff,
-            non_mainline_children,
+            new_children,
         } = cancel;
 
         self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
-        if let Some(non_mainline_children) = non_mainline_children {
-            non_mainline_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+        if let Some(new_children) = new_children {
+            new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.purge_async_work_in_subtree(lane_pos)
             })
         }
@@ -402,7 +402,7 @@ impl<E: FullElement> ElementNode<E> {
                     lane_pos,
                     updated_consumers: reserved_provider_write,
                     subscription_diff,
-                    non_mainline_children,
+                    new_children,
                 } = purge;
 
                 self.perform_purge_async_work_local(
@@ -411,11 +411,10 @@ impl<E: FullElement> ElementNode<E> {
                     lane_pos,
                 );
 
-                if let Some(non_mainline_children) = non_mainline_children {
-                    non_mainline_children
-                        .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                            child.remove_async_work_and_lane_in_subtree(lane_pos)
-                        })
+                if let Some(new_children) = new_children {
+                    new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+                        child.remove_async_work_and_lane_in_subtree(lane_pos)
+                    })
                 }
             }
             Err(Some(children)) => children
@@ -433,9 +432,142 @@ impl<E: FullElement> ElementNode<E> {
 }
 
 impl<E: FullElement> ElementNode<E> {
+    pub(in crate::sync::build) fn setup_unmount_async_work(
+        snapshot: &mut ElementSnapshot<E>,
+    ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
+    {
+        match &mut snapshot.inner {
+            ElementSnapshotInner::AsyncInflating(async_inflating) => {
+                Self::setup_unmount_async_work_async_inflating(async_inflating)
+            }
+            ElementSnapshotInner::Mainline(mainline) => {
+                Self::setup_unmount_async_work_mainline(mainline)
+            }
+        }
+    }
 
-    pub fn setup_async_work_retire(self: Arc<Self>) {
-        
+    pub(super) fn setup_unmount_async_work_async_inflating(
+        async_inflating: &mut AsyncInflating<E>,
+    ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
+    {
+        let AsyncInflating {
+            work_context,
+            stash:
+                AsyncStash {
+                    handle,
+                    subscription_diff,
+                    updated_consumers,
+                    output,
+                },
+        } = async_inflating;
+        debug_assert!(updated_consumers.is_none());
+        handle.abort();
+        let subscription_diff = std::mem::take(subscription_diff);
+        // Replace with an invalid empty value
+        let output = std::mem::replace(
+            output,
+            AsyncOutput::Suspended {
+                suspend: None,
+                barrier: None,
+            },
+        );
+        use AsyncOutput::*;
+        Some(CancelAsync {
+            lane_pos: work_context.lane_pos,
+            updated_consumers: None,
+            subscription_diff,
+            new_children: match output {
+                Completed(results) => Some(results.children),
+                _ => None,
+            },
+        })
+    }
+
+    pub(in super::super) fn setup_unmount_async_work_mainline(
+        mainline: &mut Mainline<E>,
+    ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
+    {
+        // We must take out the entire async queue during unmount, to make sure the commit barrier in backqueue is actually dropped
+        // We cannot rely on the ref-counting `Drop::drop` behavior since there can be easily a leak.
+        let (current, backqueue) =
+            std::mem::replace(&mut mainline.async_queue, AsyncWorkQueue::new_empty())
+                .current_and_backqueue();
+
+        drop(backqueue); // To show that we really dropped the backqueue
+
+        let current = current?;
+        let AsyncQueueCurrentEntry {
+            widget: _,
+            work_context,
+            stash:
+                AsyncStash {
+                    handle,
+                    subscription_diff,
+                    updated_consumers,
+                    output,
+                },
+        } = current;
+        handle.abort();
+        Some(CancelAsync {
+            lane_pos: work_context.lane_pos,
+            updated_consumers,
+            subscription_diff,
+            new_children: match output {
+                AsyncOutput::Completed(results) => Some(results.children),
+                _ => None,
+            },
+        })
+    }
+
+    pub(in super::super) fn execute_unmount_async_work<'batch>(
+        self: &Arc<Self>,
+        cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
+    ) {
+        let CancelAsync {
+            lane_pos,
+            updated_consumers,
+            subscription_diff,
+            new_children,
+        } = cancel;
+
+        // Because we are going to unmount, there is no point to maintain consumer root lane marking consistency
+        drop(updated_consumers);
+
+        // if <E as Element>::Impl::PROVIDE_ELEMENT {
+        //     if let Some(updated_consumers) = updated_consumers {
+        //         self.context.unreserve_write_async(lane_pos);
+        //         // We choose relaxed lane marking without unmarking
+        //         for write_affected_consumer in updated_consumers {
+        //             todo!();
+        //             // let deactivated = write_affected_consumer
+        //             //     .upgrade()
+        //             //     .expect("Readers should be alive")
+        //             //     .dec_secondary_root(lane_pos);
+        //             // if deactivated {
+        //             //     todo!("Record deactivated secondary root")
+        //             // }
+        //         }
+        //     }
+        // } else {
+        //     debug_assert!(
+        //         updated_consumers.is_none(),
+        //         "An Element without declaring provider should not reserve a write"
+        //     )
+        // }
+        for reserved in subscription_diff.reserve {
+            reserved.unreserve_read(&(Arc::downgrade(self) as _), lane_pos)
+        }
+
+        if let Some(new_children) = new_children {
+            new_children
+                .into_iter()
+                .for_each(|child| scope.spawn(|scope| child.unmount(scope, lane_scheduler)));
+            // new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+            //     child.unmount(scope, lane_scheduler)
+            // })
+        }
     }
 }
 
