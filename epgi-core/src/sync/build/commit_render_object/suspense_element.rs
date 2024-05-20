@@ -3,7 +3,7 @@ use either::Either;
 use crate::{
     foundation::{Arc, Asc, EitherParallel, Protocol},
     nodes::{RenderSuspense, Suspense, SuspenseElement},
-    sync::{LaneScheduler, SubtreeRenderObjectChange},
+    sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
         ArcElementContextNode, ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl,
@@ -11,27 +11,27 @@ use crate::{
     },
 };
 
-use super::ImplReconcileCommit;
+use super::ImplCommitRenderObject;
 
-impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, false> {
-    fn visit_commit<'batch>(
+impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<true, false> {
+    fn visit_commit_render_object<'batch>(
         element_node: &ElementNode<SuspenseElement<P>>,
         render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
         render_object_changes: EitherParallel<
-            [SubtreeRenderObjectChange<P>; 1],
-            [SubtreeRenderObjectChange<P>; 2],
+            [RenderObjectCommitResult<P>; 1],
+            [RenderObjectCommitResult<P>; 2],
         >,
         lane_scheduler: &'batch LaneScheduler,
         scope: &rayon::Scope<'batch>,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<P> {
+    ) -> RenderObjectCommitResult<P> {
         debug_assert!(
             self_rebuild_suspended == false,
             "Suspense itself can never suspend"
         );
         let render_object = render_object.expect("Suspense itself can never suspend");
         use Either::*;
-        use SubtreeRenderObjectChange::*;
+        use RenderObjectCommitResult::*;
         match render_object_changes.0 {
             // No update
             Left(
@@ -48,7 +48,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
             ) => {
                 let render_action =
                     render_object.mark_render_action(child_render_action, subtree_has_action);
-                return SubtreeRenderObjectChange::Keep {
+                return RenderObjectCommitResult::Keep {
                     child_render_action: render_action,
                     subtree_has_action,
                 };
@@ -64,7 +64,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                         std::mem::replace(&mut inner.children, [child_render_object]);
                     old_child_render_object.detach_render_object();
                 }
-                return SubtreeRenderObjectChange::Keep {
+                return RenderObjectCommitResult::Keep {
                     child_render_action: render_action,
                     subtree_has_action: RenderAction::Relayout,
                 };
@@ -157,7 +157,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
         };
     }
 
-    fn rebuild_success_commit<'batch>(
+    fn rebuild_success_commit_render_object<'batch>(
         _element: &SuspenseElement<P>,
         widget: &Asc<Suspense<P>>,
         _shuffle: Option<
@@ -169,19 +169,19 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
         children: &mut EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
         render_object: &mut Option<Arc<RenderObject<RenderSuspense<P>>>>,
         render_object_changes: EitherParallel<
-            [SubtreeRenderObjectChange<P>; 1],
-            [SubtreeRenderObjectChange<P>; 2],
+            [RenderObjectCommitResult<P>; 1],
+            [RenderObjectCommitResult<P>; 2],
         >,
         element_context: &ArcElementContextNode,
         lane_scheduler: &'batch LaneScheduler,
         scope: &rayon::Scope<'batch>,
         _is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<P> {
+    ) -> RenderObjectCommitResult<P> {
         debug_assert!(_shuffle.is_none(), "Suspense cannot shuffle its child");
         let render_object = render_object.as_mut().expect("Suspense can never suspend");
 
         use Either::*;
-        use SubtreeRenderObjectChange::*;
+        use RenderObjectCommitResult::*;
         match render_object_changes.0 {
             Left(
                 [Keep {
@@ -197,7 +197,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
             ) => {
                 let render_action =
                     render_object.mark_render_action(child_render_action, subtree_has_action);
-                return SubtreeRenderObjectChange::Keep {
+                return RenderObjectCommitResult::Keep {
                     child_render_action: render_action,
                     subtree_has_action,
                 };
@@ -212,7 +212,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
                         std::mem::replace(&mut inner.children, [child_render_object]);
                     old_child_render_object.detach_render_object();
                 }
-                return SubtreeRenderObjectChange::Keep {
+                return RenderObjectCommitResult::Keep {
                     child_render_action: render_action,
                     subtree_has_action: RenderAction::Relayout,
                 };
@@ -259,25 +259,25 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
         };
     }
 
-    fn rebuild_suspend_commit(
+    fn rebuild_suspend_commit_render_object(
         _render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
-    ) -> SubtreeRenderObjectChange<P> {
+    ) -> RenderObjectCommitResult<P> {
         panic!("Suspense can not suspend on itself")
     }
 
-    fn inflate_success_commit(
+    fn inflate_success_commit_render_object(
         _element: &SuspenseElement<P>,
         widget: &Asc<Suspense<P>>,
         children: &mut EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
         render_object_changes: EitherParallel<
-            [SubtreeRenderObjectChange<P>; 1],
-            [SubtreeRenderObjectChange<P>; 2],
+            [RenderObjectCommitResult<P>; 1],
+            [RenderObjectCommitResult<P>; 2],
         >,
         element_context: &ArcElementContextNode,
         lane_scheduler: &LaneScheduler,
     ) -> (
         Option<Arc<RenderObject<RenderSuspense<P>>>>,
-        SubtreeRenderObjectChange<P>,
+        RenderObjectCommitResult<P>,
     ) {
         let [child_change] = render_object_changes
             .0
@@ -289,7 +289,7 @@ impl<P: Protocol> ImplReconcileCommit<SuspenseElement<P>> for ElementImpl<true, 
             "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
         );
 
-        use SubtreeRenderObjectChange::*;
+        use RenderObjectCommitResult::*;
         let (is_suspended, child_render_object) = if let New(child_render_object) = child_change {
             (false, child_render_object)
         } else {
@@ -317,9 +317,10 @@ fn inflate_fallback<P: Protocol>(
     element_context: ArcElementContextNode,
     lane_scheduler: &LaneScheduler,
 ) -> (ArcChildElementNode<P>, ArcChildRenderObject<P>) {
-    let (fallback, change) = fallback_widget.inflate_sync(Some(element_context), lane_scheduler);
+    let (fallback, commit_result) =
+        fallback_widget.inflate_sync(Some(element_context), lane_scheduler);
 
-    let SubtreeRenderObjectChange::New(fallback_render_object) = change else {
+    let RenderObjectCommitResult::New(fallback_render_object) = commit_result.render_object else {
         panic!(
             "The fallback component inside this Suspense has suspended. \
             This is not supposed to happen. \
@@ -335,7 +336,7 @@ fn inflate_fallback_and_attach_render_object<P: Protocol>(
     fallback_widget: ArcChildWidget<P>,
     element_context: ArcElementContextNode,
     lane_scheduler: &LaneScheduler,
-) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>) {
+) -> (ArcChildElementNode<P>, RenderObjectCommitResult<P>) {
     let (fallback, fallback_render_object) =
         inflate_fallback(fallback_widget, element_context, lane_scheduler);
 
@@ -350,7 +351,7 @@ fn swap_child_render_object<P: Protocol>(
     render_object: &Arc<RenderObject<RenderSuspense<P>>>,
     child_render_object: ArcChildRenderObject<P>,
     is_suspended: bool,
-) -> SubtreeRenderObjectChange<P> {
+) -> RenderObjectCommitResult<P> {
     {
         let mut inner = render_object.inner.lock();
         let [_old_child_render_object] =
@@ -366,7 +367,7 @@ fn swap_child_render_object<P: Protocol>(
         render_object.mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
 
     // Suspense will always return Keep during rebuild
-    return SubtreeRenderObjectChange::Keep {
+    return RenderObjectCommitResult::Keep {
         child_render_action: render_action,
         subtree_has_action: RenderAction::Relayout,
     };

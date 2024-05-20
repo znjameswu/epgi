@@ -4,7 +4,7 @@ use crate::{
         EMPTY_CONSUMED_TYPES,
     },
     scheduler::get_current_scheduler,
-    sync::{LaneScheduler, SubtreeRenderObjectChange, SyncBuildContext, SyncHookContext},
+    sync::{LaneScheduler, RenderObjectCommitResult, SyncBuildContext, SyncHookContext},
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, Element, ElementBase,
         ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement,
@@ -12,14 +12,14 @@ use crate::{
     },
 };
 
-use super::{provider::read_and_update_subscriptions_sync, ImplReconcileCommit};
+use super::{provider::read_and_update_subscriptions_sync, CommitResult, ImplCommitRenderObject};
 
 pub trait ChildWidgetSyncInflateExt<PP: Protocol> {
     fn inflate_sync(
         self: Arc<Self>,
         parent_context: Option<ArcElementContextNode>,
         lane_scheduler: &LaneScheduler,
-    ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
+    ) -> (ArcChildElementNode<PP>, CommitResult<PP>);
 }
 
 impl<T> ChildWidgetSyncInflateExt<<<T as Widget>::Element as ElementBase>::ParentProtocol> for T
@@ -32,7 +32,7 @@ where
         lane_scheduler: &LaneScheduler,
     ) -> (
         ArcChildElementNode<<<T as Widget>::Element as ElementBase>::ParentProtocol>,
-        SubtreeRenderObjectChange<<<T as Widget>::Element as ElementBase>::ParentProtocol>,
+        CommitResult<<<T as Widget>::Element as ElementBase>::ParentProtocol>,
     ) {
         let (node, results) = ElementNode::<T::Element>::inflate_node_sync(
             &self.into_arc_widget(),
@@ -48,10 +48,7 @@ impl<E: FullElement> ElementNode<E> {
         widget: &E::ArcWidget,
         parent_context: Option<ArcElementContextNode>,
         lane_scheduler: &LaneScheduler,
-    ) -> (
-        Arc<ElementNode<E>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
-    ) {
+    ) -> (Arc<ElementNode<E>>, CommitResult<E::ParentProtocol>) {
         let node = Arc::new_cyclic(|weak| ElementNode {
             context: Arc::new(ElementContextNode::new_for::<E>(
                 weak.clone() as _,
@@ -74,14 +71,14 @@ impl<E: FullElement> ElementNode<E> {
             lane_scheduler,
         );
 
-        let subtree_results = Self::perform_inflate_node_sync::<true>(
+        let commit_result = Self::perform_inflate_node_sync::<true>(
             &node,
             widget,
             SyncHookContext::new_inflate(),
             consumed_values,
             lane_scheduler,
         );
-        return (node, subtree_results);
+        return (node, commit_result);
     }
 
     pub(super) fn perform_inflate_node_sync<const FIRST_INFLATE: bool>(
@@ -90,7 +87,7 @@ impl<E: FullElement> ElementNode<E> {
         mut hook_context: SyncHookContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         lane_scheduler: &LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> CommitResult<E::ParentProtocol> {
         let result = E::perform_inflate_element(
             &widget,
             SyncBuildContext {
@@ -109,23 +106,25 @@ impl<E: FullElement> ElementNode<E> {
                         child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
                     },
                 );
-                let (mut children, render_object_changes) = results.unzip_collect(|x| x);
+                let (mut children, render_object_changes) = results
+                    .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
                 debug_assert!(
                     !render_object_changes
                         .as_iter()
-                        .any(SubtreeRenderObjectChange::is_keep_render_object),
+                        .any(RenderObjectCommitResult::is_keep_render_object),
                     "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
                 );
 
-                let (render_object, change) = <E as Element>::Impl::inflate_success_commit(
-                    &element,
-                    widget,
-                    &mut children,
-                    render_object_changes,
-                    &self.context,
-                    lane_scheduler,
-                );
+                let (render_object, render_object_commit_result) =
+                    <E as Element>::Impl::inflate_success_commit_render_object(
+                        &element,
+                        widget,
+                        &mut children,
+                        render_object_changes,
+                        &self.context,
+                        lane_scheduler,
+                    );
 
                 (
                     MainlineState::Ready {
@@ -134,7 +133,7 @@ impl<E: FullElement> ElementNode<E> {
                         children,
                         render_object,
                     },
-                    change,
+                    render_object_commit_result,
                 )
             }
             Err(err) => (
@@ -142,7 +141,7 @@ impl<E: FullElement> ElementNode<E> {
                     suspended_hooks: hook_context.take_hooks(true),
                     waker: err.waker,
                 },
-                SubtreeRenderObjectChange::Suspend,
+                RenderObjectCommitResult::Suspend,
             ),
         };
         if FIRST_INFLATE {
@@ -150,6 +149,6 @@ impl<E: FullElement> ElementNode<E> {
         } else {
             self.commit_write_element(state)
         }
-        return change;
+        return CommitResult::new(change);
     }
 }

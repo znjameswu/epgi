@@ -1,8 +1,8 @@
 mod r#async;
 pub(crate) use r#async::*;
 
-mod subtree_results;
-pub use subtree_results::*;
+mod commit_results;
+pub use commit_results::*;
 
 pub(crate) mod unmount;
 
@@ -17,7 +17,7 @@ pub use rebuild::*;
 mod inflate;
 pub use inflate::*;
 
-mod commit;
-pub use commit::*;
+mod commit_render_object;
+pub use commit_render_object::*;
 
 mod provider;

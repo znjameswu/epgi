@@ -400,16 +400,12 @@ impl<E: FullElement> ElementNode<E> {
             Ok(purge) => {
                 let CancelAsync {
                     lane_pos,
-                    updated_consumers: reserved_provider_write,
+                    updated_consumers,
                     subscription_diff,
                     new_children,
                 } = purge;
 
-                self.perform_purge_async_work_local(
-                    reserved_provider_write,
-                    subscription_diff,
-                    lane_pos,
-                );
+                self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
                 if let Some(new_children) = new_children {
                     new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {

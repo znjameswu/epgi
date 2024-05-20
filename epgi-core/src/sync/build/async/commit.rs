@@ -2,8 +2,8 @@ use crate::{
     foundation::{Arc, Container, ContainerOf, Protocol},
     scheduler::{get_current_scheduler, LaneMask, LanePos},
     sync::{
-        build::provider::AsyncWorkNeedsRestarting, ImplReconcileCommit, LaneScheduler,
-        SubtreeRenderObjectChange,
+        build::provider::AsyncWorkNeedsRestarting, ImplCommitRenderObject, LaneScheduler,
+        RenderObjectCommitResult,
     },
     tree::{
         ArcAnyElementNode, ArcChildElementNode, AsyncInflating, AsyncOutput,
@@ -40,7 +40,7 @@ pub trait ChildElementAsyncCommitExt<PP: Protocol> {
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> SubtreeRenderObjectChange<PP>;
+    ) -> RenderObjectCommitResult<PP>;
 }
 
 impl<E: FullElement> ChildElementAsyncCommitExt<E::ParentProtocol> for ElementNode<E> {
@@ -49,7 +49,7 @@ impl<E: FullElement> ChildElementAsyncCommitExt<E::ParentProtocol> for ElementNo
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         self.visit_and_commit_async_impl(finished_lanes, scope, lane_scheduler)
     }
 }
@@ -63,7 +63,7 @@ where
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         let prepare_result = self.prepare_visit_and_commit_async(finished_lanes);
         use PrepareCommitAsyncResult::*;
         match prepare_result {
@@ -76,7 +76,7 @@ where
                     NextAction::Return {
                         render_object,
                         self_rebuild_suspended,
-                    } => <E as Element>::Impl::visit_commit(
+                    } => <E as Element>::Impl::visit_commit_render_object(
                         &self,
                         render_object,
                         render_object_changes,
@@ -92,8 +92,8 @@ where
                     ),
                 }
             }
-            InflateSuspended => SubtreeRenderObjectChange::Suspend,
-            SkipAndReturn => SubtreeRenderObjectChange::new_no_update(),
+            InflateSuspended => RenderObjectCommitResult::Suspend,
+            SkipAndReturn => RenderObjectCommitResult::new_no_update(),
         }
     }
 }
@@ -246,12 +246,12 @@ where
         &self,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         let mut snapshot = self.snapshot.lock();
         // https://bevy-cheatbook.github.io/pitfalls/split-borrows.html
         let snapshot_reborrow = &mut *snapshot;
@@ -282,14 +282,15 @@ where
                 // Fire the hooks before commit into render object
                 let hooks = hooks.fire_effects();
 
-                let (render_object, subtree_change) = <E as Element>::Impl::inflate_success_commit(
-                    &element,
-                    &snapshot_reborrow.widget,
-                    &mut children,
-                    render_object_changes,
-                    &self.context,
-                    lane_scheduler,
-                );
+                let (render_object, subtree_change) =
+                    <E as Element>::Impl::inflate_success_commit_render_object(
+                        &element,
+                        &snapshot_reborrow.widget,
+                        &mut children,
+                        render_object_changes,
+                        &self.context,
+                        lane_scheduler,
+                    );
 
                 snapshot_reborrow.inner = ElementSnapshotInner::Mainline(Mainline {
                     state: Some(MainlineState::Ready {
@@ -413,7 +414,7 @@ where
                                 );
 
                                 let (render_object, change) =
-                                    <E as Element>::Impl::inflate_success_commit(
+                                    <E as Element>::Impl::inflate_success_commit_render_object(
                                         &results.element,
                                         &snapshot_reborrow.widget,
                                         &mut results.children,
@@ -450,7 +451,7 @@ where
         mut results: BuildResults<E>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         widget: &E::ArcWidget,
         mut hooks: HooksWithTearDowns,
@@ -459,18 +460,21 @@ where
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
         is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         let rebuild_state = results
             .rebuild_state
             .expect("Rebuild commit should see rebuild results");
         hooks.merge_with(results.hooks, false, HookContextMode::Rebuild);
 
         // We mimic the order in sync rebuild: first apply hook update, then unmount nodes, then commit into render object
+        let mut unmounted_consumer_lanes = LaneMask::new();
         for node_needing_unmount in rebuild_state.nodes_needing_unmount {
+            unmounted_consumer_lanes =
+                unmounted_consumer_lanes | node_needing_unmount.context().consumer_root_lanes();
             scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
         }
 
-        let change = <E as Element>::Impl::rebuild_success_commit(
+        let change = <E as Element>::Impl::rebuild_success_commit_render_object(
             &results.element,
             &widget,
             rebuild_state.shuffle,

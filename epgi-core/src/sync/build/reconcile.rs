@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Container, ContainerOf, Inlinable64Vec},
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{LaneScheduler, SubtreeRenderObjectChange, SyncHookContext},
+    sync::{LaneScheduler, RenderObjectCommitResult, SyncHookContext},
     tree::{
         apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementNode,
         FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     provider::{read_and_update_subscriptions_sync, update_provided_value},
-    CancelAsync, ImplReconcileCommit,
+    CancelAsync, CommitResult, ImplCommitRenderObject,
 };
 
 impl<E: FullElement> ElementNode<E> {
@@ -20,7 +20,7 @@ impl<E: FullElement> ElementNode<E> {
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> CommitResult<E::ParentProtocol> {
         let prepare_result = self.prepare_reconcile(widget, lane_scheduler);
         use PrepareReconcileResult::*;
         let change = match prepare_result {
@@ -33,9 +33,9 @@ impl<E: FullElement> ElementNode<E> {
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
                         child.visit_and_work_sync(job_ids, scope, lane_scheduler)
                     });
-                let (_children, render_object_changes) = results.unzip_collect(|x| x);
+                let (_children, render_object_changes) = results.unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
-                return <E as Element>::Impl::visit_commit(
+                let render_object_commit_result = <E as Element>::Impl::visit_commit_render_object(
                     &self,
                     render_object,
                     render_object_changes,
@@ -43,11 +43,12 @@ impl<E: FullElement> ElementNode<E> {
                     scope,
                     self_rebuild_suspended,
                 );
+                CommitResult::new(render_object_commit_result)
             }
             Reconcile(reconcile) => {
                 self.execute_reconcile(reconcile, job_ids, scope, lane_scheduler)
             }
-            SkipAndReturn => SubtreeRenderObjectChange::new_no_update(),
+            SkipAndReturn => CommitResult::new(RenderObjectCommitResult::new_no_update()),
         };
 
         self.context.purge_lane(LanePos::SYNC);
@@ -204,7 +205,7 @@ impl<E: FullElement> ElementNode<E> {
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> CommitResult<E::ParentProtocol> {
         let SyncReconcile {
             is_poll,
             old_widget,

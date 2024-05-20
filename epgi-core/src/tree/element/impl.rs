@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, ArrayContainer, Asc, ContainerOf, Protocol, Provide, TypeKey},
     nodes::{RenderSuspense, SuspenseElement},
-    sync::ImplReconcileCommit,
+    sync::ImplCommitRenderObject,
     tree::{ArcAnyRenderObject, ArcChildRenderObject, RenderObject},
 };
 
@@ -11,12 +11,12 @@ pub trait ImplElement<E: ElementBase>: ImplElementNode<E> + ImplProvide<E> {}
 impl<I, E: ElementBase> ImplElement<E> for I where I: ImplElementNode<E> + ImplProvide<E> {}
 
 pub trait ImplFullElement<E: Element<Impl = Self>>:
-    ImplElement<E> + ImplReconcileCommit<E>
+    ImplElement<E> + ImplCommitRenderObject<E>
 {
 }
 
 impl<I, E: Element<Impl = Self>> ImplFullElement<E> for I where
-    I: ImplElement<E> + ImplReconcileCommit<E>
+    I: ImplElement<E> + ImplCommitRenderObject<E>
 {
 }
 

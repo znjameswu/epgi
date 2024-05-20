@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, AsIterator, Container, ContainerOf},
     scheduler::get_current_scheduler,
-    sync::{LaneScheduler, SubtreeRenderObjectChange, SubtreeRenderObjectChangeSummary},
+    sync::{LaneScheduler, RenderObjectCommitResult, RenderObjectCommitSummary},
     tree::{
         AnyRenderObject, ArcChildElementNode, ArcChildRenderObject, ArcElementContextNode,
         ChildRenderObjectsUpdateCallback, Element, ElementImpl, ElementNode, ImplElement,
@@ -10,32 +10,33 @@ use crate::{
     },
 };
 
-use super::ImplReconcileCommit;
+use super::ImplCommitRenderObject;
 
-impl<E, const PROVIDE_ELEMENT: bool> ImplReconcileCommit<E> for ElementImpl<true, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> ImplCommitRenderObject<E>
+    for ElementImpl<true, PROVIDE_ELEMENT>
 where
     E: RenderElement,
     E: Element<Impl = Self>,
     Self: ImplElement<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
-    fn visit_commit<'batch>(
+    fn visit_commit_render_object<'batch>(
         element_node: &ElementNode<E>,
         render_object: Option<Arc<RenderObject<E::Render>>>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         _lane_scheduler: &'batch LaneScheduler,
         _scope: &rayon::Scope<'batch>,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         debug_assert!(
             render_object.is_none() || !self_rebuild_suspended,
             "Logic error in parameters: \
             This node cannot be in RebuildSuspended state if it has an attached render object"
         );
         let render_object_change_summary =
-            SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+            RenderObjectCommitResult::summarize(render_object_changes.as_iter());
         if let Some(render_object) = render_object {
             visit_commit_attached(
                 element_node,
@@ -53,7 +54,7 @@ where
         }
     }
 
-    fn rebuild_success_commit<'batch>(
+    fn rebuild_success_commit_render_object<'batch>(
         element: &E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
@@ -61,13 +62,13 @@ where
         render_object: &mut Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
         _lane_scheduler: &'batch LaneScheduler,
         _scope: &rayon::Scope<'batch>,
         is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         let (new_render_object, change) = if let Some(render_object) = render_object.take() {
             rebuild_success_process_attached(
                 widget,
@@ -89,42 +90,42 @@ where
         change
     }
 
-    fn rebuild_suspend_commit(
+    fn rebuild_suspend_commit_render_object(
         render_object: Option<Arc<RenderObject<E::Render>>>,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
         render_object.map(|render_object| render_object.detach_render_object());
-        SubtreeRenderObjectChange::Suspend
+        RenderObjectCommitResult::Suspend
     }
 
-    fn inflate_success_commit(
+    fn inflate_success_commit_render_object(
         element: &E,
         widget: &E::ArcWidget,
         _children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
         _lane_scheduler: &LaneScheduler,
     ) -> (
         Option<Arc<RenderObject<E::Render>>>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
+        RenderObjectCommitResult<E::ParentProtocol>,
     ) {
         let render_object_change_summary =
-            SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+            RenderObjectCommitResult::summarize(render_object_changes.as_iter());
 
         debug_assert!(
             !render_object_changes
                 .as_iter()
-                .any(SubtreeRenderObjectChange::is_keep_render_object),
+                .any(RenderObjectCommitResult::is_keep_render_object),
             "Fatal logic bug in epgi-core reconcile logic. Please file issue report."
         );
 
         if render_object_change_summary.is_suspended() {
-            return (None, SubtreeRenderObjectChange::Suspend);
+            return (None, RenderObjectCommitResult::Suspend);
         }
 
-        use SubtreeRenderObjectChange::*;
+        use RenderObjectCommitResult::*;
         let child_render_objects = render_object_changes.map_collect(|change| match change {
             New(child) => child,
             Suspend | Keep { .. } => {
@@ -144,7 +145,7 @@ where
             get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
         }
 
-        let change = SubtreeRenderObjectChange::New(new_render_object.clone());
+        let change = RenderObjectCommitResult::New(new_render_object.clone());
 
         (Some(new_render_object), change)
     }
@@ -156,17 +157,17 @@ fn visit_commit_attached<E, const PROVIDE_ELEMENT: bool>(
     render_object: Arc<RenderObject<E::Render>>,
     render_object_changes: ContainerOf<
         E::ChildContainer,
-        SubtreeRenderObjectChange<E::ChildProtocol>,
+        RenderObjectCommitResult<E::ChildProtocol>,
     >,
-    render_object_change_summary: SubtreeRenderObjectChangeSummary,
-) -> SubtreeRenderObjectChange<E::ParentProtocol>
+    render_object_change_summary: RenderObjectCommitSummary,
+) -> RenderObjectCommitResult<E::ParentProtocol>
 where
     E: RenderElement,
     E: Element<Impl = ElementImpl<true, PROVIDE_ELEMENT>>,
     ElementImpl<true, PROVIDE_ELEMENT>:
         ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
-    use SubtreeRenderObjectChangeSummary::*;
+    use RenderObjectCommitSummary::*;
     match render_object_change_summary {
         KeepAll {
             child_render_action,
@@ -174,7 +175,7 @@ where
         } => {
             let render_action =
                 render_object.mark_render_action(child_render_action, subtree_has_action);
-            return SubtreeRenderObjectChange::Keep {
+            return RenderObjectCommitResult::Keep {
                 // Absorb on boundaries.
                 child_render_action: render_action,
                 subtree_has_action,
@@ -191,7 +192,7 @@ where
                     render_object_change_summary,
                 )
             });
-            return SubtreeRenderObjectChange::Keep {
+            return RenderObjectCommitResult::Keep {
                 child_render_action: render_action,
                 subtree_has_action: RenderAction::Relayout,
             };
@@ -231,7 +232,7 @@ where
                     it found the node to be in an suspended inflated state."
                 ),
             }
-            return SubtreeRenderObjectChange::Suspend;
+            return RenderObjectCommitResult::Suspend;
         }
     }
 }
@@ -240,25 +241,25 @@ pub(crate) fn visit_commit_detached<E, const PROVIDE_ELEMENT: bool>(
     element_node: &ElementNode<E>,
     render_object_changes: ContainerOf<
         E::ChildContainer,
-        SubtreeRenderObjectChange<E::ChildProtocol>,
+        RenderObjectCommitResult<E::ChildProtocol>,
     >,
-    render_object_change_summary: SubtreeRenderObjectChangeSummary,
+    render_object_change_summary: RenderObjectCommitSummary,
     self_rebuild_suspended: bool,
-) -> SubtreeRenderObjectChange<E::ParentProtocol>
+) -> RenderObjectCommitResult<E::ParentProtocol>
 where
     E: RenderElement,
     E: Element<Impl = ElementImpl<true, PROVIDE_ELEMENT>>,
     ElementImpl<true, PROVIDE_ELEMENT>:
         ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
-    if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
-    | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
+    if let RenderObjectCommitSummary::KeepAll { .. }
+    | RenderObjectCommitSummary::HasSuspended = render_object_change_summary
     {
-        return SubtreeRenderObjectChange::Suspend;
+        return RenderObjectCommitResult::Suspend;
     };
 
     if self_rebuild_suspended {
-        return SubtreeRenderObjectChange::Suspend;
+        return RenderObjectCommitResult::Suspend;
     }
 
     let mut snapshot = element_node.snapshot.lock();
@@ -348,9 +349,9 @@ where
         {
             get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
         }
-        return SubtreeRenderObjectChange::New(new_attached_render_object);
+        return RenderObjectCommitResult::New(new_attached_render_object);
     } else {
-        return SubtreeRenderObjectChange::Suspend;
+        return RenderObjectCommitResult::Suspend;
     }
 }
 
@@ -361,12 +362,12 @@ fn rebuild_success_process_attached<E, const PROVIDE_ELEMENT: bool>(
     render_object: Arc<RenderObject<E::Render>>,
     render_object_changes: ContainerOf<
         E::ChildContainer,
-        SubtreeRenderObjectChange<E::ChildProtocol>,
+        RenderObjectCommitResult<E::ChildProtocol>,
     >,
     is_new_widget: bool,
 ) -> (
     Option<Arc<RenderObject<E::Render>>>,
-    SubtreeRenderObjectChange<E::ParentProtocol>,
+    RenderObjectCommitResult<E::ParentProtocol>,
 )
 where
     E: RenderElement,
@@ -374,13 +375,13 @@ where
         ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     let render_object_change_summary =
-        SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+        RenderObjectCommitResult::summarize(render_object_changes.as_iter());
 
-    use SubtreeRenderObjectChangeSummary::*;
+    use RenderObjectCommitSummary::*;
 
     if render_object_change_summary.is_suspended() {
         render_object.detach_render_object();
-        return (None, SubtreeRenderObjectChange::Suspend);
+        return (None, RenderObjectCommitResult::Suspend);
     }
 
     let mut self_render_action = RenderAction::None;
@@ -415,7 +416,7 @@ where
     let child_render_action =
         render_object.mark_render_action(child_render_action, subtree_has_action);
 
-    let change = SubtreeRenderObjectChange::Keep {
+    let change = RenderObjectCommitResult::Keep {
         child_render_action: std::cmp::max(self_render_action, child_render_action),
         subtree_has_action: std::cmp::max(self_render_action, subtree_has_action),
     };
@@ -429,12 +430,12 @@ fn rebuild_success_process_detached<E, const PROVIDE_ELEMENT: bool>(
     children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     render_object_changes: ContainerOf<
         E::ChildContainer,
-        SubtreeRenderObjectChange<E::ChildProtocol>,
+        RenderObjectCommitResult<E::ChildProtocol>,
     >,
     element_context: &ArcElementContextNode,
 ) -> (
     Option<Arc<RenderObject<E::Render>>>,
-    SubtreeRenderObjectChange<E::ParentProtocol>,
+    RenderObjectCommitResult<E::ParentProtocol>,
 )
 where
     E: RenderElement,
@@ -442,12 +443,12 @@ where
         ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
     let render_object_change_summary =
-        SubtreeRenderObjectChange::summarize(render_object_changes.as_iter());
+        RenderObjectCommitResult::summarize(render_object_changes.as_iter());
 
-    if let SubtreeRenderObjectChangeSummary::KeepAll { .. }
-    | SubtreeRenderObjectChangeSummary::HasSuspended = render_object_change_summary
+    if let RenderObjectCommitSummary::KeepAll { .. }
+    | RenderObjectCommitSummary::HasSuspended = render_object_change_summary
     {
-        return (None, SubtreeRenderObjectChange::Suspend);
+        return (None, RenderObjectCommitResult::Suspend);
     };
 
     let render_object = try_create_render_object(
@@ -464,10 +465,10 @@ where
         {
             get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
         }
-        let change = SubtreeRenderObjectChange::New(render_object.clone());
+        let change = RenderObjectCommitResult::New(render_object.clone());
         (Some(render_object), change)
     } else {
-        return (None, SubtreeRenderObjectChange::Suspend);
+        return (None, RenderObjectCommitResult::Suspend);
     }
 }
 
@@ -479,7 +480,7 @@ fn try_create_render_object<E, const PROVIDE_ELEMENT: bool>(
     children: &ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     render_object_changes: ContainerOf<
         E::ChildContainer,
-        SubtreeRenderObjectChange<E::ChildProtocol>,
+        RenderObjectCommitResult<E::ChildProtocol>,
     >,
 ) -> Option<Arc<RenderObject<E::Render>>>
 where
@@ -493,7 +494,7 @@ where
             if suspended {
                 return None;
             }
-            use SubtreeRenderObjectChange::*;
+            use RenderObjectCommitResult::*;
             match change {
                 Keep { .. } => {
                     let child_render_object = child.get_current_subtree_render_object();
@@ -527,16 +528,16 @@ pub(super) fn update_children<R: RenderBase>(
     shuffle: Option<ChildRenderObjectsUpdateCallback<R::ChildContainer, R::ChildProtocol>>,
     render_object_changes: ContainerOf<
         R::ChildContainer,
-        SubtreeRenderObjectChange<R::ChildProtocol>,
+        RenderObjectCommitResult<R::ChildProtocol>,
     >,
-    render_object_change_summary: SubtreeRenderObjectChangeSummary,
+    render_object_change_summary: RenderObjectCommitSummary,
 ) {
     if let Some(shuffle) = shuffle {
         replace_with::replace_with_or_abort(children, move |children| {
             let slots = (shuffle)(children);
             slots.zip_collect(render_object_changes, |slot, change| {
                 use RenderObjectSlots::*;
-                use SubtreeRenderObjectChange::*;
+                use RenderObjectCommitResult::*;
                 match (slot, change) {
                     (Reuse(render_object), Keep { .. }) => render_object,
                     (_, New(render_object)) => render_object,
@@ -555,7 +556,7 @@ pub(super) fn update_children<R: RenderBase>(
     } else if !render_object_change_summary.is_keep_all() {
         replace_with::replace_with_or_abort(children, move |children| {
             children.zip_collect(render_object_changes, |child, change| {
-                use SubtreeRenderObjectChange::*;
+                use RenderObjectCommitResult::*;
                 match change {
                     Keep { .. } => child,
                     New(render_object) => render_object,

@@ -3,14 +3,14 @@ use crate::{
         Arc, Container, ContainerOf, Inlinable64Vec, InlinableDwsizeVec, Protocol, Provide,
     },
     scheduler::{get_current_scheduler, JobId},
-    sync::{LaneScheduler, SubtreeRenderObjectChange, SyncBuildContext, SyncHookContext},
+    sync::{LaneScheduler, SyncBuildContext, SyncHookContext},
     tree::{
         ArcChildElementNode, Element, ElementNode, ElementReconcileItem, ElementWidgetPair,
         FullElement, ImplElementNode, MainlineState,
     },
 };
 
-use super::ImplReconcileCommit;
+use super::{CommitResult, ImplCommitRenderObject};
 
 pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
     fn rebuild_sync<'batch>(
@@ -18,14 +18,14 @@ pub trait ChildElementWidgetPairSyncBuildExt<P: Protocol> {
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
+    ) -> (ArcChildElementNode<P>, CommitResult<P>);
 
     fn rebuild_sync_box<'batch>(
         self: Box<Self>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> (ArcChildElementNode<P>, SubtreeRenderObjectChange<P>);
+    ) -> (ArcChildElementNode<P>, CommitResult<P>);
 }
 
 impl<E> ChildElementWidgetPairSyncBuildExt<E::ParentProtocol> for ElementWidgetPair<E>
@@ -39,7 +39,7 @@ where
         lane_scheduler: &'batch LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
+        CommitResult<E::ParentProtocol>,
     ) {
         let subtree_results =
             self.element
@@ -54,7 +54,7 @@ where
         lane_scheduler: &'batch LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
+        CommitResult<E::ParentProtocol>,
     ) {
         self.rebuild_sync(job_ids, scope, lane_scheduler)
     }
@@ -73,7 +73,7 @@ impl<E: FullElement> ElementNode<E> {
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
         is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol> {
+    ) -> CommitResult<E::ParentProtocol> {
         let mut nodes_needing_unmount = Default::default();
         let results = E::perform_rebuild_element(
             &mut element,
@@ -108,9 +108,10 @@ impl<E: FullElement> ElementNode<E> {
                             }
                         }
                     });
-                let (mut children, changes) = results.unzip_collect(|x| x);
+                let (mut children, changes) = results
+                    .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
-                let change = <E as Element>::Impl::rebuild_success_commit(
+                let change = <E as Element>::Impl::rebuild_success_commit_render_object(
                     &element,
                     widget,
                     shuffle,
@@ -145,11 +146,11 @@ impl<E: FullElement> ElementNode<E> {
                         children,
                         waker: err.waker,
                     },
-                    <E as Element>::Impl::rebuild_suspend_commit(render_object),
+                    <E as Element>::Impl::rebuild_suspend_commit_render_object(render_object),
                 )
             }
         };
         self.commit_write_element(state);
-        return change;
+        return CommitResult::new(change);
     }
 }

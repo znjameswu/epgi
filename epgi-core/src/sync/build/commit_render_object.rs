@@ -4,7 +4,7 @@ mod suspense_element;
 
 use crate::{
     foundation::{Arc, ContainerOf},
-    sync::{LaneScheduler, SubtreeRenderObjectChange},
+    sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
         ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, Element,
         ElementBase, ElementNode, FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
@@ -57,26 +57,26 @@ impl<E: FullElement> ElementNode<E> {
     }
 }
 
-pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
+pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
     // Reason for this signature: we need to ensure the happy path (rebuild success with no suspense)
     // do not require a lock since there is nothing to write.
     // And there is a lot of cloned resources from visit_inspect that has no further use
     // (since visit do not occupy node, it has no choice but to clone resources out)
-    fn visit_commit<'batch>(
+    fn visit_commit_render_object<'batch>(
         element_node: &ElementNode<E>,
         render_object: Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
             <E as ElementBase>::ChildContainer,
-            SubtreeRenderObjectChange<<E as ElementBase>::ChildProtocol>,
+            RenderObjectCommitResult<<E as ElementBase>::ChildProtocol>,
         >,
         lane_scheduler: &'batch LaneScheduler,
         scope: &rayon::Scope<'batch>,
         self_rebuild_suspended: bool,
-    ) -> SubtreeRenderObjectChange<<E as ElementBase>::ParentProtocol>;
+    ) -> RenderObjectCommitResult<<E as ElementBase>::ParentProtocol>;
 
     // Reason for this signature: there is going to be a write_back regardless
     // You have to return the resources since they are moved out when we occupy the node, and later they need to move back
-    fn rebuild_success_commit<'batch>(
+    fn rebuild_success_commit_render_object<'batch>(
         element: &E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
@@ -84,30 +84,30 @@ pub trait ImplReconcileCommit<E: Element<Impl = Self>>: ImplElementNode<E> {
         render_object: &mut Self::OptionArcRenderObject,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
         lane_scheduler: &'batch LaneScheduler,
         scope: &rayon::Scope<'batch>,
         is_new_widget: bool,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
+    ) -> RenderObjectCommitResult<E::ParentProtocol>;
 
-    fn rebuild_suspend_commit(
+    fn rebuild_suspend_commit_render_object(
         render_object: Self::OptionArcRenderObject,
-    ) -> SubtreeRenderObjectChange<E::ParentProtocol>;
+    ) -> RenderObjectCommitResult<E::ParentProtocol>;
 
-    fn inflate_success_commit(
+    fn inflate_success_commit_render_object(
         element: &E,
         widget: &E::ArcWidget,
         children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
-            SubtreeRenderObjectChange<E::ChildProtocol>,
+            RenderObjectCommitResult<E::ChildProtocol>,
         >,
         element_context: &ArcElementContextNode,
         lane_scheduler: &LaneScheduler,
     ) -> (
         Self::OptionArcRenderObject,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
+        RenderObjectCommitResult<E::ParentProtocol>,
     );
 }

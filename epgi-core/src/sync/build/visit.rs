@@ -5,7 +5,7 @@ use crate::{
     tree::{ArcAnyElementNode, ArcChildElementNode, ElementNode, FullElement},
 };
 
-use super::SubtreeRenderObjectChange;
+use super::{CommitResult, RenderObjectCommitResult};
 
 pub trait AnyElementSyncReconcileExt {
     fn visit_and_work_sync_any<'batch>(
@@ -34,7 +34,7 @@ pub trait ChildElementSyncReconcileExt<PP: Protocol> {
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> (ArcChildElementNode<PP>, SubtreeRenderObjectChange<PP>);
+    ) -> (ArcChildElementNode<PP>, CommitResult<PP>);
 }
 
 impl<E: FullElement> ChildElementSyncReconcileExt<E::ParentProtocol> for ElementNode<E> {
@@ -45,7 +45,7 @@ impl<E: FullElement> ChildElementSyncReconcileExt<E::ParentProtocol> for Element
         lane_scheduler: &'batch LaneScheduler,
     ) -> (
         ArcChildElementNode<E::ParentProtocol>,
-        SubtreeRenderObjectChange<E::ParentProtocol>,
+        CommitResult<E::ParentProtocol>,
     ) {
         let result = self.reconcile_node_sync(None, job_ids, scope, lane_scheduler);
         (self, result)

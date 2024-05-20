@@ -4,7 +4,7 @@ use hashbrown::HashSet;
 
 use crate::{
     foundation::{Asc, Protocol, PtrEq, SyncMpscSender, SyncRwLock},
-    sync::{CommitBarrier, LaneScheduler, SubtreeRenderObjectChange},
+    sync::{CommitBarrier, LaneScheduler, RenderObjectCommitResult},
     tree::{
         ArcAnyElementNode, ArcAnyLayerRenderObject, AsyncSuspendWaker, AweakAnyElementNode,
         AweakAnyLayerRenderObject, AweakElementContextNode, LayoutResults, Render, RenderElement,
@@ -111,11 +111,11 @@ where
     ) -> Self {
         let lane_scheduler = LaneScheduler::new();
         use crate::sync::ChildWidgetSyncInflateExt;
-        let (root_element, subtree_change) = scheduler_handle
+        let (root_element, commit_result) = scheduler_handle
             .sync_threadpool
             .scope(|_| root_widget.inflate_sync(None, &lane_scheduler));
 
-        let SubtreeRenderObjectChange::New(root_render_object) = subtree_change else {
+        let RenderObjectCommitResult::New(root_render_object) = commit_result.render_object else {
             panic!("Root widget inflate failed!");
         };
         let root_render_object = root_render_object
