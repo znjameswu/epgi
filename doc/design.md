@@ -402,35 +402,6 @@ It will be a lot more easier to impl fallback in a static, declarative way rathe
 3. Specifically for rayon, its performance is bad for small amount of element. See https://github.com/rayon-rs/rayon/issues/1044. Tokio, on ther other hand, seems to be a very safe bet. If we perform the single-element-optimization, it will be great.
 4. We are not strictly CPU-intensive in the conventional sense. Despite that the parallelized building process could be computationally heavy, we still would yield to the scheduler at every node boundary. We can't cause a blocking (in the sense of starving the executor) if we code properly. So what we are doing is just heavy concurrent jobs with a high CPU usage.
 
-
-
-# Relaxed or strict lane marking?
-
-## Definition
-
-
-Relaxed lane marking can only be used as a heuristic.
-
-## Advantage
-If we do relaxed lane marking and opt out of lane unmarking, we could even ~~use a plane AtomicLaneMask instead of a locked LinearMap~~ drop the spawned secondary root record entirely!!!!!!(Huge advantange)
-
-## Problem with async secondary root spawning & unmount
-If async secondary root spawning and lane marking is performed within the async task itself, then this process has no point of synchronization with a potential unmount that removes the subscription.
-1. Due to lock ordering, while unmounting a subscriber, we cannot grab the lock of the provider ElementNode. The reverse is true, while spawning secondary task, we cannot grab the lock of the subscriber ElementNode.
-2. The only two possible synchronization points are:
-    1. In the secondary root lock:
-        1. This could be potentially replaced by a lockfree primitive, so better not relying on this lock.
-        2. Lock a secondary root lock then check an cooperative flag seems a strange code pattern.
-    2. In the provider lock:
-        1. Perform spawning and lane marking while holding the provider lock
-            1. This would make an async provider write potentially way too expensive. This could affect the performance of the sync batch since they also need to lock some providers, especially those "common" providers with a lot of subscribers.
-        2. Otherwise this provides no synchronization. The thread can suspend and the lane marking can happen a year later.
-
-## Decision
-~~Relaxed lane marking with no unmarking~~
-
-Please see schedule algorithm document
-
 # Layout tree walk implementation
 
 Layout is different from build, so the impl strategy from build tree walk does not work here:
