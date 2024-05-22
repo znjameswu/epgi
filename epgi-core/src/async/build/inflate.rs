@@ -124,7 +124,7 @@ impl<E: FullElement> ElementNode<E> {
                         stash: AsyncStash {
                             handle,
                             subscription_diff,
-                            updated_consumers: None,
+                            spawned_consumers: None,
                             output: AsyncOutput::Uninitiated { barrier },
                         },
                     }),

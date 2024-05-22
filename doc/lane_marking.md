@@ -1,5 +1,7 @@
 
-Decision: Do not unmark, allow relaxed lane marking.
+Decision: 
+1. Allow relaxed lane marking. Do not propagate lane unmarking.
+2. Use reverse-order unsubscription to deactivate consumer root.
 
 # Relaxed or strict lane marking?
 
@@ -142,9 +144,9 @@ Syncrhonization between unmarking and marking proves to be difficult:
                     2. For a given consumer node and a given lane, only the first lane marking will actually mark up, because the following lane mark will always comes from providers that are lower in tree than the provider that triggers the first lane marking, and thus their path will already be marked.
                 2. For a given consumer node and a given lane, when the consumer refcount decrement to zero, the abort that triggered this decrement must come from above the topmost changed provider A (aka the provider that triggers the first lane marking) (if the abort comes from somewhere below, then the refcount from A won't be decremented and thus refcount won't be zero), and thus we have the guarantee we won't meet any lane marking when we unmark the limited scope from the consumer to A.
                 3. Then the unmarking itself is not implementable. Suppose along a tree path from top down there is 4 nodes: A (provides T1) -> B (provides T2) -> C (consumes T2) -> D (consumes T1). When we abort at A, we see that B-C pair should not affect us but we have no way to know it since we can't know the existence of B when we visit A, but when we visit B, we can no longer unmark the nodes above B below A.
-                    1. Reverse-order lane unmarking. We unmark in the exact reverse order of how we would mark. That is, when we lane mark, we start from top down, so when we unmark we start from bottom up (unmark at the upwalk phase).
+                    1. Reverse-order unsubscription. We unmark in the exact reverse order of how we would mark. That is, when we lane mark, we start from top down, so when we unmark we start from bottom up (unmark at the upwalk phase).
             3. The design
     3. 
 
 # Alternative to consumer node refcount
-Can reverse-order lane unmarking solve the need for ref-counting? Yes it can!
+Can reverse-order unsubsription solve the need for ref-counting? Yes it can!

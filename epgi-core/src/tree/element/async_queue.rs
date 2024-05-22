@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     ArcChildElementNode, AsyncSuspendWaker, AweakElementContextNode,
-    ChildRenderObjectsUpdateCallback,
+    ChildRenderObjectsUpdateCallback, ConsumerWorkSpawnToken,
 };
 
 pub(crate) struct AsyncWorkQueue<E: ElementBase> {
@@ -38,7 +38,7 @@ pub(crate) struct AsyncStash<E: ElementBase> {
     /// 3. Prevent spawning staled child work.
     pub(crate) handle: WorkHandle,
     pub(crate) subscription_diff: SubscriptionDiff,
-    pub(crate) updated_consumers: Option<Vec<AweakElementContextNode>>,
+    pub(crate) spawned_consumers: Option<Vec<(AweakElementContextNode, ConsumerWorkSpawnToken)>>,
     pub(crate) output: AsyncOutput<E>,
 }
 

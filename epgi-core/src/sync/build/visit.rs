@@ -5,7 +5,7 @@ use crate::{
     tree::{ArcAnyElementNode, ArcChildElementNode, ElementNode, FullElement},
 };
 
-use super::{CommitResult, RenderObjectCommitResult};
+use super::CommitResult;
 
 pub trait AnyElementSyncReconcileExt {
     fn visit_and_work_sync_any<'batch>(

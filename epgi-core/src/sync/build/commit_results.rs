@@ -5,7 +5,38 @@ use crate::{
 
 pub struct CommitResult<P: Protocol> {
     pub render_object: RenderObjectCommitResult<P>,
+    // pub subtree_lanes: SubtreeLanesCommitResult,
 }
+
+// #[derive(Clone)]
+// pub struct SubtreeLanesCommitResult {
+//     /// The lanes removed due to a deactivated consumer
+//     pub removed_lanes: LaneMask,
+//     /// The last version of subtree lanes. Note that some bits may be outdated due to concurrent async job mark-ups.
+//     ///
+//     /// This is needed since up-propagation of removed lanes needs lane information from its siblings to decide whether to up-propagate.
+//     /// The lifecycle of batch execution guarantees that removed lanes can never be marking up at the same time.
+//     /// (Really? what if one subtree is marking up and another subtree is being deactivated?) (Unresolved)
+//     /// Therefore, for removed lanes, this field will not be outdated. But other lanes could be outdated.
+//     /// Since we never know which lanes could be removed in sibling subtrees, we always have to return a full lane mask including those potentially useless and outdated lanes.
+//     pub current: LaneMask,
+// }
+
+// impl SubtreeLanesCommitResult {
+//     pub(crate) fn new() -> Self {
+//         Self {
+//             remove_has_happened: false,
+//             current: LaneMask::new(),
+//         }
+//     }
+
+//     pub(crate) fn merge(self, other: Self) -> Self {
+//         Self {
+//             remove_has_happened: self.remove_has_happened | other.remove_has_happened,
+//             current: self.current | other.current,
+//         }
+//     }
+// }
 
 impl<P: Protocol> CommitResult<P> {
     pub(crate) fn new(render_object_commit_result: RenderObjectCommitResult<P>) -> Self {
@@ -39,6 +70,7 @@ impl<P: Protocol> CommitResult<P> {
 
 pub struct CommitSummary {
     pub render_object: RenderObjectCommitSummary,
+    // pub consumer_lanes: SubtreeLanesCommitResult,
 }
 
 impl CommitSummary {

@@ -100,7 +100,7 @@ impl<E: FullElement> ElementNode<E> {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(work_context.lane_pos);
         let no_consumer_root = !self
             .context
-            .consumer_root_lanes()
+            .consumer_lanes()
             .contains(work_context.lane_pos);
         let no_descendant_lanes = !self
             .context
@@ -200,7 +200,7 @@ impl<E: FullElement> ElementNode<E> {
                     &mut child_work_context,
                     &barrier,
                 );
-                let mut updated_consumers = None;
+                let mut spawned_consumers = None;
                 if let Some((new_provided_value, type_key, is_new_value)) = provided_value_update {
                     child_work_context
                         .to_mut()
@@ -213,15 +213,22 @@ impl<E: FullElement> ElementNode<E> {
                             work_context.batch.as_ref(),
                             &barrier,
                         );
-                        for mainline_reader in mainline_readers.iter() {
-                            let mainline_reader =
-                                mainline_reader.upgrade().expect("Readers should be alive");
-                            mainline_reader.mark_consumer_root(
-                                work_context.lane_pos,
-                                mainline_reader.assert_not_unmounted(),
-                            );
-                        }
-                        updated_consumers = Some(mainline_readers);
+                        spawned_consumers = Some(
+                            mainline_readers
+                                .into_iter()
+                                .filter_map(|mainline_reader_weak| {
+                                    let mainline_reader = mainline_reader_weak
+                                        .upgrade()
+                                        .expect("Readers should be alive");
+                                    let spawn_token = mainline_reader.mark_consumer(
+                                        work_context.lane_pos,
+                                        mainline_reader.assert_not_unmounted(),
+                                    );
+                                    let spawn_token = spawn_token?;
+                                    Some((mainline_reader_weak, spawn_token))
+                                })
+                                .collect(),
+                        );
                     }
                 }
                 let child_work_context = match child_work_context {
@@ -237,7 +244,7 @@ impl<E: FullElement> ElementNode<E> {
                         stash: AsyncStash {
                             handle: handle.clone(),
                             subscription_diff,
-                            updated_consumers,
+                            spawned_consumers,
                             output: AsyncOutput::Uninitiated { barrier },
                         },
                     },

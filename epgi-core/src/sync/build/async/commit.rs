@@ -329,7 +329,7 @@ where
                 let AsyncStash {
                     handle: _,
                     subscription_diff,
-                    updated_consumers,
+                    spawned_consumers,
                     output,
                 } = stash;
 
@@ -349,14 +349,14 @@ where
                     lane_scheduler,
                 );
                 if <E as Element>::Impl::PROVIDE_ELEMENT {
-                    if let Some(_updated_consumers) = updated_consumers {
+                    if let Some(_spawned_consumers) = spawned_consumers {
                         let provider = self.context.provider_object.as_ref().expect(
                             "Provider element should have a provider in its element context node",
                         );
                         provider.commit_async_write(work_context.lane_pos, work_context.batch.id);
                     }
                 } else {
-                    debug_assert!(updated_consumers.is_none());
+                    debug_assert!(spawned_consumers.is_none());
                 }
 
                 match output {
@@ -470,7 +470,7 @@ where
         let mut unmounted_consumer_lanes = LaneMask::new();
         for node_needing_unmount in rebuild_state.nodes_needing_unmount {
             unmounted_consumer_lanes =
-                unmounted_consumer_lanes | node_needing_unmount.context().consumer_root_lanes();
+                unmounted_consumer_lanes | node_needing_unmount.context().consumer_lanes();
             scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
         }
 

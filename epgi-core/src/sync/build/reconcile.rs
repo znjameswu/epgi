@@ -97,7 +97,7 @@ impl<E: FullElement> ElementNode<E> {
         // An oppurtunistic probe to allow bypass lock.
         let no_new_widget = widget.is_none();
         let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::SYNC);
-        let no_consumer_root = !self.context.consumer_root_lanes().contains(LanePos::SYNC);
+        let no_consumer_root = !self.context.consumer_lanes().contains(LanePos::SYNC);
         let no_poll = !self.context.needs_poll();
         let no_descendant_lanes = !self.context.descendant_lanes().contains(LanePos::SYNC);
 

@@ -142,7 +142,7 @@ pub(super) fn update_provided_value<E: FullElement>(
         // This is the a operation, we do not fear any inconsistencies caused by cancellation.
         for reader in contending_readers.mainline {
             let reader: ArcElementContextNode = reader.upgrade().expect("Readers should be alive");
-            reader.mark_consumer_root(LanePos::SYNC, reader.assert_not_unmounted());
+            reader.mark_consumer(LanePos::SYNC, reader.assert_not_unmounted());
         }
     }
 }

@@ -11,18 +11,18 @@ use crate::{
     foundation::{Arc, Container, ContainerOf},
     r#async::AsyncReconcile,
     scheduler::{get_current_scheduler, LanePos},
-    sync::{lane_scheduler, LaneScheduler},
+    sync::LaneScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode, Element,
-        ElementBase, ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement, ImplProvide,
-        Mainline, SubscriptionDiff,
+        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode,
+        ConsumerWorkSpawnToken, Element, ElementBase, ElementNode, ElementSnapshot,
+        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff,
     },
 };
 
 pub(in super::super) struct CancelAsync<I> {
     pub(super) lane_pos: LanePos,
-    pub(super) updated_consumers: Option<Vec<AweakElementContextNode>>,
+    pub(super) spawned_consumers: Option<Vec<(AweakElementContextNode, ConsumerWorkSpawnToken)>>,
     pub(super) subscription_diff: SubscriptionDiff,
     pub(super) new_children: Option<I>,
 }
@@ -79,7 +79,7 @@ impl<E: FullElement> ElementNode<E> {
                     AsyncStash {
                         handle,
                         subscription_diff,
-                        updated_consumers,
+                        spawned_consumers,
                         output,
                     },
                 widget,
@@ -95,7 +95,7 @@ impl<E: FullElement> ElementNode<E> {
                 );
                 Ok(CancelAsync {
                     lane_pos,
-                    updated_consumers,
+                    spawned_consumers: spawned_consumers,
                     subscription_diff,
                     new_children: match output {
                         Completed(results) => Some(results.children),
@@ -117,12 +117,12 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let CancelAsync {
             lane_pos,
-            updated_consumers,
+            spawned_consumers,
             subscription_diff,
             new_children,
         } = cancel;
 
-        self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
+        self.perform_purge_async_work_local(spawned_consumers, subscription_diff, lane_pos);
 
         if let Some(new_children) = new_children {
             new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
@@ -137,7 +137,7 @@ impl<E: FullElement> ElementNode<E> {
 impl<E: FullElement> ElementNode<E> {
     fn remove_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
-        let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
+        let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
         let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
 
         if no_mailbox_update && no_consumer_root && no_descendant_lanes {
@@ -202,7 +202,7 @@ impl<E: FullElement> ElementNode<E> {
 impl<E: FullElement> ElementNode<E> {
     fn purge_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
-        let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
+        let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
         let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
 
         if no_mailbox_update && no_consumer_root && no_descendant_lanes {
@@ -254,11 +254,11 @@ impl<E: FullElement> ElementNode<E> {
                 AsyncStash {
                     handle,
                     subscription_diff,
-                    updated_consumers,
+                    spawned_consumers,
                     output,
                 },
         } = async_inflating;
-        debug_assert!(updated_consumers.is_none());
+        debug_assert!(spawned_consumers.is_none());
         assert!(
             work_context.lane_pos == lane_pos,
             "A tree walk should not witness unmounted nodes from other lanes"
@@ -276,7 +276,7 @@ impl<E: FullElement> ElementNode<E> {
         use AsyncOutput::*;
         Ok(CancelAsync {
             lane_pos,
-            updated_consumers: None,
+            spawned_consumers: None,
             subscription_diff,
             new_children: match output {
                 Completed(results) => Some(results.children),
@@ -301,7 +301,7 @@ impl<E: FullElement> ElementNode<E> {
                     AsyncStash {
                         handle,
                         subscription_diff,
-                        updated_consumers,
+                        spawned_consumers,
                         output,
                     },
                 ..
@@ -309,7 +309,7 @@ impl<E: FullElement> ElementNode<E> {
                 handle.abort();
                 Ok(CancelAsync {
                     lane_pos,
-                    updated_consumers,
+                    spawned_consumers,
                     subscription_diff,
                     new_children: match output {
                         Completed(results) => Some(results.children),
@@ -327,29 +327,25 @@ impl<E: FullElement> ElementNode<E> {
 
     pub(super) fn perform_purge_async_work_local(
         self: &Arc<Self>,
-        updated_consumers: Option<Vec<AweakElementContextNode>>,
+        spawned_consumers: Option<Vec<(AweakElementContextNode, ConsumerWorkSpawnToken)>>,
         subscription_diff: SubscriptionDiff,
         lane_pos: LanePos,
     ) {
         if <E as Element>::Impl::PROVIDE_ELEMENT {
-            if let Some(updated_consumers) = updated_consumers {
+            if let Some(spawned_consumers) = spawned_consumers {
                 self.context.unreserve_write_async(lane_pos);
                 // We choose relaxed lane marking without unmarking
-                for write_affected_consumer in updated_consumers {
-                    todo!();
-                    // let deactivated = write_affected_consumer
-                    //     .upgrade()
-                    //     .expect("Readers should be alive")
-                    //     .dec_secondary_root(lane_pos);
-                    // if deactivated {
-                    //     todo!("Record deactivated secondary root")
-                    // }
+                for (spawned_consumer, spawn_token) in spawned_consumers {
+                    spawned_consumer
+                        .upgrade()
+                        .expect("Readers should be alive")
+                        .unmark_consumer(lane_pos, spawn_token);
                 }
             }
         } else {
             debug_assert!(
-                updated_consumers.is_none(),
-                "An Element without declaring provider should not reserve a write"
+                spawned_consumers.is_none(),
+                "An Element without declaring provider should not write and spawn consumer work"
             )
         }
 
@@ -364,25 +360,26 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let CancelAsync {
             lane_pos,
-            updated_consumers,
+            spawned_consumers,
             subscription_diff,
             new_children,
         } = cancel;
-
-        self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
         if let Some(new_children) = new_children {
             new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                 child.purge_async_work_in_subtree(lane_pos)
             })
         }
+
+        // Reverse-order
+        self.perform_purge_async_work_local(spawned_consumers, subscription_diff, lane_pos);
     }
 }
 
 impl<E: FullElement> ElementNode<E> {
     pub fn remove_async_work_and_lane_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
-        let no_consumer_root = !self.context.consumer_root_lanes().contains(lane_pos);
+        let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
         let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
 
         if no_mailbox_update && no_consumer_root && no_descendant_lanes {
@@ -400,18 +397,19 @@ impl<E: FullElement> ElementNode<E> {
             Ok(purge) => {
                 let CancelAsync {
                     lane_pos,
-                    updated_consumers,
+                    spawned_consumers,
                     subscription_diff,
                     new_children,
                 } = purge;
-
-                self.perform_purge_async_work_local(updated_consumers, subscription_diff, lane_pos);
 
                 if let Some(new_children) = new_children {
                     new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                         child.remove_async_work_and_lane_in_subtree(lane_pos)
                     })
                 }
+
+                // Reverse-order
+                self.perform_purge_async_work_local(spawned_consumers, subscription_diff, lane_pos);
             }
             Err(Some(children)) => children
                 .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
@@ -452,11 +450,11 @@ impl<E: FullElement> ElementNode<E> {
                 AsyncStash {
                     handle,
                     subscription_diff,
-                    updated_consumers,
+                    spawned_consumers,
                     output,
                 },
         } = async_inflating;
-        debug_assert!(updated_consumers.is_none());
+        debug_assert!(spawned_consumers.is_none());
         handle.abort();
         let subscription_diff = std::mem::take(subscription_diff);
         // Replace with an invalid empty value
@@ -470,7 +468,7 @@ impl<E: FullElement> ElementNode<E> {
         use AsyncOutput::*;
         Some(CancelAsync {
             lane_pos: work_context.lane_pos,
-            updated_consumers: None,
+            spawned_consumers: None,
             subscription_diff,
             new_children: match output {
                 Completed(results) => Some(results.children),
@@ -499,14 +497,14 @@ impl<E: FullElement> ElementNode<E> {
                 AsyncStash {
                     handle,
                     subscription_diff,
-                    updated_consumers,
+                    spawned_consumers,
                     output,
                 },
         } = current;
         handle.abort();
         Some(CancelAsync {
             lane_pos: work_context.lane_pos,
-            updated_consumers,
+            spawned_consumers: spawned_consumers,
             subscription_diff,
             new_children: match output {
                 AsyncOutput::Completed(results) => Some(results.children),
@@ -523,19 +521,19 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let CancelAsync {
             lane_pos,
-            updated_consumers,
+            spawned_consumers,
             subscription_diff,
             new_children,
         } = cancel;
 
         // Because we are going to unmount, there is no point to maintain consumer root lane marking consistency
-        drop(updated_consumers);
+        drop(spawned_consumers);
 
         // if <E as Element>::Impl::PROVIDE_ELEMENT {
-        //     if let Some(updated_consumers) = updated_consumers {
+        //     if let Some(spawned_consumers) = spawned_consumers {
         //         self.context.unreserve_write_async(lane_pos);
         //         // We choose relaxed lane marking without unmarking
-        //         for write_affected_consumer in updated_consumers {
+        //         for write_affected_consumer in spawned_consumers {
         //             todo!();
         //             // let deactivated = write_affected_consumer
         //             //     .upgrade()
@@ -548,7 +546,7 @@ impl<E: FullElement> ElementNode<E> {
         //     }
         // } else {
         //     debug_assert!(
-        //         updated_consumers.is_none(),
+        //         spawned_consumers.is_none(),
         //         "An Element without declaring provider should not reserve a write"
         //     )
         // }
