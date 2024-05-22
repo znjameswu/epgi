@@ -15,7 +15,7 @@ use crate::{
 };
 
 impl<E: FullElement> ElementNode<E> {
-    pub(super) fn reconcile_node_async(
+    pub(in crate::r#async) fn reconcile_node_async(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         work_context: Asc<WorkContext>,

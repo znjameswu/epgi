@@ -69,7 +69,7 @@ where
         match prepare_result {
             VisitChildrenAnd { children, next } => {
                 let render_object_changes = children
-                    .par_map_collect(&get_current_scheduler().async_threadpool, |child| {
+                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
                         child.visit_and_commit_async(finished_lanes, scope, lane_scheduler)
                     });
                 match next {

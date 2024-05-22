@@ -51,13 +51,19 @@ impl LaneScheduler {
     }
 
     pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
-        let Some(pos) = lane_pos.async_lane_pos() else {
-            panic!("Only async lanes have commit barriers");
-        };
-        let Some(async_lane) = &self.async_lanes[pos as usize] else {
-            return None;
-        };
+        let pos = lane_pos
+            .async_lane_pos()
+            .expect("Only async lanes have commit barriers");
+        let async_lane = self.async_lanes[pos as usize].as_ref()?;
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
+    }
+
+    pub(super) fn get_batch_conf_for(&self, lane_pos: LanePos) -> Option<Asc<BatchConf>> {
+        let pos = lane_pos
+            .async_lane_pos()
+            .expect("Only async lanes have commit barriers");
+        let async_lane = self.async_lanes[pos as usize].as_ref()?;
+        Some(async_lane.batch.clone())
     }
 
     pub(crate) fn apply_batcher_result(
