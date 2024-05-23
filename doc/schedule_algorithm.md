@@ -176,9 +176,9 @@ Definition: A unit of work can spawn another root unit of work deep down the tre
 
 
 # Dispatch
-At each dispatch, the scheduler will always try to visit the entire subtree unless 1. being blocked by another existing dispatch or 2. being aborted by another new dispatch or 3. the visited subtree is devoid of any lanes. 
+At each dispatch, the scheduler will ensure all dispatched batches have their top-level roots into executing state (either active or backqueued).
 
-This algorithm is vulnerable to self-shadowed abort nodes.
+For each active work, it will try to visit all nodes inside the MinCR, when it visit through MinCR node and there are still MaxCR beneath, it will yield back to the scheduler to continue in the subtrees of MaxCR.
 
 
 # Lock Guidelines

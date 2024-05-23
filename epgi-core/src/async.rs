@@ -18,10 +18,19 @@ impl<E: FullElement> ElementNode<E> {
         parent_handle: WorkHandle,
         barrier: CommitBarrier,
     ) {
-        {
-            get_current_scheduler().async_threadpool.spawn(move || {
+        get_current_scheduler().async_threadpool.spawn(move || {
+            let _ = self.reconcile_node_async(None, work_context, parent_handle, barrier);
+        })
+    }
+
+    pub(crate) fn spawn_multi_reconcile_node_async(
+        self: Arc<Self>,
+        works: impl IntoIterator<Item = (Asc<WorkContext>, WorkHandle, CommitBarrier)> + Send + 'static,
+    ) {
+        get_current_scheduler().async_threadpool.spawn(move || {
+            for (work_context, parent_handle, barrier) in works {
                 let _ = self.reconcile_node_async(None, work_context, parent_handle, barrier);
-            })
-        }
+            }
+        })
     }
 }

@@ -146,23 +146,23 @@ impl LaneScheduler {
     }
 
     pub(crate) fn dispatch_async_batches(&mut self, root_element: ArcAnyElementNode) {
-        let mut executable_lanes = Vec::new();
+        let mut lanes_to_start = Vec::new();
         if !self.queued_batches.is_empty() {
             for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
                 if async_lane.is_some() {
                     continue;
                 }
-                // The top priority batch is sorted to the rear
+                // The top priority batch is sorted to the rear, so the executable_lanes is sorted
                 let Some(new_async_batch) = self.queued_batches.pop() else {
                     break;
                 };
                 let lane_pos = LanePos::new_async(lane_index as u8);
                 mark_batch(&new_async_batch, lane_pos);
                 *async_lane = Some(AsyncLaneData::new(lane_pos, new_async_batch));
-                executable_lanes.push(lane_pos)
+                lanes_to_start.push(lane_pos)
             }
         }
-        root_element.visit_and_work_async(executable_lanes.as_slice(), self)
+        root_element.visit_and_start_work_async(lanes_to_start.as_slice(), self)
     }
 
     pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {
@@ -170,7 +170,7 @@ impl LaneScheduler {
     }
 
     pub(crate) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
-        // todo!()
+        todo!()
     }
 }
 

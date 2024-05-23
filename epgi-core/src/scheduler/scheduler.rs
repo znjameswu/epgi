@@ -244,65 +244,20 @@ where
                     work_context,
                     work_handle,
                     commit_barrier,
-                } => self.handle_async_yield(node, work_context, work_handle, commit_barrier),
+                } => {
+                    if let Some(node) = node.upgrade() {
+                        node.visit_and_continue_work_async(&(
+                            work_context,
+                            work_handle,
+                            commit_barrier,
+                        ))
+                    };
+                }
                 SchedulerExtensionEvent(event) => {
                     self.extension.on_extension_event(event);
                 }
                 Shutdown => break,
             }
         }
-    }
-
-    fn handle_async_yield(
-        &self,
-        node: AweakAnyElementNode,
-        work_context: Asc<WorkContext>,
-        work_handle: WorkHandle,
-        commit_barrier: CommitBarrier,
-    ) {
-        let Some(node) = node.upgrade() else {
-            return;
-        };
-        let mut ancestor_lanes = LaneMask::new();
-        let mut current = node.context();
-        // No need to OR a consumer lane, since the consumer work is either spawned by an ancestor work or the current continuing work, which we will get rid of.
-        let subtree_lanes = current.descendant_lanes() | current.mailbox_lanes();
-        debug_assert!(
-            !subtree_lanes.contains(LanePos::SYNC),
-            "We should not see a sync lane while processing unsync batches"
-        );
-        loop {
-            let Err(not_unmounted) = current.is_unmounted() else {
-                // This node is unmounted, return
-                return;
-            };
-            let Some(parent) = current.parent(not_unmounted) else {
-                break;
-            };
-            // No need to OR the occupier lane, since an occupying work is always spawned by a root mailbox work.
-            // No need to OR a consumer lanes, since consumer work is always spawned by a root mailbox work.
-            ancestor_lanes = ancestor_lanes | parent.mailbox_lanes();
-            current = parent;
-        }
-        let mut executable_lanes: Vec<LanePos> =
-            (subtree_lanes - ancestor_lanes - work_context.lane_pos)
-                .into_iter()
-                .collect();
-
-        let build_states = self.build_states.read();
-
-        executable_lanes.sort_unstable_by_key(|&lane_pos| {
-            build_states
-                .scheduler
-                .get_batch_conf_for_async(lane_pos)
-                .expect("Batch should exist")
-                .priority
-        });
-
-        node.visit_and_continue_work_async(
-            &(work_context, work_handle, commit_barrier),
-            executable_lanes.as_slice(),
-            &build_states.scheduler,
-        )
     }
 }
