@@ -15,8 +15,8 @@ use crate::{
     },
     sync::CommitBarrier,
     tree::{
-        AweakAnyElementNode, AweakAnyLayerRenderObject, AweakAnyRenderObject,
-        AweakElementContextNode, SyncSuspendWaker, WorkContext, WorkHandle,
+        AweakAnyElementNode, AweakAnyLayerRenderObject, AweakElementContextNode, SyncSuspendWaker,
+        WorkContext, WorkHandle,
     },
 };
 
@@ -52,9 +52,6 @@ pub struct SchedulerHandle {
     pub(super) job_id_counter: AtomicJobIdCounter,
 
     // mode: LatencyMode,
-    nodes_needing_paint: MpscQueue<AweakAnyRenderObject>,
-    nodes_needing_layout: MpscQueue<AweakAnyRenderObject>,
-
     pub(super) accumulated_jobs: SyncMutex<Vec<JobBuilder>>,
     pub(super) accumulated_point_rebuilds: SyncMutex<Vec<std::sync::Arc<SyncSuspendWaker>>>,
     // pub(super) boundaries_needing_relayout: SyncMutex<HashSet<PtrEq<AweakAnyRenderObject>>>,
@@ -75,8 +72,6 @@ impl SchedulerHandle {
             global_sync_job_build_lock: SyncRwLock::new(()),
             job_id_counter: AtomicJobIdCounter::new(),
             // is_executing_sync: (),
-            nodes_needing_paint: Default::default(),
-            nodes_needing_layout: Default::default(),
             accumulated_jobs: Default::default(),
             accumulated_point_rebuilds: Default::default(),
             // boundaries_needing_relayout: Default::default(),

@@ -17,7 +17,7 @@ pub struct JobId(u64);
 // 47 bit of frame counter, 1 bit of syncness, 16 bit of job counter
 impl JobId {
     const N_BITS_JOB_COUNTER: u8 = 16;
-    const INITIAL: Self = JobId(1 << (Self::N_BITS_JOB_COUNTER + 1));
+    // const INITIAL: Self = JobId(1 << (Self::N_BITS_JOB_COUNTER + 1));
     pub fn spawning_frame(&self) -> u64 {
         return self.0 >> (Self::N_BITS_JOB_COUNTER + 1);
     }

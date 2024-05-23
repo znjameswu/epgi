@@ -222,7 +222,7 @@ where
     }
 
     pub(crate) fn remove_current(&mut self) -> Option<AsyncQueueCurrentEntry<E>> {
-        self.inner.as_mut()?.current.take()
+        (&mut self.inner.as_mut()?.current).take()  // rust-analyzer#14933
     }
 
     pub(crate) fn remove_current_if(

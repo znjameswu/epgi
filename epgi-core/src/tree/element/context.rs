@@ -38,10 +38,6 @@ pub struct ElementContextNode {
 pub(crate) struct NotUnmountedToken(());
 
 impl ElementContextNode {
-    pub(crate) fn new_root(node: AweakAnyElementNode) -> Self {
-        Self::new(node, None, None)
-    }
-
     #[inline(always)]
     fn new(
         node: AweakAnyElementNode,
@@ -106,7 +102,7 @@ impl ElementContextNode {
         // t
     }
 
-    pub fn is_unmounted(&self) -> Result<(), NotUnmountedToken> {
+    pub(crate) fn is_unmounted(&self) -> Result<(), NotUnmountedToken> {
         if self.unmounted.load(Relaxed) {
             Ok(())
         } else {
@@ -114,7 +110,7 @@ impl ElementContextNode {
         }
     }
 
-    pub fn assert_not_unmounted(&self) -> NotUnmountedToken {
+    pub(crate) fn assert_not_unmounted(&self) -> NotUnmountedToken {
         debug_assert!(
             !self.unmounted.load(Relaxed),
             "We assumed this element to not be unmounted"
@@ -126,6 +122,7 @@ impl ElementContextNode {
         &self,
         not_unmounted: NotUnmountedToken,
     ) -> &Option<ArcElementContextNode> {
+        let _ = not_unmounted;
         &self.parent
     }
 }

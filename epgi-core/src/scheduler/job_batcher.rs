@@ -3,10 +3,7 @@ use std::hash::Hash;
 use hashbrown::{HashMap, HashSet};
 use smallvec::smallvec;
 
-use crate::{
-    foundation::{Asc, Inlinable64Vec, InlinableUsizeVec, MpscQueue, SyncMutex},
-    tree::AweakElementContextNode,
-};
+use crate::foundation::{Asc, Inlinable64Vec, InlinableUsizeVec};
 
 use super::{BatchConf, BatchId, JobBuilder, JobConf, JobId, JobPriority};
 
@@ -38,24 +35,22 @@ impl JobData {
     }
 }
 
-enum JobInterference {
-    Sequenced(JobId, JobId),
-    Racing(JobId, JobId),
-}
+// enum JobInterference {
+//     Sequenced(JobId, JobId),
+//     Racing(JobId, JobId),
+// }
 
-pub(crate) struct JobSchedulerSinkInner {
-    pub(crate) new_jobs: SyncMutex<Vec<JobConf>>,
-}
-pub(crate) struct RootMarkResult {
-    pub(crate) id: JobId,
-    pub(crate) node: AweakElementContextNode,
-    pub(crate) existing_sequenced_jobs: Inlinable64Vec<JobId>,
-}
+// pub(crate) struct JobSchedulerSinkInner {
+//     pub(crate) new_jobs: SyncMutex<Vec<JobConf>>,
+// }
+// pub(crate) struct RootMarkResult {
+//     pub(crate) id: JobId,
+//     pub(crate) node: AweakElementContextNode,
+//     pub(crate) existing_sequenced_jobs: Inlinable64Vec<JobId>,
+// }
 
 pub(crate) struct JobBatcher {
     job_datas: HashMap<JobId, JobData>,
-
-    completed_async_batches: Asc<MpscQueue<BatchId>>,
     batches: HashMap<BatchId, Asc<BatchConf>>,
     batch_id_counter: u64,
 }
@@ -71,7 +66,6 @@ impl JobBatcher {
     pub(super) fn new() -> Self {
         Self {
             job_datas: Default::default(),
-            completed_async_batches: Default::default(),
             batches: Default::default(),
             batch_id_counter: 1,
         }

@@ -49,21 +49,21 @@ impl<'a> BuildContext<'a> {
     ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
         match &mut self.0 {
             _BuildContext::Sync(ctx) => ctx.use_hook(hook),
-            _BuildContext::Async(_) => todo!(),
+            _BuildContext::Async(ctx) => ctx.use_hook(hook),
         }
     }
 
     pub(crate) fn async_batch(&self) -> Option<(LanePos, BatchId)> {
         match &self.0 {
             _BuildContext::Sync(_) => None,
-            _BuildContext::Async(_) => todo!(),
+            _BuildContext::Async(ctx) => todo!(),
         }
     }
 
     pub(crate) fn element_context_ref(&self) -> &ArcElementContextNode {
         match &self.0 {
-            _BuildContext::Sync(context) => context.element_context_ref(),
-            _BuildContext::Async(ctx) => todo!(),
+            _BuildContext::Sync(ctx) => ctx.element_context_ref(),
+            _BuildContext::Async(ctx) => ctx.element_context_ref(),
         }
     }
 }

@@ -45,47 +45,47 @@ impl<P: Protocol> CommitResult<P> {
         }
     }
 
-    pub(crate) fn as_summary(&self) -> CommitSummary {
-        CommitSummary {
-            render_object: self.render_object.as_summary(),
-        }
-    }
+    // pub(crate) fn as_summary(&self) -> CommitSummary {
+    //     CommitSummary {
+    //         render_object: self.render_object.as_summary(),
+    //     }
+    // }
 
-    pub(crate) fn summarize<'a>(iter: impl IntoIterator<Item = &'a Self>) -> CommitSummary {
-        // The following code is an adaption from Rust iterator's try_fold and try_reduce.
-        // It turns out that Rust can very efficiently optimize this pattern for the single-element array case (and the double-element array).
-        // https://godbolt.org/z/z3KKv4xqM
-        let mut iter = iter.into_iter();
-        let Some(init) = iter.next() else {
-            return CommitSummary::new();
-        };
-        let mut res = init.as_summary();
-        for item in iter {
-            let s = item.as_summary();
-            res = res.merge(s);
-        }
-        res
-    }
+    // pub(crate) fn summarize<'a>(iter: impl IntoIterator<Item = &'a Self>) -> CommitSummary {
+    //     // The following code is an adaption from Rust iterator's try_fold and try_reduce.
+    //     // It turns out that Rust can very efficiently optimize this pattern for the single-element array case (and the double-element array).
+    //     // https://godbolt.org/z/z3KKv4xqM
+    //     let mut iter = iter.into_iter();
+    //     let Some(init) = iter.next() else {
+    //         return CommitSummary::new();
+    //     };
+    //     let mut res = init.as_summary();
+    //     for item in iter {
+    //         let s = item.as_summary();
+    //         res = res.merge(s);
+    //     }
+    //     res
+    // }
 }
 
-pub struct CommitSummary {
-    pub render_object: RenderObjectCommitSummary,
-    // pub consumer_lanes: SubtreeLanesCommitResult,
-}
+// pub struct CommitSummary {
+//     pub render_object: RenderObjectCommitSummary,
+//     // pub consumer_lanes: SubtreeLanesCommitResult,
+// }
 
-impl CommitSummary {
-    pub(crate) fn new() -> Self {
-        Self {
-            render_object: RenderObjectCommitSummary::new(),
-        }
-    }
+// impl CommitSummary {
+//     pub(crate) fn new() -> Self {
+//         Self {
+//             render_object: RenderObjectCommitSummary::new(),
+//         }
+//     }
 
-    pub(crate) fn merge(self, other: Self) -> Self {
-        Self {
-            render_object: self.render_object.merge(other.render_object),
-        }
-    }
-}
+//     pub(crate) fn merge(self, other: Self) -> Self {
+//         Self {
+//             render_object: self.render_object.merge(other.render_object),
+//         }
+//     }
+// }
 
 // #[derive(Clone)]
 pub enum RenderObjectCommitResult<P: Protocol> {
@@ -143,15 +143,12 @@ impl<P: Protocol> RenderObjectCommitResult<P> {
         // https://godbolt.org/z/z3KKv4xqM
         let mut iter = iter.into_iter();
         let Some(init) = iter.next() else {
-            return RenderObjectCommitSummary::KeepAll {
-                child_render_action: RenderAction::None,
-                subtree_has_action: RenderAction::None,
-            };
+            return RenderObjectCommitSummary::new();
         };
         let mut res = init.as_summary();
         for item in iter {
             let s = item.as_summary();
-            res = std::cmp::max(res, s);
+            res = res.merge(s);
             if matches!(res, RenderObjectCommitSummary::HasSuspended) {
                 break;
             }

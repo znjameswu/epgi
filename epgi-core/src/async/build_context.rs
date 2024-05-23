@@ -8,6 +8,20 @@ pub(crate) struct AsyncBuildContext<'a> {
     pub(crate) element_context: &'a ArcElementContextNode,
 }
 
+impl<'a> AsyncBuildContext<'a> {
+    pub(crate) fn use_hook<T: Hook>(
+        &mut self,
+        hook: T,
+    ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
+        let (hook_state, index) = self.hooks.use_hook(hook);
+        (hook_state, index, self.element_context)
+    }
+
+    pub(crate) fn element_context_ref(&self) -> &ArcElementContextNode {
+        self.element_context
+    }
+}
+
 pub(crate) struct AsyncHookContext {
     pub(crate) hooks: HooksWithEffects,
     pub(crate) index: usize,
@@ -93,12 +107,4 @@ impl AsyncHookContext {
     }
 }
 
-impl<'a> AsyncBuildContext<'a> {
-    pub(crate) fn use_hook<T: Hook>(
-        &mut self,
-        hook: T,
-    ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
-        let (hook_state, index) = self.hooks.use_hook(hook);
-        (hook_state, index, self.element_context)
-    }
-}
+
