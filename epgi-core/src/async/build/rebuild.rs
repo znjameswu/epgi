@@ -99,14 +99,14 @@ impl<E: FullElement> ElementNode<E> {
                                 node
                             }
                             Inflate(widget) => {
-                                let (pair, child_handle) = widget.inflate_async_placeholder(
+                                let (node, child_handle) = widget.inflate_async_placeholder(
                                     child_work_context.clone(),
                                     Some(self.context.clone()),
                                     barrier.clone(),
                                 );
-                                let node = pair.element();
+                                let node_clone = node.clone();
                                 async_threadpool.spawn(move || {
-                                    pair.inflate_async_box(
+                                    node_clone.inflate_async(
                                         child_work_context,
                                         child_handle,
                                         barrier,

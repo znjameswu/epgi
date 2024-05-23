@@ -8,10 +8,9 @@ use crate::{
     scheduler::get_current_scheduler,
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash, BuildResults,
-        BuildSuspendResults, ChildElementWidgetPair, ElementBase, ElementContextNode, ElementNode,
-        ElementSnapshot, ElementSnapshotInner, ElementWidgetPair, FullElement, Widget, WorkContext,
-        WorkHandle,
+        ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash,
+        BuildResults, BuildSuspendResults, ElementBase, ElementContextNode, ElementNode,
+        ElementSnapshot, ElementSnapshotInner, FullElement, Widget, WorkContext, WorkHandle,
     },
 };
 
@@ -21,7 +20,7 @@ pub trait ChildWidgetAsyncInflateExt<PP: Protocol> {
         work_context: Asc<WorkContext>,
         parent_context: Option<ArcElementContextNode>,
         barrier: CommitBarrier,
-    ) -> (Box<dyn ChildElementWidgetPair<PP>>, WorkHandle);
+    ) -> (ArcChildElementNode<PP>, WorkHandle);
 }
 
 impl<T> ChildWidgetAsyncInflateExt<<T::Element as ElementBase>::ParentProtocol> for T
@@ -34,63 +33,40 @@ where
         parent_context: Option<ArcElementContextNode>,
         barrier: CommitBarrier,
     ) -> (
-        Box<dyn ChildElementWidgetPair<<T::Element as ElementBase>::ParentProtocol>>,
+        ArcChildElementNode<<T::Element as ElementBase>::ParentProtocol>,
         WorkHandle,
     ) {
         let arc_widget = self.into_arc_widget();
         let (node, handle) = ElementNode::<<T as Widget>::Element>::new_async_uninflated(
-            arc_widget.clone(),
+            arc_widget,
             work_context,
             parent_context,
             barrier,
         );
-
-        (
-            Box::new(ElementWidgetPair {
-                element: node,
-                widget: arc_widget,
-            }),
-            handle,
-        )
+        (node, handle)
     }
 }
 
-pub trait ChildElementWidgetPairAsyncInflateExt<P: Protocol> {
+pub trait AnyElementAsyncInflateExt {
     fn inflate_async(
-        self,
+        self: Arc<Self>,
         work_context: Asc<WorkContext>,
-        parent_handle: WorkHandle,
-        barrier: CommitBarrier,
-    );
-
-    fn inflate_async_box(
-        self: Box<Self>,
-        work_context: Asc<WorkContext>,
-        parent_handle: WorkHandle,
+        handle: WorkHandle,
         barrier: CommitBarrier,
     );
 }
 
-impl<E> ChildElementWidgetPairAsyncInflateExt<E::ParentProtocol> for ElementWidgetPair<E>
+impl<E> AnyElementAsyncInflateExt for ElementNode<E>
 where
     E: FullElement,
 {
     fn inflate_async(
-        self,
+        self: Arc<Self>,
         work_context: Asc<WorkContext>,
-        parent_handle: WorkHandle,
+        handle: WorkHandle,
         barrier: CommitBarrier,
     ) {
-        todo!()
-    }
-
-    fn inflate_async_box(
-        self: Box<Self>,
-        work_context: Asc<WorkContext>,
-        parent_handle: WorkHandle,
-        barrier: CommitBarrier,
-    ) {
-        todo!()
+        self.inflate_node_async_impl(work_context, handle, barrier)
     }
 }
 
@@ -136,38 +112,30 @@ impl<E: FullElement> ElementNode<E> {
         // Decision: in the inflate method.
     }
 
-    pub(super) fn inflate_node_async_(
+    pub(super) fn inflate_node_async_impl(
         self: &Arc<Self>,
-        widget: &E::ArcWidget,
         work_context: Asc<WorkContext>,
         handle: WorkHandle,
         barrier: CommitBarrier,
     ) {
-        // let (provider_values, widget) = {
-        //     let mut snapshot = self.snapshot.lock();
-        //     let snapshot_reborrow = &mut *snapshot;
-        //     if parent_handle.is_aborted() {
-        //         return;
-        //     }
-        //     let async_inflating = snapshot_reborrow
-        //         .inner
-        //         .async_inflating_mut()
-        //         .expect("Async inflate should only be called on a AsyncInflating node");
-        //     let provider_values = self.read_consumed_values_async(
-        //         E::get_consumed_types(&snapshot_reborrow.widget),
-        //         EMPTY_CONSUMED_TYPES,
-        //         &mut Cow::Borrowed(&work_context),
-        //         &barrier,
-        //     );
-        //     (provider_values, snapshot.widget.clone())
-        // };
-
-        let provider_values = self.read_consumed_values_async(
-            E::get_consumed_types(widget),
-            EMPTY_CONSUMED_TYPES,
-            &mut Cow::Borrowed(&work_context),
-            &barrier,
-        );
+        let (provider_values, widget) = {
+            let mut snapshot = self.snapshot.lock();
+            if handle.is_aborted() {
+                return;
+            }
+            debug_assert!(
+                snapshot.inner.async_inflating_mut().is_some(),
+                "Async inflate should only be called on a AsyncInflating node"
+            );
+            // Reversible side effect must happen with the node lock held and the work handle checked
+            let provider_values = self.read_consumed_values_async(
+                E::get_consumed_types(&snapshot.widget),
+                EMPTY_CONSUMED_TYPES,
+                &mut Cow::Borrowed(&work_context),
+                &barrier,
+            );
+            (provider_values, snapshot.widget.clone())
+        };
 
         self.perform_inflate_node_async::<true>(
             &widget,
@@ -206,14 +174,14 @@ impl<E: FullElement> ElementNode<E> {
                 let children = child_widgets.map_collect_with(
                     (child_work_context, barrier),
                     |(child_work_context, barrier), child_widget| {
-                        let (pair, child_handle) = child_widget.inflate_async_placeholder(
+                        let (node, child_handle) = child_widget.inflate_async_placeholder(
                             child_work_context.clone(),
                             Some(self.context.clone()),
                             barrier.clone(),
                         );
-                        let node = pair.element();
+                        let node_clone = node.clone();
                         async_threadpool.spawn(move || {
-                            pair.inflate_async_box(child_work_context, child_handle, barrier)
+                            node_clone.inflate_async(child_work_context, child_handle, barrier)
                         });
                         node
                     },

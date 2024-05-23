@@ -42,6 +42,7 @@ pub trait AnyElementNode:
     + crate::sync::unmount::AnyElementNodeUnmountExt
     + crate::sync::AnyElementAsyncCommitExt
     + crate::sync::AnyElementAsyncVisitExt
+    + crate::r#async::AnyElementAsyncInflateExt
     + Send
     + Sync
     + 'static
