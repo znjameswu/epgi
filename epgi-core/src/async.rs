@@ -15,11 +15,12 @@ impl<E: FullElement> ElementNode<E> {
     pub(crate) fn spawn_reconcile_node_async(
         self: Arc<Self>,
         work_context: Asc<WorkContext>,
+        parent_handle: WorkHandle,
         barrier: CommitBarrier,
     ) {
         {
             get_current_scheduler().async_threadpool.spawn(move || {
-                self.reconcile_node_async(None, work_context, WorkHandle::new(), barrier);
+                let _ = self.reconcile_node_async(None, work_context, parent_handle, barrier);
             })
         }
     }

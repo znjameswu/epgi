@@ -470,7 +470,7 @@ where
         let mut unmounted_consumer_lanes = LaneMask::new();
         for node_needing_unmount in rebuild_state.nodes_needing_unmount {
             unmounted_consumer_lanes =
-                unmounted_consumer_lanes | node_needing_unmount.context().consumer_lanes();
+                unmounted_consumer_lanes | node_needing_unmount.context_ref().consumer_lanes();
             scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
         }
 

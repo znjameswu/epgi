@@ -41,10 +41,13 @@ pub trait AnyElementNode:
     + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
     + crate::sync::unmount::AnyElementNodeUnmountExt
     + crate::sync::AnyElementAsyncCommitExt
+    + crate::sync::AnyElementAsyncVisitExt
     + Send
     + Sync
     + 'static
 {
+    fn context(&self) -> &ArcElementContextNode;
+    fn context_ref(&self) -> &ElementContextNode;
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode;
     fn push_job(&self, job_id: JobId);
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str>;
@@ -55,13 +58,10 @@ pub trait ChildElementNode<PP: Protocol>:
     AnyElementNode
     + crate::sync::ChildElementSyncReconcileExt<PP>
     + crate::sync::ChildElementAsyncCommitExt<PP>
-    + crate::sync::ChildElementAsyncVisitExt<PP>
     + Send
     + Sync
     + 'static
 {
-    fn context(&self) -> &ElementContextNode;
-
     fn as_arc_any(self: Arc<Self>) -> ArcAnyElementNode;
 
     // Due to the limitation of both arbitrary_self_type and downcasting, we have to consume both Arc pointers
@@ -75,10 +75,6 @@ pub trait ChildElementNode<PP: Protocol>:
 }
 
 impl<E: FullElement> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
-    fn context(&self) -> &ElementContextNode {
-        self.context.as_ref()
-    }
-
     fn as_arc_any(self: Arc<Self>) -> ArcAnyElementNode {
         self
     }
@@ -116,6 +112,14 @@ impl<E: FullElement> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
 }
 
 impl<E: FullElement> AnyElementNode for ElementNode<E> {
+    fn context(&self) -> &ArcElementContextNode {
+        &self.context
+    }
+
+    fn context_ref(&self) -> &ElementContextNode {
+        self.context.as_ref()
+    }
+
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode {
         self
     }
@@ -139,4 +143,6 @@ impl<E: FullElement> AnyElementNode for ElementNode<E> {
         <E as Element>::Impl::get_render_object(render_object)
             .ok_or("Render object call should only be called on after render object is attached")
     }
+    
+
 }

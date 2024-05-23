@@ -58,12 +58,10 @@ impl LaneScheduler {
         Some(CommitBarrier::from_inner(async_lane.barrier_inner.clone()))
     }
 
-    pub(super) fn get_batch_conf_for(&self, lane_pos: LanePos) -> Option<Asc<BatchConf>> {
-        let pos = lane_pos
-            .async_lane_pos()
-            .expect("Only async lanes have commit barriers");
+    pub(crate) fn get_batch_conf_for_async(&self, lane_pos: LanePos) -> Option<&Asc<BatchConf>> {
+        let pos = lane_pos.async_lane_pos().expect("Async lane is expected");
         let async_lane = self.async_lanes[pos as usize].as_ref()?;
-        Some(async_lane.batch.clone())
+        Some(&async_lane.batch)
     }
 
     pub(crate) fn apply_batcher_result(
@@ -107,23 +105,9 @@ impl LaneScheduler {
 
         if !new_async_batches.is_empty() {
             self.queued_batches.extend(new_async_batches);
+            // The top priority batch is sorted to the rear
             self.queued_batches
                 .sort_unstable_by_key(|batch| std::cmp::Reverse(batch.priority));
-        }
-
-        if !self.queued_batches.is_empty() {
-            for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
-                if async_lane.is_some() {
-                    continue;
-                }
-                let Some(new_async_batch) = self.queued_batches.pop() else {
-                    break;
-                };
-                let lane_pos = LanePos::new_async(lane_index as u8);
-                mark_batch(&new_async_batch, lane_pos);
-                *async_lane = Some(AsyncLaneData::new(lane_pos, new_async_batch));
-                todo!()
-            }
         }
     }
 
@@ -161,8 +145,24 @@ impl LaneScheduler {
         return Some(batch_id);
     }
 
-    pub(crate) fn dispatch_async_batches(&self) {
-        // todo!()
+    pub(crate) fn dispatch_async_batches(&mut self, root_element: ArcAnyElementNode) {
+        let mut executable_lanes = Vec::new();
+        if !self.queued_batches.is_empty() {
+            for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
+                if async_lane.is_some() {
+                    continue;
+                }
+                // The top priority batch is sorted to the rear
+                let Some(new_async_batch) = self.queued_batches.pop() else {
+                    break;
+                };
+                let lane_pos = LanePos::new_async(lane_index as u8);
+                mark_batch(&new_async_batch, lane_pos);
+                *async_lane = Some(AsyncLaneData::new(lane_pos, new_async_batch));
+                executable_lanes.push(lane_pos)
+            }
+        }
+        root_element.visit_and_work_async(executable_lanes.as_slice(), self)
     }
 
     pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {
