@@ -6,7 +6,7 @@ use crate::{
     foundation::{Arc, Asc, Container, ContainerOf},
     scheduler::{get_current_scheduler, LanePos},
     sync::lane_scheduler,
-    tree::{ArcChildElementNode, Element, ElementNode, FullElement, WorkContext, WorkHandle},
+    tree::{ArcChildElementNode, ElementNode, FullElement, WorkContext, WorkHandle},
 };
 
 pub trait AnyElementAsyncVisitExt {

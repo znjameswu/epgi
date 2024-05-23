@@ -4,7 +4,6 @@ use hashbrown::HashSet;
 
 use crate::{
     foundation::{Asc, Protocol, PtrEq, SyncMpscSender, SyncRwLock},
-    scheduler::{LaneMask, LanePos},
     sync::{CommitBarrier, LaneScheduler, RenderObjectCommitResult},
     tree::{
         ArcAnyElementNode, ArcAnyLayerRenderObject, AsyncSuspendWaker, AweakAnyElementNode,
@@ -89,8 +88,12 @@ impl BuildStates {
     }
 
     pub(crate) fn dispatch_async_batches(&mut self) {
+        self.scheduler.dispatch_async_batches(&self.root_element)
+    }
+
+    pub(crate) fn commit_completed_async_batches(&mut self, job_batcher: &mut JobBatcher) {
         self.scheduler
-            .dispatch_async_batches(self.root_element.clone())
+            .commit_completed_async_batches(&self.root_element, job_batcher)
     }
 }
 
@@ -164,10 +167,7 @@ where
                     requesters,
                 } => {
                     let mut build_states = self.build_states.write();
-                    // let commited_async_batches = lane_scheduler.commit_completed_async_batches(&mut self.job_batcher);
-                    // for commited_async_batch in commited_async_batches {
-                    //     self.job_batcher.remove_commited_batch(&commited_async_batch)
-                    // }
+                    build_states.commit_completed_async_batches(&mut self.job_batcher);
                     let (new_jobs, point_rebuilds) = {
                         let _guard = handle.global_sync_job_build_lock.write();
                         handle.job_id_counter.increment_frame();
@@ -191,10 +191,7 @@ where
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
                     }
-                    // let commited_async_batches = lane_scheduler.commit_completed_async_batches(&mut self.job_batcher);
-                    // for commited_async_batch in commited_async_batches {
-                    //     self.job_batcher.remove_commited_batch(&commited_async_batch)
-                    // }
+                    build_states.commit_completed_async_batches(&mut self.job_batcher);
                     build_states.perform_layout();
                     self.extension.on_layout_complete(&build_states);
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.

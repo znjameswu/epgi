@@ -113,19 +113,25 @@ impl LaneScheduler {
 
     pub(crate) fn commit_completed_async_batches(
         &mut self,
+        root_element: &ArcAnyElementNode,
         job_batcher: &mut JobBatcher,
-    ) -> Vec<BatchId> {
-        todo!()
-        // todo!()
-        // for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
-        //     let Some(async_lane) = async_lane else {
-        //         continue;
-        //     };
-        //     if async_lane.barrier_inner.is_empty() {
-        //         todo!("Commit async lane");
-        //         job_batcher.remove_commited_batch(&async_lane.batch.id);
-        //     }
-        // }
+    ) {
+        let mut finished_lanes = LaneMask::new();
+        for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
+            let Some(async_lane) = async_lane else {
+                continue;
+            };
+            if async_lane.barrier_inner.is_empty() {
+                finished_lanes = finished_lanes | LanePos::new_async(lane_index as u8);
+                job_batcher.remove_commited_batch(&async_lane.batch.id);
+            }
+        }
+        if !finished_lanes.is_empty() {
+            let root_element = root_element.clone();
+            rayon::scope(move |scope| {
+                root_element.visit_and_commit_async_any(finished_lanes, scope, self);
+            })
+        }
     }
 
     pub(crate) fn dispatch_sync_batch(
@@ -135,17 +141,16 @@ impl LaneScheduler {
         let Some(sync_batch) = self.sync_batch() else {
             return None;
         };
+        let root_element = root_element.clone();
         rayon::scope(|scope| {
-            root_element
-                .clone()
-                .visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
+            root_element.visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
         });
         let batch_id = sync_batch.id;
         self.remove_commited_batch(LanePos::SYNC);
         return Some(batch_id);
     }
 
-    pub(crate) fn dispatch_async_batches(&mut self, root_element: ArcAnyElementNode) {
+    pub(crate) fn dispatch_async_batches(&mut self, root_element: &ArcAnyElementNode) {
         let mut lanes_to_start = Vec::new();
         if !self.queued_batches.is_empty() {
             for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
@@ -162,7 +167,11 @@ impl LaneScheduler {
                 lanes_to_start.push(lane_pos)
             }
         }
-        root_element.visit_and_start_work_async(lanes_to_start.as_slice(), self)
+        if !lanes_to_start.is_empty() {
+            root_element
+                .clone()
+                .visit_and_start_work_async(lanes_to_start.as_slice(), self)
+        }
     }
 
     pub(crate) fn reorder_async_work(&self, node: AweakAnyElementNode) {

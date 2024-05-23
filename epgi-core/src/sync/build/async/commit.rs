@@ -6,10 +6,10 @@ use crate::{
         RenderObjectCommitResult,
     },
     tree::{
-        ArcAnyElementNode, ArcChildElementNode, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element, ElementNode,
-        ElementSnapshotInner, FullElement, HookContextMode, HooksWithTearDowns, ImplElementNode,
-        ImplProvide, Mainline, MainlineState, SubscriptionDiff,
+        ArcChildElementNode, AsyncInflating, AsyncOutput, AsyncQueueCurrentEntry, AsyncStash,
+        AsyncWorkQueue, BuildResults, Element, ElementNode, ElementSnapshotInner, FullElement,
+        HookContextMode, HooksWithTearDowns, ImplElementNode, ImplProvide, Mainline, MainlineState,
+        SubscriptionDiff,
     },
 };
 
@@ -19,7 +19,7 @@ pub trait AnyElementAsyncCommitExt {
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> ArcAnyElementNode;
+    );
 }
 
 impl<E: FullElement> AnyElementAsyncCommitExt for ElementNode<E> {
@@ -28,9 +28,8 @@ impl<E: FullElement> AnyElementAsyncCommitExt for ElementNode<E> {
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
-    ) -> ArcAnyElementNode {
+    ) {
         self.visit_and_commit_async_impl(finished_lanes, scope, lane_scheduler);
-        self
     }
 }
 
