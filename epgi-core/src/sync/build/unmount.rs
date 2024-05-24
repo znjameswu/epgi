@@ -125,10 +125,11 @@ impl<E: FullElement> ElementNode<E> {
                 .async_inflating_mut()
                 .expect("Unmount async inflating should only be called on async inflating nodes");
 
-            Self::setup_unmount_async_work_async_inflating(async_inflating)
+            Self::prepare_purge_async_work_async_inflating(
+                async_inflating,
+                async_inflating.work_context.lane_pos,
+            )
         };
-        if let Some(cancel_async) = cancel_async {
-            self.execute_unmount_async_work(cancel_async, scope, true)
-        }
+        self.execute_unmount_async_work(cancel_async, scope, true)
     }
 }
