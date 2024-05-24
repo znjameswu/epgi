@@ -517,7 +517,6 @@ impl<E: FullElement> ElementNode<E> {
         self: &Arc<Self>,
         cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         scope: &rayon::Scope<'batch>,
-        lane_scheduler: &'batch LaneScheduler,
     ) {
         let CancelAsync {
             lane_pos,
@@ -557,7 +556,7 @@ impl<E: FullElement> ElementNode<E> {
         if let Some(new_children) = new_children {
             new_children
                 .into_iter()
-                .for_each(|child| scope.spawn(|scope| child.unmount(scope, lane_scheduler)));
+                .for_each(|child| scope.spawn(|scope| child.unmount_if_async_inflating(scope)));
             // new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
             //     child.unmount(scope, lane_scheduler)
             // })

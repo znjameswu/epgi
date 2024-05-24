@@ -1,7 +1,7 @@
 use crate::{
     foundation::Arc,
     sync::LaneScheduler,
-    tree::{ElementNode, FullElement, SuspendWaker},
+    tree::{AsyncInflating, AsyncOutput, AsyncStash, ElementNode, FullElement, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 
@@ -13,6 +13,8 @@ pub trait AnyElementNodeUnmountExt {
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     );
+
+    fn unmount_if_async_inflating(self: Arc<Self>, scope: &rayon::Scope<'_>);
 }
 
 impl<E: FullElement> AnyElementNodeUnmountExt for ElementNode<E> {
@@ -21,14 +23,18 @@ impl<E: FullElement> AnyElementNodeUnmountExt for ElementNode<E> {
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     ) {
-        ElementNode::unmount(&self, scope, lane_scheduler)
+        self.unmount_impl(scope, lane_scheduler)
+    }
+
+    fn unmount_if_async_inflating(self: Arc<Self>, scope: &rayon::Scope<'_>) {
+        self.unmount_if_async_inflating_impl(scope)
     }
 }
 
 impl<E: FullElement> ElementNode<E> {
     // We could require a BuildScheduler in parameter to ensure the global lock
     // However, doing so on a virtual function incurs additional overhead.
-    fn unmount<'batch>(
+    fn unmount_impl<'batch>(
         self: &Arc<Self>,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
@@ -67,9 +73,11 @@ impl<E: FullElement> ElementNode<E> {
         };
 
         if let Some(cancel_async) = cancel_async {
-            self.execute_unmount_async_work(cancel_async, scope, lane_scheduler)
+            self.execute_unmount_async_work(cancel_async, scope)
         }
 
+        // These side effect reversal does not need the node lock held
+        // Because those side effects are only fired in the commit phase, which is holding sync scheduler lock, which we are also holding.
         let mut async_work_needs_restarting = AsyncWorkNeedsRestarting::new();
         for consumed_type in E::get_consumed_types(&widget) {
             let provider_node = self
@@ -99,6 +107,65 @@ impl<E: FullElement> ElementNode<E> {
                 child.unmount(scope, lane_scheduler)
             } else {
                 it.for_each(|child| scope.spawn(|s| child.unmount(s, lane_scheduler)))
+            }
+        }
+    }
+
+    fn unmount_if_async_inflating_impl(self: &Arc<Self>, scope: &rayon::Scope<'_>) {
+        let unmounted = self.context.unmounted.swap(true, Relaxed);
+        if unmounted {
+            return;
+        }
+        let new_children = {
+            let mut snapshot = self.snapshot.lock();
+
+            let async_inflating = snapshot
+                .inner
+                .async_inflating_mut()
+                .expect("Unmount async inflating should only be called on async inflating nodes");
+
+            let AsyncInflating {
+                work_context,
+                stash:
+                    AsyncStash {
+                        handle,
+                        subscription_diff,
+                        spawned_consumers,
+                        output,
+                    },
+            } = async_inflating;
+
+            handle.abort();
+            for reserved in subscription_diff.reserve.iter() {
+                reserved.unreserve_read(&(Arc::downgrade(self) as _), work_context.lane_pos);
+            }
+            debug_assert!(
+                spawned_consumers.is_none(),
+                "Async inflating should not spawn consumer work"
+            );
+            let mut new_children = None;
+            // Force the destructor to run by taking it out
+            match std::mem::replace(output, AsyncOutput::Gone) {
+                AsyncOutput::Uninitiated { .. } => {}
+                AsyncOutput::Suspended { suspend, .. } => todo!(),
+                AsyncOutput::Completed(build_results) => {
+                    new_children = Some(build_results.children)
+                }
+                AsyncOutput::Gone => debug_assert!(
+                    false,
+                    "Tried to unmount an async inflating node whose output has been taken"
+                ),
+            }
+            new_children
+        };
+        if let Some(new_children) = new_children {
+            let mut it = new_children.into_iter();
+            // Single child optimization
+            if it.len() == 1 {
+                let child = it.next().unwrap();
+                child.unmount_if_async_inflating(scope)
+            } else {
+                it.for_each(|child| scope.spawn(|s| child.unmount_if_async_inflating(s)))
             }
         }
     }
