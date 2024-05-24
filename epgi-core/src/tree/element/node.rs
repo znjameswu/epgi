@@ -22,11 +22,7 @@ impl<E: Element> ElementNode<E> {
     ) -> Self {
         Self {
             context,
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget,
-                // subtree_suspended: true,
-                inner,
-            }),
+            snapshot: SyncMutex::new(ElementSnapshot::new(widget, inner)),
         }
     }
     pub fn widget(&self) -> E::ArcWidget {
@@ -144,6 +140,4 @@ impl<E: FullElement> AnyElementNode for ElementNode<E> {
         <E as Element>::Impl::get_render_object(render_object)
             .ok_or("Render object call should only be called on after render object is attached")
     }
-    
-
 }

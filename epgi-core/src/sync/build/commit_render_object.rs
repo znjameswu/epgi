@@ -30,7 +30,11 @@ impl<E: FullElement> ElementNode<E> {
                 "An async work should not be executing alongside a sync work"
             );
             mainline.state = Some(state);
-            self.prepare_execute_backqueue(mainline, &snapshot_reborrow.widget)
+            self.prepare_execute_backqueue(
+                mainline,
+                &snapshot_reborrow.widget,
+                &snapshot_reborrow.element_lock_held,
+            )
         };
 
         if let Some(async_work_needing_start) = async_work_needing_start {

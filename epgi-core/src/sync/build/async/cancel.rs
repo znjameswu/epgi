@@ -15,8 +15,9 @@ use crate::{
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode,
-        ConsumerWorkSpawnToken, Element, ElementBase, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff,
+        ConsumerWorkSpawnToken, Element, ElementBase, ElementLockHeldToken, ElementNode,
+        ElementSnapshot, ElementSnapshotInner, FullElement, ImplProvide, Mainline,
+        SubscriptionDiff,
     },
 };
 
@@ -178,9 +179,12 @@ impl<E: FullElement> ElementNode<E> {
                     Self::prepare_purge_async_work_async_inflating(async_inflating, lane_pos);
                 RemoveAsync { purge, start: None }
             }
-            ElementSnapshotInner::Mainline(mainline) => {
-                self.prepare_remove_async_work_mainline(mainline, &snapshot.widget, lane_pos)
-            }
+            ElementSnapshotInner::Mainline(mainline) => self.prepare_remove_async_work_mainline(
+                mainline,
+                &snapshot.widget,
+                lane_pos,
+                &snapshot.element_lock_held,
+            ),
         }
     }
 
@@ -189,9 +193,10 @@ impl<E: FullElement> ElementNode<E> {
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
         lane_pos: LanePos,
+        element_lock_held: &ElementLockHeldToken,
     ) -> RemoveAsync<E> {
         let purge = Self::prepare_purge_async_work_mainline(mainline, lane_pos);
-        let rebuild = self.prepare_execute_backqueue(mainline, old_widget);
+        let rebuild = self.prepare_execute_backqueue(mainline, old_widget, element_lock_held);
         RemoveAsync {
             purge,
             start: rebuild,
@@ -349,6 +354,8 @@ impl<E: FullElement> ElementNode<E> {
             )
         }
 
+        // Since we are holding sync scheduler lock, can we use scheduler ordering instead of element lock to guarantee side effect reversal?
+        // We need to prove reservation the same lane either happens-before us acquired the element lock, or after the sync walk is completed.
         for reserved in subscription_diff.reserve {
             reserved.unreserve_read(&(Arc::downgrade(self) as _), lane_pos)
         }
@@ -426,21 +433,21 @@ impl<E: FullElement> ElementNode<E> {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    pub(in crate::sync::build) fn setup_unmount_async_work(
-        snapshot: &mut ElementSnapshot<E>,
-    ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
-    {
-        match &mut snapshot.inner {
-            ElementSnapshotInner::AsyncInflating(async_inflating) => {
-                Self::setup_unmount_async_work_async_inflating(async_inflating)
-            }
-            ElementSnapshotInner::Mainline(mainline) => {
-                Self::setup_unmount_async_work_mainline(mainline)
-            }
-        }
-    }
+    // pub(in crate::sync::build) fn setup_unmount_async_work(
+    //     snapshot: &mut ElementSnapshot<E>,
+    // ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
+    // {
+    //     match &mut snapshot.inner {
+    //         ElementSnapshotInner::AsyncInflating(async_inflating) => {
+    //             Self::setup_unmount_async_work_async_inflating(async_inflating)
+    //         }
+    //         ElementSnapshotInner::Mainline(mainline) => {
+    //             Self::setup_unmount_async_work_mainline(mainline)
+    //         }
+    //     }
+    // }
 
-    pub(super) fn setup_unmount_async_work_async_inflating(
+    pub(in super::super) fn setup_unmount_async_work_async_inflating(
         async_inflating: &mut AsyncInflating<E>,
     ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
     {
@@ -458,13 +465,7 @@ impl<E: FullElement> ElementNode<E> {
         handle.abort();
         let subscription_diff = std::mem::take(subscription_diff);
         // Replace with an invalid empty value
-        let output = std::mem::replace(
-            output,
-            AsyncOutput::Suspended {
-                suspend: None,
-                barrier: None,
-            },
-        );
+        let output = std::mem::replace(output, AsyncOutput::Gone);
         use AsyncOutput::*;
         Some(CancelAsync {
             lane_pos: work_context.lane_pos,
@@ -504,7 +505,7 @@ impl<E: FullElement> ElementNode<E> {
         handle.abort();
         Some(CancelAsync {
             lane_pos: work_context.lane_pos,
-            spawned_consumers: spawned_consumers,
+            spawned_consumers,
             subscription_diff,
             new_children: match output {
                 AsyncOutput::Completed(results) => Some(results.children),
@@ -513,10 +514,12 @@ impl<E: FullElement> ElementNode<E> {
         })
     }
 
+    #[inline]
     pub(in super::super) fn execute_unmount_async_work<'batch>(
         self: &Arc<Self>,
         cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         scope: &rayon::Scope<'batch>,
+        single_child_optimization: bool,
     ) {
         let CancelAsync {
             lane_pos,
@@ -554,12 +557,20 @@ impl<E: FullElement> ElementNode<E> {
         }
 
         if let Some(new_children) = new_children {
-            new_children
-                .into_iter()
-                .for_each(|child| scope.spawn(|scope| child.unmount_if_async_inflating(scope)));
-            // new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-            //     child.unmount(scope, lane_scheduler)
-            // })
+            if single_child_optimization {
+                new_children
+                    .into_iter()
+                    .for_each(|child| scope.spawn(|scope| child.unmount_if_async_inflating(scope)));
+            } else {
+                let mut it = new_children.into_iter();
+                // Single child optimization
+                if it.len() == 1 {
+                    let child = it.next().unwrap();
+                    child.unmount_if_async_inflating(scope)
+                } else {
+                    it.for_each(|child| scope.spawn(|s| child.unmount_if_async_inflating(s)))
+                }
+            }
         }
     }
 }

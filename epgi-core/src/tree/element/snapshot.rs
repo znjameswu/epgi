@@ -9,6 +9,19 @@ pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
     // pub(super) subtree_suspended: bool,
     pub(crate) inner: ElementSnapshotInner<E>,
+    pub(crate) element_lock_held: ElementLockHeldToken,
+}
+
+pub(crate) struct ElementLockHeldToken(());
+
+impl<E: Element> ElementSnapshot<E> {
+    pub(crate) fn new(widget: E::ArcWidget, inner: ElementSnapshotInner<E>) -> Self {
+        Self {
+            widget,
+            inner,
+            element_lock_held: ElementLockHeldToken(()),
+        }
+    }
 }
 
 pub(crate) enum ElementSnapshotInner<E: Element> {

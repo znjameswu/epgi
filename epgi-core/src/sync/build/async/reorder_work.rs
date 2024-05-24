@@ -2,7 +2,9 @@ use crate::{
     foundation::{Arc, ContainerOf},
     r#async::AsyncReconcile,
     sync::LaneScheduler,
-    tree::{ArcChildElementNode, ElementBase, ElementNode, FullElement, Mainline},
+    tree::{
+        ArcChildElementNode, ElementBase, ElementLockHeldToken, ElementNode, FullElement, Mainline,
+    },
 };
 
 use super::cancel::CancelAsync;
@@ -22,7 +24,12 @@ impl<E: FullElement> ElementNode<E> {
                 .inner
                 .mainline_mut()
                 .expect("reorder_async_work should only be performed on mainline nodes");
-            self.prepare_reorder_async_work(mainline, &snapshot_reborrow.widget, lane_scheduler)
+            self.prepare_reorder_async_work(
+                mainline,
+                &snapshot_reborrow.widget,
+                lane_scheduler,
+                &snapshot_reborrow.element_lock_held,
+            )
         };
 
         if let Some(reorder) = try_reorder_result {
@@ -35,6 +42,7 @@ impl<E: FullElement> ElementNode<E> {
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
         lane_scheduler: &LaneScheduler,
+        element_lock_held: &ElementLockHeldToken,
     ) -> Option<ReorderAsync<E>> {
         let async_queue = &mut mainline.async_queue;
 
@@ -83,6 +91,7 @@ impl<E: FullElement> ElementNode<E> {
             backqueue_candidate.widget,
             backqueue_candidate.work_context,
             backqueue_candidate.barrier,
+            element_lock_held,
         ) else {
             panic!("Impossible to fail")
         };
@@ -105,6 +114,7 @@ impl<E: FullElement> ElementNode<E> {
         self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
+        element_lock_held: &ElementLockHeldToken,
     ) -> Option<AsyncReconcile<E>> {
         let async_queue = &mut mainline.async_queue;
         let Some(backqueue) = async_queue.backqueue_mut() else {
@@ -139,6 +149,7 @@ impl<E: FullElement> ElementNode<E> {
             backqueue_candidate.widget,
             backqueue_candidate.work_context,
             backqueue_candidate.barrier,
+            element_lock_held,
         ) else {
             panic!("Impossible to fail")
         };

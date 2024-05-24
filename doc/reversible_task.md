@@ -49,8 +49,10 @@ let shared_states = Arc::new(Mutex::new(some_states()));
 // Abort routine
 abort_handle.abort();
 let mut guard = shared_state.lock();
-reverse_effect_if_present(&mut *guard);
+reverse_effect_if_present_inside(&mut *guard);
+let setup = setup_reverse_effect_if_present_outside(&mut *guard);
 drop(guard);
+reverse_effect_outside(setup);
 
 
 // Target task
@@ -66,13 +68,30 @@ spawn(Abortable::new(async move {
     drop(guard);
 }, abort_reg))
 ```
-You can take time to verify the correctness of memory ordering in this program. Since we actively checked a flag in our task, this is called cooperative task cancellation.
+You can take time to verify the correctness of memory ordering in this program. Since we actively checked a flag in our task, this is a correct cooperative task cancellation.
 
 Compared to a minimal barebone code using `Mutex` and `AbortHandle`, we introduced zero extra variable, one extra write in our abort routine, one extra read and one extra branching in our task, and an extra capture (`abort_handle`) in our async move closure. Recallling that 
 
 > ... We *must* write into *some* shared states in our abort routine. Accompanying that we also would have to read that piece of state in our task.
 
 In order for the read to happen, we need a reference to the new pieces of state in our async closure capture. In order for the read to be effective, the control flow after that must depend on the read value somehow. If our task is returning empty `()`, then the minimal possible dependency on our read value that we can ever introduce would be an empty branching. And exactly an extra reference and an empty branching alongside a read is introduced in the the cooperative task cancellation algorithm. Therefore, we proved that the cooperative task cancellation *is* indeed one of **the most theoretically efficient algorithms** for a reversible task system whose shared state is protected by a lock.
+
+Note that we present two versions of cancellation in our example: "outside" and "inside". "Inside" variant is easy to guarantee correctness. "Outside" variant is also correct for most cases. However, "outside" varaint places an extra constraints on the effect characteristics. 
+1. New effects must not have identity collision with any previous effects. Or in other words, the canceller must be able to distinguish between any two effects. The reason is that, since the canceller performs outside of the lock region, it must not mistake its target.
+2. New effects must not modify with the previous effects.
+
+In EPGI practice, lane position as an identifier along with batch lifecycle most of the time can guarantee the correctness of the "outside" variant.
+
+Explanation of some batch lifecycle guarantees
+1. Aborting a batch in a subtree must happen while holding sync scheduler lock
+2. Starting a new batch must happen while holding sync scheduler lock
+3. While holding the sync scheduler lock, a batch should never abort itself in a subtree. (Now we guarantee while holding the lock, aborting and starting cannot race)
+4. The scheduler guarantee that when not holding sync scheduler lock, an async batch should not be active in a node when a descendant node has a work of the batch
+
+### ElementLockHeldToken
+In our project, in order to ensure that the effect launcher hold the appropriate lock, we introduced a zero-sized token type inside our element node lock. Any reversible side-effect methods will require this token in their parameter signature, in order to prove that the invoker does hold an ElementNode. Thus eliminating any accidental invocation without holding the lock.
+
+However, for non-reversible side-effects, we do not require such proof.
 
 ## Solutions for states protected by atomic variables
 One solution using cooperative task cancellation is as follows. Though the most theoretically efficient solution remains unknown.
@@ -252,3 +271,14 @@ Suppose the shared state is distributed in a tree structure and each tree node i
 # Several code guidelines for this project
 1. Whenever an async work writes into a non-exclusive mutex, a cooperative flag must be used.
 2. Whenever an async work calls the global scheduler, a cooperative flag must be used.
+
+
+
+# List of reversible side effect in EPGI
+For an async work, the following side effects are supposed to be reversible
+1. Try occupy the node itself, whether succeedded or backqueued
+2. Write back build results
+3. Leave a reservation in provider
+4. Mark consumer root itself
+
+Note: propagating consumer lane marking upward may be non-reversible, check out relaxed lane consistency design.

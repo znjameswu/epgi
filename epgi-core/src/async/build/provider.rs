@@ -6,8 +6,8 @@ use crate::{
     foundation::{Arc, Asc, InlinableDwsizeVec, InlinableUsizeVec, Provide, TypeKey},
     sync::CommitBarrier,
     tree::{
-        ArcElementContextNode, ElementNode, FullElement, ProviderElementMap, SubscriptionDiff,
-        WorkContext,
+        ArcElementContextNode, ElementLockHeldToken, ElementNode, FullElement, ProviderElementMap,
+        SubscriptionDiff, WorkContext,
     },
 };
 
@@ -73,6 +73,7 @@ impl<E: FullElement> ElementNode<E> {
         old_consumed_types: &[TypeKey],
         work_context: &mut Cow<'_, WorkContext>,
         barrier: &CommitBarrier,
+        element_lock_held: &ElementLockHeldToken,
     ) -> InlinableDwsizeVec<Arc<dyn Provide>> {
         let is_old_consumed_types = std::ptr::eq(new_consumed_types, old_consumed_types);
 
@@ -101,6 +102,7 @@ impl<E: FullElement> ElementNode<E> {
                         work_context.lane_pos,
                         work_context.batch.as_ref(),
                         barrier,
+                        element_lock_held,
                     )
                 };
                 work_context

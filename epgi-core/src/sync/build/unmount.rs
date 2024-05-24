@@ -1,7 +1,7 @@
 use crate::{
     foundation::Arc,
     sync::LaneScheduler,
-    tree::{AsyncInflating, AsyncOutput, AsyncStash, ElementNode, FullElement, SuspendWaker},
+    tree::{ElementNode, FullElement, SuspendWaker},
 };
 use core::sync::atomic::Ordering::*;
 
@@ -73,7 +73,7 @@ impl<E: FullElement> ElementNode<E> {
         };
 
         if let Some(cancel_async) = cancel_async {
-            self.execute_unmount_async_work(cancel_async, scope)
+            self.execute_unmount_async_work(cancel_async, scope, false)
         }
 
         // These side effect reversal does not need the node lock held
@@ -116,57 +116,19 @@ impl<E: FullElement> ElementNode<E> {
         if unmounted {
             return;
         }
-        let new_children = {
+        let cancel_async = {
             let mut snapshot = self.snapshot.lock();
+            let snapshot_reborrow = &mut *snapshot;
 
-            let async_inflating = snapshot
+            let async_inflating = snapshot_reborrow
                 .inner
                 .async_inflating_mut()
                 .expect("Unmount async inflating should only be called on async inflating nodes");
 
-            let AsyncInflating {
-                work_context,
-                stash:
-                    AsyncStash {
-                        handle,
-                        subscription_diff,
-                        spawned_consumers,
-                        output,
-                    },
-            } = async_inflating;
-
-            handle.abort();
-            for reserved in subscription_diff.reserve.iter() {
-                reserved.unreserve_read(&(Arc::downgrade(self) as _), work_context.lane_pos);
-            }
-            debug_assert!(
-                spawned_consumers.is_none(),
-                "Async inflating should not spawn consumer work"
-            );
-            let mut new_children = None;
-            // Force the destructor to run by taking it out
-            match std::mem::replace(output, AsyncOutput::Gone) {
-                AsyncOutput::Uninitiated { .. } => {}
-                AsyncOutput::Suspended { suspend, .. } => todo!(),
-                AsyncOutput::Completed(build_results) => {
-                    new_children = Some(build_results.children)
-                }
-                AsyncOutput::Gone => debug_assert!(
-                    false,
-                    "Tried to unmount an async inflating node whose output has been taken"
-                ),
-            }
-            new_children
+            Self::setup_unmount_async_work_async_inflating(async_inflating)
         };
-        if let Some(new_children) = new_children {
-            let mut it = new_children.into_iter();
-            // Single child optimization
-            if it.len() == 1 {
-                let child = it.next().unwrap();
-                child.unmount_if_async_inflating(scope)
-            } else {
-                it.for_each(|child| scope.spawn(|s| child.unmount_if_async_inflating(s)))
-            }
+        if let Some(cancel_async) = cancel_async {
+            self.execute_unmount_async_work(cancel_async, scope, true)
         }
     }
 }

@@ -18,8 +18,8 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let reorder = {
             let mut snapshot = self.snapshot.lock();
-            let snapshot_rebrrow = &mut *snapshot;
-            let mainline = snapshot_rebrrow
+            let snapshot_reborrow = &mut *snapshot;
+            let mainline = snapshot_reborrow
                 .inner
                 .mainline_mut()
                 .expect("Restart can only be called on mainline nodes");
@@ -28,7 +28,11 @@ impl<E: FullElement> ElementNode<E> {
                 .ok()
                 .expect("Lane to be canceled must exist");
             let rebuild = self
-                .prepare_execute_backqueue(mainline, &snapshot_rebrrow.widget)
+                .prepare_execute_backqueue(
+                    mainline,
+                    &snapshot_reborrow.widget,
+                    &snapshot_reborrow.element_lock_held,
+                )
                 .expect("Impossible to fail");
 
             ReorderAsync {

@@ -55,13 +55,13 @@ impl<E: FullElement> ElementNode<E> {
                 parent_context,
                 widget,
             )),
-            snapshot: SyncMutex::new(ElementSnapshot {
-                widget: widget.clone(),
-                inner: ElementSnapshotInner::Mainline(Mainline {
+            snapshot: SyncMutex::new(ElementSnapshot::new(
+                widget.clone(),
+                ElementSnapshotInner::Mainline(Mainline {
                     state: None,
                     async_queue: AsyncWorkQueue::new_empty(),
                 }),
-            }),
+            )),
         });
 
         let consumed_values = read_and_update_subscriptions_sync(

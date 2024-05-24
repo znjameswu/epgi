@@ -9,8 +9,8 @@ use crate::{
     sync::CommitBarrier,
     tree::{
         apply_hook_updates, no_widget_update, ArcChildElementNode, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementNode, FullElement,
-        HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
+        AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementLockHeldToken,
+        ElementNode, FullElement, HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
     },
 };
 
@@ -155,6 +155,7 @@ impl<E: FullElement> ElementNode<E> {
             widget,
             work_context,
             barrier,
+            &snapshot_reborrow.element_lock_held,
         )))
     }
 
@@ -166,6 +167,7 @@ impl<E: FullElement> ElementNode<E> {
         widget: Option<E::ArcWidget>,
         work_context: Asc<WorkContext>,
         barrier: CommitBarrier,
+        element_lock_held: &ElementLockHeldToken,
     ) -> Result<AsyncReconcile<E>, OccupyError> {
         let Mainline { state, async_queue } = mainline;
 
@@ -199,6 +201,7 @@ impl<E: FullElement> ElementNode<E> {
                     old_consumed_types,
                     &mut child_work_context,
                     &barrier,
+                    element_lock_held,
                 );
                 let mut spawned_consumers = None;
                 if let Some((new_provided_value, type_key, is_new_value)) = provided_value_update {

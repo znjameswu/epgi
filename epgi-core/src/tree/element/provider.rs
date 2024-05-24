@@ -10,7 +10,9 @@ use crate::{
     sync::CommitBarrier,
 };
 
-use super::{AweakAnyElementNode, AweakElementContextNode, ElementContextNode};
+use super::{
+    AweakAnyElementNode, AweakElementContextNode, ElementContextNode, ElementLockHeldToken,
+};
 
 pub(crate) struct ProviderObject {
     value: SyncRwLock<Arc<dyn Provide>>, // TODO ArcSwapAny<ThinArcProvide>
@@ -104,7 +106,9 @@ impl ElementContextNode {
         lane_pos: LanePos,
         batch_conf: &BatchConf,
         barrier: &CommitBarrier,
+        element_lock_held: &ElementLockHeldToken,
     ) -> Arc<dyn Provide> {
+        let _ = element_lock_held;
         let provider = self
             .provider_object
             .as_ref()

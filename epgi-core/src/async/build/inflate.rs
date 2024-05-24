@@ -93,9 +93,9 @@ impl<E: FullElement> ElementNode<E> {
             );
             Self {
                 context: Arc::new(element_context),
-                snapshot: SyncMutex::new(ElementSnapshot {
+                snapshot: SyncMutex::new(ElementSnapshot::new(
                     widget,
-                    inner: ElementSnapshotInner::AsyncInflating(AsyncInflating {
+                    ElementSnapshotInner::AsyncInflating(AsyncInflating {
                         work_context,
                         stash: AsyncStash {
                             handle,
@@ -104,7 +104,7 @@ impl<E: FullElement> ElementNode<E> {
                             output: AsyncOutput::Uninitiated { barrier },
                         },
                     }),
-                }),
+                )),
             }
         });
         (node, handle_clone)
@@ -120,21 +120,23 @@ impl<E: FullElement> ElementNode<E> {
     ) {
         let (provider_values, widget) = {
             let mut snapshot = self.snapshot.lock();
+            let snapshot_reborrow = &mut *snapshot;
             if handle.is_aborted() {
                 return;
             }
             debug_assert!(
-                snapshot.inner.async_inflating_mut().is_some(),
+                snapshot_reborrow.inner.async_inflating_mut().is_some(),
                 "Async inflate should only be called on a AsyncInflating node"
             );
             // Reversible side effect must happen with the node lock held and the work handle checked
             let provider_values = self.read_consumed_values_async(
-                E::get_consumed_types(&snapshot.widget),
+                E::get_consumed_types(&snapshot_reborrow.widget),
                 EMPTY_CONSUMED_TYPES,
                 &mut Cow::Borrowed(&work_context),
                 &barrier,
+                &snapshot_reborrow.element_lock_held,
             );
-            (provider_values, snapshot.widget.clone())
+            (provider_values, snapshot_reborrow.widget.clone())
         };
 
         self.perform_inflate_node_async::<true>(
