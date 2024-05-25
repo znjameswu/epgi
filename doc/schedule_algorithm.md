@@ -169,6 +169,56 @@ Definition: A unit of work can spawn another root unit of work deep down the tre
 
 ### Execution Scope
 
+
+### Two batch execution strategies
+Current decision: eager batch dispatch.
+#### Eager batch dispatch
+If a top-level root node is unoccupied, then we immediately start active execution of the root work.
+
+If along a tree path there exist top-level root A and top-level root B, where the priority of A's lane is higher than B. Then during dispatch, we visit through A (meanwhile trying to start active work in A) and still try to start active work in B. Even if later A's work may spawn into B and interrupt B's work.
+
+Advantage:
+1. When A's work visits through the MaxCR under A, it does not need to yield the subtrees below back to scheduler to examine the presence of other lane. In fact, we do not need a subtree yielding mechanism!
+    1. Because other lanes would have already visited through A's MaxCR during their dispatch and are already executing.
+2. All node either has an active current work, or they don't have any work (including backqueued) at all, which is easier to reason with.
+3. If we are lucky, A's MaxCR may not contain B, and thus in the end A and B do not interfere. We get a higher throughput in this manner.
+4. We don't even need a tree walk, we can just identify all top-level roots by lane marking and dispatch them right away.
+5. Continue-work operation is naturally eager. (Or eager is naturally suited for dynamic root spawning)
+#### Conservative batch dispatch
+We only start a top-level root work when both the node is unoccupied, and the node's nearest ancestor work has yielded to the scheduler or is non-existent
+
+If along a tree path there exist top-level root A and top-level root B, where the *priority of A's lane is higher than B*. Then during dispatch, we only try to start active work in A, and place a backqueue work of B in B. When A's work has visited through A's MaxCR, it will yield subtrees below the MaxCR to the scheduler. If they contains B and there is no other active work shadowing B, we try to start the backqueued work in B.
+
+If along a tree path there exist top-level root A and top-level root B, where the *priority of B's lane is higher than A*. Then during dispatch, we visit through A during downwalk phase and try to start active work in B. Then during upwalk phase we try to start active work in A.
+
+For multi lane scenario and considering interference from previous dispatched work, the above principle is generalized into:
+1. Downwalk phase
+    1. Record encountered ancestor lane work priority (including previous dispatches)
+    2. If found a top-level root from the target lanes (including those from previous dispatches)
+        1. If the priority is higher than the highest encountered priority, mark this node for possible active execution.
+        2. Otherwise mark for backqueue
+    3. Downwalk until we found all top-level roots of our target lanes
+2. Upwalk phase
+    1. Try to start active execution or backqueue according to mark
+
+Disadvantage:
+1. It will allow node to be in a backqueued state, where there is work in backqueue, but no active current work. This won't happen in the eager strategy.
+    1. If there are bugs in scheduler, then a batch can be starved indefinitely in backqueue.
+2. If a high-priority batch with a high-in-the-tree root hangs itself or become very slow, all other async batches will be blocked because the hanged batch does not yield. (Severe!)
+3. We could lose some throughput for lanes with actually non-overlapping MaxCRs, despite we are more work-efficient now.
+4. Dispatch process will be more complex, despite we only need a single dispatch every frame.
+5. It can spawn various yield-subtree-to-scheduler requests, clogging up scheduler.
+6. We haven't dive into interferences between yield from previous dispatch and a later dispatch. (Though the proof may not be very hard)
+7. Then there comes the problem of continue-work. 
+    1. In the example of A and B, if A has lower priority than B, then how should we repond when A spawned a consumer work at C below B?
+        1. If we put a backqueue work at C. 
+            1. It is entirely possible that B has already yielded subtree including C back to the scheduler, and the scheduler has finished processing this yield before we backqueued C. Then C will be lost. (Fatal)
+        2. If we try to start active work at C.
+            1. It is not work efficient anymore. Since B could be executing slowly and its MaxCR can contain C.
+            2. It pretty much looks like as if we are doing eager batch dispatch (Severe)
+                1. Actually, handling dynamic root spawning would always look like the eager strategy, including handling interference with previous dispatches.
+    1. Especially, under a relaxed lane marking consistency, there can be false positives for continue-work.
+
 ## Synchronized Operations From the LaneManager
 1. 
 
