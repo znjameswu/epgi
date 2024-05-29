@@ -1,4 +1,6 @@
-use super::AsAny;
+use std::any::TypeId;
+
+use super::{AsAny, Asc};
 
 pub trait Provide: AsAny + Send + Sync {
     fn eq_sized(&self, other: &Self) -> bool
@@ -27,5 +29,17 @@ where
         Self: Sized,
     {
         <Self as PartialEq>::eq(self, other)
+    }
+}
+
+impl dyn Provide {
+    // TODO: Replace all dyn Provide with dyn Any+Send+Sync. We don't really use virtual method on Provide anyway
+    pub fn downcast_asc<T: Provide>(self: Asc<Self>) -> Option<Asc<T>> {
+        if TypeId::of::<T>() == self.type_id() {
+            let ptr = Asc::into_raw(self);
+            unsafe { Some(Asc::from_raw(ptr.cast())) }
+        } else {
+            None
+        }
     }
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
-use epgi_core::{Builder, Provider, SuspendableBuilder, Suspense};
+use epgi_core::{Consumer, SuspendableBuilder, Suspense};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
@@ -22,23 +22,43 @@ fn main() {
     //             .build(),
     //     )
     //     .build();
-    Provider!(init = || Arc::new(1f32), child = todo!(),);
-
-    Builder!(
-        builder = |ctx| {
+    let child = Consumer!(
+        builder = |ctx, color: Arc<f32>| {
             let (pending, start_transition) = ctx.use_transition();
             GestureDetector!(
-                on_tap = |job| start_transition.start(|job| {}, job),
+                on_tap = move |job| start_transition.start(|job| {}, job),
                 child = ConstrainedBox!(
                     constraints = BoxConstraints::new_tight(50.0, 50.0),
                     child = ColorBox! {
-                        color = Color::rgb(0.0, 1.0, 0.0),
+                        color = Color::rgb(0.0, *color as _, 0.0),
                         child = PhantomBox!()
                     }
                 )
             )
         }
     );
+    // Builder!(
+    //     builder = |ctx| {
+    //         let (color, set_color) = ctx.use_state(1.0f32);
+    //         Provider!(init = || todo!(), child)
+    //     }
+    // );
+
+    // Builder!(
+    //     builder = |ctx| {
+    //         let (pending, start_transition) = ctx.use_transition();
+    //         GestureDetector!(
+    //             on_tap = |job| start_transition.start(|job| {}, job),
+    //             child = ConstrainedBox!(
+    //                 constraints = BoxConstraints::new_tight(50.0, 50.0),
+    //                 child = ColorBox! {
+    //                     color = Color::rgb(0.0, 1.0, 0.0),
+    //                     child = PhantomBox!()
+    //                 }
+    //             )
+    //         )
+    //     }
+    // );
 
     let app = GestureDetector!(
         on_tap = |job| println!("Tapped"),
