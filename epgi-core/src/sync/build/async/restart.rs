@@ -7,8 +7,18 @@ use crate::{
 
 use super::reorder_work::ReorderAsync;
 
+pub trait AnyElementNodeRestartAsyncExt {
+    fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, lane_scheduler: &LaneScheduler);
+}
+
+impl<E: FullElement> AnyElementNodeRestartAsyncExt for ElementNode<E> {
+    fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, lane_scheduler: &LaneScheduler) {
+        self.restart_async_work_impl(lane_pos, lane_scheduler)
+    }
+}
+
 impl<E: FullElement> ElementNode<E> {
-    fn restart_async_work(
+    fn restart_async_work_impl(
         self: &Arc<Self>,
         lane_pos: LanePos,
         // This BuildScheduler is necessary!
@@ -42,18 +52,5 @@ impl<E: FullElement> ElementNode<E> {
         };
 
         self.perform_reorder_async_work(reorder);
-    }
-}
-
-pub(crate) mod restart_private {
-    use super::*;
-    pub trait AnyElementNodeRestartAsyncExt {
-        fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, lane_scheduler: &LaneScheduler);
-    }
-
-    impl<E: FullElement> AnyElementNodeRestartAsyncExt for ElementNode<E> {
-        fn restart_async_work(self: Arc<Self>, lane_pos: LanePos, lane_scheduler: &LaneScheduler) {
-            ElementNode::restart_async_work(&self, lane_pos, lane_scheduler)
-        }
     }
 }

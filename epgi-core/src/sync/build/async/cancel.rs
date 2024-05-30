@@ -3,10 +3,10 @@
 /// 1. Purge: Simple wipe the existence and stop any execution of this lane, disregarding any lane mark consistencies.
 ///     1. Destroys lane mark consistency under the subtree.
 ///     2. Only suitable for batch retirement or subtree unmount, when the subtree is certainly not going to be revisited by the given batch.
-/// 2. Remove: 
+/// 2. Remove:
 ///     1. Down walk: purge everything
 ///     2. Up walk: requeue everything remaining
-/// 3. Cancel: 
+/// 3. Cancel:
 ///     1. For the subtree root, purge and backqueue
 ///     2. For children, remove
 ///
@@ -41,11 +41,11 @@ pub trait AnyElementNodeAsyncCancelExt {
 
 impl<E: FullElement> AnyElementNodeAsyncCancelExt for ElementNode<E> {
     fn remove_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
-        Self::remove_async_work_in_subtree::<false>(&self, lane_pos)
+        self.remove_async_work_in_subtree_impl::<false>(lane_pos)
     }
 
     fn remove_async_work_and_lane_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
-        Self::remove_async_work_in_subtree::<true>(&self, lane_pos)
+        self.remove_async_work_in_subtree_impl::<true>(lane_pos)
     }
 
     // fn purge_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
@@ -138,7 +138,7 @@ impl<E: FullElement> ElementNode<E> {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    pub fn remove_async_work_in_subtree<const PURGE_LANE: bool>(
+    pub fn remove_async_work_in_subtree_impl<const PURGE_LANE: bool>(
         self: &Arc<Self>,
         lane_pos: LanePos,
     ) {

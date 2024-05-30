@@ -33,9 +33,9 @@ impl<E: Element> ElementNode<E> {
 pub trait AnyElementNode:
     crate::sync::AnyElementNodeAsyncCancelExt
     + crate::sync::AnyElementSyncReconcileExt
-    + crate::sync::restart_private::AnyElementNodeRestartAsyncExt
-    + crate::sync::reorder_work_private::AnyElementNodeReorderAsyncWorkExt
-    + crate::sync::unmount::AnyElementNodeUnmountExt
+    + crate::sync::AnyElementNodeRestartAsyncExt
+    + crate::sync::AnyElementNodeReorderAsyncWorkExt
+    + crate::sync::AnyElementNodeUnmountExt
     + crate::sync::AnyElementAsyncCommitExt
     + crate::sync::AnyElementAsyncVisitExt
     + crate::r#async::AnyElementAsyncInflateExt

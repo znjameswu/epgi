@@ -9,6 +9,16 @@ use crate::{
 
 use super::cancel::CancelAsync;
 
+pub trait AnyElementNodeReorderAsyncWorkExt {
+    fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler);
+}
+
+impl<E: FullElement> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
+    fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler) {
+        self.reorder_async_work_impl(lane_scheduler)
+    }
+}
+
 pub(in super::super) struct ReorderAsync<E: ElementBase> {
     pub(in super::super) cancel:
         Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
@@ -16,7 +26,7 @@ pub(in super::super) struct ReorderAsync<E: ElementBase> {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    fn reorder_async_work(self: &Arc<Self>, lane_scheduler: &LaneScheduler) {
+    fn reorder_async_work_impl(self: &Arc<Self>, lane_scheduler: &LaneScheduler) {
         let try_reorder_result = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
@@ -154,18 +164,5 @@ impl<E: FullElement> ElementNode<E> {
             panic!("Impossible to fail")
         };
         return Some(reconcile);
-    }
-}
-
-pub(crate) mod reorder_work_private {
-    use super::*;
-    pub trait AnyElementNodeReorderAsyncWorkExt {
-        fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler);
-    }
-
-    impl<E: FullElement> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
-        fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler) {
-            ElementNode::reorder_async_work(&self, lane_scheduler)
-        }
     }
 }

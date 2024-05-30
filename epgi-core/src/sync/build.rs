@@ -4,7 +4,8 @@ pub(crate) use r#async::*;
 mod commit_results;
 pub use commit_results::*;
 
-pub(crate) mod unmount;
+mod unmount;
+pub(crate) use unmount::*;
 
 mod reconcile;
 
