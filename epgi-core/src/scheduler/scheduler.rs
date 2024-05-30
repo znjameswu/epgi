@@ -29,7 +29,7 @@ pub(super) enum SchedulerTask {
     ReorderProviderReservation {
         context: AweakElementContextNode, // TODO: Reorder reservation can be done in parallel
     },
-    AsyncYieldSubtree {
+    AsyncContinueWork {
         node: AweakAnyElementNode,
         work_context: Asc<WorkContext>,
         work_handle: WorkHandle,
@@ -236,7 +236,7 @@ where
                         build_states.scheduler.reorder_provider_reservation(context);
                     })
                 }
-                AsyncYieldSubtree {
+                AsyncContinueWork {
                     node,
                     work_context,
                     work_handle,

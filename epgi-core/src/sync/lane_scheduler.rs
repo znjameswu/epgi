@@ -167,6 +167,14 @@ impl LaneScheduler {
                 lanes_to_start.push(lane_pos)
             }
         }
+
+        // In theory, instead of visiting top-down, we can also filter out top-level roots during lane marking,
+        // and directly start working on individual top-level roots.
+        // It would be faster, but this would rely on a weak pointer from ElementContextNode back to ElementNode
+        // (Lane marking needs parent pointers, which are provided by ElementContextNode)
+        // We DO have this weak pointer, but its implications on our parallel algorithm remains unclear. 
+        // (For example, mountedness and lifecycle concerns)
+        // We choose the more traditional visit and start work
         if !lanes_to_start.is_empty() {
             root_element
                 .clone()

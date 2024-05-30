@@ -30,7 +30,7 @@ where
         self: Arc<Self>,
         work_to_continue: &(Asc<WorkContext>, WorkHandle, CommitBarrier),
     ) {
-        ElementNode::visit_and_continue_work_async_impl(self, work_to_continue)
+        self.visit_and_continue_work_async_impl(work_to_continue)
     }
 
     fn visit_and_start_work_async(
@@ -38,7 +38,7 @@ where
         lanes_to_start: &[LanePos],
         lane_scheduler: &LaneScheduler,
     ) {
-        ElementNode::visit_and_start_work_async_impl(self, lanes_to_start, lane_scheduler)
+        self.visit_and_start_work_async_impl(lanes_to_start, lane_scheduler)
     }
 }
 
@@ -73,7 +73,7 @@ impl<E: FullElement> ElementNode<E> {
     fn visit_and_start_work_async_impl(
         self: Arc<Self>,
         // The lanes yet to be started, from high priority to low priority
-        lanes_to_start: &[LanePos],
+        mut lanes_to_start: &[LanePos],
         lane_scheduler: &LaneScheduler,
     ) {
         // Since we are starting root work, we do not need to look into descendant lanes
@@ -89,42 +89,70 @@ impl<E: FullElement> ElementNode<E> {
             That would indicate they have already been started"
         );
 
-        let mut works_to_start = Vec::new();
-        for &lane_pos in lanes_to_start {
-            if self_lanes.contains(lane_pos) {
-                // Start async work
-                let work_context = Asc::new(WorkContext {
-                    lane_pos,
-                    batch: lane_scheduler
-                        .get_batch_conf_for_async(lane_pos)
-                        .expect("async lane should exist")
-                        .clone(),
-                    recorded_provider_values: Default::default(),
-                });
-                let parent_handle = WorkHandle::new();
-                let barrier = lane_scheduler
-                    .get_commit_barrier_for(lane_pos)
-                    .expect("async lane should exist");
-                works_to_start.push((work_context, parent_handle, barrier));
+        let mut unblocked_works = Vec::new();
+        let mut remaining_lanes_to_start = lanes_to_start;
+
+        let init_work_for_lane_pos = |lane_pos: LanePos| {
+            let work_context = Asc::new(WorkContext {
+                lane_pos,
+                batch: lane_scheduler
+                    .get_batch_conf_for_async(lane_pos)
+                    .expect("async lane should exist")
+                    .clone(),
+                recorded_provider_values: Default::default(),
+            });
+            let parent_handle = WorkHandle::new();
+            let barrier = lane_scheduler
+                .get_commit_barrier_for(lane_pos)
+                .expect("async lane should exist");
+            (work_context, parent_handle, barrier)
+        };
+        
+        while let Some((&lane_pos, rest_lanes)) = remaining_lanes_to_start.split_first() {
+            if !self_lanes.contains(lane_pos) {
+                break;
             }
+            remaining_lanes_to_start = rest_lanes;
+            unblocked_works.push(init_work_for_lane_pos(lane_pos));
         }
 
-        let mut remaining_lanes_to_start = Cow::Borrowed(lanes_to_start);
-        if !works_to_start.is_empty() {
-            remaining_lanes_to_start.to_mut().retain(|&lane_pos| {
-                works_to_start
-                    .iter()
-                    .any(|(work_context, _, _)| work_context.lane_pos == lane_pos)
-            });
+        if !unblocked_works.is_empty() {
             self.clone()
-                .spawn_multi_reconcile_node_async(works_to_start);
+                .spawn_multi_reconcile_node_async(unblocked_works);
         }
-        if !remaining_lanes_to_start.is_empty() {
+
+        let mut blocked_works = Vec::new();
+        for &lane_pos in remaining_lanes_to_start {
+            if !self_lanes.contains(lane_pos) {
+                break;
+            }
+            blocked_works.push(init_work_for_lane_pos(lane_pos));
+        }
+
+        let mut remaining_lanes_to_start_for_descendant = Cow::Borrowed(remaining_lanes_to_start);
+        if !blocked_works.is_empty() {
+            // We need to prevent our descendants from starting those lanes that we already have.
+            // We have already removed the lanes of the unblocked works.
+            // Now we need to remove the lanes of the blocked works.
+            // Instead of checking inside the vec, we check inside our lane mask. It is an overkill but faster.
+            remaining_lanes_to_start_for_descendant
+                .to_mut()
+                .retain(|&lane_pos| !self_lanes.contains(lane_pos));
+        }
+
+        if !remaining_lanes_to_start_for_descendant.is_empty() {
             if let Some(children) = self.get_children() {
                 children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                    child.visit_and_start_work_async(&remaining_lanes_to_start, lane_scheduler)
+                    child.visit_and_start_work_async(
+                        &remaining_lanes_to_start_for_descendant,
+                        lane_scheduler,
+                    )
                 })
             };
+        }
+
+        if !blocked_works.is_empty() {
+            self.clone().spawn_multi_reconcile_node_async(blocked_works);
         }
     }
 

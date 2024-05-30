@@ -154,7 +154,7 @@ impl SchedulerHandle {
     ) {
         self.task_rx
             .other_scheduler_tasks
-            .push(SchedulerTask::AsyncYieldSubtree {
+            .push(SchedulerTask::AsyncContinueWork {
                 node,
                 work_context,
                 work_handle,
