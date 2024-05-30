@@ -4,10 +4,10 @@ use crate::{
     debug::debug_assert_sync_phase,
     foundation::{
         Arc, BoolExpectExt, MapEntryExtenision, MapOccupiedEntryExtension, Provide, PtrEq,
-        PtrEqExt, SyncMutex, SyncRwLock, TypeKey,
+        PtrEqExt, SmallMap, SyncMutex, SyncRwLock, TypeKey,
     },
     scheduler::{get_current_scheduler, BatchConf, BatchId, JobPriority, LanePos},
-    sync::CommitBarrier,
+    sync::{CommitBarrier, LaneScheduler},
 };
 
 use super::{
@@ -60,12 +60,12 @@ impl ProviderObject {
 
 enum AsyncProviderReservation {
     ReservedForRead {
-        readers: HashMap<LanePos, ReservedReadingBatch>,
+        readers: SmallMap<LanePos, ReservedReadingBatch>,
         backqueue_writer: Option<(ReservedWriter, CommitBarrier)>,
     },
     ReservedForWrite {
         writer: ReservedWriter,
-        backqueue_readers: HashMap<LanePos, (ReservedReadingBatch, CommitBarrier)>,
+        backqueue_readers: SmallMap<LanePos, (ReservedReadingBatch, CommitBarrier)>,
     },
 }
 
@@ -85,6 +85,7 @@ impl ReservedReadingBatch {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct ReservedWriter {
     lane_pos: LanePos,
     batch_id: BatchId,
@@ -283,6 +284,74 @@ impl ElementContextNode {
         };
         // return mainline_readers;
     }
+
+    pub(crate) fn reorder_reservation(&self, lane_scheduler: &LaneScheduler) {
+        let provider = self
+            .provider_object
+            .as_ref()
+            .expect("The provider to be reordered should exist on the context node");
+        let mut inner = provider.inner.lock();
+        use AsyncProviderReservation::*;
+        match &mut inner.reservation {
+            ReservedForRead {
+                readers,
+                backqueue_writer,
+            } => {
+                let Some((writer, _barrier)) = backqueue_writer else {
+                    return;
+                };
+                if readers
+                    .values()
+                    .all(|reader| writer.priority < reader.priority)
+                {
+                    let (writer, barrier) = backqueue_writer.take().expect("Impossible to fail");
+                    drop(barrier); // Just to show where we dropped it
+                    inner.reservation = ReservedForWrite {
+                        writer,
+                        backqueue_readers: std::mem::take(readers)
+                            .into_iter()
+                            .map(|(lane_pos, reader)| {
+                                (
+                                    lane_pos,
+                                    (
+                                        reader,
+                                        lane_scheduler
+                                            .get_commit_barrier_for(lane_pos)
+                                            .expect("Lane should exist"),
+                                    ),
+                                )
+                            })
+                            .collect(),
+                    }
+                }
+            }
+            ReservedForWrite {
+                writer,
+                backqueue_readers,
+            } => {
+                if backqueue_readers
+                    .values()
+                    .any(|(reader, _barrier)| reader.priority < writer.priority)
+                {
+                    inner.reservation = ReservedForRead {
+                        readers: std::mem::take(backqueue_readers)
+                            .into_iter()
+                            .map(|(lane_pos, (reader, barrier))| {
+                                drop(barrier); // Just to show where we dropped it
+                                (lane_pos, reader)
+                            })
+                            .collect(),
+                        backqueue_writer: Some((
+                            writer.clone(),
+                            lane_scheduler
+                                .get_commit_barrier_for(writer.lane_pos)
+                                .expect("Lane should exist"),
+                        )),
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl ProviderObject {
@@ -351,6 +420,7 @@ impl ProviderObject {
             &(LanePos, Arc<dyn Provide>, CommitBarrier),
         ),
     ) {
+        todo!()
     }
 
     #[must_use]

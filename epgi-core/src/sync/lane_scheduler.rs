@@ -50,7 +50,7 @@ impl LaneScheduler {
         }
     }
 
-    pub(super) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
+    pub(crate) fn get_commit_barrier_for(&self, lane_pos: LanePos) -> Option<CommitBarrier> {
         let pos = lane_pos
             .async_lane_pos()
             .expect("Only async lanes have commit barriers");
@@ -172,7 +172,7 @@ impl LaneScheduler {
         // and directly start working on individual top-level roots.
         // It would be faster, but this would rely on a weak pointer from ElementContextNode back to ElementNode
         // (Lane marking needs parent pointers, which are provided by ElementContextNode)
-        // We DO have this weak pointer, but its implications on our parallel algorithm remains unclear. 
+        // We DO have this weak pointer, but its implications on our parallel algorithm remains unclear.
         // (For example, mountedness and lifecycle concerns)
         // We choose the more traditional visit and start work
         if !lanes_to_start.is_empty() {
@@ -187,7 +187,10 @@ impl LaneScheduler {
     }
 
     pub(crate) fn reorder_provider_reservation(&self, context: AweakElementContextNode) {
-        todo!()
+        let Some(context) = context.upgrade() else {
+            return;
+        };
+        context.reorder_reservation(self)
     }
 }
 
