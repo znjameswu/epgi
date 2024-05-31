@@ -30,3 +30,5 @@ smallvec = { version = "1.13", features = [
 lazy_static = "1.4"
 typed-builder = { workspace = true }
 epgi-macro = { workspace = true }
+atomic = "0.6.0"
+bytemuck = "1.16.0"

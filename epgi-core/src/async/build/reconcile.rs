@@ -39,7 +39,7 @@ impl<E: FullElement> ElementNode<E> {
                 // Occupy every node along the line is doable and would even improve the async batch performance.
                 // But more likely than not, it would cause more interference, often severe interference, with sync batch.
                 // Therefore, it is better to not occupy, and yield to scheduler to walk the tree in sync mode.
-                get_current_scheduler().schedule_async_yield_subtree(
+                get_current_scheduler().schedule_async_continue_work(
                     Arc::downgrade(self) as _,
                     work_context,
                     parent_handle,

@@ -257,7 +257,7 @@ impl<E: FullElement> ElementNode<E> {
                 mut suspended_hooks,
                 waker,
             } => {
-                waker.set_completed();
+                waker.abort();
                 // If it is not poll, then it means a new job occurred on this previously suspended node
                 if !is_poll {
                     apply_hook_updates(&self.context, job_ids, &mut suspended_hooks);
@@ -279,7 +279,7 @@ impl<E: FullElement> ElementNode<E> {
                 suspended_hooks,
                 waker,
             } => {
-                waker.set_completed();
+                waker.abort();
                 self.perform_inflate_node_sync::<false>(
                     new_widget,
                     if !is_poll {

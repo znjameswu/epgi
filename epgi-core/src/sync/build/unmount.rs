@@ -68,7 +68,7 @@ impl<E: FullElement> ElementNode<E> {
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work");
             let children = state.children_cloned();
-            state.waker_ref().map(SuspendWaker::set_completed);
+            state.waker_ref().map(SuspendWaker::abort);
             (children, snapshot.widget.clone(), async_cancel)
         };
 

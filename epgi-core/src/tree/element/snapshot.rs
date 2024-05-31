@@ -3,7 +3,9 @@ use crate::{
     tree::{AsyncInflating, HooksWithTearDowns},
 };
 
-use super::{ArcChildElementNode, AsyncWorkQueue, Element, ImplElementNode, SuspendWaker};
+use super::{
+    ArcChildElementNode, ArcSuspendWaker, AsyncWorkQueue, Element, ImplElementNode, SuspendWaker,
+};
 
 pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
@@ -75,13 +77,13 @@ pub(crate) enum MainlineState<E: Element, H> {
     },
     InflateSuspended {
         suspended_hooks: H,
-        waker: SuspendWaker,
+        waker: ArcSuspendWaker,
     }, // The hooks may be partially initialized
     RebuildSuspended {
         element: E,
         suspended_hooks: H,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        waker: SuspendWaker,
+        waker: ArcSuspendWaker,
     }, // The element is stale. The hook state is valid but may only have partial transparent build effects.
 }
 
@@ -153,7 +155,7 @@ impl<E: Element, H> MainlineState<E, H> {
     //     }
     // }
 
-    pub(crate) fn waker(self) -> Option<SuspendWaker> {
+    pub(crate) fn waker(self) -> Option<ArcSuspendWaker> {
         match self {
             MainlineState::Ready { .. } => None,
             MainlineState::InflateSuspended { waker, .. }

@@ -6,7 +6,7 @@ use crate::{
     foundation::{Asc, Protocol, PtrEq, SyncMpscSender, SyncRwLock},
     sync::{CommitBarrier, LaneScheduler, RenderObjectCommitResult},
     tree::{
-        ArcAnyElementNode, ArcAnyLayerRenderObject, AsyncSuspendWaker, AweakAnyElementNode,
+        ArcAnyElementNode, ArcAnyLayerRenderObject, ArcSuspendWaker, AweakAnyElementNode,
         AweakAnyLayerRenderObject, AweakElementContextNode, LayoutResults, Render, RenderElement,
         RenderObject, Widget, WorkContext, WorkHandle,
     },
@@ -20,8 +20,8 @@ pub(super) enum SchedulerTask {
         frame_id: u64,
         requesters: Vec<SyncMpscSender<FrameResults>>,
     },
-    SuspendReady {
-        waker: std::sync::Arc<AsyncSuspendWaker>,
+    AsyncSuspendReady {
+        waker: ArcSuspendWaker,
     },
     ReorderAsyncWork {
         node: AweakAnyElementNode,
@@ -168,20 +168,13 @@ where
                 } => {
                     let mut build_states = self.build_states.write();
                     build_states.commit_completed_async_batches(&mut self.job_batcher);
-                    let (new_jobs, point_rebuilds) = {
-                        let _guard = handle.global_sync_job_build_lock.write();
-                        handle.job_id_counter.increment_frame();
-                        (
-                            std::mem::take(&mut *handle.accumulated_jobs.lock()),
-                            std::mem::take(&mut *handle.accumulated_point_rebuilds.lock()),
-                        )
-                    };
+                    let (new_jobs, point_rebuilds) = handle.process_new_frame();
                     let updates = self.job_batcher.update_with_new_jobs(new_jobs);
                     build_states.apply_batcher_result(
                         updates,
                         point_rebuilds
                             .into_iter()
-                            .filter(|waker| !waker.completed())
+                            .filter(|waker| !waker.aborted())
                             .map(|waker| PtrEq(waker.node.clone()))
                             .collect(),
                     );
@@ -221,7 +214,11 @@ where
                     paint_started.wait();
                     drop(read_guard);
                 }
-                SuspendReady { waker } => {}
+                AsyncSuspendReady { waker } => {
+                    if !waker.aborted() && !waker.lane_pos().is_sync() {
+                        todo!()
+                    }
+                }
                 ReorderAsyncWork { node } => {
                     let build_states = self.build_states.clone();
                     handle.sync_threadpool.spawn(move || {

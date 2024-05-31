@@ -1,6 +1,6 @@
 use event_listener::EventListener;
 
-use crate::tree::SuspendWaker;
+use crate::tree::ArcSuspendWaker;
 
 pub enum Error {
     Suspended,
@@ -27,5 +27,5 @@ struct TracedError {
 }
 
 pub struct BuildSuspendedError {
-    pub(crate) waker: SuspendWaker,
+    pub(crate) waker: ArcSuspendWaker,
 }

@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    ArcChildElementNode, AsyncSuspendWaker, AweakElementContextNode,
+    ArcChildElementNode, ArcSuspendWaker, AweakElementContextNode,
     ChildRenderObjectsUpdateCallback, ConsumerWorkSpawnToken,
 };
 
@@ -222,7 +222,7 @@ where
     }
 
     pub(crate) fn remove_current(&mut self) -> Option<AsyncQueueCurrentEntry<E>> {
-        (&mut self.inner.as_mut()?.current).take()  // rust-analyzer#14933
+        (&mut self.inner.as_mut()?.current).take() // rust-analyzer#14933
     }
 
     pub(crate) fn remove_current_if(
@@ -306,7 +306,7 @@ pub(crate) enum AsyncOutput<E: ElementBase> {
 pub(crate) struct BuildSuspendResults {
     // widget: E::ArcWidget,
     pub(crate) hooks: HooksWithEffects,
-    pub(crate) waker: AsyncSuspendWaker,
+    pub(crate) waker: ArcSuspendWaker,
 }
 
 impl BuildSuspendResults {

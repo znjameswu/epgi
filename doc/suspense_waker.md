@@ -23,7 +23,7 @@ Therefore, if we allow it, there would definitely be two pollers and we need `fu
 
 If the future just becomes ready to produce a final value when the async batch is about to poll it, it is possible that the async batch commit the completed node ahead of the sync point rebuild begins.
 1. We need to prevent the sync point rebuild from happening. 
-    1. Solution: abort the waker from the previous sync polling (now inside the sync mainline states) during async commit, and deactivate or remove the waker from accumulated waker queue in scheduler.
+    1. Solution: abort the waker from the previous sync polling (now inside the sync mainline states) during async commit. (And the schdeuler needs check the waker status before polling)
 
 
 ### Can we just forbid it? Delay the async batch until the sync batch has resolved the final value?
@@ -35,4 +35,7 @@ Decision: Allow async batch to poll a sync future hook. Abort the waker during a
 ## Waker behavior when committing a suspended async batch
 Suspended async batch sometimes can get committed. Therefore, we have to convert async wakers into sync wakers.
 
-1. Use `futures::Shared`. During commit, just directly clone the future and then poll it with a sync waker and abort the async waker and deactivate or remove the sc.
+1. Use `futures::Shared`. During commit, just directly clone the future and then poll it with a sync waker and abort the async waker. (And the schdeuler needs check the waker status before polling)
+    1. However, this means that during commit, we must iterate through the hooks and find the future to poll it again. This would bake into hook API design (Fatal)
+2. Atomically mutate the waker from async waker into sync waker. The rest is the same
+

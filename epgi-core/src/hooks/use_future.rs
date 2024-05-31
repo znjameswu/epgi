@@ -4,7 +4,7 @@ use futures::FutureExt;
 
 use crate::{
     foundation::{Arc, BuildSuspendedError, DependencyKey},
-    tree::{BuildContext, Effect, Hook, HookState, SuspendWaker},
+    tree::{ArcSuspendWaker, BuildContext, Effect, Hook, HookState, SuspendWaker},
 };
 
 use super::State;
@@ -20,8 +20,8 @@ impl<'a> BuildContext<'a> {
         dependencies: D,
     ) -> Result<&T, BuildSuspendedError> {
         let element_context = Arc::downgrade(self.element_context_ref());
-        let waker = if let Some((lane_pos, batch_id)) = self.async_batch() {
-            SuspendWaker::new_async(element_context, lane_pos, batch_id)
+        let waker = if let Some((lane_pos, _batch_id)) = self.async_batch() {
+            SuspendWaker::new_async(element_context, lane_pos)
         } else {
             SuspendWaker::new_sync(element_context)
         };
@@ -140,7 +140,7 @@ where
     Fut: Future<Output = T> + Unpin + Send + Sync + 'static,
     T: State,
 {
-    fn poll(&mut self, waker: SuspendWaker) -> Result<&T, BuildSuspendedError> {
+    fn poll(&mut self, waker: ArcSuspendWaker) -> Result<&T, BuildSuspendedError> {
         let maybe_done = &mut self.maybe_done;
         match maybe_done {
             MaybeDone::Done(value) => Ok(value),
@@ -154,7 +154,7 @@ where
                         let MaybeDone::Done(value) = maybe_done else {
                             panic!("Impossible to fail")
                         };
-                        waker.set_completed();
+                        waker.abort();
                         Ok(value)
                     }
                     std::task::Poll::Pending => Err(BuildSuspendedError { waker }),

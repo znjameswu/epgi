@@ -15,7 +15,7 @@ use crate::{
     },
     sync::CommitBarrier,
     tree::{
-        AweakAnyElementNode, AweakAnyLayerRenderObject, AweakElementContextNode, SyncSuspendWaker,
+        ArcSuspendWaker, AweakAnyElementNode, AweakAnyLayerRenderObject, AweakElementContextNode,
         WorkContext, WorkHandle,
     },
 };
@@ -53,7 +53,7 @@ pub struct SchedulerHandle {
 
     // mode: LatencyMode,
     pub(super) accumulated_jobs: SyncMutex<Vec<JobBuilder>>,
-    pub(super) accumulated_point_rebuilds: SyncMutex<Vec<std::sync::Arc<SyncSuspendWaker>>>,
+    pub(super) accumulated_wakeups: SyncMutex<Vec<ArcSuspendWaker>>,
     // pub(super) boundaries_needing_relayout: SyncMutex<HashSet<PtrEq<AweakAnyRenderObject>>>,
     pub(super) layer_needing_repaint: SyncMutex<HashSet<PtrEq<AweakAnyLayerRenderObject>>>,
 }
@@ -73,7 +73,7 @@ impl SchedulerHandle {
             job_id_counter: AtomicJobIdCounter::new(),
             // is_executing_sync: (),
             accumulated_jobs: Default::default(),
-            accumulated_point_rebuilds: Default::default(),
+            accumulated_wakeups: Default::default(),
             // boundaries_needing_relayout: Default::default(),
             layer_needing_repaint: Default::default(),
         }
@@ -117,9 +117,17 @@ impl SchedulerHandle {
         }
     }
 
-    pub(crate) fn push_point_rebuild(&self, waker: std::sync::Arc<SyncSuspendWaker>) {
-        self.accumulated_point_rebuilds.lock().push(waker);
-        (self.request_redraw)();
+    pub(crate) fn push_suspend_wake(&self, waker: ArcSuspendWaker) {
+        let mut accumulated_wakeups = self.accumulated_wakeups.lock();
+        if waker.lane_pos().is_sync() {
+            accumulated_wakeups.push(waker);
+            (self.request_redraw)();
+        } else {
+            accumulated_wakeups.push(waker.clone());
+            self.task_rx
+                .other_tasks
+                .push(SchedulerTask::AsyncSuspendReady { waker })
+        }
     }
 
     pub fn request_new_frame(&self) -> SyncMpscReceiver<FrameResults> {
@@ -127,25 +135,25 @@ impl SchedulerHandle {
         {
             self.task_rx.request_frame.lock().requesters.push(tx);
         }
-        self.task_rx.new_scheduler_task.notify(usize::MAX);
+        self.task_rx.new_task_event.notify(usize::MAX);
         return rx;
     }
 
     pub(crate) fn schedule_reorder_async_work(&self, node: AweakAnyElementNode) {
         self.task_rx
-            .other_scheduler_tasks
+            .other_tasks
             .push(SchedulerTask::ReorderAsyncWork { node });
-        self.task_rx.new_scheduler_task.notify(usize::MAX);
+        self.task_rx.new_task_event.notify(usize::MAX);
     }
 
     pub(crate) fn schedule_reorder_provider_reservation(&self, context: AweakElementContextNode) {
         self.task_rx
-            .other_scheduler_tasks
+            .other_tasks
             .push(SchedulerTask::ReorderProviderReservation { context });
-        self.task_rx.new_scheduler_task.notify(usize::MAX);
+        self.task_rx.new_task_event.notify(usize::MAX);
     }
 
-    pub(crate) fn schedule_async_yield_subtree(
+    pub(crate) fn schedule_async_continue_work(
         &self,
         node: AweakAnyElementNode,
         work_context: Asc<WorkContext>,
@@ -153,7 +161,7 @@ impl SchedulerHandle {
         commit_barrier: CommitBarrier,
     ) {
         self.task_rx
-            .other_scheduler_tasks
+            .other_tasks
             .push(SchedulerTask::AsyncContinueWork {
                 node,
                 work_context,
@@ -180,14 +188,60 @@ impl SchedulerHandle {
     // pub fn schedule_idle_callback
 }
 
+impl SchedulerHandle {
+    /// Returns accumulated jobs and point rebuilds
+    pub(super) fn process_new_frame(&self) -> (Vec<JobBuilder>, Vec<ArcSuspendWaker>) {
+        let _guard = self.global_sync_job_build_lock.write();
+        self.job_id_counter.increment_frame();
+        let accumulated_jobs = std::mem::take(&mut *self.accumulated_jobs.lock());
+        let mut point_rebuilds = Vec::new();
+        let mut accumulated_wakeups = self.accumulated_wakeups.lock();
+        // Workaround for extract_if/drain_filter
+        *accumulated_wakeups = std::mem::take(&mut *accumulated_wakeups)
+            .into_iter()
+            .filter_map(|waker| {
+                if waker.aborted() {
+                    return None;
+                }
+                if waker.lane_pos().is_sync() {
+                    point_rebuilds.push(waker);
+                    return None;
+                }
+                Some(waker)
+            })
+            .collect();
+        (accumulated_jobs, point_rebuilds)
+    }
+
+    pub(super) fn get_async_wakeups(&self) -> Vec<ArcSuspendWaker> {
+        let mut async_wakeups = Vec::new();
+        let mut accumulated_wakeups = self.accumulated_wakeups.lock();
+        // Workaround for extract_if/drain_filter
+        *accumulated_wakeups = std::mem::take(&mut *accumulated_wakeups)
+            .into_iter()
+            .filter_map(|waker| {
+                if waker.aborted() {
+                    return None;
+                }
+                if !waker.lane_pos().is_sync() {
+                    async_wakeups.push(waker);
+                    return None;
+                }
+                Some(waker)
+            })
+            .collect();
+        return async_wakeups;
+    }
+}
+
 pub(super) struct SchedulerTaskReceiver {
     // requested_new_frame: AtomicBool,
     // occupy_node_requests: MpscQueue<()>,
     // event: event_listener::Event,
     request_shutdown: AtomicBool,
     request_frame: SyncMutex<RequestFrame>,
-    other_scheduler_tasks: MpscQueue<SchedulerTask>,
-    new_scheduler_task: event_listener::Event,
+    other_tasks: MpscQueue<SchedulerTask>,
+    new_task_event: event_listener::Event,
 }
 
 struct RequestFrame {
@@ -208,8 +262,8 @@ impl SchedulerTaskReceiver {
                 next_frame_id: 0,
                 requesters: Vec::new(),
             }),
-            other_scheduler_tasks: Default::default(),
-            new_scheduler_task: event_listener::Event::new(),
+            other_tasks: Default::default(),
+            new_task_event: event_listener::Event::new(),
         }
     }
     pub(super) fn try_recv(&self) -> Option<SchedulerTask> {
@@ -227,7 +281,7 @@ impl SchedulerTaskReceiver {
                 });
             }
         }
-        if let Some(e) = self.other_scheduler_tasks.pop() {
+        if let Some(e) = self.other_tasks.pop() {
             return Some(e);
         }
         return None;
@@ -237,7 +291,7 @@ impl SchedulerTaskReceiver {
             if let Some(e) = self.try_recv() {
                 return e;
             }
-            let listener = self.new_scheduler_task.listen();
+            let listener = self.new_task_event.listen();
             if let Some(e) = self.try_recv() {
                 return e;
             }

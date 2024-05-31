@@ -441,7 +441,7 @@ where
                         waker,
                         ..
                     } => {
-                        waker.set_completed();
+                        waker.abort();
                         return Self::perform_commit_rebuild_success_async(
                             results,
                             render_object_changes,
@@ -459,7 +459,7 @@ where
                         mut suspended_hooks,
                         waker,
                     } => {
-                        waker.set_completed();
+                        waker.abort();
                         suspended_hooks.merge_with(
                             results.hooks,
                             false,

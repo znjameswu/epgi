@@ -3,7 +3,10 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+use bytemuck::NoUninit;
+
+#[derive(NoUninit, PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[repr(C)]
 pub struct LanePos(u8);
 
 impl LanePos {
