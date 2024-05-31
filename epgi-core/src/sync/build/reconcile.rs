@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     provider::{read_and_update_subscriptions_sync, update_provided_value},
-    CancelAsync, CommitResult, ImplCommitRenderObject,
+    AsyncCancel, CommitResult, ImplCommitRenderObject,
 };
 
 impl<E: FullElement> ElementNode<E> {
@@ -61,8 +61,8 @@ struct SyncReconcile<E: Element> {
     old_widget: E::ArcWidget,
     new_widget: Option<E::ArcWidget>,
     state: MainlineState<E, HooksWithTearDowns>,
-    cancel_async:
-        Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
+    async_cancel:
+        Option<AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
 }
 
 enum PrepareReconcileResult<E: Element> {
@@ -161,8 +161,8 @@ impl<E: FullElement> ElementNode<E> {
 
         let state = (&mut mainline.state).take().expect("Impossible to fail"); // rust-analyzer#14933
                                                                                // Not able to use `Option::map` due to closure lifetime problem.
-        let cancel_async = if let Some(entry) = mainline.async_queue.current_ref() {
-            let cancel = Self::prepare_cancel_async_work(
+        let async_cancel = if let Some(entry) = mainline.async_queue.current_ref() {
+            let cancel = Self::setup_interrupt_async_work(
                 mainline,
                 entry.work_context.lane_pos,
                 lane_scheduler,
@@ -181,7 +181,7 @@ impl<E: FullElement> ElementNode<E> {
                 old_widget: snapshot_reborrow.widget.clone(),
                 new_widget: widget,
                 state,
-                cancel_async,
+                async_cancel,
             });
         }
         let old_widget = if let Some(widget) = &widget {
@@ -194,7 +194,7 @@ impl<E: FullElement> ElementNode<E> {
             old_widget,
             new_widget: widget,
             state,
-            cancel_async,
+            async_cancel,
         });
     }
 
@@ -211,11 +211,11 @@ impl<E: FullElement> ElementNode<E> {
             old_widget,
             new_widget,
             state,
-            cancel_async,
+            async_cancel,
         } = reconcile;
 
-        if let Some(cancel_async) = cancel_async {
-            self.perform_cancel_async_work(cancel_async)
+        if let Some(async_cancel) = async_cancel {
+            self.execute_cancel_async_work(async_cancel, false)
         }
         let new_widget_ref = new_widget.as_ref().unwrap_or(&old_widget);
         let consumed_values = read_and_update_subscriptions_sync(

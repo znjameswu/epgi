@@ -7,7 +7,7 @@ use crate::{
     },
 };
 
-use super::cancel::CancelAsync;
+use super::cancel::AsyncCancel;
 
 pub trait AnyElementNodeReorderAsyncWorkExt {
     fn reorder_async_work(self: Arc<Self>, lane_scheduler: &LaneScheduler);
@@ -21,7 +21,7 @@ impl<E: FullElement> AnyElementNodeReorderAsyncWorkExt for ElementNode<E> {
 
 pub(in super::super) struct ReorderAsync<E: ElementBase> {
     pub(in super::super) cancel:
-        Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
+        Option<AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
     pub(in super::super) start: AsyncReconcile<E>,
 }
 
@@ -81,7 +81,7 @@ impl<E: FullElement> ElementNode<E> {
         if let Some(ref curr) = current {
             let curr_lane_pos = curr.work_context.lane_pos;
             cancel = Some(
-                Self::prepare_cancel_async_work(mainline, curr_lane_pos, lane_scheduler)
+                Self::setup_interrupt_async_work(mainline, curr_lane_pos, lane_scheduler)
                     .ok()
                     .expect("Impossible to fail"),
             );
@@ -114,7 +114,7 @@ impl<E: FullElement> ElementNode<E> {
     pub(in super::super) fn perform_reorder_async_work(self: &Arc<Self>, reorder: ReorderAsync<E>) {
         let ReorderAsync { cancel, start } = reorder;
         if let Some(remove) = cancel {
-            self.perform_cancel_async_work(remove)
+            self.execute_cancel_async_work(remove, false)
         }
         let node = self.clone();
         node.execute_reconcile_node_async_detached(start);

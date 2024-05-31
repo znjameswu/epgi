@@ -1,17 +1,10 @@
 /// Basic concepts:
 ///
-/// 1. Purge: Simple wipe the existence and stop any execution of this lane, disregarding any lane mark consistencies.
-///     1. Destroys lane mark consistency under the subtree.
-///     2. Only suitable for batch retirement or subtree unmount, when the subtree is certainly not going to be revisited by the given batch.
-/// 2. Remove:
-///     1. Down walk: purge everything
-///     2. Up walk: requeue everything remaining
-/// 3. Cancel:
-///     1. For the subtree root, purge and backqueue
-///     2. For children, remove
-///
+/// 1. Backqueue: Means after we remove the current work, we place it inside the backqueue. Otherwise, we just discard it
+/// 2. Requeue: Means after we remove the current work, we check the backqueue to fire the highest priority work. It corresponds to the eager batch dispatch strategy
+/// 3. Interrupt: Cancel with backqueue but not requeue
 use crate::{
-    foundation::{Arc, Asc, Container, ContainerOf},
+    foundation::{Arc, Container, ContainerOf},
     r#async::AsyncReconcile,
     scheduler::{get_current_scheduler, LanePos},
     sync::LaneScheduler,
@@ -19,128 +12,47 @@ use crate::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode,
         ConsumerWorkSpawnToken, Element, ElementBase, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff, WorkContext,
+        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff,
     },
 };
 
 pub trait AnyElementNodeAsyncCancelExt {
-    fn remove_async_work_in_subtree(
-        self: Arc<Self>,
-        lane_pos: LanePos,
-        // modifications: Asc<TreeModifications>,
-    );
-
-    fn remove_async_work_and_lane_in_subtree(
-        self: Arc<Self>,
-        lane_pos: LanePos,
-        // modifications: Asc<TreeModifications>,
-    );
-
-    // fn purge_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos);
+    // Lane purging cannot be done in this function.
+    // This function visit the async version of the tree.
+    // While lane marking and purging should be done on the mainline version of the tree.
+    // The impact of this difference is that by visiting the async version of the tree, we may miss some to-be-unmounted mainline nodes
+    // If we visit *both* the mainline children and the async children, then we are creating an exponential visitt explosion by potentially visit one node twice.
+    // (Though the exponential explosion is avoided by the atomic flag checking)
+    fn remove_async_work(self: Arc<Self>, lane_pos: LanePos, requeue: bool);
 }
 
 impl<E: FullElement> AnyElementNodeAsyncCancelExt for ElementNode<E> {
-    fn remove_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
-        self.remove_async_work_in_subtree_impl::<false>(lane_pos)
+    fn remove_async_work(self: Arc<Self>, lane_pos: LanePos, requeue: bool) {
+        self.remove_async_work_impl(lane_pos, requeue)
     }
-
-    fn remove_async_work_and_lane_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
-        self.remove_async_work_in_subtree_impl::<true>(lane_pos)
-    }
-
-    // fn purge_async_work_in_subtree(self: Arc<Self>, lane_pos: LanePos) {
-    //     Self::purge_async_work_in_subtree(&self, lane_pos)
-    // }
 }
 
-pub(in super::super) struct CancelAsync<I> {
+pub(in crate::sync) struct AsyncCancel<I> {
     pub(super) lane_pos: LanePos,
     pub(super) spawned_consumers: Option<Vec<(AweakElementContextNode, ConsumerWorkSpawnToken)>>,
     pub(super) subscription_diff: SubscriptionDiff,
-    pub(super) new_children: Option<I>,
+    pub(super) async_children: Option<I>,
 }
 
-pub(in super::super) struct RemoveAsync<E: ElementBase> {
+struct AsyncCancelAndRestart<E: ElementBase> {
     cancel: Result<
-        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     >,
     start: Option<AsyncReconcile<E>>,
 }
 
 impl<E: FullElement> ElementNode<E> {
-    // // This functions serves as an example function on how to invoke the kit
-    // pub(super) fn cancel_async_work(
-    //     self: &Arc<Self>,
-    //     lane_pos: LanePos,
-    //     lane_scheduler: &BuildScheduler,
-    // ) {
-    //     let remove_result = {
-    //         let mut snapshot = self.snapshot.lock();
-    //         let snapshot_reborrow = &mut *snapshot;
-    //         let mainline = snapshot
-    //             .inner
-    //             .mainline_mut()
-    //             .expect("Cancel can only be called on mainline nodes");
-    //         Self::prepare_cancel_async_work(mainline, lane_pos, lane_scheduler)
-    //     };
-
-    //     match remove_result {
-    //         Ok(remove) => self.perform_cancel_async_work(remove),
-    //         Err(Some(children)) => children
-    //             .par_for_each(&get_current_scheduler().threadpool, |child| {
-    //                 child.remove_async_work_in_subtree(lane_pos)
-    //             }),
-    //         Err(None) => {}
-    //     }
-    // }
-
-    pub(in super::super) fn prepare_cancel_async_work(
-        mainline: &mut Mainline<E>,
+    pub fn remove_async_work_impl(
+        self: Arc<Self>,
         lane_pos: LanePos,
-        lane_scheduler: &LaneScheduler,
-    ) -> Result<
-        CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-    > {
-        let (cancel, widget, work_context) =
-            Self::prepare_purge_async_work_mainline(mainline, lane_pos)?;
-        mainline.async_queue.push_backqueue(
-            widget,
-            work_context,
-            lane_scheduler
-                .get_commit_barrier_for(lane_pos)
-                .expect("CommitBarrier should exist"),
-        );
-        Ok(cancel)
-    }
-
-    pub(in super::super) fn perform_cancel_async_work(
-        self: &Arc<Self>,
-        cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-    ) {
-        let CancelAsync {
-            lane_pos,
-            spawned_consumers,
-            subscription_diff,
-            new_children,
-        } = cancel;
-
-        if let Some(new_children) = new_children {
-            new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                child.remove_async_work_in_subtree(lane_pos)
-            })
-        }
-
-        self.perform_purge_async_work_local(spawned_consumers, subscription_diff, lane_pos);
-        // Do not requeue anything here
-    }
-}
-
-impl<E: FullElement> ElementNode<E> {
-    pub fn remove_async_work_in_subtree_impl<const PURGE_LANE: bool>(
-        self: &Arc<Self>,
-        lane_pos: LanePos,
+        requeue: bool,
+        // purge_lane_mark: bool,
     ) {
         let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
         let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
@@ -152,131 +64,96 @@ impl<E: FullElement> ElementNode<E> {
         let remove = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
-            self.prepare_remove_async_work(snapshot_reborrow, lane_pos)
+            self.setup_cancel_async_work(snapshot_reborrow, lane_pos, requeue)
         };
 
-        let RemoveAsync { cancel, start } = remove;
+        let AsyncCancelAndRestart { cancel, start } = remove;
 
         match cancel {
             Ok(cancel) => {
-                let CancelAsync {
+                let AsyncCancel {
                     lane_pos,
                     spawned_consumers,
                     subscription_diff,
-                    new_children,
+                    async_children,
                 } = cancel;
 
-                if let Some(new_children) = new_children {
+                if let Some(new_children) = async_children {
                     new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                        if PURGE_LANE {
-                            child.remove_async_work_and_lane_in_subtree(lane_pos)
-                        } else {
-                            child.remove_async_work_in_subtree(lane_pos)
-                        }
+                        child.remove_async_work(lane_pos, requeue)
                     })
                 }
 
                 // Reverse-order
-                self.perform_purge_async_work_local(spawned_consumers, subscription_diff, lane_pos);
+                self.execute_cancel_async_work_local(
+                    spawned_consumers,
+                    subscription_diff,
+                    lane_pos,
+                );
             }
-            Err(Some(children)) => {
-                children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                    if PURGE_LANE {
-                        child.remove_async_work_and_lane_in_subtree(lane_pos)
-                    } else {
-                        child.remove_async_work_in_subtree(lane_pos)
-                    }
-                })
-            }
+            Err(Some(children)) => children
+                .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+                    child.remove_async_work(lane_pos, requeue)
+                }),
             Err(None) => {}
         }
 
+        // if purge_lane_mark {
+        //     self.context.purge_lane(lane_pos);
+        // }
+
         if let Some(start) = start {
-            let node = self.clone();
-            node.execute_reconcile_node_async_detached(start);
-        }
-        if PURGE_LANE {
-            self.context.purge_lane(lane_pos);
+            self.execute_reconcile_node_async_detached(start);
         }
     }
 
-    fn prepare_remove_async_work(
+    fn setup_cancel_async_work(
         self: &Arc<Self>,
         snapshot: &mut ElementSnapshot<E>,
         lane_pos: LanePos,
-    ) -> RemoveAsync<E> {
+        requeue: bool,
+    ) -> AsyncCancelAndRestart<E> {
         match &mut snapshot.inner {
             ElementSnapshotInner::AsyncInflating(async_inflating) => {
                 let cancel =
-                    Self::prepare_purge_async_work_async_inflating(async_inflating, lane_pos);
-                RemoveAsync {
+                    Self::setup_cancel_async_work_async_inflating(async_inflating, lane_pos);
+                AsyncCancelAndRestart {
                     cancel: Ok(cancel),
                     start: None,
                 }
             }
             ElementSnapshotInner::Mainline(mainline) => {
-                let cancel = Self::prepare_purge_async_work_mainline(mainline, lane_pos)
-                    .map(|(cancel, _, _)| cancel);
-                let rebuild = self.prepare_execute_backqueue(
-                    mainline,
-                    &snapshot.widget,
-                    &snapshot.element_lock_held,
-                );
-                RemoveAsync {
-                    cancel,
-                    start: rebuild,
-                }
+                let cancel = Self::setup_cancel_async_work_mainline(mainline, lane_pos, None);
+
+                let start = if requeue {
+                    self.prepare_execute_backqueue(
+                        mainline,
+                        &snapshot.widget,
+                        &snapshot.element_lock_held,
+                    )
+                } else {
+                    None
+                };
+                AsyncCancelAndRestart { cancel, start }
             }
         }
     }
-}
 
-impl<E: FullElement> ElementNode<E> {
-    // fn purge_async_work_in_subtree(self: &Arc<Self>, lane_pos: LanePos) {
-    //     let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
-    //     let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
-    //     let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
+    pub(in crate::sync) fn setup_interrupt_async_work(
+        mainline: &mut Mainline<E>,
+        lane_pos: LanePos,
+        lane_scheduler: &LaneScheduler,
+    ) -> Result<
+        AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+    > {
+        Self::setup_cancel_async_work_mainline(mainline, lane_pos, Some(lane_scheduler))
+    }
 
-    //     if no_mailbox_update && no_consumer_root && no_descendant_lanes {
-    //         return;
-    //     }
-
-    //     let purge = {
-    //         let mut snapshot = self.snapshot.lock();
-    //         Self::prepare_purge_async_work(&mut *snapshot, lane_pos)
-    //     };
-
-    //     match purge {
-    //         Ok(remove) => self.perform_purge_async_work(remove),
-    //         Err(Some(children)) => children
-    //             .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-    //                 child.purge_async_work_in_subtree(lane_pos)
-    //             }),
-    //         Err(None) => {}
-    //     }
-    // }
-
-    // pub(super) fn prepare_purge_async_work(
-    //     snapshot: &mut ElementSnapshot<E>,
-    //     lane_pos: LanePos,
-    // ) -> Result<
-    //     CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-    //     Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-    // > {
-    //     match &mut snapshot.inner {
-    //         ElementSnapshotInner::AsyncInflating(async_inflating) => {
-    //             Self::prepare_purge_async_work_async_inflating(async_inflating, lane_pos)
-    //         }
-    //         ElementSnapshotInner::Mainline(mainline) => {
-    //             Self::prepare_purge_async_work_mainline(mainline, lane_pos)
-    //         }
-    //     }
-    // }
-
-    pub(in super::super) fn prepare_purge_async_work_async_inflating(
+    pub(in crate::sync) fn setup_cancel_async_work_async_inflating(
         async_inflating: &mut AsyncInflating<E>,
         lane_pos: LanePos,
-    ) -> CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>> {
+    ) -> AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>> {
         let AsyncInflating {
             work_context,
             stash:
@@ -297,26 +174,23 @@ impl<E: FullElement> ElementNode<E> {
         // Replace with an invalid empty value
         let output = std::mem::replace(output, AsyncOutput::Gone);
         use AsyncOutput::*;
-        CancelAsync {
+        AsyncCancel {
             lane_pos,
             spawned_consumers: None,
             subscription_diff,
-            new_children: match output {
+            async_children: match output {
                 Completed(results) => Some(results.children),
                 _ => None,
             },
         }
     }
 
-    fn prepare_purge_async_work_mainline(
+    fn setup_cancel_async_work_mainline(
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
+        backqueue_with_lane_scehduler: Option<&LaneScheduler>,
     ) -> Result<
-        (
-            CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-            Option<E::ArcWidget>,
-            Asc<WorkContext>,
-        ),
+        AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
         let Mainline { state, async_queue } = mainline;
@@ -335,29 +209,58 @@ impl<E: FullElement> ElementNode<E> {
                 work_context,
             }) => {
                 handle.abort();
-                Ok((
-                    CancelAsync {
-                        lane_pos,
-                        spawned_consumers,
-                        subscription_diff,
-                        new_children: match output {
-                            Completed(results) => Some(results.children),
-                            _ => None,
-                        },
+                if let Some(lane_scheduler) = backqueue_with_lane_scehduler {
+                    async_queue.push_backqueue(
+                        widget,
+                        work_context,
+                        lane_scheduler
+                            .get_commit_barrier_for(lane_pos)
+                            .expect("CommitBarrier should exist"),
+                    );
+                }
+                Ok(AsyncCancel {
+                    lane_pos,
+                    spawned_consumers,
+                    subscription_diff,
+                    async_children: match output {
+                        Completed(results) => Some(results.children),
+                        _ => None,
                     },
-                    widget,
-                    work_context,
-                ))
+                })
             }
-            FoundBackqueue(_) => Err(state
+            NotFound => Err(state
                 .as_ref()
                 .expect("A mainline tree walk should not encounter another sync work.")
                 .children_cloned()),
-            NotFound => Err(None),
+            // Should we return None or the mainline children?
+            // If we can guarantee no active work under a backqueued work, then we can return None
+            FoundBackqueue(_) => Err(None),
         }
     }
 
-    fn perform_purge_async_work_local(
+    pub(in crate::sync) fn execute_cancel_async_work(
+        self: &Arc<Self>,
+        cancel: AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        requeue: bool,
+    ) {
+        let AsyncCancel {
+            lane_pos,
+            spawned_consumers,
+            subscription_diff,
+            async_children,
+        } = cancel;
+
+        if let Some(async_children) = async_children {
+            async_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+                child.remove_async_work(lane_pos, requeue)
+            })
+        }
+
+        self.execute_cancel_async_work_local(spawned_consumers, subscription_diff, lane_pos);
+        // Do not requeue anything here
+    }
+
+    fn execute_cancel_async_work_local(
         self: &Arc<Self>,
         spawned_consumers: Option<Vec<(AweakElementContextNode, ConsumerWorkSpawnToken)>>,
         subscription_diff: SubscriptionDiff,
@@ -387,33 +290,12 @@ impl<E: FullElement> ElementNode<E> {
             reserved.unreserve_read(&(Arc::downgrade(self) as _), lane_pos)
         }
     }
-
-    // pub(in super::super) fn perform_purge_async_work(
-    //     self: &Arc<Self>,
-    //     cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-    // ) {
-    //     let CancelAsync {
-    //         lane_pos,
-    //         spawned_consumers,
-    //         subscription_diff,
-    //         new_children,
-    //     } = cancel;
-
-    //     if let Some(new_children) = new_children {
-    //         new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-    //             child.purge_async_work_in_subtree(lane_pos)
-    //         })
-    //     }
-
-    //     // Reverse-order
-    //     self.perform_purge_async_work_local(spawned_consumers, subscription_diff, lane_pos);
-    // }
 }
 
 impl<E: FullElement> ElementNode<E> {
     pub(in super::super) fn setup_unmount_async_work_mainline(
         mainline: &mut Mainline<E>,
-    ) -> Option<CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
+    ) -> Option<AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>
     {
         // We must take out the entire async queue during unmount, to make sure the commit barrier in backqueue is actually dropped
         // We cannot rely on the ref-counting `Drop::drop` behavior since there can be easily a leak.
@@ -436,11 +318,11 @@ impl<E: FullElement> ElementNode<E> {
                 },
         } = current;
         handle.abort();
-        Some(CancelAsync {
+        Some(AsyncCancel {
             lane_pos: work_context.lane_pos,
             spawned_consumers,
             subscription_diff,
-            new_children: match output {
+            async_children: match output {
                 AsyncOutput::Completed(results) => Some(results.children),
                 _ => None,
             },
@@ -450,15 +332,15 @@ impl<E: FullElement> ElementNode<E> {
     #[inline]
     pub(in super::super) fn execute_unmount_async_work<'batch>(
         self: &Arc<Self>,
-        cancel: CancelAsync<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+        cancel: AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         scope: &rayon::Scope<'batch>,
         single_child_optimization: bool,
     ) {
-        let CancelAsync {
+        let AsyncCancel {
             lane_pos,
             spawned_consumers,
             subscription_diff,
-            new_children,
+            async_children,
         } = cancel;
 
         // Because we are going to unmount, there is no point to maintain consumer root lane marking consistency
@@ -489,13 +371,13 @@ impl<E: FullElement> ElementNode<E> {
             reserved.unreserve_read(&(Arc::downgrade(self) as _), lane_pos)
         }
 
-        if let Some(new_children) = new_children {
+        if let Some(async_children) = async_children {
             if single_child_optimization {
-                new_children
+                async_children
                     .into_iter()
                     .for_each(|child| scope.spawn(|scope| child.unmount_if_async_inflating(scope)));
             } else {
-                let mut it = new_children.into_iter();
+                let mut it = async_children.into_iter();
                 // Single child optimization
                 if it.len() == 1 {
                     let child = it.next().unwrap();

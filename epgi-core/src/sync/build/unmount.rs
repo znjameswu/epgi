@@ -43,7 +43,7 @@ impl<E: FullElement> ElementNode<E> {
         if unmounted {
             return;
         }
-        let (children, widget, cancel_async) = {
+        let (children, widget, async_cancel) = {
             // How do we ensure no one else will occupy/lane-mark this node after we unmount it?
             // 1. Ways of async batch to occupy this node
             //      1. Async reconciling down from the parent, which is occupied by the caller of this method
@@ -59,7 +59,7 @@ impl<E: FullElement> ElementNode<E> {
                 .inner
                 .mainline_mut()
                 .expect("Unmount should only be called on mainline nodes");
-            let cancel_async = Self::setup_unmount_async_work_mainline(mainline);
+            let async_cancel = Self::setup_unmount_async_work_mainline(mainline);
             // Drop backqueue.
             mainline.async_queue.backqueue_mut().map(Vec::clear);
             // Read mainline children and drop suspended work.
@@ -69,11 +69,11 @@ impl<E: FullElement> ElementNode<E> {
                 .expect("A mainline tree walk should not encounter another sync work");
             let children = state.children_cloned();
             state.waker_ref().map(SuspendWaker::set_completed);
-            (children, snapshot.widget.clone(), cancel_async)
+            (children, snapshot.widget.clone(), async_cancel)
         };
 
-        if let Some(cancel_async) = cancel_async {
-            self.execute_unmount_async_work(cancel_async, scope, false)
+        if let Some(async_cancel) = async_cancel {
+            self.execute_unmount_async_work(async_cancel, scope, false)
         }
 
         // These side effect reversal does not need the node lock held
@@ -116,7 +116,7 @@ impl<E: FullElement> ElementNode<E> {
         if unmounted {
             return;
         }
-        let cancel_async = {
+        let async_cancel = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
 
@@ -125,11 +125,11 @@ impl<E: FullElement> ElementNode<E> {
                 .async_inflating_mut()
                 .expect("Unmount async inflating should only be called on async inflating nodes");
 
-            Self::prepare_purge_async_work_async_inflating(
+            Self::setup_cancel_async_work_async_inflating(
                 async_inflating,
                 async_inflating.work_context.lane_pos,
             )
         };
-        self.execute_unmount_async_work(cancel_async, scope, true)
+        self.execute_unmount_async_work(async_cancel, scope, true)
     }
 }
