@@ -1,4 +1,4 @@
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 
 use crate::{
     debug::debug_assert_sync_phase,
@@ -70,7 +70,7 @@ enum AsyncProviderReservation {
 }
 
 struct ReservedReadingBatch {
-    id: BatchId,
+    // id: BatchId,
     priority: JobPriority,
     nodes: HashSet<PtrEq<AweakAnyElementNode>>,
 }
@@ -78,7 +78,7 @@ struct ReservedReadingBatch {
 impl ReservedReadingBatch {
     fn new_empty(batch_conf: &BatchConf) -> Self {
         Self {
-            id: batch_conf.id,
+            // id: batch_conf.id,
             priority: batch_conf.priority,
             nodes: Default::default(),
         }
@@ -258,31 +258,36 @@ impl ElementContextNode {
             .as_ref()
             .expect("The provider to be reserved should exist on the context node");
         let mut inner = provider.inner.lock();
-        // let mainline_readers = inner
-        //     .consumers
-        //     .iter()
-        //     .map(|ptr_eq| ptr_eq.0.clone())
-        //     .collect();
         use AsyncProviderReservation::*;
-        let ReservedForWrite {
-            writer,
-            backqueue_readers,
-        } = &mut inner.reservation
-        else {
-            panic!("The async writer to be unreserved must exist")
-        };
-        assert_eq!(
-            writer.lane_pos, lane_pos,
-            "The async writer to be unreserved must exist"
-        );
-        inner.reservation = ReservedForRead {
-            readers: std::mem::take(backqueue_readers)
-                .into_iter()
-                .map(|(lane_pos, (set, _))| (lane_pos, set))
-                .collect(),
-            backqueue_writer: None,
-        };
-        // return mainline_readers;
+        match &mut inner.reservation {
+            ReservedForRead {
+                backqueue_writer, ..
+            } => {
+                let (writer, _barrier) = backqueue_writer
+                    .take()
+                    .expect("The async writer to be unreserved must exist");
+                assert_eq!(
+                    writer.lane_pos, lane_pos,
+                    "The async writer to be unreserved must exist"
+                );
+            }
+            ReservedForWrite {
+                writer,
+                backqueue_readers,
+            } => {
+                assert_eq!(
+                    writer.lane_pos, lane_pos,
+                    "The async writer to be unreserved must exist"
+                );
+                inner.reservation = ReservedForRead {
+                    readers: std::mem::take(backqueue_readers)
+                        .into_iter()
+                        .map(|(lane_pos, (set, _))| (lane_pos, set))
+                        .collect(),
+                    backqueue_writer: None,
+                };
+            }
+        }
     }
 
     pub(crate) fn reorder_reservation(&self, lane_scheduler: &LaneScheduler) {
@@ -411,18 +416,6 @@ impl ProviderObject {
         }
     }
 
-    fn remove_reservation(
-        &self,
-        subscriber: &AweakAnyElementNode,
-        lane_pos: LanePos,
-        should_enter_write: impl FnOnce(
-            &HashMap<LanePos, HashSet<PtrEq<AweakAnyElementNode>>>,
-            &(LanePos, Arc<dyn Provide>, CommitBarrier),
-        ),
-    ) {
-        todo!()
-    }
-
     #[must_use]
     pub(crate) fn unregister_read(&self, subscriber: &AweakElementContextNode) -> Option<LanePos> {
         debug_assert_sync_phase();
@@ -451,7 +444,7 @@ impl ProviderObject {
         use AsyncProviderReservation::*;
         let ReservedForRead {
             readers,
-            backqueue_writer,
+            backqueue_writer: None,
         } = &inner.reservation
         else {
             panic!("There should be no async writer when reserving a sync writer")
@@ -488,7 +481,10 @@ impl ProviderObject {
             },
         )
         else {
-            panic!("There should be a reserved write when committing an async write");
+            panic!(
+                "The provider object should be reserved for write when committing an async write,
+                otherwise there would be a commit barrier preventing this commit"
+            );
         };
         debug_assert_eq!(
             writer.lane_pos, lane_pos,
