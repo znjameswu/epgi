@@ -38,7 +38,7 @@ impl<E: FullElement> ElementNode<E> {
                 .ok()
                 .expect("Lane to be canceled must exist");
             let rebuild = self
-                .prepare_execute_backqueue(
+                .setup_execute_backqueue(
                     mainline,
                     &snapshot_reborrow.widget,
                     &snapshot_reborrow.element_lock_held,
@@ -51,6 +51,6 @@ impl<E: FullElement> ElementNode<E> {
             }
         };
 
-        self.perform_reorder_async_work(reorder);
+        self.execute_reorder_async_work(reorder);
     }
 }

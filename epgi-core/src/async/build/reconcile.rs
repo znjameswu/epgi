@@ -22,11 +22,11 @@ impl<E: FullElement> ElementNode<E> {
         parent_handle: WorkHandle,
         barrier: CommitBarrier,
     ) -> Result<(), Aborted> {
-        let prepare_result =
-            self.prepare_reconcile_async(widget, work_context, parent_handle, barrier)?;
+        let setup_result =
+            self.setup_reconcile_async(widget, work_context, parent_handle, barrier)?;
 
-        use PrepareAsyncReconcileResult::*;
-        match prepare_result {
+        use SetupAsyncReconcileResult::*;
+        match setup_result {
             Reconcile(Ok(reconcile)) => Self::execute_reconcile_async(&self, reconcile),
             SkipAndVisit {
                 barrier,
@@ -71,7 +71,7 @@ pub(crate) struct AsyncReconcile<E: ElementBase> {
     )>,
 }
 
-enum PrepareAsyncReconcileResult<E: ElementBase> {
+enum SetupAsyncReconcileResult<E: ElementBase> {
     Reconcile(Result<AsyncReconcile<E>, OccupyError>),
     SkipAndVisit {
         barrier: CommitBarrier,
@@ -88,14 +88,14 @@ pub enum OccupyError {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    fn prepare_reconcile_async(
+    fn setup_reconcile_async(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         work_context: Asc<WorkContext>,
         parent_handle: WorkHandle,
         barrier: CommitBarrier,
-    ) -> Result<PrepareAsyncReconcileResult<E>, Aborted> {
-        use PrepareAsyncReconcileResult::*;
+    ) -> Result<SetupAsyncReconcileResult<E>, Aborted> {
+        use SetupAsyncReconcileResult::*;
         let no_new_widget = widget.is_none();
         let no_mailbox_update = !self.context.mailbox_lanes().contains(work_context.lane_pos);
         let no_consumer_root = !self
@@ -149,7 +149,7 @@ impl<E: FullElement> ElementNode<E> {
             });
         }
 
-        Ok(Reconcile(self.prepare_occupy_async(
+        Ok(Reconcile(self.setup_occupy_async(
             mainline,
             &snapshot_reborrow.widget,
             widget,
@@ -160,7 +160,7 @@ impl<E: FullElement> ElementNode<E> {
     }
 
     /// A piece of logic that is shared by async build and reorder.
-    pub(crate) fn prepare_occupy_async(
+    pub(crate) fn setup_occupy_async(
         self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,

@@ -34,7 +34,7 @@ impl<E: FullElement> ElementNode<E> {
                 .inner
                 .mainline_mut()
                 .expect("reorder_async_work should only be performed on mainline nodes");
-            self.prepare_reorder_async_work(
+            self.setup_reorder_async_work(
                 mainline,
                 &snapshot_reborrow.widget,
                 lane_scheduler,
@@ -43,11 +43,11 @@ impl<E: FullElement> ElementNode<E> {
         };
 
         if let Some(reorder) = try_reorder_result {
-            self.perform_reorder_async_work(reorder)
+            self.execute_reorder_async_work(reorder)
         }
     }
 
-    pub(in super::super) fn prepare_reorder_async_work(
+    pub(in super::super) fn setup_reorder_async_work(
         self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
@@ -95,7 +95,7 @@ impl<E: FullElement> ElementNode<E> {
         // But since the widget has changed since then, it means another committed work must have an explicit new widget and changed it during commit.
         // Then backqueue_candidate would have already conflict with that hypothetical work in the parent node, and must have already been cancelled.
         // Conflict! Therefore it can't return Skip now.
-        let Ok(reconcile) = self.prepare_occupy_async(
+        let Ok(reconcile) = self.setup_occupy_async(
             mainline,
             old_widget,
             backqueue_candidate.widget,
@@ -111,7 +111,7 @@ impl<E: FullElement> ElementNode<E> {
         });
     }
 
-    pub(in super::super) fn perform_reorder_async_work(self: &Arc<Self>, reorder: ReorderAsync<E>) {
+    pub(in super::super) fn execute_reorder_async_work(self: &Arc<Self>, reorder: ReorderAsync<E>) {
         let ReorderAsync { cancel, start } = reorder;
         if let Some(remove) = cancel {
             self.execute_cancel_async_work(remove, false)
@@ -120,7 +120,7 @@ impl<E: FullElement> ElementNode<E> {
         node.execute_reconcile_node_async_detached(start);
     }
 
-    pub(in super::super) fn prepare_execute_backqueue(
+    pub(in super::super) fn setup_execute_backqueue(
         self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
@@ -153,7 +153,7 @@ impl<E: FullElement> ElementNode<E> {
         // But since the widget has changed since then, it means another committed work must have an explicit new widget and changed it during commit.
         // Then backqueue_candidate would have already conflict with that hypothetical work in the parent node, and must have already been cancelled.
         // Conflict! Therefore it can't return Skip now.
-        let Ok(reconcile) = self.prepare_occupy_async(
+        let Ok(reconcile) = self.setup_occupy_async(
             mainline,
             old_widget,
             backqueue_candidate.widget,

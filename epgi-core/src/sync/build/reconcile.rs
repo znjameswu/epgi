@@ -21,9 +21,9 @@ impl<E: FullElement> ElementNode<E> {
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     ) -> CommitResult<E::ParentProtocol> {
-        let prepare_result = self.prepare_reconcile(widget, lane_scheduler);
-        use PrepareReconcileResult::*;
-        let change = match prepare_result {
+        let setup_result = self.setup_reconcile(widget, lane_scheduler);
+        use SetupReconcileResult::*;
+        let change = match setup_result {
             SkipAndVisitChildren {
                 children,
                 render_object,
@@ -65,7 +65,7 @@ struct SyncReconcile<E: Element> {
         Option<AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
 }
 
-enum PrepareReconcileResult<E: Element> {
+enum SetupReconcileResult<E: Element> {
     Reconcile(SyncReconcile<E>),
     /// Visit is needed when the node itself does not need reconcile, but
     /// lane marking has indicated that one of its descendants needs needs reconcile.
@@ -89,11 +89,11 @@ enum PrepareReconcileResult<E: Element> {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    fn prepare_reconcile(
+    fn setup_reconcile(
         self: &Arc<Self>,
         widget: Option<E::ArcWidget>,
         lane_scheduler: &LaneScheduler,
-    ) -> PrepareReconcileResult<E> {
+    ) -> SetupReconcileResult<E> {
         // An oppurtunistic probe to allow bypass lock.
         let no_new_widget = widget.is_none();
         let no_mailbox_update = !self.context.mailbox_lanes().contains(LanePos::SYNC);
@@ -104,7 +104,7 @@ impl<E: FullElement> ElementNode<E> {
         if no_new_widget && no_mailbox_update && no_consumer_root && no_poll && no_descendant_lanes
         {
             // Subtree has no work, end of visit
-            return PrepareReconcileResult::SkipAndReturn;
+            return SetupReconcileResult::SkipAndReturn;
         }
 
         let mut snapshot = self.snapshot.lock();
@@ -127,7 +127,7 @@ impl<E: FullElement> ElementNode<E> {
         if no_widget_update && no_mailbox_update && no_consumer_root && no_poll {
             if no_descendant_lanes {
                 // Subtree has no work, end of visit
-                return PrepareReconcileResult::SkipAndReturn;
+                return SetupReconcileResult::SkipAndReturn;
             }
             use MainlineState::*;
             return match state {
@@ -135,12 +135,12 @@ impl<E: FullElement> ElementNode<E> {
                     children,
                     render_object,
                     ..
-                } => PrepareReconcileResult::SkipAndVisitChildren::<E> {
+                } => SetupReconcileResult::SkipAndVisitChildren::<E> {
                     children: children.map_ref_collect(Clone::clone),
                     render_object: render_object.clone(),
                     self_rebuild_suspended: false,
                 },
-                RebuildSuspended { children, .. } => PrepareReconcileResult::SkipAndVisitChildren {
+                RebuildSuspended { children, .. } => SetupReconcileResult::SkipAndVisitChildren {
                     children: children.map_ref_collect(Clone::clone),
                     render_object: Default::default(),
                     self_rebuild_suspended: true,
@@ -154,7 +154,7 @@ impl<E: FullElement> ElementNode<E> {
                         2. Subtree has work. \
                         3. Self suspended during the last inflate attempt."
                     );
-                    PrepareReconcileResult::SkipAndReturn
+                    SetupReconcileResult::SkipAndReturn
                 }
             };
         }
@@ -176,7 +176,7 @@ impl<E: FullElement> ElementNode<E> {
 
         // Cannot skip work but can skip rebuild, meaning there is a polling work here.
         if no_widget_update && no_mailbox_update {
-            return PrepareReconcileResult::Reconcile(SyncReconcile {
+            return SetupReconcileResult::Reconcile(SyncReconcile {
                 is_poll: true,
                 old_widget: snapshot_reborrow.widget.clone(),
                 new_widget: widget,
@@ -189,7 +189,7 @@ impl<E: FullElement> ElementNode<E> {
         } else {
             snapshot_reborrow.widget.clone()
         };
-        return PrepareReconcileResult::Reconcile(SyncReconcile {
+        return SetupReconcileResult::Reconcile(SyncReconcile {
             is_poll: false,
             old_widget,
             new_widget: widget,

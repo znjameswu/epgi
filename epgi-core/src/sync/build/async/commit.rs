@@ -63,9 +63,9 @@ where
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        let prepare_result = self.prepare_visit_and_commit_async(finished_lanes);
-        use PrepareCommitAsyncResult::*;
-        match prepare_result {
+        let setup_result = self.setup_visit_and_commit_async(finished_lanes);
+        use SetupCommitAsyncResult::*;
+        match setup_result {
             VisitChildrenAnd { children, next } => {
                 let render_object_changes = children
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
@@ -97,7 +97,7 @@ where
     }
 }
 
-enum PrepareCommitAsyncResult<E: Element> {
+enum SetupCommitAsyncResult<E: Element> {
     VisitChildrenAnd {
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         next: NextAction<E>,
@@ -119,11 +119,11 @@ impl<E> ElementNode<E>
 where
     E: FullElement,
 {
-    fn prepare_visit_and_commit_async(
+    fn setup_visit_and_commit_async(
         &self,
         finished_lanes: LaneMask,
-    ) -> PrepareCommitAsyncResult<E> {
-        use PrepareCommitAsyncResult::*;
+    ) -> SetupCommitAsyncResult<E> {
+        use SetupCommitAsyncResult::*;
         let mut snapshot = self.snapshot.lock();
         // https://bevy-cheatbook.github.io/pitfalls/split-borrows.html
         let snapshot_reborrow = &mut *snapshot;

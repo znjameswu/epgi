@@ -126,7 +126,7 @@ impl<E: FullElement> ElementNode<E> {
                 let cancel = Self::setup_cancel_async_work_mainline(mainline, lane_pos, None);
 
                 let start = if requeue {
-                    self.prepare_execute_backqueue(
+                    self.setup_execute_backqueue(
                         mainline,
                         &snapshot.widget,
                         &snapshot.element_lock_held,
