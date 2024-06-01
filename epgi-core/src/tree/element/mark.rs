@@ -186,16 +186,14 @@ impl ElementContextNode {
     // }
 
     pub(crate) fn purge_lane(&self, lane_pos: LanePos) {
-        self.mark
-            .mailbox_lanes
-            .fetch_remove_single(lane_pos, Relaxed);
-        self.mark
-            .consumer_lanes
-            .fetch_remove_single(lane_pos, Relaxed);
-        self.mark
-            .descendant_lanes
-            .fetch_remove_single(lane_pos, Relaxed);
-        if lane_pos.is_sync() {
+        self.purge_lanes(LaneMask::new_single(lane_pos))
+    }
+
+    pub(crate) fn purge_lanes(&self, lane_mask: LaneMask) {
+        self.mark.mailbox_lanes.fetch_remove(lane_mask, Relaxed);
+        self.mark.consumer_lanes.fetch_remove(lane_mask, Relaxed);
+        self.mark.descendant_lanes.fetch_remove(lane_mask, Relaxed);
+        if lane_mask.contains(LanePos::SYNC) {
             self.mark.needs_poll.store(false, Relaxed)
         }
     }

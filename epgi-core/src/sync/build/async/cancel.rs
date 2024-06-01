@@ -6,7 +6,7 @@
 use crate::{
     foundation::{Arc, Container, ContainerOf},
     r#async::AsyncReconcile,
-    scheduler::{get_current_scheduler, LanePos},
+    scheduler::{get_current_scheduler, LaneMask, LanePos},
     sync::LaneScheduler,
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
@@ -101,6 +101,16 @@ impl<E: FullElement> ElementNode<E> {
         // if purge_lane_mark {
         //     self.context.purge_lane(lane_pos);
         // }
+        debug_assert!(
+            self.context.provider_object.is_none()
+                || self
+                    .context
+                    .provider_object
+                    .as_ref()
+                    .is_some_and(|provider| !provider
+                        .contains_reservation_from_lanes(LaneMask::new_single(lane_pos))),
+            "The cancel left residues inside this provider object"
+        );
 
         if let Some(start) = start {
             self.execute_reconcile_node_async_detached(start);

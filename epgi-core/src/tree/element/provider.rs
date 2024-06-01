@@ -6,7 +6,7 @@ use crate::{
         Arc, BoolExpectExt, MapEntryExtenision, MapOccupiedEntryExtension, Provide, PtrEq,
         PtrEqExt, SmallMap, SyncMutex, SyncRwLock, TypeKey,
     },
-    scheduler::{get_current_scheduler, BatchConf, BatchId, JobPriority, LanePos},
+    scheduler::{get_current_scheduler, BatchConf, BatchId, JobPriority, LaneMask, LanePos},
     sync::{CommitBarrier, LaneScheduler},
 };
 
@@ -55,6 +55,41 @@ impl ProviderObject {
     }
     pub(crate) fn get_value(&self) -> Arc<dyn Provide> {
         self.value.read().clone()
+    }
+    pub(crate) fn contains_reservation_from_lanes(&self, lane_mask: LaneMask) -> bool {
+        use AsyncProviderReservation::*;
+        match &self.inner.lock().reservation {
+            ReservedForRead {
+                readers,
+                backqueue_writer,
+            } => {
+                if readers.keys().any(|&lane_pos| lane_mask.contains(lane_pos)) {
+                    return true;
+                }
+                if backqueue_writer
+                    .as_ref()
+                    .is_some_and(|(writer, _)| lane_mask.contains(writer.lane_pos))
+                {
+                    return true;
+                }
+                return false;
+            }
+            ReservedForWrite {
+                writer,
+                backqueue_readers,
+            } => {
+                if lane_mask.contains(writer.lane_pos) {
+                    return true;
+                }
+                if backqueue_readers
+                    .keys()
+                    .any(|&lane_pos| lane_mask.contains(lane_pos))
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
     }
 }
 

@@ -65,7 +65,7 @@ where
     ) -> RenderObjectCommitResult<E::ParentProtocol> {
         let setup_result = self.setup_visit_and_commit_async(finished_lanes);
         use SetupCommitAsyncResult::*;
-        match setup_result {
+        let result = match setup_result {
             VisitChildrenAnd { children, next } => {
                 let render_object_changes = children
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
@@ -93,7 +93,16 @@ where
             }
             InflateSuspended => RenderObjectCommitResult::Suspend,
             SkipAndReturn => RenderObjectCommitResult::new_no_update(),
-        }
+        };
+        self.context.purge_lanes(finished_lanes);
+        debug_assert!(
+            self.context.provider_object.is_none()
+                || self.context.provider_object.as_ref().is_some_and(
+                    |provider| !provider.contains_reservation_from_lanes(finished_lanes)
+                ),
+            "The commit left residues inside this provider object"
+        );
+        return result;
     }
 }
 
