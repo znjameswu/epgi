@@ -103,7 +103,7 @@ impl ElementContextNode {
     /// This operation is atomic.
     pub(crate) fn reserve_read(
         self: &Arc<Self>,
-        subscriber: AweakAnyElementNode,
+        reserver: AweakAnyElementNode,
         lane_pos: LanePos,
         batch_conf: &BatchConf,
         barrier: &CommitBarrier,
@@ -121,7 +121,7 @@ impl ElementContextNode {
                 .entry(lane_pos)
                 .or_insert(ReservedReadingBatch::new_empty(batch_conf))
                 .nodes
-                .insert(PtrEq(subscriber)),
+                .insert(PtrEq(reserver)),
             ReservedForWrite {
                 backqueue_readers, ..
             } => backqueue_readers
@@ -133,14 +133,14 @@ impl ElementContextNode {
                 })
                 .0
                 .nodes
-                .insert(PtrEq(subscriber)),
+                .insert(PtrEq(reserver)),
         };
         return provider.read();
     }
 
     pub(crate) fn unreserve_read(
         self: &Arc<Self>,
-        subscriber: &AweakAnyElementNode,
+        reserver: &AweakAnyElementNode,
         lane_pos: LanePos,
     ) {
         debug_assert_sync_phase();
@@ -163,45 +163,117 @@ impl ElementContextNode {
                     .and_modify(|reader| {
                         reader
                             .nodes
-                            .remove(subscriber.as_ref_ptr_eq())
+                            .remove(reserver.as_ref_ptr_eq())
                             .assert("The reservation to be removed must exist")
                     })
                     .remove_if(|reader| reader.nodes.is_empty())
-                    .is_none();
+                    .is_ok();
 
                 if removed_lane {
-                    // Yield to writer if there are no reader left
-                    if readers.is_empty() {
-                        if let Some((writer, barrier)) = backqueue_writer.take() {
-                            drop(barrier);
-                            inner.reservation = ReservedForWrite {
-                                writer,
-                                backqueue_readers: Default::default(),
-                            }
-                        }
-                    } else {
-                        // Otherwise, we have to determine the priority between the rest of the readers and the writer
-                        get_current_scheduler()
-                            .schedule_reorder_provider_reservation(Arc::downgrade(self));
+                    if let Some(reservation) =
+                        self.on_reader_reservation_removed(readers, backqueue_writer)
+                    {
+                        inner.reservation = reservation;
                     }
                 }
             }
             ReservedForWrite {
                 backqueue_readers, ..
             } => {
-                backqueue_readers
+                let _ = backqueue_readers
                     .entry(lane_pos)
                     .occupied()
                     .expect("The lane of the reservation to be removed should exist")
                     .and_modify(|(reader, _)| {
                         reader
                             .nodes
-                            .remove(subscriber.as_ref_ptr_eq())
+                            .remove(reserver.as_ref_ptr_eq())
                             .assert("The reservation to be removed must exist")
                     })
                     .remove_if(|(reader, _)| reader.nodes.is_empty());
             }
         };
+    }
+
+    fn on_reader_reservation_removed(
+        self: &Arc<Self>,
+        readers: &mut SmallMap<LanePos, ReservedReadingBatch>,
+        backqueue_writer: &mut Option<(ReservedWriter, CommitBarrier)>,
+    ) -> Option<AsyncProviderReservation> {
+        if backqueue_writer.is_some() {
+            // Yield to writer if there are no reader left
+            if readers.is_empty() {
+                let (writer, barrier) = backqueue_writer.take().expect("Impossible to fail");
+                drop(barrier);
+                return Some(AsyncProviderReservation::ReservedForWrite {
+                    writer,
+                    backqueue_readers: Default::default(),
+                });
+            } else {
+                // Otherwise, we have to determine the priority between the rest of the readers and the writer
+                get_current_scheduler().schedule_reorder_provider_reservation(Arc::downgrade(self));
+            }
+        }
+        return None;
+    }
+
+    /// The entire lane of the reserving work will be removed from the occupier.
+    /// A lane may have multiple reserving work on this provider. Therefore, it is okay if the lane has already been removed by a previous call from the same lane.
+    #[must_use]
+    pub(crate) fn register_reserved_read(
+        self: &Arc<Self>,
+        subscriber: AweakElementContextNode,
+        reserver: &AweakAnyElementNode,
+        lane_pos: LanePos,
+    ) -> Option<LanePos> {
+        debug_assert_sync_phase();
+
+        let provider = self
+            .provider_object
+            .as_ref()
+            .expect("The provider to be unreserved should exist on the context node");
+
+        let mut inner = provider.inner.lock();
+        inner.consumers.insert(PtrEq(subscriber));
+        use AsyncProviderReservation::*;
+        match &mut inner.reservation {
+            ReservedForRead {
+                backqueue_writer,
+                readers,
+            } => {
+                let removed_lane = readers
+                    .entry(lane_pos)
+                    .occupied()
+                    .expect("The lane of the reservation to be removed should exist")
+                    .and_modify(|reader| {
+                        reader
+                            .nodes
+                            .remove(reserver.as_ref_ptr_eq())
+                            .assert("The reservation to be removed must exist")
+                    })
+                    .remove_if(|reader| reader.nodes.is_empty())
+                    .is_ok();
+                // This ensures that we only report contending writers once during a batch commit
+                // We do not wish to restart the writer multiple times during our commit
+                // But we need to make sure that we only restart the contending writer AFTER we have registered all reserved reads
+                if removed_lane {
+                    if let Some((writer, _barrier)) = backqueue_writer {
+                        let writer_lane_pos = writer.lane_pos;
+                        if let Some(reservation) =
+                            self.on_reader_reservation_removed(readers, backqueue_writer)
+                        {
+                            inner.reservation = reservation;
+                        }
+                        return Some(writer_lane_pos);
+                    }
+                }
+                return None;
+            }
+            ReservedForWrite { .. } => panic!(
+                "The provider is reserved for write,\
+                which means all its reserved read should not be able to commit"
+            ),
+        }
     }
 
     // Returns mainline readers
@@ -256,7 +328,7 @@ impl ElementContextNode {
         let provider = self
             .provider_object
             .as_ref()
-            .expect("The provider to be reserved should exist on the context node");
+            .expect("The provider to be unreserved should exist on the context node");
         let mut inner = provider.inner.lock();
         use AsyncProviderReservation::*;
         match &mut inner.reservation {
@@ -381,41 +453,6 @@ impl ProviderObject {
         }
     }
 
-    /// The entire lane of the reserving work will be removed from the occupier.
-    /// A lane may have multiple reserving work on this provider. Therefore, it is okay if the lane has already been removed by a previous call from the same lane.
-    #[must_use]
-    pub(crate) fn register_reserved_read(
-        &self,
-        subscriber: AweakElementContextNode,
-        lane_pos: LanePos,
-    ) -> Option<LanePos> {
-        debug_assert_sync_phase();
-
-        let mut inner = self.inner.lock();
-        inner.consumers.insert(PtrEq(subscriber));
-        use AsyncProviderReservation::*;
-        match &mut inner.reservation {
-            ReservedForRead {
-                backqueue_writer: None,
-                readers,
-            } => {
-                readers.remove(&lane_pos);
-                if readers.is_empty() {
-                    todo!()
-                }
-                None
-            }
-            ReservedForRead {
-                backqueue_writer: Some((writer, ..)),
-                ..
-            } => Some(writer.lane_pos),
-            ReservedForWrite { .. } => panic!(
-                "The provider is reserved for write,\
-                which means all its reserved read should not be able to commit"
-            ),
-        }
-    }
-
     #[must_use]
     pub(crate) fn unregister_read(&self, subscriber: &AweakElementContextNode) -> Option<LanePos> {
         debug_assert_sync_phase();
@@ -467,7 +504,12 @@ impl ProviderObject {
         };
     }
 
-    pub(crate) fn commit_async_write(&self, lane_pos: LanePos, batch_id: BatchId) {
+    pub(crate) fn commit_async_write(
+        &self,
+        lane_pos: LanePos,
+        batch_id: BatchId,
+        lane_scheduler: &LaneScheduler,
+    ) {
         let mut inner = self.inner.lock();
         use AsyncProviderReservation::*;
         let ReservedForWrite {
@@ -501,6 +543,11 @@ impl ProviderObject {
             readers: backqueue_readers
                 .into_iter()
                 .map(|(lane_pos, (reader, barrier))| {
+                    reader.nodes.iter().for_each(|PtrEq(node)| {
+                        if let Some(node) = node.upgrade() {
+                            node.restart_async_work(lane_pos, lane_scheduler)
+                        }
+                    });
                     drop(barrier); //Symbolic
                     (lane_pos, reader)
                 })

@@ -95,7 +95,7 @@ impl<'a, K, V> MapEntryExtenision for linear_map::Entry<'a, K, V> {
 pub trait MapOccupiedEntryExtension: Sized {
     type Value;
     fn and_modify(self, f: impl FnOnce(&mut Self::Value)) -> Self;
-    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Option<Self>;
+    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Result<Self::Value, Self>;
 }
 
 impl<'a, K, V> MapOccupiedEntryExtension for std::collections::hash_map::OccupiedEntry<'a, K, V> {
@@ -106,12 +106,11 @@ impl<'a, K, V> MapOccupiedEntryExtension for std::collections::hash_map::Occupie
         self
     }
     #[inline(always)]
-    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Option<Self> {
+    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Result<V, Self> {
         if f(self.get()) {
-            self.remove();
-            return None;
+            return Ok(self.remove());
         }
-        Some(self)
+        Err(self)
     }
 }
 impl<'a, K, V, S> MapOccupiedEntryExtension for hashbrown::hash_map::OccupiedEntry<'a, K, V, S> {
@@ -122,12 +121,11 @@ impl<'a, K, V, S> MapOccupiedEntryExtension for hashbrown::hash_map::OccupiedEnt
         self
     }
     #[inline(always)]
-    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Option<Self> {
+    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Result<V, Self> {
         if f(self.get()) {
-            self.remove();
-            return None;
+            return Ok(self.remove());
         }
-        Some(self)
+        Err(self)
     }
 }
 impl<'a, K, V> MapOccupiedEntryExtension for linear_map::OccupiedEntry<'a, K, V> {
@@ -138,11 +136,10 @@ impl<'a, K, V> MapOccupiedEntryExtension for linear_map::OccupiedEntry<'a, K, V>
         self
     }
     #[inline(always)]
-    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Option<Self> {
+    fn remove_if(self, f: impl FnOnce(&Self::Value) -> bool) -> Result<V, Self> {
         if f(self.get()) {
-            self.remove();
-            return None;
+            return Ok(self.remove());
         }
-        Some(self)
+        Err(self)
     }
 }

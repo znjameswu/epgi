@@ -7,10 +7,9 @@ use crate::{
     },
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode, BuildResults,
-        Element, ElementNode, ElementSnapshotInner, FullElement, HookContextMode,
-        HooksWithTearDowns, ImplElementNode, ImplProvide, Mainline, MainlineState,
-        SubscriptionDiff,
+        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element, ElementNode,
+        ElementSnapshotInner, FullElement, HookContextMode, HooksWithTearDowns, ImplElementNode,
+        ImplProvide, Mainline, MainlineState, SubscriptionDiff,
     },
 };
 
@@ -59,7 +58,7 @@ where
     E: FullElement,
 {
     fn visit_and_commit_async_impl<'batch>(
-        &self,
+        self: &Arc<Self>,
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
@@ -240,7 +239,7 @@ where
     }
 
     fn execute_commit_async<'batch>(
-        &self,
+        self: &Arc<Self>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             RenderObjectCommitResult<E::ChildProtocol>,
@@ -267,9 +266,9 @@ where
                 subtree_change
             }
             ElementSnapshotInner::Mainline(mainline) => Self::execute_commit_async_mainline(
+                self,
                 mainline,
                 &mut snapshot_reborrow.widget,
-                &self.context,
                 render_object_changes,
                 finished_lanes,
                 scope,
@@ -344,9 +343,9 @@ where
     }
 
     fn execute_commit_async_mainline<'batch>(
+        self: &Arc<Self>,
         mainline: &mut Mainline<E>,
         widget: &mut E::ArcWidget,
-        element_context: &ArcElementContextNode,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             RenderObjectCommitResult<E::ChildProtocol>,
@@ -392,19 +391,23 @@ where
             is_new_widget = true;
         }
 
-        Self::apply_subscription_registrations(
-            &Arc::downgrade(element_context),
+        Self::commit_async_read(
+            self,
             subscription_diff,
             work_context.lane_pos,
             lane_scheduler,
         );
         if <E as Element>::Impl::PROVIDE_ELEMENT {
             if let Some(_spawned_consumers) = spawned_consumers {
-                let provider = element_context
-                    .provider_object
-                    .as_ref()
-                    .expect("Provider element should have a provider in its element context node");
-                provider.commit_async_write(work_context.lane_pos, work_context.batch.id);
+                let provider =
+                    self.context.provider_object.as_ref().expect(
+                        "Provider element should have a provider in its element context node",
+                    );
+                provider.commit_async_write(
+                    work_context.lane_pos,
+                    work_context.batch.id,
+                    lane_scheduler,
+                );
             }
         } else {
             debug_assert!(spawned_consumers.is_none());
@@ -430,7 +433,7 @@ where
                             hooks,
                             render_object,
                             mainline,
-                            element_context,
+                            &self.context,
                             scope,
                             lane_scheduler,
                             is_new_widget,
@@ -449,7 +452,7 @@ where
                             suspended_hooks,
                             Default::default(),
                             mainline,
-                            element_context,
+                            &self.context,
                             scope,
                             lane_scheduler,
                             is_new_widget,
@@ -472,7 +475,7 @@ where
                                 widget,
                                 &mut results.children,
                                 render_object_changes,
-                                element_context,
+                                &self.context,
                                 lane_scheduler,
                             );
                         mainline.state = Some(MainlineState::Ready {
@@ -546,8 +549,8 @@ where
         return change;
     }
 
-    fn apply_subscription_registrations(
-        weak_element_context: &AweakElementContextNode,
+    fn commit_async_read(
+        self: &Arc<Self>,
         subscription_diff: SubscriptionDiff,
         lane_pos: LanePos,
         lane_scheduler: &LaneScheduler,
@@ -564,14 +567,14 @@ where
 
         let mut async_work_needs_restarting = AsyncWorkNeedsRestarting::new();
 
+        let weak_element_context = Arc::downgrade(&self.context);
+
         for providing_element_context in reserve {
-            // providing_element_context.register
-            let provider = providing_element_context
-                .provider_object
-                .as_ref()
-                .expect("Recorded providers should exist");
-            let contending_writer =
-                provider.register_reserved_read(weak_element_context.clone(), lane_pos);
+            let contending_writer = providing_element_context.register_reserved_read(
+                weak_element_context.clone(),
+                &(Arc::downgrade(self) as _),
+                lane_pos,
+            );
             if let Some(contending_lane) = contending_writer {
                 async_work_needs_restarting.push(contending_lane, providing_element_context)
             }
@@ -601,46 +604,4 @@ where
 
         async_work_needs_restarting.execute_restarts(lane_scheduler);
     }
-
-    // fn commit_async_inflating(
-    //     async_inflating: AsyncInflating<E>,
-    //     finished_lanes: LaneMask,
-    // ) -> MainlineState<E, HooksWithTearDowns> {
-    //     let AsyncInflating {
-    //         work_context,
-    //         stash,
-    //     } = async_inflating;
-    //     assert!(
-    //         finished_lanes.contains(work_context.lane_pos),
-    //         "Async commit should not visit into non-mainline nodes from other lanes"
-    //     );
-
-    //     match stash.output {
-    //         AsyncOutput::Completed(results) => {
-    //             debug_assert!(
-    //                 results.rebuild_state.is_none(),
-    //                 "Async inflate node should not have a rebuild results"
-    //             );
-    //             MainlineState::Ready {
-    //                 element: results.element,
-    //                 hooks: results.hooks.fire_effects(),
-    //                 children: results.children,
-    //                 render_object: todo!(),
-    //             }
-    //         }
-    //         AsyncOutput::Suspended {
-    //             suspend,
-    //             barrier: None,
-    //         } => MainlineState::InflateSuspended {
-    //             suspended_hooks: todo!(),
-    //             waker: todo!(),
-    //         },
-    //         AsyncOutput::Uninitiated { barrier }
-    //         | AsyncOutput::Suspended {
-    //             barrier: Some(barrier),
-    //             ..
-    //         } => panic!("Async commit initiated when there is still commit barrier alive"),
-    //         AsyncOutput::Gone => todo!(),
-    //     }
-    // }
 }
