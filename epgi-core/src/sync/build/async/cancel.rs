@@ -23,12 +23,12 @@ pub trait AnyElementNodeAsyncCancelExt {
     // The impact of this difference is that by visiting the async version of the tree, we may miss some to-be-unmounted mainline nodes
     // If we visit *both* the mainline children and the async children, then we are creating an exponential visitt explosion by potentially visit one node twice.
     // (Though the exponential explosion is avoided by the atomic flag checking)
-    fn remove_async_work(self: Arc<Self>, lane_pos: LanePos, requeue: bool);
+    fn cancel_async_work(self: Arc<Self>, lane_pos: LanePos, requeue: bool);
 }
 
 impl<E: FullElement> AnyElementNodeAsyncCancelExt for ElementNode<E> {
-    fn remove_async_work(self: Arc<Self>, lane_pos: LanePos, requeue: bool) {
-        self.remove_async_work_impl(lane_pos, requeue)
+    fn cancel_async_work(self: Arc<Self>, lane_pos: LanePos, requeue: bool) {
+        self.cancel_async_work_impl(lane_pos, requeue)
     }
 }
 
@@ -48,7 +48,7 @@ struct AsyncCancelAndRestart<E: ElementBase> {
 }
 
 impl<E: FullElement> ElementNode<E> {
-    pub fn remove_async_work_impl(
+    pub fn cancel_async_work_impl(
         self: Arc<Self>,
         lane_pos: LanePos,
         requeue: bool,
@@ -80,7 +80,7 @@ impl<E: FullElement> ElementNode<E> {
 
                 if let Some(new_children) = async_children {
                     new_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                        child.remove_async_work(lane_pos, requeue)
+                        child.cancel_async_work(lane_pos, requeue)
                     })
                 }
 
@@ -93,7 +93,7 @@ impl<E: FullElement> ElementNode<E> {
             }
             Err(Some(children)) => children
                 .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                    child.remove_async_work(lane_pos, requeue)
+                    child.cancel_async_work(lane_pos, requeue)
                 }),
             Err(None) => {}
         }
@@ -252,7 +252,7 @@ impl<E: FullElement> ElementNode<E> {
 
         if let Some(async_children) = async_children {
             async_children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-                child.remove_async_work(lane_pos, requeue)
+                child.cancel_async_work(lane_pos, requeue)
             })
         }
 

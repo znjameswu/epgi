@@ -38,6 +38,7 @@ pub trait AnyElementNode:
     + crate::sync::AnyElementNodeUnmountExt
     + crate::sync::AnyElementAsyncCommitExt
     + crate::sync::AnyElementAsyncVisitExt
+    + crate::sync::AnyElementAsyncPurgeLaneMark
     + crate::r#async::AnyElementAsyncInflateExt
     + Send
     + Sync

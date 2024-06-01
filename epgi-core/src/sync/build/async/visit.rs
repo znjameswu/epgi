@@ -73,7 +73,7 @@ impl<E: FullElement> ElementNode<E> {
     fn visit_and_start_work_async_impl(
         self: Arc<Self>,
         // The lanes yet to be started, from high priority to low priority
-        mut lanes_to_start: &[LanePos],
+        lanes_to_start: &[LanePos],
         lane_scheduler: &LaneScheduler,
     ) {
         // Since we are starting root work, we do not need to look into descendant lanes

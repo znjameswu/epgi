@@ -87,8 +87,8 @@ impl LaneScheduler {
                     if expired_batches.contains(&async_lane_data.batch.id) {
                         root_element
                             .clone()
-                            .remove_async_work(async_lane_data.lane_pos, true);
-                        todo!("Remove lane mark");
+                            .cancel_async_work(async_lane_data.lane_pos, true);
+                        root_element.purge_lane_mark_async(async_lane_data.lane_pos);
                         *async_lane = None;
                     }
                 }
