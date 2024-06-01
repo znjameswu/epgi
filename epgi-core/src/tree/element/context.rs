@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 use hashbrown::HashMap;
 
 use crate::{
-    foundation::{Arc, Asc, Aweak, InlinableUsizeVec, SyncMutex, TypeKey},
-    scheduler::JobId,
+    foundation::{Arc, Asc, Aweak, SyncMutex, TypeKey},
+    scheduler::{JobBuilder, JobId},
     tree::Update,
 };
 
@@ -90,16 +90,23 @@ impl ElementContextNode {
         }
     }
 
-    pub(crate) fn push_update(this: &Arc<Self>, job_id: JobId, update: Update) {
-        let jobs = {
-            let mut mailbox = this.mailbox.lock();
-            mailbox.entry(job_id).or_insert(Vec::new()).push(update);
+    pub(crate) fn push_update(self: &Arc<Self>, update: Update, job_builder: &mut JobBuilder) {
+        let mut mailbox = self.mailbox.lock();
+        let hook_index = update.hook_index;
+        let job_id = job_builder.id();
+        mailbox.entry(job_id).or_default().push(update);
+        job_builder.add_root(
+            Arc::downgrade(self),
             mailbox
-                .keys()
-                .filter_map(|&x| (x != job_id).then_some(x))
-                .collect::<InlinableUsizeVec<_>>()
-        };
-        // t
+                .iter()
+                .filter_map(move |(&existing_job_id, exisiting_updates)| {
+                    (existing_job_id != job_id
+                        && exisiting_updates
+                            .iter()
+                            .any(|existing_update| existing_update.hook_index == hook_index))
+                    .then_some(existing_job_id)
+                }),
+        );
     }
 
     pub(crate) fn is_unmounted(&self) -> Result<(), NotUnmountedToken> {

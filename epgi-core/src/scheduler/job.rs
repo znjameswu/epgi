@@ -3,11 +3,11 @@ use std::{
     time::Instant,
 };
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 
 use crate::{
     foundation::{Inlinable64Vec, PtrEq},
-    tree::{AweakElementContextNode, HookIndex, Update},
+    tree::AweakElementContextNode,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -105,27 +105,13 @@ impl JobBuilder {
         self.conf.id()
     }
 
-    pub fn extend_sequenced_jobs(&mut self, iter: impl IntoIterator<Item = JobId>) {
-        self.existing_sequenced_jobs.extend(iter);
-    }
-
-    pub fn extend_sequenced_jobs_in(
+    pub(crate) fn add_root(
         &mut self,
         node: AweakElementContextNode,
-        mailbox: &HashMap<JobId, Vec<Update>>,
-        index: HookIndex,
+        sequenced_jobs: impl IntoIterator<Item = JobId>,
     ) {
-        let id = self.id();
         self.conf.roots_mut().insert(PtrEq(node));
-        self.extend_sequenced_jobs(mailbox.iter().filter_map(|(job_id, updates)| {
-            if *job_id == id {
-                return None;
-            }
-            updates
-                .iter()
-                .any(|update| update.hook_index == index)
-                .then_some(*job_id)
-        }))
+        self.existing_sequenced_jobs.extend(sequenced_jobs);
     }
 }
 

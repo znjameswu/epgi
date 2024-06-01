@@ -97,17 +97,10 @@ where
         let Some(node) = self.node.upgrade() else {
             return false;
         };
-        {
-            let mut mailbox = node.mailbox.lock();
-            job_builder.extend_sequenced_jobs_in(self.node.clone(), &mut *mailbox, self.self_index);
-            mailbox
-                .entry(job_builder.id())
-                .or_default()
-                .push(Update::new::<StateHookState<T>>(
-                    self.self_index,
-                    move |hook| hook.value = value,
-                ));
-        }
+        node.push_update(
+            Update::new::<StateHookState<T>>(self.self_index, move |hook| hook.value = value),
+            job_builder,
+        );
         return true;
     }
 }
