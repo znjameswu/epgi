@@ -60,19 +60,11 @@ where
         self.inner.is_none()
     }
 
-    pub(crate) fn is_free(&self) -> bool {
-        match &self.inner {
-            None => true,
-            Some(inner) => inner.current.is_none(),
-        }
-    }
-
-    // fn get_stash_mut(&mut self, lane_pos: LanePos) -> Option<&mut AsyncStash<E>> {
-    //     self.inner.as_mut().and_then(|inner| {
-    //         inner.current.as_mut().and_then(|current| {
-    //             (current.work.context.lane_pos == lane_pos).then_some(&mut current.1)
-    //         })
-    //     })
+    // pub(crate) fn is_free(&self) -> bool {
+    //     match &self.inner {
+    //         None => true,
+    //         Some(inner) => inner.current.is_none(),
+    //     }
     // }
 
     pub(crate) fn current_ref(&self) -> Option<&AsyncQueueCurrentEntry<E>> {
@@ -392,14 +384,4 @@ pub(crate) struct SubscriptionDiff {
     /// The subscription needs to be cleared in the event of a commit or a cancellation.
     pub(crate) reserve: InlinableUsizeVec<ArcElementContextNode>,
     pub(crate) remove: InlinableUsizeVec<ArcElementContextNode>,
-}
-
-impl SubscriptionDiff {
-    fn new_uninflated(subscriptions: InlinableUsizeVec<ArcElementContextNode>) -> Self {
-        Self {
-            register: subscriptions,
-            reserve: Default::default(),
-            remove: Default::default(),
-        }
-    }
 }

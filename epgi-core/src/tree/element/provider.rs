@@ -53,9 +53,11 @@ impl ProviderObject {
             type_key,
         }
     }
-    pub(crate) fn get_value(&self) -> Arc<dyn Provide> {
+
+    pub(crate) fn read(&self) -> Arc<dyn Provide> {
         self.value.read().clone()
     }
+
     pub(crate) fn contains_reservation_from_lanes(&self, lane_mask: LaneMask) -> bool {
         use AsyncProviderReservation::*;
         match &self.inner.lock().reservation {
@@ -467,10 +469,6 @@ impl ElementContextNode {
 }
 
 impl ProviderObject {
-    pub(crate) fn read(&self) -> Arc<dyn Provide> {
-        self.value.read().clone()
-    }
-
     #[must_use]
     pub(crate) fn register_read(&self, subscriber: AweakElementContextNode) -> Option<LanePos> {
         debug_assert_sync_phase();

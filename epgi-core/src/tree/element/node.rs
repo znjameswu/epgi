@@ -1,7 +1,4 @@
-use crate::{
-    foundation::{Arc, Protocol, SyncMutex},
-    scheduler::JobId,
-};
+use crate::foundation::{Arc, Protocol, SyncMutex};
 
 use super::{
     ArcAnyElementNode, ArcAnyRenderObject, ArcChildElementNode, ArcChildRenderObject,
@@ -47,7 +44,7 @@ pub trait AnyElementNode:
     fn context(&self) -> &ArcElementContextNode;
     fn context_ref(&self) -> &ElementContextNode;
     fn as_any_arc(self: Arc<Self>) -> ArcAnyElementNode;
-    fn push_job(&self, job_id: JobId);
+    // fn push_job(&self, job_id: JobId);
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str>;
     // fn context(&self) -> &ArcElementContextNode;
 }
@@ -122,9 +119,9 @@ impl<E: FullElement> AnyElementNode for ElementNode<E> {
         self
     }
 
-    fn push_job(&self, job_id: JobId) {
-        todo!()
-    }
+    // fn push_job(&self, job_id: JobId) {
+    //     todo!()
+    // }
 
     fn render_object(&self) -> Result<ArcAnyRenderObject, &str> {
         if !<E as Element>::Impl::HAS_RENDER {

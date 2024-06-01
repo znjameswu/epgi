@@ -48,12 +48,12 @@ impl<E: Element> ElementSnapshotInner<E> {
         }
     }
 
-    pub(crate) fn async_inflating_ref(&self) -> Option<&AsyncInflating<E>> {
-        match self {
-            ElementSnapshotInner::AsyncInflating(x) => Some(x),
-            ElementSnapshotInner::Mainline(_) => None,
-        }
-    }
+    // pub(crate) fn async_inflating_ref(&self) -> Option<&AsyncInflating<E>> {
+    //     match self {
+    //         ElementSnapshotInner::AsyncInflating(x) => Some(x),
+    //         ElementSnapshotInner::Mainline(_) => None,
+    //     }
+    // }
 
     pub(crate) fn async_inflating_mut(&mut self) -> Option<&mut AsyncInflating<E>> {
         match self {
@@ -88,38 +88,38 @@ pub(crate) enum MainlineState<E: Element, H> {
 }
 
 impl<E: Element, H> MainlineState<E, H> {
-    pub(crate) fn is_suspended(&self) -> bool {
-        match self {
-            MainlineState::Ready { .. } => false,
-            MainlineState::InflateSuspended { .. } | MainlineState::RebuildSuspended { .. } => true,
-        }
-    }
+    // pub(crate) fn is_suspended(&self) -> bool {
+    //     match self {
+    //         MainlineState::Ready { .. } => false,
+    //         MainlineState::InflateSuspended { .. } | MainlineState::RebuildSuspended { .. } => true,
+    //     }
+    // }
 
-    pub(crate) fn element(self) -> Option<E> {
-        match self {
-            MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { element, .. }
-            | MainlineState::RebuildSuspended { element, .. } => Some(element),
-        }
-    }
+    // pub(crate) fn element(self) -> Option<E> {
+    //     match self {
+    //         MainlineState::InflateSuspended { .. } => None,
+    //         MainlineState::Ready { element, .. }
+    //         | MainlineState::RebuildSuspended { element, .. } => Some(element),
+    //     }
+    // }
 
-    pub(crate) fn element_ref(&self) -> Option<&E> {
-        match self {
-            MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { element, .. }
-            | MainlineState::RebuildSuspended { element, .. } => Some(element),
-        }
-    }
+    // pub(crate) fn element_ref(&self) -> Option<&E> {
+    //     match self {
+    //         MainlineState::InflateSuspended { .. } => None,
+    //         MainlineState::Ready { element, .. }
+    //         | MainlineState::RebuildSuspended { element, .. } => Some(element),
+    //     }
+    // }
 
-    pub(crate) fn children_ref(
-        &self,
-    ) -> Option<&ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>> {
-        match self {
-            MainlineState::InflateSuspended { .. } => None,
-            MainlineState::Ready { children, .. }
-            | MainlineState::RebuildSuspended { children, .. } => Some(children),
-        }
-    }
+    // pub(crate) fn children_ref(
+    //     &self,
+    // ) -> Option<&ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>> {
+    //     match self {
+    //         MainlineState::InflateSuspended { .. } => None,
+    //         MainlineState::Ready { children, .. }
+    //         | MainlineState::RebuildSuspended { children, .. } => Some(children),
+    //     }
+    // }
 
     pub(crate) fn children_cloned(
         &self,
@@ -155,13 +155,13 @@ impl<E: Element, H> MainlineState<E, H> {
     //     }
     // }
 
-    pub(crate) fn waker(self) -> Option<ArcSuspendWaker> {
-        match self {
-            MainlineState::Ready { .. } => None,
-            MainlineState::InflateSuspended { waker, .. }
-            | MainlineState::RebuildSuspended { waker, .. } => Some(waker),
-        }
-    }
+    // pub(crate) fn waker(self) -> Option<ArcSuspendWaker> {
+    //     match self {
+    //         MainlineState::Ready { .. } => None,
+    //         MainlineState::InflateSuspended { waker, .. }
+    //         | MainlineState::RebuildSuspended { waker, .. } => Some(waker),
+    //     }
+    // }
 
     pub(crate) fn waker_ref(&self) -> Option<&SuspendWaker> {
         match self {

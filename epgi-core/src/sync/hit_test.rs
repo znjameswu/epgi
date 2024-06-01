@@ -83,10 +83,6 @@ impl<R: FullRender> RenderObject<R> {
     }
 }
 
-pub trait ChildLayerRenderObjectHitTestExt<C: Canvas> {
-    // fn hit_test_layer(self: Arc<Self>, results: &mut HitTestResults<C>) -> bool;
-}
-
 pub trait ImplHitTest<R: Render<Impl = Self>>: ImplRender<R> {
     const ORPHAN_LAYER: bool;
 

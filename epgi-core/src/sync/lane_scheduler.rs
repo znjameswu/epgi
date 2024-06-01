@@ -27,7 +27,7 @@ struct AsyncLaneData {
     // top_level_roots:
     // state: LaneState,
     barrier_inner: Asc<CommitBarrierInner>,
-    blocked_by: LaneMask,
+    // blocked_by: LaneMask,
 }
 
 impl AsyncLaneData {
@@ -36,7 +36,7 @@ impl AsyncLaneData {
             lane_pos,
             batch,
             barrier_inner: Asc::new(CommitBarrierInner::new()),
-            blocked_by: LaneMask::new(),
+            // blocked_by: LaneMask::new(),
         }
     }
 }
