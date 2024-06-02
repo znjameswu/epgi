@@ -315,7 +315,7 @@ pub(crate) struct BuildResults<E: ElementBase> {
 
 pub(crate) struct BuildResultsRebuild<E: ElementBase> {
     pub(crate) nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-    pub(crate) nodes_inflating: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+    // pub(crate) nodes_inflating: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
     pub(crate) shuffle:
         Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
 }
@@ -342,7 +342,7 @@ where
         element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
-        nodes_inflating: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
+        // nodes_inflating: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
     ) -> Self {
         Self {
@@ -351,7 +351,7 @@ where
             children,
             rebuild_state: Some(BuildResultsRebuild {
                 nodes_needing_unmount,
-                nodes_inflating,
+                // nodes_inflating,
                 shuffle,
             }),
         }
