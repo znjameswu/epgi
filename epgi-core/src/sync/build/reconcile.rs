@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Arc, Container, ContainerOf, Inlinable64Vec},
     scheduler::{get_current_scheduler, JobId, LanePos},
-    sync::{LaneScheduler, RenderObjectCommitResult, SyncHookContext},
+    sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
         apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementNode,
         FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
@@ -33,7 +33,8 @@ impl<E: FullElement> ElementNode<E> {
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
                         child.visit_and_work_sync(job_ids, scope, lane_scheduler)
                     });
-                let (_children, render_object_changes) = results.unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
+                let (_children, render_object_changes) = results
+                    .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
                 let render_object_commit_result = <E as Element>::Impl::visit_commit_render_object(
                     &self,
@@ -242,7 +243,7 @@ impl<E: FullElement> ElementNode<E> {
                     new_widget,
                     element,
                     children,
-                    SyncHookContext::new_rebuild(hooks),
+                    hooks,
                     render_object,
                     consumed_values,
                     job_ids,
@@ -266,7 +267,7 @@ impl<E: FullElement> ElementNode<E> {
                     new_widget,
                     element,
                     children,
-                    SyncHookContext::new_rebuild(suspended_hooks),
+                    suspended_hooks,
                     Default::default(),
                     consumed_values,
                     job_ids,
@@ -282,11 +283,12 @@ impl<E: FullElement> ElementNode<E> {
                 waker.abort();
                 self.perform_inflate_node_sync::<false>(
                     new_widget,
-                    if !is_poll {
-                        SyncHookContext::new_inflate()
-                    } else {
-                        SyncHookContext::new_poll_inflate(suspended_hooks)
-                    },
+                    Some(suspended_hooks),
+                    // if !is_poll {
+                    //     SyncHookContext::new_inflate()
+                    // } else {
+                    //     SyncHookContext::new_poll_inflate(suspended_hooks)
+                    // },
                     consumed_values,
                     lane_scheduler,
                 )

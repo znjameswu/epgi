@@ -4,7 +4,6 @@ use futures::stream::Aborted;
 
 use crate::{
     foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Provide},
-    r#async::AsyncHookContext,
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
@@ -330,7 +329,7 @@ impl<E: FullElement> ElementNode<E> {
             self.perform_rebuild_node_async(
                 widget.as_ref().unwrap_or(&old_widget),
                 last_element,
-                AsyncHookContext::new_rebuild(hooks),
+                hooks,
                 children,
                 provider_values,
                 child_work_context,
@@ -340,7 +339,7 @@ impl<E: FullElement> ElementNode<E> {
         } else {
             self.perform_inflate_node_async::<false>(
                 &widget.unwrap_or(old_widget),
-                AsyncHookContext::new_inflate(),
+                None,
                 provider_values,
                 child_work_context,
                 handle,

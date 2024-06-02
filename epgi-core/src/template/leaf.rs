@@ -34,7 +34,7 @@ pub trait LeafElement: Clone + Send + Sync + Sized + 'static {
     fn update_element(
         &mut self,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<(), BuildSuspendedError> {
         Ok(())
@@ -42,7 +42,7 @@ pub trait LeafElement: Clone + Send + Sync + Sized + 'static {
 
     fn create_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Self, BuildSuspendedError>;
 
@@ -83,7 +83,7 @@ where
     fn perform_rebuild_element(
         element: &mut E,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         _children: [ArcChildElementNode<Self::ChildProtocol>; 0],
         _nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
@@ -104,7 +104,7 @@ where
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<(E, [ArcChildWidget<Self::ChildProtocol>; 0]), BuildSuspendedError> {
         E::create_element(widget, ctx, provider_values).map(|element| (element, []))

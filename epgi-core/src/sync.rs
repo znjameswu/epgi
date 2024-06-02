@@ -13,8 +13,5 @@ pub use hit_test::*;
 mod composite;
 pub use composite::*;
 
-mod build_context;
-pub use build_context::*;
-
 mod lane_scheduler;
 pub use lane_scheduler::*;

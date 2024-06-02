@@ -26,7 +26,7 @@ pub trait TemplateElementBase<E> {
     fn perform_rebuild_element(
         element: &mut E,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: ContainerOf<Self::ChildContainer, ArcChildElementNode<Self::ChildProtocol>>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
@@ -43,7 +43,7 @@ pub trait TemplateElementBase<E> {
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<
         (
@@ -71,7 +71,7 @@ where
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: ContainerOf<Self::ChildContainer, ArcChildElementNode<Self::ChildProtocol>>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
@@ -97,7 +97,7 @@ where
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<
         (

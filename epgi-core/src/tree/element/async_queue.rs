@@ -1,6 +1,5 @@
 use crate::{
     foundation::{Asc, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec, VecPushLastExt},
-    r#async::AsyncHookContext,
     scheduler::LanePos,
     sync::CommitBarrier,
     tree::{ArcElementContextNode, ElementBase, HooksWithEffects, WorkContext, WorkHandle},
@@ -302,7 +301,7 @@ pub(crate) struct BuildSuspendResults {
 }
 
 impl BuildSuspendResults {
-    pub fn new(hooks_context: AsyncHookContext) -> Self {
+    pub fn new(hooks: HooksWithEffects) -> Self {
         todo!()
     }
 }
@@ -326,12 +325,12 @@ where
     E: ElementBase,
 {
     pub fn new_inflate(
-        hooks_context: AsyncHookContext,
+        hooks: HooksWithEffects,
         element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
     ) -> Self {
         Self {
-            hooks: hooks_context.hooks,
+            hooks,
             element,
             children,
             rebuild_state: None,
@@ -339,7 +338,7 @@ where
     }
 
     pub fn new_rebuild(
-        hooks_context: AsyncHookContext,
+        hooks: HooksWithEffects,
         element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         nodes_needing_unmount: InlinableDwsizeVec<ArcChildElementNode<E::ChildProtocol>>,
@@ -347,7 +346,7 @@ where
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
     ) -> Self {
         Self {
-            hooks: hooks_context.hooks,
+            hooks,
             element,
             children,
             rebuild_state: Some(BuildResultsRebuild {

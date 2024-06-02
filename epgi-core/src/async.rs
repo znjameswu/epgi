@@ -1,9 +1,6 @@
 mod build;
 pub use build::*;
 
-mod build_context;
-pub use build_context::*;
-
 use crate::{
     foundation::{Arc, Asc},
     scheduler::get_current_scheduler,

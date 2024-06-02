@@ -3,12 +3,13 @@ use crate::{
         Arc, AsIterator, Container, InlinableDwsizeVec, Protocol, Provide, SyncMutex,
         EMPTY_CONSUMED_TYPES,
     },
-    scheduler::get_current_scheduler,
-    sync::{LaneScheduler, RenderObjectCommitResult, SyncBuildContext, SyncHookContext},
+    scheduler::{get_current_scheduler, LanePos},
+    sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
-        ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, Element, ElementBase,
-        ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement,
-        Mainline, MainlineState, Widget,
+        ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext, Element,
+        ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
+        FullElement, HookContext, HookContextMode, HooksWithTearDowns, Mainline, MainlineState,
+        Widget,
     },
 };
 
@@ -74,7 +75,7 @@ impl<E: FullElement> ElementNode<E> {
         let commit_result = Self::perform_inflate_node_sync::<true>(
             &node,
             widget,
-            SyncHookContext::new_inflate(),
+            None,
             consumed_values,
             lane_scheduler,
         );
@@ -84,22 +85,29 @@ impl<E: FullElement> ElementNode<E> {
     pub(super) fn perform_inflate_node_sync<const FIRST_INFLATE: bool>(
         self: &Arc<Self>,
         widget: &E::ArcWidget,
-        mut hook_context: SyncHookContext,
+        suspended_hooks: Option<HooksWithTearDowns>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         lane_scheduler: &LaneScheduler,
     ) -> CommitResult<E::ParentProtocol> {
-        let result = E::perform_inflate_element(
-            &widget,
-            SyncBuildContext {
-                hooks: &mut hook_context,
-                element_context: &self.context,
-            }
-            .into(),
-            provider_values,
-        );
+        let hook_mode = if suspended_hooks.is_none() {
+            HookContextMode::Inflate
+        } else {
+            HookContextMode::PollInflate
+        };
+        let mut hooks = suspended_hooks.unwrap_or_default();
+        let mut ctx = BuildContext {
+            lane_pos: LanePos::SYNC,
+            element_context: &self.context,
+            hook_context: HookContext::new_sync(&mut hooks, hook_mode),
+        };
+        let result = E::perform_inflate_element(&widget, &mut ctx, provider_values);
 
         let (state, change) = match result {
             Ok((element, child_widgets)) => {
+                if !ctx.hook_context.has_finished() {
+                    panic!("A build function should always invoke every hook whenever it is called")
+                }
+
                 let results = child_widgets.par_map_collect(
                     &get_current_scheduler().sync_threadpool,
                     |child_widget| {
@@ -129,7 +137,7 @@ impl<E: FullElement> ElementNode<E> {
                 (
                     MainlineState::Ready {
                         element,
-                        hooks: hook_context.take_hooks(false),
+                        hooks,
                         children,
                         render_object,
                     },
@@ -138,7 +146,7 @@ impl<E: FullElement> ElementNode<E> {
             }
             Err(err) => (
                 MainlineState::InflateSuspended {
-                    suspended_hooks: hook_context.take_hooks(true),
+                    suspended_hooks: hooks,
                     waker: err.waker,
                 },
                 RenderObjectCommitResult::Suspend,

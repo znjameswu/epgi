@@ -1,11 +1,11 @@
 use crate::{
     foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Protocol, Provide},
-    r#async::{AsyncBuildContext, AsyncHookContext},
     scheduler::get_current_scheduler,
     sync::CommitBarrier,
     tree::{
-        ArcChildElementNode, AsyncOutput, BuildResults, BuildSuspendResults, ElementNode,
-        ElementReconcileItem, ElementWidgetPair, FullElement, WorkContext, WorkHandle,
+        ArcChildElementNode, AsyncOutput, BuildContext, BuildResults, BuildSuspendResults,
+        ElementNode, ElementReconcileItem, ElementWidgetPair, FullElement, HookContext,
+        HookContextMode, HooksWithEffects, WorkContext, WorkHandle,
     },
 };
 
@@ -58,7 +58,7 @@ impl<E: FullElement> ElementNode<E> {
         self: &Arc<Self>,
         widget: &E::ArcWidget,
         mut element: E,
-        mut hook_context: AsyncHookContext,
+        mut hooks: HooksWithEffects,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         child_work_context: Asc<WorkContext>,
@@ -66,14 +66,15 @@ impl<E: FullElement> ElementNode<E> {
         barrier: CommitBarrier,
     ) {
         let mut nodes_needing_unmount = Default::default();
+        let mut ctx = BuildContext {
+            lane_pos: child_work_context.lane_pos,
+            element_context: &self.context,
+            hook_context: HookContext::new_async(&mut hooks, HookContextMode::Rebuild),
+        };
         let results = E::perform_rebuild_element(
             &mut element,
             &widget,
-            AsyncBuildContext {
-                hooks: &mut hook_context,
-                element_context: &self.context,
-            }
-            .into(),
+            &mut ctx,
             provider_values,
             children,
             &mut nodes_needing_unmount,
@@ -83,6 +84,9 @@ impl<E: FullElement> ElementNode<E> {
 
         let output = match results {
             Ok((items, shuffle)) => {
+                if !ctx.hook_context.has_finished() {
+                    panic!("A build function should always invoke every hook whenever it is called")
+                }
                 let async_threadpool = &get_current_scheduler().async_threadpool;
                 let mut nodes_inflating = InlinableDwsizeVec::new();
                 let new_children = items.map_collect_with(
@@ -120,7 +124,7 @@ impl<E: FullElement> ElementNode<E> {
                 );
 
                 AsyncOutput::Completed(BuildResults::new_rebuild(
-                    hook_context,
+                    hooks,
                     element,
                     new_children,
                     nodes_needing_unmount,
@@ -129,7 +133,7 @@ impl<E: FullElement> ElementNode<E> {
                 ))
             }
             Err((children, err)) => AsyncOutput::Suspended {
-                suspend: Some(BuildSuspendResults::new(hook_context)),
+                suspend: Some(BuildSuspendResults::new(hooks)),
                 barrier: Some(barrier),
             },
         };

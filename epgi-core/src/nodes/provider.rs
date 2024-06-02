@@ -76,7 +76,7 @@ impl<T: Provide, P: Protocol> SingleChildElement for ProviderElement<T, P> {
     fn get_child_widget(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
+        _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
         Ok(widget.child.clone())

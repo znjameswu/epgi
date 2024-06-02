@@ -4,7 +4,7 @@ use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize};
 use epgi_core::{
     foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{ImplByTemplate, LeafElement, LeafElementTemplate, LeafRender, LeafRenderTemplate},
-    tree::{ElementBase, Widget},
+    tree::{BuildContext, ElementBase, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -46,7 +46,7 @@ impl LeafElement for PhantomBoxElement {
 
     fn create_element(
         _widget: &Self::ArcWidget,
-        _ctx: epgi_core::tree::BuildContext,
+        _ctx: &mut BuildContext,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Self, BuildSuspendedError> {
         Ok(Self)

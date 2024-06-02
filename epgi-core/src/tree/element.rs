@@ -57,7 +57,7 @@ pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: ContainerOf<Self::ChildContainer, ArcChildElementNode<Self::ChildProtocol>>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<Self::ChildProtocol>>,
@@ -74,7 +74,7 @@ pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<
         (

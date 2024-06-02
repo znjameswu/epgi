@@ -56,7 +56,7 @@ impl<P: Protocol> ElementBase for SuspenseElement<P> {
     fn perform_rebuild_element(
         &mut self,
         widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
+        _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<P>>,
@@ -104,7 +104,7 @@ impl<P: Protocol> ElementBase for SuspenseElement<P> {
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
+        _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<
         (

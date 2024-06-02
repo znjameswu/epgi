@@ -53,7 +53,7 @@ impl Widget for GestureDetector {
 }
 
 impl ComponentWidget<BoxProtocol> for GestureDetector {
-    fn build(&self, _ctx: BuildContext<'_>) -> ArcChildWidget<BoxProtocol> {
+    fn build(&self, _ctx: &mut BuildContext<'_>) -> ArcChildWidget<BoxProtocol> {
         let mut recognizer_factories = Vec::new();
         if let Some(on_tap) = &self.on_tap {
             recognizer_factories.push(GestureRecognizerFactory::new::<TapGestureRecognizer>(
@@ -143,7 +143,7 @@ impl BoxSingleChildElement for RawGestureDetectorElement {
     fn get_child_widget(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
-        _ctx: BuildContext<'_>,
+        _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
         Ok(widget.child.clone())

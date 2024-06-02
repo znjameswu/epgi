@@ -47,15 +47,15 @@ impl ArcWake for SuspendWaker {
 impl SuspendWaker {}
 
 impl SuspendWaker {
-    pub(crate) fn new_sync(node: AweakElementContextNode) -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self {
-            state: Atomic::new(SuspendWakerState::Suspended),
-            lane_pos: Atomic::new(LanePos::SYNC),
-            node,
-        })
-    }
+    // pub(crate) fn new_sync(node: AweakElementContextNode) -> std::sync::Arc<Self> {
+    //     std::sync::Arc::new(Self {
+    //         state: Atomic::new(SuspendWakerState::Suspended),
+    //         lane_pos: Atomic::new(LanePos::SYNC),
+    //         node,
+    //     })
+    // }
 
-    pub(crate) fn new_async(
+    pub(crate) fn new(
         node: AweakElementContextNode,
         lane_pos: LanePos,
         // batch_id: BatchId,

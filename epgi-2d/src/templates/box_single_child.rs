@@ -40,7 +40,7 @@ pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
     fn get_child_widget(
         element: Option<&mut Self>,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError>;
 
@@ -68,7 +68,7 @@ where
     fn perform_rebuild_element(
         element: &mut E,
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         [child]: [ArcChildElementNode<BoxProtocol>; 1],
         nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<BoxProtocol>>,
@@ -95,7 +95,7 @@ where
 
     fn perform_inflate_element(
         widget: &Self::ArcWidget,
-        ctx: BuildContext<'_>,
+        ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<(E, [ArcChildWidget<BoxProtocol>; 1]), BuildSuspendedError> {
         let element = E::create_element(widget);

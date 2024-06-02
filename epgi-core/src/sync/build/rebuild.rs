@@ -2,11 +2,12 @@ use crate::{
     foundation::{
         Arc, Container, ContainerOf, Inlinable64Vec, InlinableDwsizeVec, Protocol, Provide,
     },
-    scheduler::{get_current_scheduler, JobId},
-    sync::{LaneScheduler, SyncBuildContext, SyncHookContext},
+    scheduler::{get_current_scheduler, JobId, LanePos},
+    sync::LaneScheduler,
     tree::{
-        ArcChildElementNode, Element, ElementNode, ElementReconcileItem, ElementWidgetPair,
-        FullElement, ImplElementNode, MainlineState,
+        ArcChildElementNode, BuildContext, Element, ElementNode, ElementReconcileItem,
+        ElementWidgetPair, FullElement, HookContext, HookContextMode, HooksWithTearDowns,
+        ImplElementNode, MainlineState,
     },
 };
 
@@ -66,7 +67,7 @@ impl<E: FullElement> ElementNode<E> {
         widget: &E::ArcWidget,
         mut element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        mut hook_context: SyncHookContext,
+        mut hooks: HooksWithTearDowns,
         mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
@@ -75,14 +76,16 @@ impl<E: FullElement> ElementNode<E> {
         is_new_widget: bool,
     ) -> CommitResult<E::ParentProtocol> {
         let mut nodes_needing_unmount = Default::default();
+        let hook_context = HookContext::new_sync(&mut hooks, HookContextMode::Rebuild);
+        let mut ctx = BuildContext {
+            lane_pos: LanePos::SYNC,
+            element_context: &self.context,
+            hook_context,
+        };
         let results = E::perform_rebuild_element(
             &mut element,
             &widget,
-            SyncBuildContext {
-                hooks: &mut hook_context,
-                element_context: &self.context,
-            }
-            .into(),
+            &mut ctx,
             provider_values,
             children,
             &mut nodes_needing_unmount,
@@ -90,6 +93,9 @@ impl<E: FullElement> ElementNode<E> {
 
         let (state, change) = match results {
             Ok((items, shuffle)) => {
+                if !ctx.hook_context.has_finished() {
+                    panic!("A build function should always invoke every hook whenever it is called")
+                }
                 // Starting the unmounting as early as possible.
                 // Unmount before updating render object can cause render object to hold reference to detached children,
                 // Therfore, we need to ensure we do not read into render objects before the batch commit is done
@@ -126,7 +132,7 @@ impl<E: FullElement> ElementNode<E> {
                 (
                     MainlineState::Ready {
                         element,
-                        hooks: hook_context.take_hooks(false),
+                        hooks,
                         children,
                         render_object,
                     },
@@ -141,7 +147,7 @@ impl<E: FullElement> ElementNode<E> {
 
                 (
                     MainlineState::RebuildSuspended {
-                        suspended_hooks: hook_context.take_hooks(true),
+                        suspended_hooks: hooks,
                         element,
                         children,
                         waker: err.waker,
