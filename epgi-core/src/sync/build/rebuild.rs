@@ -93,9 +93,10 @@ impl<E: FullElement> ElementNode<E> {
 
         let (state, change) = match results {
             Ok((items, shuffle)) => {
-                if !ctx.hook_context.has_finished() {
-                    panic!("A build function should always invoke every hook whenever it is called")
-                }
+                assert!(
+                    ctx.hook_context.has_finished(),
+                    "A build function should always invoke every hook whenever it is called"
+                );
                 // Starting the unmounting as early as possible.
                 // Unmount before updating render object can cause render object to hold reference to detached children,
                 // Therfore, we need to ensure we do not read into render objects before the batch commit is done

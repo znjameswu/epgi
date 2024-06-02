@@ -104,9 +104,10 @@ impl<E: FullElement> ElementNode<E> {
 
         let (state, change) = match result {
             Ok((element, child_widgets)) => {
-                if !ctx.hook_context.has_finished() {
-                    panic!("A build function should always invoke every hook whenever it is called")
-                }
+                assert!(
+                    ctx.hook_context.has_finished(),
+                    "A build function should always invoke every hook whenever it is called"
+                );
 
                 let results = child_widgets.par_map_collect(
                     &get_current_scheduler().sync_threadpool,

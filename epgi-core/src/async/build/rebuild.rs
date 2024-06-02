@@ -84,9 +84,11 @@ impl<E: FullElement> ElementNode<E> {
 
         let output = match results {
             Ok((items, shuffle)) => {
-                if !ctx.hook_context.has_finished() {
-                    panic!("A build function should always invoke every hook whenever it is called")
-                }
+                assert!(
+                    ctx.hook_context.has_finished(),
+                    "A build function should always invoke every hook whenever it is called"
+                );
+
                 let async_threadpool = &get_current_scheduler().async_threadpool;
                 let mut nodes_inflating = InlinableDwsizeVec::new();
                 let new_children = items.map_collect_with(

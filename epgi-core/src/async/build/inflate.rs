@@ -175,9 +175,11 @@ impl<E: FullElement> ElementNode<E> {
 
         let output = match result {
             Ok((element, child_widgets)) => {
-                if !ctx.hook_context.has_finished() {
-                    panic!("A build function should always invoke every hook whenever it is called")
-                }
+                assert!(
+                    ctx.hook_context.has_finished(),
+                    "A build function should always invoke every hook whenever it is called"
+                );
+
                 let async_threadpool = &get_current_scheduler().async_threadpool;
                 let children = child_widgets.map_collect_with(
                     (child_work_context, barrier),
