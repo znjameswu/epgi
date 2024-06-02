@@ -58,7 +58,8 @@ impl<E: FullElement> ElementNode<E> {
 }
 
 struct SyncReconcile<E: Element> {
-    is_poll: bool,
+    has_poll: bool,
+    has_mailbox_update: bool,
     old_widget: E::ArcWidget,
     new_widget: Option<E::ArcWidget>,
     state: MainlineState<E, HooksWithTearDowns>,
@@ -175,23 +176,14 @@ impl<E: FullElement> ElementNode<E> {
             None
         };
 
-        // Cannot skip work but can skip rebuild, meaning there is a polling work here.
-        if no_widget_update && no_mailbox_update {
-            return SetupReconcileResult::Reconcile(SyncReconcile {
-                is_poll: true,
-                old_widget: snapshot_reborrow.widget.clone(),
-                new_widget: widget,
-                state,
-                async_cancel,
-            });
-        }
         let old_widget = if let Some(widget) = &widget {
             std::mem::replace(&mut snapshot_reborrow.widget, widget.clone())
         } else {
             snapshot_reborrow.widget.clone()
         };
         return SetupReconcileResult::Reconcile(SyncReconcile {
-            is_poll: false,
+            has_poll: !no_poll,
+            has_mailbox_update: !no_mailbox_update,
             old_widget,
             new_widget: widget,
             state,
@@ -208,7 +200,8 @@ impl<E: FullElement> ElementNode<E> {
         lane_scheduler: &'batch LaneScheduler,
     ) -> CommitResult<E::ParentProtocol> {
         let SyncReconcile {
-            is_poll,
+            has_poll,
+            has_mailbox_update,
             old_widget,
             new_widget,
             state,
@@ -237,8 +230,10 @@ impl<E: FullElement> ElementNode<E> {
                 mut hooks,
                 render_object,
             } => {
-                assert!(!is_poll, "A non-suspended node should not be polled");
-                apply_hook_updates(&self.context, job_ids, &mut hooks);
+                assert!(!has_poll, "A non-suspended node should not be polled");
+                if has_mailbox_update {
+                    apply_hook_updates(&self.context, job_ids, &mut hooks);
+                }
                 self.perform_rebuild_node_sync(
                     new_widget,
                     element,
@@ -259,8 +254,7 @@ impl<E: FullElement> ElementNode<E> {
                 waker,
             } => {
                 waker.abort();
-                // If it is not poll, then it means a new job occurred on this previously suspended node
-                if !is_poll {
+                if has_mailbox_update {
                     apply_hook_updates(&self.context, job_ids, &mut suspended_hooks);
                 }
                 self.perform_rebuild_node_sync(
@@ -277,18 +271,17 @@ impl<E: FullElement> ElementNode<E> {
                 )
             }
             MainlineState::InflateSuspended {
-                suspended_hooks,
+                mut suspended_hooks,
                 waker,
             } => {
                 waker.abort();
+                if has_mailbox_update {
+                    apply_hook_updates(&self.context, job_ids, &mut suspended_hooks);
+                    // TODO: This is impossible and should trigger a warning
+                }
                 self.perform_inflate_node_sync::<false>(
                     new_widget,
                     Some(suspended_hooks),
-                    // if !is_poll {
-                    //     SyncHookContext::new_inflate()
-                    // } else {
-                    //     SyncHookContext::new_poll_inflate(suspended_hooks)
-                    // },
                     consumed_values,
                     lane_scheduler,
                 )

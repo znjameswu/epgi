@@ -57,17 +57,20 @@ impl<E: FullElement> ElementNode<E> {
 }
 
 pub(crate) struct AsyncReconcile<E: ElementBase> {
-    pub(crate) widget: Option<E::ArcWidget>,
-    pub(crate) child_work_context: Asc<WorkContext>,
-    pub(crate) handle: WorkHandle,
-    pub(crate) barrier: CommitBarrier,
-    pub(crate) old_widget: E::ArcWidget,
-    pub(crate) provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    pub(crate) states: Option<(
-        E,
+    widget: Option<E::ArcWidget>,
+    child_work_context: Asc<WorkContext>,
+    handle: WorkHandle,
+    barrier: CommitBarrier,
+    old_widget: E::ArcWidget,
+    provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    states: Result<
+        (
+            E,
+            HooksWithEffects,
+            ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+        ),
         HooksWithEffects,
-        ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-    )>,
+    >,
 }
 
 enum SetupAsyncReconcileResult<E: ElementBase> {
@@ -260,8 +263,8 @@ impl<E: FullElement> ElementNode<E> {
                 use crate::tree::MainlineState::*;
                 let reconcile = match state {
                     InflateSuspended {
-                        suspended_hooks: last_hooks,
-                        waker,
+                        suspended_hooks,
+                        waker: _,
                     } => AsyncReconcile {
                         handle,
                         widget,
@@ -269,7 +272,7 @@ impl<E: FullElement> ElementNode<E> {
                         old_widget: old_widget.clone(),
                         provider_values,
                         barrier,
-                        states: None,
+                        states: Err(suspended_hooks.read(|| None)),
                     },
                     Ready {
                         element,
@@ -289,7 +292,7 @@ impl<E: FullElement> ElementNode<E> {
                         old_widget: old_widget.clone(),
                         provider_values,
                         barrier,
-                        states: Some((
+                        states: Ok((
                             element.clone(),
                             hooks.read(|| None),
                             children.map_ref_collect(Clone::clone),
@@ -324,27 +327,31 @@ impl<E: FullElement> ElementNode<E> {
             states,
         } = rebuild;
 
-        if let Some((last_element, mut hooks, children)) = states {
-            apply_hook_updates(&self.context, child_work_context.job_ids(), &mut hooks);
-            self.perform_rebuild_node_async(
-                widget.as_ref().unwrap_or(&old_widget),
-                last_element,
-                hooks,
-                children,
-                provider_values,
-                child_work_context,
-                handle,
-                barrier,
-            )
-        } else {
-            self.perform_inflate_node_async::<false>(
-                &widget.unwrap_or(old_widget),
-                None,
-                provider_values,
-                child_work_context,
-                handle,
-                barrier,
-            )
+        match states {
+            Ok((last_element, mut hooks, children)) => {
+                apply_hook_updates(&self.context, child_work_context.job_ids(), &mut hooks);
+                self.perform_rebuild_node_async(
+                    widget.as_ref().unwrap_or(&old_widget),
+                    last_element,
+                    hooks,
+                    children,
+                    provider_values,
+                    child_work_context,
+                    handle,
+                    barrier,
+                )
+            }
+            Err(mut suspended_hooks) => {
+                apply_hook_updates(&self.context, child_work_context.job_ids(), &mut suspended_hooks);
+                self.perform_inflate_node_async::<false>(
+                    &widget.unwrap_or(old_widget),
+                    Some(suspended_hooks),
+                    provider_values,
+                    child_work_context,
+                    handle,
+                    barrier,
+                )
+            }
         }
     }
 
