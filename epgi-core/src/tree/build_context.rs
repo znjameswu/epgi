@@ -66,10 +66,7 @@ impl<'a> HookContext<'a> {
 }
 
 impl<'a> BuildContext<'a> {
-    pub fn use_hook<T: Hook>(
-        &mut self,
-        hook: T,
-    ) -> (&mut T::HookState, HookIndex, &ArcElementContextNode) {
+    pub fn use_hook<T: Hook>(&mut self, hook: T) -> (&mut T::HookState, HookIndex) {
         match &mut self.hook_context.hooks {
             Hooks::Sync(hooks) => {
                 let hooks_len = hooks.array_hooks.len();
@@ -90,7 +87,7 @@ impl<'a> BuildContext<'a> {
                     panic!("Hook reads should not be out of bound")
                 };
                 self.hook_context.index += 1;
-                (hook_state, HookIndex { index }, self.element_context)
+                (hook_state, HookIndex { index })
             }
             Hooks::Async(hooks) => {
                 let hooks_len = hooks.array_hooks.len();
@@ -111,7 +108,7 @@ impl<'a> BuildContext<'a> {
                     panic!("Hook reads should not be out of bound")
                 };
                 self.hook_context.index += 1;
-                (hook_state, HookIndex { index }, self.element_context)
+                (hook_state, HookIndex { index })
             }
         }
     }

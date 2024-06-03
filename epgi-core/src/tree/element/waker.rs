@@ -21,10 +21,10 @@ enum SuspendWakerState {
     Aborted,
 }
 
-pub(crate) struct SuspendWaker {
+pub struct SuspendWaker {
     state: Atomic<SuspendWakerState>,
     lane_pos: Atomic<LanePos>,
-    pub(crate) node: AweakElementContextNode,
+    pub(crate) element_context: AweakElementContextNode,
 }
 
 impl ArcWake for SuspendWaker {
@@ -63,11 +63,11 @@ impl SuspendWaker {
         std::sync::Arc::new(Self {
             state: Atomic::new(SuspendWakerState::Suspended),
             lane_pos: Atomic::new(lane_pos),
-            node,
+            element_context: node,
         })
     }
 
-    pub(crate) fn aborted(&self) -> bool {
+    pub(crate) fn is_aborted(&self) -> bool {
         debug_assert_sync_phase();
         // Relaxed is okay because we assert now we are in sync phase
         self.state.load(Relaxed) == SuspendWakerState::Aborted

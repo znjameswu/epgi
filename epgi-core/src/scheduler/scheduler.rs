@@ -174,8 +174,8 @@ where
                         updates,
                         point_rebuilds
                             .into_iter()
-                            .filter(|waker| !waker.aborted())
-                            .map(|waker| PtrEq(waker.node.clone()))
+                            .filter(|waker| !waker.is_aborted())
+                            .map(|waker| PtrEq(waker.element_context.clone()))
                             .collect(),
                     );
                     build_states.dispatch_async_batches();
@@ -215,8 +215,19 @@ where
                     drop(read_guard);
                 }
                 AsyncSuspendReady { waker } => {
-                    if !waker.aborted() && !waker.lane_pos().is_sync() {
-                        todo!()
+                    if !waker.is_aborted() && !waker.lane_pos().is_sync() {
+                        let build_states = self.build_states.read();
+                        let barrier = build_states
+                            .scheduler
+                            .get_commit_barrier_for(waker.lane_pos())
+                            .expect("Commit barrier should exist for async-polled lane");
+                        handle.async_threadpool.spawn(move || {
+                            if let Some(element_context) = waker.element_context.upgrade() {
+                                if let Some(node) = element_context.element_node.upgrade() {
+                                    node.poll_async(waker, barrier)
+                                }
+                            }
+                        })
                     }
                 }
                 ReorderAsyncWork { node } => {

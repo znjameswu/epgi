@@ -155,7 +155,7 @@ where
                         };
                     }
                     AsyncOutput::Suspended {
-                        suspend,
+                        suspended_results: suspend,
                         barrier: None,
                     } => {
                         let result = suspend.take().expect("Async build should fill back the results before commit ever took place");
@@ -424,7 +424,7 @@ where
 
         match output {
             AsyncOutput::Suspended {
-                suspend: Some(suspend),
+                suspended_results: Some(suspend),
                 barrier: None,
             } => todo!(),
             AsyncOutput::Completed(mut results) => {
@@ -501,7 +501,7 @@ where
             | AsyncOutput::Suspended {
                 barrier: Some(_), ..
             } => panic!("CommitBarrier should not be encountered during commit"),
-            AsyncOutput::Gone | AsyncOutput::Suspended { suspend: None, .. } => {
+            AsyncOutput::Gone | AsyncOutput::Suspended { suspended_results: None, .. } => {
                 panic!("Async results are gone before commit")
             }
         }

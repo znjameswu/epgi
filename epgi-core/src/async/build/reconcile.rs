@@ -57,13 +57,13 @@ impl<E: FullElement> ElementNode<E> {
 }
 
 pub(crate) struct AsyncReconcile<E: ElementBase> {
-    widget: Option<E::ArcWidget>,
-    child_work_context: Asc<WorkContext>,
-    handle: WorkHandle,
-    barrier: CommitBarrier,
-    old_widget: E::ArcWidget,
-    provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    states: Result<
+    pub(super) widget: Option<E::ArcWidget>,
+    pub(super) child_work_context: Asc<WorkContext>,
+    pub(super) handle: WorkHandle,
+    pub(super) barrier: CommitBarrier,
+    pub(super) old_widget: E::ArcWidget,
+    pub(super) provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    pub(super) states: Result<
         (
             E,
             HooksWithEffects,
@@ -314,7 +314,7 @@ impl<E: FullElement> ElementNode<E> {
         }
     }
 
-    pub(super) fn execute_reconcile_async(self: &Arc<Self>, rebuild: AsyncReconcile<E>) {
+    pub(super) fn execute_reconcile_async(self: &Arc<Self>, reconcile: AsyncReconcile<E>) {
         //TODO: Merge updates and bypass clean nodes.
 
         let AsyncReconcile {
@@ -325,7 +325,7 @@ impl<E: FullElement> ElementNode<E> {
             old_widget,
             provider_values,
             states,
-        } = rebuild;
+        } = reconcile;
 
         match states {
             Ok((last_element, mut hooks, children)) => {
@@ -342,7 +342,11 @@ impl<E: FullElement> ElementNode<E> {
                 )
             }
             Err(mut suspended_hooks) => {
-                apply_hook_updates(&self.context, child_work_context.job_ids(), &mut suspended_hooks);
+                apply_hook_updates(
+                    &self.context,
+                    child_work_context.job_ids(),
+                    &mut suspended_hooks,
+                );
                 self.perform_inflate_node_async::<false>(
                     &widget.unwrap_or(old_widget),
                     Some(suspended_hooks),

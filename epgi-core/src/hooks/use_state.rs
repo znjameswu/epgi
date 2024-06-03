@@ -8,10 +8,11 @@ use crate::{
 
 impl<'a> BuildContext<'a> {
     pub fn use_state_ref_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (&T, SetState<T>) {
-        let (hook_state, index, element_context) = self.use_hook(StateHook { init });
+        let node = Arc::downgrade(self.element_context);
+        let (hook_state, index) = self.use_hook(StateHook { init });
         (
             &hook_state.value,
-            SetState::new(Arc::downgrade(element_context), index),
+            SetState::new(node, index),
         )
     }
 

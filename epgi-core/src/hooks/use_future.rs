@@ -19,9 +19,8 @@ impl<'a> BuildContext<'a> {
         compute_future: impl FnOnce(D) -> Fut,
         dependencies: D,
     ) -> Result<&T, BuildSuspendedError> {
-        let element_context = Arc::downgrade(self.element_context);
-        let waker = SuspendWaker::new(element_context, self.lane_pos);
-        let (hook_state, _index, _element_context) = self.use_hook(FutureHook {
+        let waker = SuspendWaker::new(Arc::downgrade(self.element_context), self.lane_pos);
+        let (hook_state, _index) = self.use_hook(FutureHook {
             dependencies,
             compute_future,
         });

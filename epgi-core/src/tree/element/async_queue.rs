@@ -286,7 +286,7 @@ pub(crate) enum AsyncOutput<E: ElementBase> {
     },
     Suspended {
         /// None means a work from the same lane has taken the results and is currently processing it.
-        suspend: Option<BuildSuspendResults>,
+        suspended_results: Option<BuildSuspendResults>,
         /// None means this async work is allowed to be commited as suspended.
         barrier: Option<CommitBarrier>,
     },
@@ -301,8 +301,8 @@ pub(crate) struct BuildSuspendResults {
 }
 
 impl BuildSuspendResults {
-    pub fn new(hooks: HooksWithEffects) -> Self {
-        todo!()
+    pub fn new(hooks: HooksWithEffects, waker: ArcSuspendWaker) -> Self {
+        Self { hooks, waker }
     }
 }
 

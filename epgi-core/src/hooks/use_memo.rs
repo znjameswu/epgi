@@ -11,7 +11,7 @@ impl<'a> BuildContext<'a> {
         compute: impl FnOnce(D) -> T,
         dependencies: D,
     ) -> &T {
-        let (hook_state, _index, _element_context) = self.use_hook(MemoHook {
+        let (hook_state, _index) = self.use_hook(MemoHook {
             dependencies,
             compute,
         });

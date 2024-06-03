@@ -134,8 +134,8 @@ impl<E: FullElement> ElementNode<E> {
                     shuffle,
                 ))
             }
-            Err((children, err)) => AsyncOutput::Suspended {
-                suspend: Some(BuildSuspendResults::new(hooks)),
+            Err((_children, err)) => AsyncOutput::Suspended {
+                suspended_results: Some(BuildSuspendResults::new(hooks, err.waker)),
                 barrier: Some(barrier),
             },
         };

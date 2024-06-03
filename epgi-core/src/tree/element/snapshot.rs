@@ -61,6 +61,13 @@ impl<E: Element> ElementSnapshotInner<E> {
             ElementSnapshotInner::Mainline(_) => None,
         }
     }
+
+    pub(crate) fn is_async_inflating(&self) -> bool {
+        match self {
+            ElementSnapshotInner::AsyncInflating(x) => true,
+            ElementSnapshotInner::Mainline(_) => false,
+        }
+    }
 }
 
 pub(crate) struct Mainline<E: Element> {

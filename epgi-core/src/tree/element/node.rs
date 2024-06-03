@@ -37,6 +37,7 @@ pub trait AnyElementNode:
     + crate::sync::AnyElementAsyncVisitExt
     + crate::sync::AnyElementAsyncPurgeLaneMark
     + crate::r#async::AnyElementAsyncInflateExt
+    + crate::r#async::AnyElementAsyncPollExt
     + Send
     + Sync
     + 'static

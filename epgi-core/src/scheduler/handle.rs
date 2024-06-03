@@ -200,7 +200,7 @@ impl SchedulerHandle {
         *accumulated_wakeups = std::mem::take(&mut *accumulated_wakeups)
             .into_iter()
             .filter_map(|waker| {
-                if waker.aborted() {
+                if waker.is_aborted() {
                     return None;
                 }
                 if waker.lane_pos().is_sync() {
@@ -220,7 +220,7 @@ impl SchedulerHandle {
         *accumulated_wakeups = std::mem::take(&mut *accumulated_wakeups)
             .into_iter()
             .filter_map(|waker| {
-                if waker.aborted() {
+                if waker.is_aborted() {
                     return None;
                 }
                 if !waker.lane_pos().is_sync() {
