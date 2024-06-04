@@ -252,7 +252,7 @@ impl JobBatcher {
                 &mut self.job_datas,
                 sync_batch_id,
                 sync_job_priority,
-                JobData::is_sync,
+                |job_data| job_data.is_sync() || job_data.priority() <= &sync_job_priority,
             );
             let sync_batch = Asc::new(sync_batch);
             debug_assert!(sync_batch.is_sync());

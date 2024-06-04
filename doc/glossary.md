@@ -178,6 +178,8 @@ Mailbox Mode
 1. Units of immediate work spawned directly from a sync job will be completed atomically. That is, updates from a sync job that are not partitioned by future hooks will always be presented wholly in any frame.
 2. Units of work from async jobs will be completed atomically. That is, async jobs will never present a partial updates.
 3. A sync job will always batch with all jobs that are sequenced-before it in the sync batch. All sync jobs will be batched in the sync batch. The remaining sequenced async jobs will be batched. 
+  1. This guarantees that excluding jobs in the sync batch (which will be committed after the sync build is complete), the rest async batches are *closed* under sequenced relations
+  2. However, in the presence of an unfinished sync batch, both the sync batch and the async batches are *not closed* under sequenced relations
 4. Sync jobs are always batched in one single sync lane and always finish uninterrupted in the current frame.
 5. The ordering of units of work inside a single batch will follow the order of job creation, except for delayed work. 
 6. (Goal) The scheduler will try to execute as many non-conflicting jobs in parallel as possible.
