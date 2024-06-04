@@ -24,7 +24,7 @@ impl StartTransition {
         //
         // If the flip job is pushed and the transition job is not:
         // It is possible that the second flip job will be dispatched without realizing the exisitence of the first flip job
-        // And a wrong commit sequence of: first flip -> second flip -> first transtion (invalid state) -> second transition will occur.
+        // And a wrong commit sequence can occur: first flip -> second flip -> first transstion (invalid state) -> second transition.
         //
         // If the transition job is pushed and the flip job is not:
         // It is just plain stupid

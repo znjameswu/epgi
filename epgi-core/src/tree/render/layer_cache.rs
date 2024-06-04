@@ -26,7 +26,7 @@ where
 
     pub(crate) fn composite_results_ref(
         &self,
-        token: NoRecompositeToken,
+        _token: NoRecompositeToken,
     ) -> Option<&CompositeResults<CC, T>> {
         self.composite_results.as_ref()
     }

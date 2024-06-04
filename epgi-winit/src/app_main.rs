@@ -279,11 +279,7 @@ impl<'a> MainState<'a> {
 
         let scheduler = Scheduler::new(
             Asc::new(RootView { child }),
-            LayoutResults {
-                constraints: BoxConstraints::default(),
-                size: BoxSize::INFINITY,
-                memo: (),
-            },
+            LayoutResults::new(BoxConstraints::default(), BoxSize::INFINITY, ()),
             BoxOffset::ZERO,
             get_current_scheduler(),
             EpgiGlazierSchedulerExtension::new(rx),

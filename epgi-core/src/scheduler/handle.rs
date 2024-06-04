@@ -185,6 +185,12 @@ impl SchedulerHandle {
             .insert(PtrEq(layer_render_object));
     }
 
+    pub fn push_extension_event(&self, event: Box<dyn Any + Send + Sync>) {
+        self.task_rx
+            .other_tasks
+            .push(SchedulerTask::SchedulerExtensionEvent(event))
+    }
+
     // pub fn schedule_idle_callback
 }
 
@@ -211,26 +217,6 @@ impl SchedulerHandle {
             })
             .collect();
         (accumulated_jobs, point_rebuilds)
-    }
-
-    pub(super) fn get_async_wakeups(&self) -> Vec<ArcSuspendWaker> {
-        let mut async_wakeups = Vec::new();
-        let mut accumulated_wakeups = self.accumulated_wakeups.lock();
-        // Workaround for extract_if/drain_filter
-        *accumulated_wakeups = std::mem::take(&mut *accumulated_wakeups)
-            .into_iter()
-            .filter_map(|waker| {
-                if waker.is_aborted() {
-                    return None;
-                }
-                if !waker.lane_pos().is_sync() {
-                    async_wakeups.push(waker);
-                    return None;
-                }
-                Some(waker)
-            })
-            .collect();
-        return async_wakeups;
     }
 }
 

@@ -41,23 +41,23 @@ impl<R: RenderBase, LC> RenderCache<R, LC> {
         })
     }
 
-    #[inline(always)]
-    pub(crate) fn last_layout_constraints_ref(
-        &self,
-    ) -> Option<&<R::ParentProtocol as Protocol>::Constraints> {
-        self.0
-            .as_ref()
-            .map(|cache| &cache.layout_results.constraints)
-    }
+    // #[inline(always)]
+    // pub(crate) fn last_layout_constraints_ref(
+    //     &self,
+    // ) -> Option<&<R::ParentProtocol as Protocol>::Constraints> {
+    //     self.0
+    //         .as_ref()
+    //         .map(|cache| &cache.layout_results.constraints)
+    // }
 
-    #[inline(always)]
-    pub(crate) fn last_layout_constraints_mut(
-        &mut self,
-    ) -> Option<&mut <R::ParentProtocol as Protocol>::Constraints> {
-        self.0
-            .as_mut()
-            .map(|cache| &mut cache.layout_results.constraints)
-    }
+    // #[inline(always)]
+    // pub(crate) fn last_layout_constraints_mut(
+    //     &mut self,
+    // ) -> Option<&mut <R::ParentProtocol as Protocol>::Constraints> {
+    //     self.0
+    //         .as_mut()
+    //         .map(|cache| &mut cache.layout_results.constraints)
+    // }
 
     #[inline(always)]
     pub(crate) fn last_layout_results_mut(
@@ -76,23 +76,24 @@ pub(crate) struct LayoutCache<P: Protocol, M, LC> {
     pub(crate) layer_cache: Option<LC>,
 }
 
-impl<P, M, LC> LayoutCache<P, M, LC>
-where
-    P: Protocol,
-{
-    pub(crate) fn new(
-        layout_results: LayoutResults<P, M>,
-        paint_offset: Option<P::Offset>,
-        layer_cache: Option<LC>,
-    ) -> Self {
-        Self {
-            layout_results,
-            paint_offset,
-            layer_cache,
-        }
-    }
-}
+// impl<P, M, LC> LayoutCache<P, M, LC>
+// where
+//     P: Protocol,
+// {
+//     pub(crate) fn new(
+//         layout_results: LayoutResults<P, M>,
+//         paint_offset: Option<P::Offset>,
+//         layer_cache: Option<LC>,
+//     ) -> Self {
+//         Self {
+//             layout_results,
+//             paint_offset,
+//             layer_cache,
+//         }
+//     }
+// }
 
+#[non_exhaustive]
 pub struct LayoutResults<P: Protocol, M> {
     pub constraints: P::Constraints,
     // pub(crate) parent_use_size: bool,
@@ -104,7 +105,7 @@ impl<P, M> LayoutResults<P, M>
 where
     P: Protocol,
 {
-    pub(crate) fn new(
+    pub fn new(
         constraints: P::Constraints,
         // parent_use_size: bool,
         size: P::Size,

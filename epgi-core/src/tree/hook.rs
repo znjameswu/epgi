@@ -24,9 +24,9 @@ impl<T> HooksWith<T> {
         }
     }
 
-    pub(crate) fn get(&self, index: HookIndex) -> Option<&(Box<dyn HookState>, T)> {
-        self.array_hooks.get(index.index)
-    }
+    // pub(crate) fn get(&self, index: HookIndex) -> Option<&(Box<dyn HookState>, T)> {
+    //     self.array_hooks.get(index.index)
+    // }
 
     pub(crate) fn get_mut(&mut self, index: HookIndex) -> Option<&mut (Box<dyn HookState>, T)> {
         self.array_hooks.get_mut(index.index)

@@ -107,7 +107,7 @@ impl<E: FullElement> ElementNode<E> {
                 .expect("async lane should exist");
             (work_context, parent_handle, barrier)
         };
-        
+
         while let Some((&lane_pos, rest_lanes)) = remaining_lanes_to_start.split_first() {
             if !self_lanes.contains(lane_pos) {
                 break;

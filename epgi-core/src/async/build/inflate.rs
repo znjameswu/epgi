@@ -2,15 +2,15 @@ use std::borrow::Cow;
 
 use crate::{
     foundation::{
-        Arc, Asc, Container, InlinableDwsizeVec, Protocol, Provide, SyncMutex, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, Container, InlinableDwsizeVec, Protocol, Provide, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash,
         BuildContext, BuildResults, BuildSuspendResults, ElementBase, ElementContextNode,
-        ElementNode, ElementSnapshot, ElementSnapshotInner, FullElement, HookContext,
-        HookContextMode, HooksWithEffects, Widget, WorkContext, WorkHandle,
+        ElementNode, ElementSnapshotInner, FullElement, HookContext, HookContextMode,
+        HooksWithEffects, Widget, WorkContext, WorkHandle,
     },
 };
 
@@ -91,21 +91,19 @@ impl<E: FullElement> ElementNode<E> {
                 &work_context.recorded_provider_values,
                 &element_context.provider_map,
             );
-            Self {
-                context: Arc::new(element_context),
-                snapshot: SyncMutex::new(ElementSnapshot::new(
-                    widget,
-                    ElementSnapshotInner::AsyncInflating(AsyncInflating {
-                        work_context,
-                        stash: AsyncStash {
-                            handle,
-                            subscription_diff,
-                            spawned_consumers: None,
-                            output: AsyncOutput::Uninitiated { barrier },
-                        },
-                    }),
-                )),
-            }
+            Self::new(
+                Arc::new(element_context),
+                widget,
+                ElementSnapshotInner::AsyncInflating(AsyncInflating {
+                    work_context,
+                    stash: AsyncStash {
+                        handle,
+                        subscription_diff,
+                        spawned_consumers: None,
+                        output: AsyncOutput::Uninitiated { barrier },
+                    },
+                }),
+            )
         });
         (node, handle_clone)
         // We could either read the subscription here or in the inflate method since async inflating is a two-step process. \

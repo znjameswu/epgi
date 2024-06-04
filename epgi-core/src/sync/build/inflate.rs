@@ -1,15 +1,13 @@
 use crate::{
     foundation::{
-        Arc, AsIterator, Container, InlinableDwsizeVec, Protocol, Provide, SyncMutex,
-        EMPTY_CONSUMED_TYPES,
+        Arc, AsIterator, Container, InlinableDwsizeVec, Protocol, Provide, EMPTY_CONSUMED_TYPES,
     },
     scheduler::{get_current_scheduler, LanePos},
     sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext, Element,
-        ElementBase, ElementContextNode, ElementNode, ElementSnapshot, ElementSnapshotInner,
-        FullElement, HookContext, HookContextMode, HooksWithTearDowns, Mainline, MainlineState,
-        Widget,
+        ElementBase, ElementContextNode, ElementNode, ElementSnapshotInner, FullElement,
+        HookContext, HookContextMode, HooksWithTearDowns, Mainline, MainlineState, Widget,
     },
 };
 
@@ -50,19 +48,19 @@ impl<E: FullElement> ElementNode<E> {
         parent_context: Option<ArcElementContextNode>,
         lane_scheduler: &LaneScheduler,
     ) -> (Arc<ElementNode<E>>, CommitResult<E::ParentProtocol>) {
-        let node = Arc::new_cyclic(|weak| ElementNode {
-            context: Arc::new(ElementContextNode::new_for::<E>(
-                weak.clone() as _,
-                parent_context,
-                widget,
-            )),
-            snapshot: SyncMutex::new(ElementSnapshot::new(
+        let node = Arc::new_cyclic(|weak| {
+            ElementNode::new(
+                Arc::new(ElementContextNode::new_for::<E>(
+                    weak.clone() as _,
+                    parent_context,
+                    widget,
+                )),
                 widget.clone(),
                 ElementSnapshotInner::Mainline(Mainline {
                     state: None,
                     async_queue: AsyncWorkQueue::new_empty(),
                 }),
-            )),
+            )
         });
 
         let consumed_values = read_and_update_subscriptions_sync(

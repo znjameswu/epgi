@@ -12,7 +12,7 @@ pub struct ElementNode<E: Element> {
 }
 
 impl<E: Element> ElementNode<E> {
-    pub(super) fn new(
+    pub(crate) fn new(
         context: ArcElementContextNode,
         widget: E::ArcWidget,
         inner: ElementSnapshotInner<E>,

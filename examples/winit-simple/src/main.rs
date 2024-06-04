@@ -45,8 +45,8 @@ fn main() {
     let app = Suspense!(
         fallback = fallback,
         child = SuspendableBuilder!(
-            builder = move |mut ctx| {
-                let res = ctx.use_future(
+            builder = move |ctx| {
+                let _res = ctx.use_future(
                     |_| {
                         tokio::spawn(async {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;

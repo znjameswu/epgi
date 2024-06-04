@@ -160,6 +160,7 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
     }
 
     fn detach_render_object(&self) {
+        self.mark.set_is_detached();
         todo!()
     }
 

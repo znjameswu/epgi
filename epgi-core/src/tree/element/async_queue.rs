@@ -117,65 +117,65 @@ where
         (inner.current.as_mut(), Some(&mut inner.backqueue))
     }
 
-    fn contains(&self, lane_pos: LanePos) -> bool {
-        if let Some(inner) = &self.inner {
-            if let Some(current) = &inner.current {
-                if current.work_context.lane_pos == lane_pos {
-                    return true;
-                }
-            }
-            if inner
-                .backqueue
-                .iter()
-                .find(|entry| entry.work_context.lane_pos == lane_pos)
-                .is_some()
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    // fn contains(&self, lane_pos: LanePos) -> bool {
+    //     if let Some(inner) = &self.inner {
+    //         if let Some(current) = &inner.current {
+    //             if current.work_context.lane_pos == lane_pos {
+    //                 return true;
+    //             }
+    //         }
+    //         if inner
+    //             .backqueue
+    //             .iter()
+    //             .find(|entry| entry.work_context.lane_pos == lane_pos)
+    //             .is_some()
+    //         {
+    //             return true;
+    //         }
+    //     }
+    //     return false;
+    // }
 
-    pub(super) fn backqueue_current_if<
-        F: FnOnce(&AsyncQueueCurrentEntry<E>) -> Option<CommitBarrier>,
-    >(
-        &mut self,
-        predicate: F,
-    ) -> Option<AsyncQueueCurrentEntry<E>> {
-        if let Some(inner) = &mut self.inner {
-            if let Some(current) = &mut inner.current {
-                if let Some(barrier) = predicate(current) {
-                    let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
-                    let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
-                        widget: taken.widget.clone(),
-                        work_context: taken.work_context.clone(),
-                        barrier,
-                    });
-                    return Some(taken);
-                }
-            }
-        }
-        return None;
-    }
+    // pub(super) fn backqueue_current_if<
+    //     F: FnOnce(&AsyncQueueCurrentEntry<E>) -> Option<CommitBarrier>,
+    // >(
+    //     &mut self,
+    //     predicate: F,
+    // ) -> Option<AsyncQueueCurrentEntry<E>> {
+    //     if let Some(inner) = &mut self.inner {
+    //         if let Some(current) = &mut inner.current {
+    //             if let Some(barrier) = predicate(current) {
+    //                 let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
+    //                 let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
+    //                     widget: taken.widget.clone(),
+    //                     work_context: taken.work_context.clone(),
+    //                     barrier,
+    //                 });
+    //                 return Some(taken);
+    //             }
+    //         }
+    //     }
+    //     return None;
+    // }
 
-    pub(super) fn backqueue_current<F: FnOnce(&AsyncQueueCurrentEntry<E>) -> CommitBarrier>(
-        &mut self,
-        get_commit_barrier: F,
-    ) -> Option<AsyncQueueCurrentEntry<E>> {
-        if let Some(inner) = &mut self.inner {
-            if let Some(taken) = (&mut inner.current).take() {
-                // rust-analyzer#14933
-                let barrier = get_commit_barrier(&taken);
-                let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
-                    widget: taken.widget.clone(),
-                    work_context: taken.work_context.clone(),
-                    barrier,
-                });
-                return Some(taken);
-            }
-        }
-        return None;
-    }
+    // pub(super) fn backqueue_current<F: FnOnce(&AsyncQueueCurrentEntry<E>) -> CommitBarrier>(
+    //     &mut self,
+    //     get_commit_barrier: F,
+    // ) -> Option<AsyncQueueCurrentEntry<E>> {
+    //     if let Some(inner) = &mut self.inner {
+    //         if let Some(taken) = (&mut inner.current).take() {
+    //             // rust-analyzer#14933
+    //             let barrier = get_commit_barrier(&taken);
+    //             let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
+    //                 widget: taken.widget.clone(),
+    //                 work_context: taken.work_context.clone(),
+    //                 barrier,
+    //             });
+    //             return Some(taken);
+    //         }
+    //     }
+    //     return None;
+    // }
 
     // The method is designed in such a way that no one can construct a emtpy queue with inner.is_some()
     // while enabling zero-clone code
@@ -212,9 +212,9 @@ where
         return Ok(result);
     }
 
-    pub(crate) fn remove_current(&mut self) -> Option<AsyncQueueCurrentEntry<E>> {
-        (&mut self.inner.as_mut()?.current).take() // rust-analyzer#14933
-    }
+    // pub(crate) fn remove_current(&mut self) -> Option<AsyncQueueCurrentEntry<E>> {
+    //     (&mut self.inner.as_mut()?.current).take() // rust-analyzer#14933
+    // }
 
     pub(crate) fn remove_current_if(
         &mut self,

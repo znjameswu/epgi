@@ -98,11 +98,9 @@ where
             &constraints,
             &inner_reborrow.children,
         );
-        inner_reborrow.cache.insert_layout_results(LayoutResults {
-            constraints: constraints.clone(),
-            size: size.clone(),
-            memo,
-        });
+        inner_reborrow
+            .cache
+            .insert_layout_results(LayoutResults::new(constraints.clone(), size.clone(), memo));
 
         self.mark.clear_self_needs_layout();
         self.mark.set_parent_use_size();
@@ -125,11 +123,9 @@ where
             &constraints,
             &inner_reborrow.children,
         );
-        inner_reborrow.cache.insert_layout_results(LayoutResults {
-            constraints: constraints.clone(),
-            size: size,
-            memo,
-        });
+        inner_reborrow
+            .cache
+            .insert_layout_results(LayoutResults::new(constraints.clone(), size, memo));
         self.mark.clear_self_needs_layout();
         self.mark.clear_parent_use_size();
     }

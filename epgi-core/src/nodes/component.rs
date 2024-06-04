@@ -119,7 +119,10 @@ impl<P: Protocol> SingleChildElement for SuspendableComponentElement<P> {
 
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Builder<F, P>>))]
-pub struct Builder<F: Fn(&mut BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static, P: Protocol> {
+pub struct Builder<
+    F: Fn(&mut BuildContext) -> ArcChildWidget<P> + Send + Sync + 'static,
+    P: Protocol,
+> {
     pub builder: F,
 }
 
@@ -169,7 +172,10 @@ pub struct SuspendableBuilder<
 impl<F, P> std::fmt::Debug for SuspendableBuilder<F, P>
 where
     P: Protocol,
-    F: Fn(&mut BuildContext) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Function").finish()
@@ -179,7 +185,10 @@ where
 impl<F, P> Widget for SuspendableBuilder<F, P>
 where
     P: Protocol,
-    F: Fn(&mut BuildContext) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
 {
     type ParentProtocol = P;
     type ChildProtocol = P;
@@ -193,7 +202,10 @@ where
 impl<F, P> SuspendableComponentWidget<P> for SuspendableBuilder<F, P>
 where
     P: Protocol,
-    F: Fn(&mut BuildContext) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
 {
     fn build(&self, ctx: &mut BuildContext<'_>) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
         (self.builder)(ctx)

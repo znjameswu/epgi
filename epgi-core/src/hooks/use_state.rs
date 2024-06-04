@@ -10,10 +10,7 @@ impl<'a> BuildContext<'a> {
     pub fn use_state_ref_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (&T, SetState<T>) {
         let node = Arc::downgrade(self.element_context);
         let (hook_state, index) = self.use_hook(StateHook { init });
-        (
-            &hook_state.value,
-            SetState::new(node, index),
-        )
+        (&hook_state.value, SetState::new(node, index))
     }
 
     pub fn use_state_ref<T: State>(&mut self, init: T) -> (&T, SetState<T>) {

@@ -252,8 +252,8 @@ where
     ElementImpl<true, PROVIDE_ELEMENT>:
         ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
 {
-    if let RenderObjectCommitSummary::KeepAll { .. }
-    | RenderObjectCommitSummary::HasSuspended = render_object_change_summary
+    if let RenderObjectCommitSummary::KeepAll { .. } | RenderObjectCommitSummary::HasSuspended =
+        render_object_change_summary
     {
         return RenderObjectCommitResult::Suspend;
     };
@@ -445,8 +445,8 @@ where
     let render_object_change_summary =
         RenderObjectCommitResult::summarize(render_object_changes.as_iter());
 
-    if let RenderObjectCommitSummary::KeepAll { .. }
-    | RenderObjectCommitSummary::HasSuspended = render_object_change_summary
+    if let RenderObjectCommitSummary::KeepAll { .. } | RenderObjectCommitSummary::HasSuspended =
+        render_object_change_summary
     {
         return (None, RenderObjectCommitResult::Suspend);
     };
@@ -536,8 +536,8 @@ pub(super) fn update_children<R: RenderBase>(
         replace_with::replace_with_or_abort(children, move |children| {
             let slots = (shuffle)(children);
             slots.zip_collect(render_object_changes, |slot, change| {
-                use RenderObjectSlots::*;
                 use RenderObjectCommitResult::*;
+                use RenderObjectSlots::*;
                 match (slot, change) {
                     (Reuse(render_object), Keep { .. }) => render_object,
                     (_, New(render_object)) => render_object,

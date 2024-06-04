@@ -1,7 +1,4 @@
-use std::{
-    sync::atomic::{Ordering, Ordering::*},
-    time::Instant,
-};
+use std::{sync::atomic::Ordering::*, time::Instant};
 
 use hashbrown::HashSet;
 
@@ -124,9 +121,9 @@ impl AtomicJobIdCounter {
         Self(portable_atomic::AtomicU64::new(0))
     }
 
-    pub(super) fn load_frame(&self, order: Ordering) -> u64 {
-        return self.0.load(order) >> (Self::BITS_JOB_COUNTER + 1);
-    }
+    // pub(super) fn load_frame(&self, order: Ordering) -> u64 {
+    //     return self.0.load(order) >> (Self::BITS_JOB_COUNTER + 1);
+    // }
 
     pub(super) fn increment_frame(&self) {
         loop {

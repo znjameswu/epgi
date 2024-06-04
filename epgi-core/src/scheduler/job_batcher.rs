@@ -30,9 +30,9 @@ impl JobData {
     fn priority(&self) -> &JobPriority {
         self.conf.priority_ref()
     }
-    fn spawning_frame(&self) -> u64 {
-        self.conf.id().spawning_frame()
-    }
+    // fn spawning_frame(&self) -> u64 {
+    //     self.conf.id().spawning_frame()
+    // }
 }
 
 // enum JobInterference {
