@@ -64,7 +64,7 @@ impl<E: Element> ElementSnapshotInner<E> {
 
     pub(crate) fn is_async_inflating(&self) -> bool {
         match self {
-            ElementSnapshotInner::AsyncInflating(x) => true,
+            ElementSnapshotInner::AsyncInflating(_) => true,
             ElementSnapshotInner::Mainline(_) => false,
         }
     }

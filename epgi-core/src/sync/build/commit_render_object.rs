@@ -96,6 +96,7 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
         is_new_widget: bool,
     ) -> RenderObjectCommitResult<E::ParentProtocol>;
 
+    // Detach render object if any
     fn rebuild_suspend_commit_render_object(
         render_object: Self::OptionArcRenderObject,
     ) -> RenderObjectCommitResult<E::ParentProtocol>;

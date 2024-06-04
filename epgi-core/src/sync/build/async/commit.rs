@@ -155,14 +155,15 @@ where
                         };
                     }
                     AsyncOutput::Suspended {
-                        suspended_results: suspend,
+                        suspended_results,
                         barrier: None,
                     } => {
-                        let result = suspend.take().expect("Async build should fill back the results before commit ever took place");
+                        let result = suspended_results.take().expect("Async build should fill back the results before commit ever took place");
+                        result.waker.make_sync();
                         snapshot_reborrow.inner = ElementSnapshotInner::Mainline(Mainline {
                             state: Some(MainlineState::InflateSuspended {
                                 suspended_hooks: result.hooks.fire_effects(),
-                                waker: todo!(), // Prevent fired async wakes, establish sync wakes
+                                waker: result.waker,
                             }),
                             async_queue: AsyncWorkQueue::new_empty(),
                         });
@@ -306,49 +307,66 @@ where
             "Commit walk should only see a async-inflating node if its lane is completed"
         );
         let output = std::mem::replace(&mut stash.output, AsyncOutput::Gone);
-        let AsyncOutput::Completed(results) = output else {
-            panic!(
-                "Previously the commit visit determined this node needs commit and is not suspended during inflating. \
-                However, when it visit again it has been in a non-commitable state or suspended state, \
-                indicating a possible state corruption"
-            );
-        };
 
-        let BuildResults {
-            hooks,
-            element,
-            mut children,
-            rebuild_state,
-        } = results;
+        match output {
+            AsyncOutput::Completed(results) => {
+                let BuildResults {
+                    hooks,
+                    element,
+                    mut children,
+                    rebuild_state,
+                } = results;
 
-        debug_assert!(
-            rebuild_state.is_none(),
-            "Inflate commit should not see rebuild results"
-        );
+                debug_assert!(
+                    rebuild_state.is_none(),
+                    "Inflate commit should not see rebuild results"
+                );
 
-        // Fire the hooks before commit into render object
-        let hooks = hooks.fire_effects();
+                // Fire the hooks before commit into render object
+                let hooks = hooks.fire_effects();
 
-        let (render_object, subtree_change) =
-            <E as Element>::Impl::inflate_success_commit_render_object(
-                &element,
-                widget,
-                &mut children,
-                render_object_changes,
-                element_context,
-                lane_scheduler,
-            );
+                let (render_object, subtree_change) =
+                    <E as Element>::Impl::inflate_success_commit_render_object(
+                        &element,
+                        widget,
+                        &mut children,
+                        render_object_changes,
+                        element_context,
+                        lane_scheduler,
+                    );
 
-        let mainline = Mainline {
-            state: Some(MainlineState::Ready {
-                element,
-                hooks,
-                children,
-                render_object,
-            }),
-            async_queue: AsyncWorkQueue::new_empty(),
-        };
-        return (mainline, subtree_change);
+                let mainline = Mainline {
+                    state: Some(MainlineState::Ready {
+                        element,
+                        hooks,
+                        children,
+                        render_object,
+                    }),
+                    async_queue: AsyncWorkQueue::new_empty(),
+                };
+                return (mainline, subtree_change);
+            }
+            AsyncOutput::Suspended {
+                suspended_results: Some(suspended_results),
+                barrier: None,
+            } => {
+                let mainline = Mainline {
+                    state: Some(MainlineState::InflateSuspended {
+                        suspended_hooks: suspended_results.hooks.fire_effects(),
+                        waker: suspended_results.waker,
+                    }),
+                    async_queue: AsyncWorkQueue::new_empty(),
+                };
+                return (mainline, RenderObjectCommitResult::Suspend);
+            }
+            AsyncOutput::Uninitiated { .. } | AsyncOutput::Gone | AsyncOutput::Suspended { .. } => {
+                panic!(
+                    "Previously the commit visit determined this node needs commit and is not suspended during inflating. \
+                    However, when it visit again it has been in a non-commitable state or suspended state, \
+                    indicating a possible state corruption"
+                );
+            }
+        }
     }
 
     fn execute_commit_async_mainline<'batch>(
@@ -424,9 +442,67 @@ where
 
         match output {
             AsyncOutput::Suspended {
-                suspended_results: Some(suspend),
+                suspended_results: Some(suspended_results),
                 barrier: None,
-            } => todo!(),
+            } => {
+                suspended_results.waker.make_sync();
+                use MainlineState::*;
+                let new_state = match state {
+                    Ready {
+                        element,
+                        mut hooks,
+                        children,
+                        render_object,
+                    } => {
+                        hooks.merge_with(suspended_results.hooks, true, HookContextMode::Rebuild);
+                        <<E as Element>::Impl as ImplCommitRenderObject<E>>::rebuild_suspend_commit_render_object(
+                            render_object,
+                        );
+                        RebuildSuspended {
+                            element,
+                            suspended_hooks: hooks,
+                            children,
+                            waker: suspended_results.waker,
+                        }
+                    }
+                    InflateSuspended {
+                        mut suspended_hooks,
+                        waker,
+                    } => {
+                        waker.abort();
+                        suspended_hooks.merge_with(
+                            suspended_results.hooks,
+                            true,
+                            HookContextMode::PollInflate,
+                        );
+                        InflateSuspended {
+                            suspended_hooks,
+                            waker: suspended_results.waker,
+                        }
+                    }
+                    RebuildSuspended {
+                        element,
+                        mut suspended_hooks,
+                        children,
+                        waker,
+                    } => {
+                        waker.abort();
+                        suspended_hooks.merge_with(
+                            suspended_results.hooks,
+                            true,
+                            HookContextMode::Rebuild,
+                        );
+                        RebuildSuspended {
+                            element,
+                            suspended_hooks,
+                            children,
+                            waker,
+                        }
+                    }
+                };
+                mainline.state = Some(new_state);
+                return RenderObjectCommitResult::Suspend;
+            }
             AsyncOutput::Completed(mut results) => {
                 use MainlineState::*;
                 match state {
@@ -501,7 +577,11 @@ where
             | AsyncOutput::Suspended {
                 barrier: Some(_), ..
             } => panic!("CommitBarrier should not be encountered during commit"),
-            AsyncOutput::Gone | AsyncOutput::Suspended { suspended_results: None, .. } => {
+            AsyncOutput::Gone
+            | AsyncOutput::Suspended {
+                suspended_results: None,
+                ..
+            } => {
                 panic!("Async results are gone before commit")
             }
         }
