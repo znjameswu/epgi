@@ -6,6 +6,7 @@ use std::{
     time::Instant,
 };
 
+use event_listener::Listener;
 use hashbrown::HashSet;
 
 use crate::{
@@ -44,7 +45,7 @@ pub struct SchedulerHandle {
     pub sync_threadpool: rayon::ThreadPool,
     pub async_threadpool: rayon::ThreadPool,
 
-    request_redraw: Box<dyn Fn() + Send + Sync>,
+    pub request_redraw: AtomicBool,
 
     pub(super) task_rx: SchedulerTaskReceiver,
 
@@ -62,12 +63,11 @@ impl SchedulerHandle {
     pub fn new(
         sync_threadpool: rayon::ThreadPool,
         async_threadpool: rayon::ThreadPool,
-        request_redraw: Box<dyn Fn() + Send + Sync>,
     ) -> Self {
         Self {
             sync_threadpool,
             async_threadpool,
-            request_redraw,
+            request_redraw: AtomicBool::new(false),
             task_rx: SchedulerTaskReceiver::new(),
             global_sync_job_build_lock: SyncRwLock::new(()),
             job_id_counter: AtomicJobIdCounter::new(),
@@ -98,7 +98,7 @@ impl SchedulerHandle {
                 .accumulated_jobs
                 .lock()
                 .push(job_builder);
-            (self.request_redraw)();
+            self.request_redraw.store(true, Release);
         }
         drop(guard);
     }
@@ -113,7 +113,7 @@ impl SchedulerHandle {
                 .accumulated_jobs
                 .lock()
                 .push(job_builder);
-            (self.request_redraw)();
+            self.request_redraw.store(true, Release);
         }
     }
 
@@ -121,7 +121,7 @@ impl SchedulerHandle {
         let mut accumulated_wakeups = self.accumulated_wakeups.lock();
         if waker.lane_pos().is_sync() {
             accumulated_wakeups.push(waker);
-            (self.request_redraw)();
+            self.request_redraw.store(true, Release);
         } else {
             accumulated_wakeups.push(waker.clone());
             self.task_rx

@@ -14,6 +14,7 @@ peniko = { workspace = true }
 vello_encoding = { workspace = true }
 vello = { workspace = true }
 parley = { workspace = true }
+masonry = { workspace = true }
 
 [features]
 default = []

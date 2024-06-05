@@ -281,17 +281,17 @@ impl WinitPointerEventConverter {
                     ToBeAdded => log::error!("Winit produces a CursorInput event while the pointer has no registered position"),
                 };
             }
-            TouchpadMagnify {
+            PinchGesture {
                 device_id,
                 delta,
                 phase,
             } => {
                 log::error!("Pointer signal event is not implemented")
             }
-            SmartMagnify { device_id } => {
+            DoubleTapGesture { device_id } => {
                 log::error!("Smart magnify event is not implemented")
             }
-            TouchpadRotate {
+            RotationGesture {
                 device_id,
                 delta,
                 phase,

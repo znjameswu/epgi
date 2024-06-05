@@ -11,8 +11,10 @@ use epgi_core::{
 };
 use std::{
     num::NonZeroUsize,
+    sync::atomic::Ordering,
     time::{Instant, SystemTime},
 };
+use tracing::subscriber::SetGlobalDefaultError;
 use typed_builder::TypedBuilder;
 use vello::{
     kurbo::Affine,
@@ -20,28 +22,35 @@ use vello::{
     util::{RenderContext, RenderSurface},
     AaSupport, RenderParams, Renderer, RendererOptions, Scene,
 };
+use wgpu::PresentMode;
 use winit::{
+    application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    event_loop::{ActiveEventLoop, EventLoop},
 };
+
+pub use winit::window::{Window, WindowAttributes};
 
 use crate::{EpgiGlazierSchedulerExtension, WinitPointerEventConverter};
 
-#[derive(TypedBuilder)]
-pub struct AppLauncher {
-    #[builder(default="epgi app".into(), setter(into))]
-    title: String,
-    app: ArcChildWidget<BoxProtocol>,
-    sync_threadpool_builder: rayon::ThreadPool,
-    async_threadpool_builder: rayon::ThreadPool,
+pub enum WindowState<'a> {
+    Uninitialized(WindowAttributes),
+    Rendering {
+        window: Arc<Window>,
+        surface: RenderSurface<'a>,
+        // accesskit_adapter: Adapter,
+    },
+    Suspended {
+        window: Arc<Window>,
+        // accesskit_adapter: Adapter,
+    },
 }
 
 struct MainState<'a> {
-    window: Arc<Window>,
+    window: WindowState<'a>,
+
     // app: App<T, V>,
     render_cx: RenderContext,
-    surface: RenderSurface<'a>,
     renderer: Option<Renderer>,
     // root_layer: Option<Layer<Affine2dCanvas>>,
     scene: Scene,
@@ -50,98 +59,198 @@ struct MainState<'a> {
     scheduler_join_handle: Option<std::thread::JoinHandle<()>>,
     frame_binding: Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
     constraints_binding: Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
+    pointer_event_converter: WinitPointerEventConverter,
+}
+
+#[derive(TypedBuilder)]
+pub struct AppLauncher {
+    app: ArcChildWidget<BoxProtocol>,
+    sync_threadpool_builder: rayon::ThreadPool,
+    async_threadpool_builder: rayon::ThreadPool,
+    window: WindowAttributes,
+    #[builder(default = EventLoop::new().unwrap(), setter(skip))]
+    event_loop: EventLoop<()>,
 }
 
 impl AppLauncher {
     pub fn run(self) {
         pretty_env_logger::init();
-        let event_loop = EventLoop::new().unwrap();
-        event_loop.set_control_flow(ControlFlow::Wait);
-        // let _guard = self.app.rt.enter();
-        let window = WindowBuilder::new()
-            .with_inner_size(winit::dpi::LogicalSize {
-                width: 1024.,
-                height: 768.,
-            })
-            .build(&event_loop)
-            .unwrap();
-        let mut main_state = MainState::new(window);
+        let render_cx = RenderContext::new().unwrap();
 
         let (tx, rx) = unbounded_channel_sync();
-        let window = main_state.window.clone();
-        initialize_scheduler_handle(
-            self.sync_threadpool_builder,
-            self.async_threadpool_builder,
-            move || {
-                window.request_redraw();
-            },
-        );
-        main_state.start_scheduler_with(self.app, rx);
-        let mut pointer_event_converter = WinitPointerEventConverter::new(tx);
-
-        event_loop
-            .run(move |event, elwt| {
-                if let winit::event::Event::WindowEvent { event: e, .. } = &event {
-                    // println!("{:?}", e);
-                    use WindowEvent::*;
-                    match e {
-                        CloseRequested => elwt.exit(),
-                        RedrawRequested => {
-                            main_state.render();
-                        }
-                        Resized(winit::dpi::PhysicalSize { width, height }) => {
-                            // main_state.size(Size {
-                            //     width: width.into(),
-                            //     height: height.into(),
-                            // });
-                        }
-                        ModifiersChanged(modifiers) => {}
-                        CursorMoved { .. }
-                        | CursorEntered { .. }
-                        | CursorLeft { .. }
-                        | MouseWheel { .. }
-                        | MouseInput { .. }
-                        | TouchpadMagnify { .. }
-                        | SmartMagnify { .. }
-                        | TouchpadRotate { .. }
-                        | TouchpadPressure { .. }
-                        | AxisMotion { .. }
-                        | Touch { .. } => {
-                            pointer_event_converter.convert(e);
-                            main_state.window.request_redraw();
-                        }
-                        _ => (),
-                    }
-                }
-            })
-            .unwrap();
-    }
-}
-
-impl<'a> MainState<'a> {
-    fn new(window: Window) -> Self {
-        let mut render_cx = RenderContext::new().unwrap();
-        let size = window.inner_size();
-        let window = Arc::new(window);
-        let surface = futures::executor::block_on(render_cx.create_surface(
-            window.clone(),
-            size.width,
-            size.height,
-        ))
-        .unwrap();
-        MainState {
-            window,
+        let mut main_state = MainState {
+            window: WindowState::Uninitialized(self.window),
             render_cx,
-            surface,
             renderer: None,
             scene: Scene::default(),
             counter: 0,
             scheduler_join_handle: None,
             frame_binding: Default::default(),
             constraints_binding: Default::default(),
+            pointer_event_converter: WinitPointerEventConverter::new(tx),
+        };
+
+        // If there is no default tracing subscriber, we set our own. If one has
+        // already been set, we get an error which we swallow.
+        // By now, we're about to take control of the event loop. The user is unlikely
+        // to try to set their own subscriber once the event loop has started.
+        let _ = try_init_tracing();
+
+        initialize_scheduler_handle(self.sync_threadpool_builder, self.async_threadpool_builder);
+        main_state.start_scheduler_with(self.app, rx);
+
+        self.event_loop.run_app(&mut main_state).unwrap()
+
+        // let event_loop = EventLoop::new().unwrap();
+        // event_loop.set_control_flow(ControlFlow::Wait);
+        // // let _guard = self.app.rt.enter();
+        // let window = WindowBuilder::new()
+        //     .with_inner_size(winit::dpi::LogicalSize {
+        //         width: 1024.,
+        //         height: 768.,
+        //     })
+        //     .build(&event_loop)
+        //     .unwrap();
+        // let mut main_state = MainState::new(window);
+
+        // let (tx, rx) = unbounded_channel_sync();
+        // let window = main_state.window.clone();
+        // initialize_scheduler_handle(
+        //     self.sync_threadpool_builder,
+        //     self.async_threadpool_builder,
+        //     move || {
+        //         window.request_redraw();
+        //     },
+        // );
+        // main_state.start_scheduler_with(self.app, rx);
+        // let mut pointer_event_converter = WinitPointerEventConverter::new(tx);
+
+        // event_loop.run_app(&mut main_state).unwrap();
+    }
+}
+
+impl ApplicationHandler for MainState<'_> {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        match std::mem::replace(
+            &mut self.window,
+            // TODO: Is there a better default value which could be used?
+            WindowState::Uninitialized(WindowAttributes::default()),
+        ) {
+            WindowState::Uninitialized(attributes) => {
+                let visible = attributes.visible;
+                let attributes = attributes.with_visible(false);
+
+                let window = event_loop.create_window(attributes).unwrap();
+
+                window.set_visible(visible);
+                let window = Arc::new(window);
+                let size = window.inner_size();
+                let surface = futures::executor::block_on(self.render_cx.create_surface(
+                    window.clone(),
+                    size.width,
+                    size.height,
+                    PresentMode::AutoVsync,
+                ))
+                .unwrap();
+                let scale_factor = window.scale_factor();
+                self.window = WindowState::Rendering { window, surface };
+                // self.render_root
+                //     .handle_window_event(WindowEvent::Rescale(scale_factor));
+            }
+            WindowState::Suspended { window } => {
+                let size = window.inner_size();
+                let surface = futures::executor::block_on(self.render_cx.create_surface(
+                    window.clone(),
+                    size.width,
+                    size.height,
+                    PresentMode::AutoVsync,
+                ))
+                .unwrap();
+                self.window = WindowState::Rendering { window, surface }
+            }
+            _ => {
+                // We have received a redundant resumed event. That's allowed by winit
+            }
         }
     }
 
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        match std::mem::replace(
+            &mut self.window,
+            // TODO: Is there a better default value which could be used?
+            WindowState::Uninitialized(WindowAttributes::default()),
+        ) {
+            WindowState::Rendering { window, surface } => {
+                drop(surface);
+                self.window = WindowState::Suspended { window };
+            }
+            _ => {
+                // We have received a redundant resumed event. That's allowed by winit
+            }
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let WindowState::Rendering { window, .. } = &mut self.window else {
+            tracing::warn!(
+                ?event,
+                "Got window event whilst suspended or before window created"
+            );
+            return;
+        };
+
+        use WindowEvent::*;
+        match event {
+            CloseRequested => event_loop.exit(),
+            RedrawRequested => {
+                self.render();
+            }
+            Resized(winit::dpi::PhysicalSize { width, height }) => {
+                // main_state.size(Size {
+                //     width: width.into(),
+                //     height: height.into(),
+                // });
+            }
+            ModifiersChanged(modifiers) => {}
+            CursorMoved { .. }
+            | CursorEntered { .. }
+            | CursorLeft { .. }
+            | MouseWheel { .. }
+            | MouseInput { .. }
+            | PinchGesture { .. }
+            | DoubleTapGesture { .. }
+            | RotationGesture { .. }
+            | TouchpadPressure { .. }
+            | AxisMotion { .. }
+            | Touch { .. } => {
+                self.pointer_event_converter.convert(&event);
+                window.request_redraw();
+            }
+            _ => (),
+        }
+
+        self.handle_signals(event_loop)
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: ()) {
+        let WindowState::Rendering { window, .. } = &mut self.window else {
+            tracing::warn!(
+                ?event,
+                "Got window event whilst suspended or before window created"
+            );
+            return;
+        };
+
+        self.handle_signals(event_loop)
+    }
+}
+
+impl<'a> MainState<'a> {
     fn update_size(&self, size_dp: BoxSize) {
         let constraints = BoxConstraints {
             min_width: size_dp.width as f32,
@@ -156,23 +265,26 @@ impl<'a> MainState<'a> {
         }
     }
 
-    fn update_frame(&self, counter: u64) {
-        if let Some(set_frame) = &*self.frame_binding.lock() {
-            get_current_scheduler().create_sync_job(|job_builder| {
-                set_frame.set(FrameInfo::now(self.counter), job_builder);
-            });
-        }
-    }
-
     fn render(&mut self) {
-        // let fragment = self.app.fragment();
-        let scale = self.window.scale_factor();
-        let size = self.window.inner_size();
+        let WindowState::Rendering {
+            window, surface, ..
+        } = &mut self.window
+        else {
+            tracing::warn!("Tried to render whilst suspended or before window created");
+            return;
+        };
+        let scale = window.scale_factor();
+        let size = window.inner_size();
         let width = size.width;
         let height = size.height;
 
         let scheduler = get_current_scheduler();
-        self.update_frame(self.counter);
+        // Update frame
+        if let Some(set_frame) = &*self.frame_binding.lock() {
+            scheduler.create_sync_job(|job_builder| {
+                set_frame.set(FrameInfo::now(self.counter), job_builder);
+            });
+        }
 
         let frame_results = scheduler.request_new_frame().recv().unwrap();
         let encoding = frame_results
@@ -181,9 +293,8 @@ impl<'a> MainState<'a> {
             .downcast_ref::<Arc<Affine2dEncoding>>()
             .unwrap();
 
-        if self.surface.config.width != width || self.surface.config.height != height {
-            self.render_cx
-                .resize_surface(&mut self.surface, width, height);
+        if surface.config.width != width || surface.config.height != height {
+            self.render_cx.resize_surface(surface, width, height);
         }
         let transform = if scale != 1.0 {
             Some(Affine::scale(scale))
@@ -201,16 +312,15 @@ impl<'a> MainState<'a> {
         self.scene = unsafe { std::mem::transmute(scene) };
 
         self.counter += 1;
-        let surface_texture = self
-            .surface
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
-        let dev_id = self.surface.dev_id;
+        let Ok(surface_texture) = surface.surface.get_current_texture() else {
+            tracing::warn!("failed to acquire next swapchain texture");
+            return;
+        };
+        let dev_id = surface.dev_id;
         let device = &self.render_cx.devices[dev_id].device;
         let queue = &self.render_cx.devices[dev_id].queue;
         let renderer_options = RendererOptions {
-            surface_format: Some(self.surface.format),
+            surface_format: Some(surface.format),
             use_cpu: false,
             antialiasing_support: AaSupport {
                 area: true,
@@ -231,6 +341,19 @@ impl<'a> MainState<'a> {
             .expect("failed to render to surface");
         surface_texture.present();
         device.poll(wgpu::Maintain::Wait);
+    }
+
+    fn handle_signals(&mut self, _event_loop: &ActiveEventLoop) {
+        let WindowState::Rendering { window, .. } = &mut self.window else {
+            tracing::warn!("Tried to handle a signal whilst suspended or before window created");
+            return;
+        };
+        if get_current_scheduler()
+            .request_redraw
+            .swap(false, Ordering::Acquire)
+        {
+            window.request_redraw()
+        }
     }
 }
 
@@ -295,7 +418,6 @@ impl<'a> MainState<'a> {
 fn initialize_scheduler_handle(
     sync_threadpool_builder: rayon::ThreadPool,
     async_threadpool_builder: rayon::ThreadPool,
-    reqeust_redraw: impl Fn() + Send + Sync + 'static,
 ) {
     // let sync_threadpool_builder = rayon::ThreadPoolBuilder::new()
     //     .num_threads(1)
@@ -314,11 +436,7 @@ fn initialize_scheduler_handle(
     //     let tokio_handle = tokio_rt.handle();
     //     // sync_threadpool_builder.broadcast(|_| )
     // }
-    let scheduler_handle = SchedulerHandle::new(
-        sync_threadpool_builder,
-        async_threadpool_builder,
-        Box::new(reqeust_redraw),
-    );
+    let scheduler_handle = SchedulerHandle::new(sync_threadpool_builder, async_threadpool_builder);
     unsafe {
         setup_scheduler(scheduler_handle);
     }
@@ -375,4 +493,67 @@ fn bind_constraints(
         },
     });
     (child, result)
+}
+
+pub(crate) fn try_init_tracing() -> Result<(), SetGlobalDefaultError> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use time::macros::format_description;
+        use tracing_subscriber::filter::LevelFilter;
+        use tracing_subscriber::fmt::time::UtcTime;
+        use tracing_subscriber::prelude::*;
+        use tracing_subscriber::EnvFilter;
+
+        // Default level is DEBUG in --dev, INFO in --release
+        // DEBUG should print a few logs per low-density event.
+        // INFO should only print logs for noteworthy things.
+        let default_level = if cfg!(debug_assertions) {
+            LevelFilter::DEBUG
+        } else {
+            LevelFilter::INFO
+        };
+        // Use EnvFilter to allow the user to override the log level without recompiling.
+        // TODO - Print error message if the env var is incorrectly formatted.
+        let env_filter = EnvFilter::builder()
+            .with_default_directive(default_level.into())
+            .with_env_var("RUST_LOG")
+            .from_env_lossy();
+        // This format is more concise than even the 'Compact' default:
+        // - We print the time without the date (GUI apps usually run for very short periods).
+        // - We print the time with seconds precision (we really don't need anything lower).
+        // - We skip the target. In app code, the target is almost always visual noise. By
+        //   default, it only gives you the module a log was defined in. This is rarely useful;
+        //   the log message is much more helpful for finding a log's location.
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_timer(UtcTime::new(format_description!(
+                "[hour]:[minute]:[second]"
+            )))
+            .with_target(false);
+
+        let registry = tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer);
+        tracing::dispatcher::set_global_default(registry.into())
+    }
+
+    // Note - tracing-wasm might not work in headless Node.js. Probably doesn't matter anyway,
+    // because this is a GUI framework, so wasm targets will virtually always be browsers.
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Ignored if the panic hook is already set
+        console_error_panic_hook::set_once();
+
+        let max_level = if cfg!(debug_assertions) {
+            tracing::Level::DEBUG
+        } else {
+            tracing::Level::INFO
+        };
+        let config = tracing_wasm::WASMLayerConfigBuilder::new()
+            .set_max_level(max_level)
+            .build();
+
+        tracing::subscriber::set_global_default(
+            Registry::default().with(tracing_wasm::WASMLayer::new(config)),
+        )
+    }
 }

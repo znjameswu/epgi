@@ -11,11 +11,11 @@ vello = []
 
 [dependencies]
 
-async-channel = "1.9"
+async-channel = "2.0"
 crossbeam = "0.8"
 derivative = "2.2.0"
 either = "1.9"
-event-listener = "2.5"
+event-listener = "5.0"
 futures = "0.3.27"
 hashbrown = { workspace = true }
 linear-map = "1.2.0"

@@ -1,7 +1,8 @@
+use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
 use epgi_core::{SuspendableBuilder, Suspense};
-use epgi_winit::AppLauncher;
+use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
 fn main() {
@@ -105,10 +106,18 @@ fn main() {
         let _guard = tokio_runtime.enter();
         std::mem::forget(_guard);
     });
+
+    let window_size = LogicalSize::new(400.0, 400.0);
+    let window_attributes = Window::default_attributes()
+        .with_title("Hello World!")
+        .with_resizable(true)
+        .with_min_inner_size(window_size);
+
     AppLauncher::builder()
         .app(app)
         .sync_threadpool_builder(sync_threadpool)
         .async_threadpool_builder(async_threadpool)
+        .window(window_attributes)
         .build()
         .run();
 }

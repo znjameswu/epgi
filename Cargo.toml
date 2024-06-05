@@ -46,16 +46,19 @@ path = "./epgi-macro"
 
 [workspace.dependencies]
 hashbrown = { version = "0.14", features = ["rayon"] }
-vello = { git = "https://github.com/linebender/vello", rev = "6fa114c020f8656947e283bdf4bed96fe7a54c70" }
-vello_encoding = { git = "https://github.com/linebender/vello", rev = "6fa114c020f8656947e283bdf4bed96fe7a54c70" }
+vello = "0.1.0"
+vello_encoding = "0.1.0"
 peniko = "0.1.0"
-parley = { git = "https://github.com/dfrg/parley", rev = "1940d1ae9f2a9b44b7c18967147ffa7d345fdafd" }
+masonry = "0.2.0"
+parley = "0.1.0"
 glazier = { git = "https://github.com/linebender/glazier", rev = "8d2a4b2cafd5e6be49bfb4ac8d0bd26fe02f036e", default-features = false, features = [
     "accesskit",
     "x11",
 ] }
-winit = { version = "0.29", features = ["rwh_05"] }
-wgpu = "0.19.0"
+winit = "0.30"
+dpi = "0.1.1"
+wgpu = "0.19.4"
 rayon = "1.9"
 log = "0.4.21"
+tracing = "0.1.40"
 typed-builder = "0.18.1"

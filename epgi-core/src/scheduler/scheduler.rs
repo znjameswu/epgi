@@ -1,5 +1,6 @@
 use std::{any::Any, sync::Arc};
 
+use event_listener::Listener;
 use hashbrown::HashSet;
 
 use crate::{
