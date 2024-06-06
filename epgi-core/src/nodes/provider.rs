@@ -14,6 +14,7 @@ use crate::{
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Provider<T, P>>))]
 pub struct Provider<T: Provide, P: Protocol> {
+    #[builder(setter(transform=|op: impl Fn() -> Asc<T> + Send + Sync + 'static| Box::new(op) as _))]
     pub init: Box<dyn Fn() -> Asc<T> + Send + Sync>,
     pub child: ArcChildWidget<P>,
 }

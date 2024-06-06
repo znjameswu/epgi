@@ -1,6 +1,8 @@
-use epgi_core::foundation::Asc;
+use epgi_core::{foundation::Asc, scheduler::JobBuilder};
 
 pub type ArcCallback = Asc<dyn Fn() + Send + Sync>;
+
+pub type ArcJobCallback = Asc<dyn Fn(&mut JobBuilder) + Send + Sync>;
 
 // // No, this will not work. They are not alias but two traits whose trait objects cannot be coerced into each other
 // // The real trait alias in Rust nightly circumvented the trait coercion issue

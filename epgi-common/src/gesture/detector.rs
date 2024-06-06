@@ -8,6 +8,7 @@ use epgi_core::{
     foundation::{AnyRawPointer, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
     hit_test_interface_query_table,
     nodes::{ComponentElement, ComponentWidget},
+    scheduler::JobBuilder,
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{
         ArcChildWidget, BuildContext, ElementBase, HitTestBehavior, RenderAction, RenderObject,
@@ -19,15 +20,15 @@ use hashbrown::HashMap;
 use typed_builder::TypedBuilder;
 
 use crate::{
-    ArcCallback, GestureRecognizer, GestureRecognizerTeamPolicy, PointerEvent, PointerEventHandler,
-    TapGestureRecognizer,
+    ArcJobCallback, GestureRecognizer, GestureRecognizerTeamPolicy, PointerEvent,
+    PointerEventHandler, TapGestureRecognizer,
 };
 
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<GestureDetector>))]
 pub struct GestureDetector {
-    #[builder(default, setter(transform=|op: impl Fn() + Send + Sync + 'static| Some(Asc::new(op) as _)))]
-    pub on_tap: Option<ArcCallback>,
+    #[builder(default, setter(transform=|op: impl Fn(&mut JobBuilder) + Send + Sync + 'static| Some(Asc::new(op) as _)))]
+    pub on_tap: Option<ArcJobCallback>,
     pub child: ArcChildWidget<BoxProtocol>,
 }
 

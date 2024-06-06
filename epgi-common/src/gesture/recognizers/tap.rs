@@ -1,14 +1,15 @@
 use std::any::TypeId;
 
 use epgi_2d::Point2d;
+use epgi_core::scheduler::get_current_scheduler;
 
 use crate::{
-    ArcCallback, GestureRecognizer, PointerInteractionEvent, PointerInteractionId,
+    ArcJobCallback, GestureRecognizer, PointerInteractionEvent, PointerInteractionId,
     RecognizerResponse,
 };
 
 pub struct TapGestureRecognizer {
-    pub on_tap: ArcCallback,
+    pub on_tap: ArcJobCallback,
 }
 
 impl GestureRecognizer for TapGestureRecognizer {
@@ -25,7 +26,9 @@ impl GestureRecognizer for TapGestureRecognizer {
     }
 
     fn handle_arena_victory(&self, interaction_id: PointerInteractionId) -> RecognizerResponse {
-        (self.on_tap)();
+        get_current_scheduler().create_sync_job(|job_builder| {
+            (self.on_tap)(job_builder);
+        });
         RecognizerResponse::certain(1.0)
     }
 

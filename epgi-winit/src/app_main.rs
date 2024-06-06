@@ -453,7 +453,7 @@ fn bind_frame_info(
     let result = frame_binding.clone();
 
     let child = Arc::new(Builder {
-        builder: move |mut ctx| {
+        builder: move |ctx| {
             let frame_binding = frame_binding.clone();
             let child = child.clone();
             let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
@@ -481,7 +481,7 @@ fn bind_constraints(
     let result = constraints_binding.clone();
 
     let child = Arc::new(Builder {
-        builder: move |mut ctx| {
+        builder: move |ctx| {
             let constraints_binding = constraints_binding.clone();
             let child = child.clone();
             let (constraints, set_constraints) = ctx.use_state_default::<BoxConstraints>();
