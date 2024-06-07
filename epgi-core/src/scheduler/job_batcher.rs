@@ -161,7 +161,7 @@ impl JobBatcher {
                     !batch_conf.is_sync(),
                     "A sync batch should always complete successfully, not expire."
                 );
-                // Remove batch that becomes open
+                // Remove batches that became open
                 expired_batches.push(batch_id);
                 for job_id in batch_conf.job_ids.iter() {
                     self.job_datas.get_mut(job_id).unwrap().batch = None;

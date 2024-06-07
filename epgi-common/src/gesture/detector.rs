@@ -60,16 +60,11 @@ impl ComponentWidget<BoxProtocol> for GestureDetector {
             recognizer_factories.push(GestureRecognizerFactory::new::<TapGestureRecognizer>(
                 {
                     let on_tap = on_tap.clone();
-                    move || TapGestureRecognizer {
-                        on_tap: on_tap.clone(),
-                    }
+                    move || TapGestureRecognizer::new(on_tap.clone())
                 },
                 {
                     let on_tap = on_tap.clone();
-                    move |recognizer| {
-                        todo!();
-                        recognizer.on_tap = on_tap.clone();
-                    }
+                    move |recognizer| recognizer.update(on_tap.clone())
                 },
             ));
         }

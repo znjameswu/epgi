@@ -77,8 +77,7 @@ where
     E: FullElement,
 {
     fn element(&self) -> ArcChildElementNode<E::ParentProtocol> {
-        todo!()
-        // self.element.clone() as _
+        self.element.clone() as _
     }
 }
 

@@ -119,12 +119,14 @@ impl LaneScheduler {
     ) {
         let mut finished_lanes = LaneMask::new();
         for (lane_index, async_lane) in self.async_lanes.iter_mut().enumerate() {
-            let Some(async_lane) = async_lane else {
+            let Some(async_lane_data) = async_lane else {
                 continue;
             };
-            if async_lane.barrier_inner.is_empty() {
+            if async_lane_data.barrier_inner.is_empty() {
                 finished_lanes = finished_lanes | LanePos::new_async(lane_index as u8);
-                job_batcher.remove_commited_batch(&async_lane.batch.id);
+                job_batcher.remove_commited_batch(&async_lane_data.batch.id);
+                // Option::take_if is not stabilized
+                *async_lane = None;
             }
         }
         if !finished_lanes.is_empty() {

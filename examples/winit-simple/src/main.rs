@@ -3,7 +3,7 @@ use std::sync::Arc;
 use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
-use epgi_core::{Consumer, SuspendableBuilder, Suspense};
+use epgi_core::{Builder, Consumer, SuspendableBuilder, Suspense};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
@@ -22,15 +22,24 @@ fn main() {
     //             .build(),
     //     )
     //     .build();
-    let child = Consumer!(
-        builder = |ctx, color: Arc<f32>| {
+    let child = Builder!(
+        builder = |ctx| {
+            let (transited, set_transited) = ctx.use_state(false);
             let (pending, start_transition) = ctx.use_transition();
             GestureDetector!(
-                on_tap = move |job| start_transition.start(|job| {}, job),
+                on_tap = move |job_builder| start_transition.start(
+                    |job_builder| {
+                        set_transited.set(!transited, job_builder);
+                    },
+                    job_builder
+                ),
                 child = ConstrainedBox!(
-                    constraints = BoxConstraints::new_tight(50.0, 50.0),
+                    constraints = BoxConstraints::new_tight(
+                        if pending { 50.0 } else { 100.0 },
+                        if transited { 100.0 } else { 50.0 }
+                    ),
                     child = ColorBox! {
-                        color = Color::rgb(0.0, *color as _, 0.0),
+                        color = Color::rgb(0.0, 1.0, 0.0),
                         child = PhantomBox!()
                     }
                 )
@@ -90,13 +99,36 @@ fn main() {
                     |_| {
                         tokio::spawn(async {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            println!("Time has passed!")
+                            println!("Future resolved!")
                         })
                         .map(Result::unwrap)
                     },
                     (),
                 )?;
-                Ok(app.clone())
+
+                let (transited, set_transited) = ctx.use_state(false);
+                let (pending, start_transition) = ctx.use_transition();
+                Ok(GestureDetector!(
+                    on_tap = move |job_builder| {
+                        println!("Tapped!");
+                        start_transition.start(
+                            |job_builder| {
+                                set_transited.set(!transited, job_builder);
+                            },
+                            job_builder,
+                        );
+                    },
+                    child = ConstrainedBox!(
+                        constraints = BoxConstraints::new_tight(
+                            if pending { 50.0 } else { 100.0 },
+                            if transited { 100.0 } else { 50.0 }
+                        ),
+                        child = ColorBox! {
+                            color = Color::rgb(0.0, 1.0, 0.0),
+                            child = PhantomBox!()
+                        }
+                    )
+                ))
             }
         ),
     );

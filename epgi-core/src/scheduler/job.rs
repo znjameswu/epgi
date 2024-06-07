@@ -128,7 +128,7 @@ impl AtomicJobIdCounter {
     pub(super) fn increment_frame(&self) {
         loop {
             let prev = self.0.load(Relaxed);
-            let new = (prev >> (Self::BITS_JOB_COUNTER + 1) + 1) << (Self::BITS_JOB_COUNTER + 1);
+            let new = ((prev >> (Self::BITS_JOB_COUNTER + 1)) + 1) << (Self::BITS_JOB_COUNTER + 1);
             if let Ok(_) = self.0.compare_exchange_weak(prev, new, Relaxed, Relaxed) {
                 break;
             }
