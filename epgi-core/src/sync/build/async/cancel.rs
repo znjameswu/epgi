@@ -11,8 +11,9 @@ use crate::{
     tree::{
         ArcChildElementNode, AsyncDequeueResult, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, AweakElementContextNode,
-        ConsumerWorkSpawnToken, Element, ElementBase, ElementNode, ElementSnapshot,
-        ElementSnapshotInner, FullElement, ImplProvide, Mainline, SubscriptionDiff,
+        ConsumerWorkSpawnToken, Element, ElementBase, ElementContextNode, ElementNode,
+        ElementSnapshot, ElementSnapshotInner, FullElement, ImplProvide, Mainline,
+        SubscriptionDiff,
     },
 };
 
@@ -40,10 +41,7 @@ pub(in crate::sync) struct AsyncCancel<I> {
 }
 
 struct AsyncCancelAndRestart<E: ElementBase> {
-    cancel: Result<
-        AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
-    >,
+    cancel: AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     start: Option<AsyncReconcile<E>>,
 }
 
@@ -54,23 +52,36 @@ impl<E: FullElement> ElementNode<E> {
         requeue: bool,
         // purge_lane_mark: bool,
     ) {
-        let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
-        let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
-        let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
+        // let no_mailbox_update = !self.context.mailbox_lanes().contains(lane_pos);
+        // let no_consumer_root = !self.context.consumer_lanes().contains(lane_pos);
+        // let no_descendant_lanes = !self.context.descendant_lanes().contains(lane_pos);
 
-        if no_mailbox_update && no_consumer_root && no_descendant_lanes {
-            return;
-        }
-        let remove = {
+        // if no_mailbox_update && no_consumer_root && no_descendant_lanes && not_spawned_by_parent {
+        //     return;
+        // }
+        let result = {
             let mut snapshot = self.snapshot.lock();
             let snapshot_reborrow = &mut *snapshot;
             self.setup_cancel_async_work(snapshot_reborrow, lane_pos, requeue)
         };
 
-        let AsyncCancelAndRestart { cancel, start } = remove;
+        fn debug_assert_no_provider_reservation(
+            element_context: &ElementContextNode,
+            lane_pos: LanePos,
+        ) {
+            debug_assert!(
+                element_context.provider_object.is_none()
+                    || element_context
+                        .provider_object
+                        .as_ref()
+                        .is_some_and(|provider| !provider
+                            .contains_reservation_from_lanes(LaneMask::new_single(lane_pos))),
+                "The cancel left residues inside this provider object"
+            );
+        }
 
-        match cancel {
-            Ok(cancel) => {
+        match result {
+            Ok(AsyncCancelAndRestart { cancel, start }) => {
                 let AsyncCancel {
                     lane_pos,
                     spawned_consumers,
@@ -90,31 +101,26 @@ impl<E: FullElement> ElementNode<E> {
                     subscription_diff,
                     lane_pos,
                 );
+
+                debug_assert_no_provider_reservation(&self.context, lane_pos);
+                if let Some(start) = start {
+                    self.execute_reconcile_node_async_detached(start);
+                }
             }
-            Err(Some(children)) => children
-                .par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+            Err(Some(children)) => {
+                debug_assert_no_provider_reservation(&self.context, lane_pos);
+                children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
                     child.cancel_async_work(lane_pos, requeue)
-                }),
-            Err(None) => {}
+                })
+            }
+            Err(None) => {
+                debug_assert_no_provider_reservation(&self.context, lane_pos);
+            }
         }
 
         // if purge_lane_mark {
         //     self.context.purge_lane(lane_pos);
         // }
-        debug_assert!(
-            self.context.provider_object.is_none()
-                || self
-                    .context
-                    .provider_object
-                    .as_ref()
-                    .is_some_and(|provider| !provider
-                        .contains_reservation_from_lanes(LaneMask::new_single(lane_pos))),
-            "The cancel left residues inside this provider object"
-        );
-
-        if let Some(start) = start {
-            self.execute_reconcile_node_async_detached(start);
-        }
     }
 
     fn setup_cancel_async_work(
@@ -122,29 +128,35 @@ impl<E: FullElement> ElementNode<E> {
         snapshot: &mut ElementSnapshot<E>,
         lane_pos: LanePos,
         requeue: bool,
-    ) -> AsyncCancelAndRestart<E> {
+    ) -> Result<
+        AsyncCancelAndRestart<E>,
+        Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
+    > {
         match &mut snapshot.inner {
             ElementSnapshotInner::AsyncInflating(async_inflating) => {
                 let cancel =
                     Self::setup_cancel_async_work_async_inflating(async_inflating, lane_pos);
-                AsyncCancelAndRestart {
-                    cancel: Ok(cancel),
+                Ok(AsyncCancelAndRestart {
+                    cancel,
                     start: None,
-                }
+                })
             }
             ElementSnapshotInner::Mainline(mainline) => {
-                let cancel = Self::setup_cancel_async_work_mainline(mainline, lane_pos, None);
+                let cancel =
+                    Self::setup_cancel_async_work_mainline(mainline, lane_pos, None, &self.context);
 
-                let start = if requeue {
-                    self.setup_execute_backqueue(
-                        mainline,
-                        &snapshot.widget,
-                        &snapshot.element_lock_held,
-                    )
-                } else {
-                    None
-                };
-                AsyncCancelAndRestart { cancel, start }
+                cancel.map(|cancel| AsyncCancelAndRestart {
+                    cancel,
+                    start: if requeue {
+                        self.setup_execute_backqueue(
+                            mainline,
+                            &snapshot.widget,
+                            &snapshot.element_lock_held,
+                        )
+                    } else {
+                        None
+                    },
+                })
             }
         }
     }
@@ -153,11 +165,17 @@ impl<E: FullElement> ElementNode<E> {
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
         lane_scheduler: &LaneScheduler,
+        element_context: &ElementContextNode,
     ) -> Result<
         AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
-        Self::setup_cancel_async_work_mainline(mainline, lane_pos, Some(lane_scheduler))
+        Self::setup_cancel_async_work_mainline(
+            mainline,
+            lane_pos,
+            Some(lane_scheduler),
+            element_context,
+        )
     }
 
     pub(in crate::sync) fn setup_cancel_async_work_async_inflating(
@@ -199,35 +217,24 @@ impl<E: FullElement> ElementNode<E> {
         mainline: &mut Mainline<E>,
         lane_pos: LanePos,
         backqueue_with_lane_scehduler: Option<&LaneScheduler>,
+        element_context: &ElementContextNode,
     ) -> Result<
         AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
         Option<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>,
     > {
         let Mainline { state, async_queue } = mainline;
+
         use AsyncDequeueResult::*;
         use AsyncOutput::*;
-        match async_queue.try_remove(lane_pos) {
-            FoundCurrent(AsyncQueueCurrentEntry {
-                stash:
-                    AsyncStash {
-                        handle,
-                        subscription_diff,
-                        spawned_consumers,
-                        output,
-                    },
-                widget,
-                work_context,
-            }) => {
+        match async_queue.try_remove(lane_pos, backqueue_with_lane_scehduler) {
+            FoundCurrent(stash) => {
+                let AsyncStash {
+                    handle,
+                    subscription_diff,
+                    spawned_consumers,
+                    output,
+                } = stash;
                 handle.abort();
-                if let Some(lane_scheduler) = backqueue_with_lane_scehduler {
-                    async_queue.push_backqueue(
-                        widget,
-                        work_context,
-                        lane_scheduler
-                            .get_commit_barrier_for(lane_pos)
-                            .expect("CommitBarrier should exist"),
-                    );
-                }
                 Ok(AsyncCancel {
                     lane_pos,
                     spawned_consumers,
@@ -238,13 +245,19 @@ impl<E: FullElement> ElementNode<E> {
                     },
                 })
             }
-            NotFound => Err(state
-                .as_ref()
-                .expect("A mainline tree walk should not encounter another sync work.")
-                .children_cloned()),
+            NotFound => {
+                if element_context.descendant_lanes().contains(lane_pos) {
+                    Err(state
+                        .as_ref()
+                        .expect("A mainline tree walk should not encounter another sync work.")
+                        .children_cloned())
+                } else {
+                    Err(None)
+                }
+            }
             // Should we return None or the mainline children?
             // If we can guarantee no active work under a backqueued work, then we can return None
-            FoundBackqueue(_) => Err(None),
+            FoundBackqueue => Err(None),
         }
     }
 

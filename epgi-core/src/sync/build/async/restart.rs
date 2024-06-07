@@ -34,9 +34,10 @@ impl<E: FullElement> ElementNode<E> {
                 .mainline_mut()
                 .expect("Restart can only be called on mainline nodes");
 
-            let cancel = Self::setup_interrupt_async_work(mainline, lane_pos, lane_scheduler)
-                .ok()
-                .expect("Lane to be canceled must exist");
+            let cancel =
+                Self::setup_interrupt_async_work(mainline, lane_pos, lane_scheduler, &self.context)
+                    .ok()
+                    .expect("Lane to be canceled must exist");
             let rebuild = self
                 .setup_execute_backqueue(
                     mainline,

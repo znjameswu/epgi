@@ -168,6 +168,7 @@ impl<E: FullElement> ElementNode<E> {
                 mainline,
                 entry.work_context.lane_pos,
                 lane_scheduler,
+                &self.context,
             )
             .ok()
             .expect("Impossible to fail");

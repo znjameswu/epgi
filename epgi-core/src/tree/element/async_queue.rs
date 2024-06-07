@@ -1,7 +1,7 @@
 use crate::{
     foundation::{Asc, ContainerOf, InlinableDwsizeVec, InlinableUsizeVec, VecPushLastExt},
     scheduler::LanePos,
-    sync::CommitBarrier,
+    sync::{CommitBarrier, LaneScheduler},
     tree::{ArcElementContextNode, ElementBase, HooksWithEffects, WorkContext, WorkHandle},
 };
 
@@ -136,27 +136,27 @@ where
     //     return false;
     // }
 
-    // pub(super) fn backqueue_current_if<
-    //     F: FnOnce(&AsyncQueueCurrentEntry<E>) -> Option<CommitBarrier>,
-    // >(
-    //     &mut self,
-    //     predicate: F,
-    // ) -> Option<AsyncQueueCurrentEntry<E>> {
-    //     if let Some(inner) = &mut self.inner {
-    //         if let Some(current) = &mut inner.current {
-    //             if let Some(barrier) = predicate(current) {
-    //                 let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
-    //                 let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
-    //                     widget: taken.widget.clone(),
-    //                     work_context: taken.work_context.clone(),
-    //                     barrier,
-    //                 });
-    //                 return Some(taken);
-    //             }
-    //         }
-    //     }
-    //     return None;
-    // }
+    pub(super) fn backqueue_current_if<
+        F: FnOnce(&AsyncQueueCurrentEntry<E>) -> Option<CommitBarrier>,
+    >(
+        &mut self,
+        predicate: F,
+    ) -> Option<AsyncQueueCurrentEntry<E>> {
+        if let Some(inner) = &mut self.inner {
+            if let Some(current) = &mut inner.current {
+                if let Some(barrier) = predicate(current) {
+                    let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
+                    let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
+                        widget: taken.widget.clone(),
+                        work_context: taken.work_context.clone(),
+                        barrier,
+                    });
+                    return Some(taken);
+                }
+            }
+        }
+        return None;
+    }
 
     // pub(super) fn backqueue_current<F: FnOnce(&AsyncQueueCurrentEntry<E>) -> CommitBarrier>(
     //     &mut self,
@@ -237,37 +237,92 @@ where
 
     // Cancels given lane in this queue. If the current active work is cancelled, return the children it has spawned.
     // Return error if the given lane was not found.
-    pub(crate) fn try_remove(&mut self, lane_pos: LanePos) -> AsyncDequeueResult<E> {
+    pub(crate) fn try_remove(
+        &mut self,
+        lane_pos: LanePos,
+        backqueue_with_lane_scehduler: Option<&LaneScheduler>,
+    ) -> AsyncDequeueResult<E> {
+        debug_assert!(!lane_pos.is_sync());
         let Some(inner) = &mut self.inner else {
             return AsyncDequeueResult::NotFound;
         };
-        if let Some(entry) = &inner.current {
-            if entry.work_context.lane_pos == lane_pos {
-                let current = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
-                return AsyncDequeueResult::FoundCurrent(current);
+        let current = &mut inner.current;
+        if current
+            .as_ref()
+            .is_some_and(|current| current.work_context.lane_pos == lane_pos)
+        {
+            let AsyncQueueCurrentEntry {
+                widget,
+                work_context,
+                stash,
+            } = current.take().expect("Impossible to fail");
+
+            if let Some(lane_scheduler) = backqueue_with_lane_scehduler {
+                inner.backqueue.push(AsyncQueueBackqueueEntry {
+                    widget,
+                    work_context,
+                    barrier: lane_scheduler
+                        .get_commit_barrier_for(lane_pos)
+                        .expect("Commit barrier should exist for the backqueueing lane"),
+                });
+            } else {
+                if inner.current.is_none() && inner.backqueue.is_empty() {
+                    self.inner = None
+                }
             }
+            return AsyncDequeueResult::FoundCurrent(stash);
         }
         if let Some(index) = inner
             .backqueue
             .iter()
             .position(|entry| entry.work_context.lane_pos == lane_pos)
         {
-            let result = inner.backqueue.swap_remove(index);
-            if inner.current.is_none() && inner.backqueue.is_empty() {
-                self.inner = None
+            if backqueue_with_lane_scehduler.is_none() {
+                let _result = inner.backqueue.swap_remove(index);
+                if inner.current.is_none() && inner.backqueue.is_empty() {
+                    self.inner = None
+                }
             }
-            return AsyncDequeueResult::FoundBackqueue(result);
-        }
-        if inner.current.is_none() && inner.backqueue.is_empty() {
-            self.inner = None
+            return AsyncDequeueResult::FoundBackqueue;
         }
         return AsyncDequeueResult::NotFound;
     }
+
+    // pub(crate) fn try_remove_current(
+    //     &mut self,
+    //     lane_pos: LanePos,
+    //     backqueue_with_lane_scehduler: Option<&LaneScheduler>,
+    // ) -> Option<AsyncStash<E>> {
+    //     debug_assert!(!lane_pos.is_sync());
+    //     let inner = self.inner.as_mut()?;
+    //     let current = &mut inner.current;
+    //     if current
+    //         .as_ref()
+    //         .is_some_and(|current| current.work_context.lane_pos == lane_pos)
+    //     {
+    //         let AsyncQueueCurrentEntry {
+    //             widget,
+    //             work_context,
+    //             stash,
+    //         } = current.take().expect("Impossible to fail");
+    //         if let Some(lane_scheduler) = backqueue_with_lane_scehduler {
+    //             inner.backqueue.push(AsyncQueueBackqueueEntry {
+    //                 widget,
+    //                 work_context,
+    //                 barrier: lane_scheduler
+    //                     .get_commit_barrier_for(lane_pos)
+    //                     .expect("Commit barrier should exist for the backqueueing lane"),
+    //             });
+    //         }
+    //         return Some(stash);
+    //     }
+    //     return None;
+    // }
 }
 
 pub(crate) enum AsyncDequeueResult<E: ElementBase> {
-    FoundCurrent(AsyncQueueCurrentEntry<E>),
-    FoundBackqueue(AsyncQueueBackqueueEntry<E::ArcWidget>),
+    FoundCurrent(AsyncStash<E>),
+    FoundBackqueue,
     NotFound,
 }
 

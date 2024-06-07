@@ -3,7 +3,8 @@ use crate::{
     r#async::AsyncReconcile,
     sync::LaneScheduler,
     tree::{
-        ArcChildElementNode, ElementBase, ElementLockHeldToken, ElementNode, FullElement, Mainline,
+        ArcChildElementNode, ElementBase, ElementContextNode, ElementLockHeldToken, ElementNode,
+        FullElement, Mainline,
     },
 };
 
@@ -38,6 +39,7 @@ impl<E: FullElement> ElementNode<E> {
                 mainline,
                 &snapshot_reborrow.widget,
                 lane_scheduler,
+                &self.context,
                 &snapshot_reborrow.element_lock_held,
             )
         };
@@ -52,6 +54,7 @@ impl<E: FullElement> ElementNode<E> {
         mainline: &mut Mainline<E>,
         old_widget: &E::ArcWidget,
         lane_scheduler: &LaneScheduler,
+        element_context: &ElementContextNode,
         element_lock_held: &ElementLockHeldToken,
     ) -> Option<ReorderAsync<E>> {
         let async_queue = &mut mainline.async_queue;
@@ -60,6 +63,16 @@ impl<E: FullElement> ElementNode<E> {
         let (current, Some(backqueue)) = async_queue.current_and_backqueue_mut() else {
             return None;
         };
+
+        let Some(current) = current else {
+            debug_assert!(
+                backqueue.is_empty(),
+                "An async queue should not be in a stalled state"
+            );
+            tracing::warn!("An empty async queue has failed to clear its allocation");
+            return None;
+        };
+
         let Some((index, entry)) = backqueue
             .iter()
             .rev()
@@ -70,22 +83,21 @@ impl<E: FullElement> ElementNode<E> {
         };
 
         let backqueue_priority = entry.work_context.batch.priority;
-        if let Some(ref curr) = current {
-            if backqueue_priority >= curr.work_context.batch.priority {
-                return None;
-            }
+        if backqueue_priority >= current.work_context.batch.priority {
+            return None;
         }
 
         let backqueue_candidate = backqueue.swap_remove(index);
-        let mut cancel = None;
-        if let Some(ref curr) = current {
-            let curr_lane_pos = curr.work_context.lane_pos;
-            cancel = Some(
-                Self::setup_interrupt_async_work(mainline, curr_lane_pos, lane_scheduler)
-                    .ok()
-                    .expect("Impossible to fail"),
-            );
-        }
+        let curr_lane_pos = current.work_context.lane_pos;
+        let cancel = Self::setup_interrupt_async_work(
+            mainline,
+            curr_lane_pos,
+            lane_scheduler,
+            element_context,
+        )
+        .ok()
+        .expect("Impossible to fail");
+
         // Why it can't Skip?
         // Because the backqueue_candidate previous tried to occupy this node (hence the entry)
         // Suppose now it comes back with Skip, the only thing that could have caused this change is that the widget has been changed since then.
@@ -106,15 +118,15 @@ impl<E: FullElement> ElementNode<E> {
             panic!("Impossible to fail")
         };
         return Some(ReorderAsync {
-            cancel,
+            cancel: Some(cancel),
             start: reconcile,
         });
     }
 
     pub(in super::super) fn execute_reorder_async_work(self: &Arc<Self>, reorder: ReorderAsync<E>) {
         let ReorderAsync { cancel, start } = reorder;
-        if let Some(remove) = cancel {
-            self.execute_cancel_async_work(remove, false)
+        if let Some(cancel) = cancel {
+            self.execute_cancel_async_work(cancel, false)
         }
         let node = self.clone();
         node.execute_reconcile_node_async_detached(start);
@@ -145,8 +157,9 @@ impl<E: FullElement> ElementNode<E> {
         // Why it can't be Skip?
         // Because the backqueue_candidate previous tried to occupy this node (hence the entry)
         // ~~Suppose now it comes back with Skip, the only thing that could have caused this change is that the widget has been changed since then.~~
-        // (???? A subscription could also have been cancelled)
+        // (???? A subscription could also have been cancelled and thus no consumer update)
         // (Decision: we also revert the work at the provider if we cancel a subscription)
+        // (Related decision: we do not perform consumer lane unmark)
         // It means that, previously the backqueue_candidate determines there is a widget update, now there isn't.
         // In order to achieve this, the backqueue_candidate needs to have an explicit new widget (otherwise there will always be no widget update)
         // Which means the backqueue_candidate must be a child work of a parent work (only root work can have no explicit new widget)

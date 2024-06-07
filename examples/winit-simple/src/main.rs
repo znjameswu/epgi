@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
-use epgi_core::{Builder, Consumer, SuspendableBuilder, Suspense};
+use epgi_core::{Builder, SuspendableBuilder, Suspense};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
@@ -95,6 +93,7 @@ fn main() {
         fallback = fallback,
         child = SuspendableBuilder!(
             builder = move |ctx| {
+                let (transited, set_transited) = ctx.use_state(false);
                 let _res = ctx.use_future(
                     |_| {
                         tokio::spawn(async {
@@ -103,10 +102,8 @@ fn main() {
                         })
                         .map(Result::unwrap)
                     },
-                    (),
+                    transited,
                 )?;
-
-                let (transited, set_transited) = ctx.use_state(false);
                 let (pending, start_transition) = ctx.use_transition();
                 Ok(GestureDetector!(
                     on_tap = move |job_builder| {

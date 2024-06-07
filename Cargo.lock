@@ -1211,6 +1211,7 @@ dependencies = [
  "rayon",
  "replace_with",
  "smallvec",
+ "tracing",
  "typed-builder",
 ]
 
