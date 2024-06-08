@@ -36,20 +36,20 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
             // No update
             Left(
                 [Keep {
-                    child_render_action,
+                    propagated_render_action,
                     subtree_has_action,
                 }],
             )
             | Right(
                 [Keep { .. } | Suspend, Keep {
-                    child_render_action,
+                    propagated_render_action,
                     subtree_has_action,
                 }],
             ) => {
                 let render_action =
-                    render_object.mark_render_action(child_render_action, subtree_has_action);
+                    render_object.mark_render_action(propagated_render_action, subtree_has_action);
                 return RenderObjectCommitResult::Keep {
-                    child_render_action: render_action,
+                    propagated_render_action: render_action,
                     subtree_has_action,
                 };
             }
@@ -65,7 +65,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
                     old_child_render_object.detach_render_object();
                 }
                 return RenderObjectCommitResult::Keep {
-                    child_render_action: render_action,
+                    propagated_render_action: render_action,
                     subtree_has_action: RenderAction::Relayout,
                 };
             }
@@ -185,20 +185,20 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
         match render_object_changes.0 {
             Left(
                 [Keep {
-                    child_render_action,
+                    propagated_render_action,
                     subtree_has_action,
                 }],
             )
             | Right(
                 [Keep { .. } | Suspend, Keep {
-                    child_render_action,
+                    propagated_render_action,
                     subtree_has_action,
                 }],
             ) => {
                 let render_action =
-                    render_object.mark_render_action(child_render_action, subtree_has_action);
+                    render_object.mark_render_action(propagated_render_action, subtree_has_action);
                 return RenderObjectCommitResult::Keep {
-                    child_render_action: render_action,
+                    propagated_render_action: render_action,
                     subtree_has_action,
                 };
             }
@@ -213,7 +213,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
                     old_child_render_object.detach_render_object();
                 }
                 return RenderObjectCommitResult::Keep {
-                    child_render_action: render_action,
+                    propagated_render_action: render_action,
                     subtree_has_action: RenderAction::Relayout,
                 };
             }
@@ -368,7 +368,7 @@ fn swap_child_render_object<P: Protocol>(
 
     // Suspense will always return Keep during rebuild
     return RenderObjectCommitResult::Keep {
-        child_render_action: render_action,
+        propagated_render_action: render_action,
         subtree_has_action: RenderAction::Relayout,
     };
 }

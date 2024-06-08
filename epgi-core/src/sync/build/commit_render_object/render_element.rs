@@ -170,15 +170,15 @@ where
     use RenderObjectCommitSummary::*;
     match render_object_change_summary {
         KeepAll {
-            child_render_action,
-            subtree_has_action,
+            propagated_render_action,
+            descendant_has_action,
         } => {
             let render_action =
-                render_object.mark_render_action(child_render_action, subtree_has_action);
+                render_object.mark_render_action(propagated_render_action, descendant_has_action);
             return RenderObjectCommitResult::Keep {
                 // Absorb on boundaries.
-                child_render_action: render_action,
-                subtree_has_action,
+                propagated_render_action: render_action,
+                subtree_has_action: descendant_has_action,
             };
         }
         HasNewNoSuspend => {
@@ -193,7 +193,7 @@ where
                 )
             });
             return RenderObjectCommitResult::Keep {
-                child_render_action: render_action,
+                propagated_render_action: render_action,
                 subtree_has_action: RenderAction::Relayout,
             };
         }
@@ -403,22 +403,25 @@ where
         });
     }
 
-    let (child_render_action, subtree_has_action) = if let KeepAll {
-        child_render_action,
-        subtree_has_action,
+    let (propagated_render_action, descendant_has_action) = if let KeepAll {
+        propagated_render_action,
+        descendant_has_action,
     } = render_object_change_summary
     {
-        (child_render_action, subtree_has_action)
+        (propagated_render_action, descendant_has_action)
     } else {
         (RenderAction::Relayout, RenderAction::Relayout)
     };
 
-    let child_render_action =
-        render_object.mark_render_action(child_render_action, subtree_has_action);
+    let self_render_action = std::cmp::max(self_render_action, propagated_render_action);
+    let subtree_has_action = std::cmp::max(self_render_action, descendant_has_action);
+
+    let propagated_render_action =
+        render_object.mark_render_action(self_render_action, descendant_has_action);
 
     let change = RenderObjectCommitResult::Keep {
-        child_render_action: std::cmp::max(self_render_action, child_render_action),
-        subtree_has_action: std::cmp::max(self_render_action, subtree_has_action),
+        propagated_render_action,
+        subtree_has_action,
     };
 
     return (Some(render_object), change);

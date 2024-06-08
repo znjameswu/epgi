@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering::*};
 
 pub(crate) struct RenderMark {
     needs_layout: AtomicBool,
-    subtree_has_layout: AtomicBool,
+    descendant_has_layout: AtomicBool,
     parent_use_size: AtomicBool,
     is_detached: AtomicBool,
 }
@@ -26,7 +26,7 @@ impl RenderMark {
     pub(crate) fn new() -> Self {
         Self {
             needs_layout: true.into(),
-            subtree_has_layout: true.into(),
+            descendant_has_layout: true.into(),
             parent_use_size: true.into(),
             is_detached: false.into(),
         }
@@ -88,16 +88,16 @@ impl RenderMark {
         self.needs_layout.store(true, Relaxed)
     }
 
-    pub(crate) fn subtree_has_layout(&self) -> bool {
-        self.subtree_has_layout.load(Relaxed)
+    pub(crate) fn descendant_has_layout(&self) -> bool {
+        self.descendant_has_layout.load(Relaxed)
     }
 
-    pub(crate) fn clear_subtree_has_layout(&self) {
-        self.subtree_has_layout.store(false, Relaxed)
+    pub(crate) fn clear_descendant_has_layout(&self) {
+        self.descendant_has_layout.store(false, Relaxed)
     }
 
-    pub(crate) fn set_subtree_has_layout(&self) {
-        self.subtree_has_layout.store(true, Relaxed)
+    pub(crate) fn set_descendant_has_layout(&self) {
+        self.descendant_has_layout.store(true, Relaxed)
     }
 }
 

@@ -92,7 +92,7 @@ pub enum RenderObjectCommitResult<P: Protocol> {
     /// Nothing has changed since the last commit.
     Keep {
         // You have to ensure child >= subtree
-        child_render_action: RenderAction,
+        propagated_render_action: RenderAction,
         /// This field pass through without being absorbed by some boundaries.
         subtree_has_action: RenderAction,
     },
@@ -103,7 +103,7 @@ pub enum RenderObjectCommitResult<P: Protocol> {
 impl<P: Protocol> RenderObjectCommitResult<P> {
     pub const fn new_no_update() -> Self {
         Self::Keep {
-            child_render_action: RenderAction::None,
+            propagated_render_action: RenderAction::None,
             subtree_has_action: RenderAction::None,
         }
     }
@@ -124,11 +124,11 @@ impl<P: Protocol> RenderObjectCommitResult<P> {
     pub(crate) fn as_summary(&self) -> RenderObjectCommitSummary {
         match self {
             RenderObjectCommitResult::Keep {
-                child_render_action,
+                propagated_render_action,
                 subtree_has_action,
             } => RenderObjectCommitSummary::KeepAll {
-                child_render_action: *child_render_action,
-                subtree_has_action: *subtree_has_action,
+                propagated_render_action: *propagated_render_action,
+                descendant_has_action: *subtree_has_action,
             },
             RenderObjectCommitResult::New(_) => RenderObjectCommitSummary::HasNewNoSuspend,
             RenderObjectCommitResult::Suspend => RenderObjectCommitSummary::HasSuspended,
@@ -162,8 +162,8 @@ impl<P: Protocol> RenderObjectCommitResult<P> {
 pub(crate) enum RenderObjectCommitSummary {
     KeepAll {
         // You have to ensure child >= subtree
-        child_render_action: RenderAction,
-        subtree_has_action: RenderAction,
+        propagated_render_action: RenderAction,
+        descendant_has_action: RenderAction,
     },
     HasNewNoSuspend,
     HasSuspended,
@@ -172,8 +172,8 @@ pub(crate) enum RenderObjectCommitSummary {
 impl RenderObjectCommitSummary {
     pub(crate) fn new() -> Self {
         Self::KeepAll {
-            child_render_action: RenderAction::None,
-            subtree_has_action: RenderAction::None,
+            propagated_render_action: RenderAction::None,
+            descendant_has_action: RenderAction::None,
         }
     }
 

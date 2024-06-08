@@ -27,17 +27,13 @@ where
     fn visit_and_layout(&self) {
         let is_relayout_boundary = R::Impl::DRY_LAYOUT || !self.mark.parent_use_size();
         let needs_layout = self.mark.needs_layout();
-        let subtree_has_layout = self.mark.subtree_has_layout();
+        let descendant_has_layout = self.mark.descendant_has_layout();
         debug_assert!(
             is_relayout_boundary || needs_layout.is_err(),
             "A layout walk should not encounter a dirty non-boundary node. \
             Such node should be already laied-out by an ancester layout sometime earlier in this walk."
         );
-        debug_assert!(
-            subtree_has_layout || needs_layout.is_err(),
-            "A dirty node should always mark its subtree as dirty"
-        );
-        if !subtree_has_layout {
+        if !descendant_has_layout && needs_layout.is_err() {
             return;
         }
         let children = {
@@ -60,10 +56,12 @@ where
             }
             inner.children.map_ref_collect(Clone::clone)
         };
-        children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
-            child.visit_and_layout()
-        });
-        self.mark.clear_subtree_has_layout();
+        if descendant_has_layout {
+            children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {
+                child.visit_and_layout()
+            });
+            self.mark.clear_descendant_has_layout();
+        }
     }
 }
 
