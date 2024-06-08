@@ -136,27 +136,27 @@ where
     //     return false;
     // }
 
-    pub(super) fn backqueue_current_if<
-        F: FnOnce(&AsyncQueueCurrentEntry<E>) -> Option<CommitBarrier>,
-    >(
-        &mut self,
-        predicate: F,
-    ) -> Option<AsyncQueueCurrentEntry<E>> {
-        if let Some(inner) = &mut self.inner {
-            if let Some(current) = &mut inner.current {
-                if let Some(barrier) = predicate(current) {
-                    let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
-                    let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
-                        widget: taken.widget.clone(),
-                        work_context: taken.work_context.clone(),
-                        barrier,
-                    });
-                    return Some(taken);
-                }
-            }
-        }
-        return None;
-    }
+    // pub(super) fn backqueue_current_if<
+    //     F: FnOnce(&AsyncQueueCurrentEntry<E>) -> Option<CommitBarrier>,
+    // >(
+    //     &mut self,
+    //     predicate: F,
+    // ) -> Option<AsyncQueueCurrentEntry<E>> {
+    //     if let Some(inner) = &mut self.inner {
+    //         if let Some(current) = &mut inner.current {
+    //             if let Some(barrier) = predicate(current) {
+    //                 let taken = (&mut inner.current).take().expect("Impossible to fail"); // rust-analyzer#14933
+    //                 let backqueued_entry = inner.backqueue.push_last(AsyncQueueBackqueueEntry {
+    //                     widget: taken.widget.clone(),
+    //                     work_context: taken.work_context.clone(),
+    //                     barrier,
+    //                 });
+    //                 return Some(taken);
+    //             }
+    //         }
+    //     }
+    //     return None;
+    // }
 
     // pub(super) fn backqueue_current<F: FnOnce(&AsyncQueueCurrentEntry<E>) -> CommitBarrier>(
     //     &mut self,

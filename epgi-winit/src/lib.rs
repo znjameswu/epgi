@@ -1,5 +1,5 @@
 mod app_main;
-pub use app_main::{AppLauncher, WindowAttributes, Window};
+pub use app_main::{AppLauncher, Window, WindowAttributes};
 
 mod scheduler_extension;
 use scheduler_extension::*;

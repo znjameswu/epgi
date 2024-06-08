@@ -14,6 +14,6 @@ pub mod template;
 
 pub mod tree;
 
-pub use nodes::{Builder, Provider, Consumer, SuspendableBuilder, Suspense};
+pub use nodes::{Builder, Consumer, Provider, SuspendableBuilder, Suspense};
 
 mod debug;

@@ -60,10 +60,7 @@ pub struct SchedulerHandle {
 }
 
 impl SchedulerHandle {
-    pub fn new(
-        sync_threadpool: rayon::ThreadPool,
-        async_threadpool: rayon::ThreadPool,
-    ) -> Self {
+    pub fn new(sync_threadpool: rayon::ThreadPool, async_threadpool: rayon::ThreadPool) -> Self {
         Self {
             sync_threadpool,
             async_threadpool,

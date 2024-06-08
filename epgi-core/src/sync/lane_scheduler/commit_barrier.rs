@@ -14,13 +14,13 @@ pub(super) struct CommitBarrierInner {
 }
 
 impl CommitBarrierInner {
-    pub(crate) fn dec(&self) {
-        self.counter.fetch_sub(1, Relaxed);
-    }
+    // pub(crate) fn dec(&self) {
+    //     self.counter.fetch_sub(1, Relaxed);
+    // }
 
-    pub(super) fn inc(&self) {
-        self.counter.fetch_add(1, Relaxed);
-    }
+    // pub(super) fn inc(&self) {
+    //     self.counter.fetch_add(1, Relaxed);
+    // }
 
     pub(super) fn new() -> Self {
         Self {

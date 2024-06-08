@@ -1,85 +1,13 @@
 use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
-use epgi_core::{Builder, SuspendableBuilder, Suspense};
+use epgi_core::{SuspendableBuilder, Suspense};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
 fn main() {
-    // let app = GestureDetector::builder()
-    //     .on_tap(|| println!("Tapped"))
-    //     .child(
-    //         ConstrainedBox::builder()
-    //             .constraints(BoxConstraints::new_tight(50.0, 50.0))
-    //             .child(
-    //                 ColorBox::builder()
-    //                     .color(Color::rgb(1.0, 0.0, 0.0))
-    //                     .child(PhantomBox::builder().build())
-    //                     .build(),
-    //             )
-    //             .build(),
-    //     )
-    //     .build();
-    let child = Builder!(
-        builder = |ctx| {
-            let (transited, set_transited) = ctx.use_state(false);
-            let (pending, start_transition) = ctx.use_transition();
-            GestureDetector!(
-                on_tap = move |job_builder| start_transition.start(
-                    |job_builder| {
-                        set_transited.set(!transited, job_builder);
-                    },
-                    job_builder
-                ),
-                child = ConstrainedBox!(
-                    constraints = BoxConstraints::new_tight(
-                        if pending { 50.0 } else { 100.0 },
-                        if transited { 100.0 } else { 50.0 }
-                    ),
-                    child = ColorBox! {
-                        color = Color::rgb(0.0, 1.0, 0.0),
-                        child = PhantomBox!()
-                    }
-                )
-            )
-        }
-    );
-    // Builder!(
-    //     builder = |ctx| {
-    //         let (color, set_color) = ctx.use_state(1.0f32);
-    //         Provider!(init = || todo!(), child)
-    //     }
-    // );
-
-    // Builder!(
-    //     builder = |ctx| {
-    //         let (pending, start_transition) = ctx.use_transition();
-    //         GestureDetector!(
-    //             on_tap = |job| start_transition.start(|job| {}, job),
-    //             child = ConstrainedBox!(
-    //                 constraints = BoxConstraints::new_tight(50.0, 50.0),
-    //                 child = ColorBox! {
-    //                     color = Color::rgb(0.0, 1.0, 0.0),
-    //                     child = PhantomBox!()
-    //                 }
-    //             )
-    //         )
-    //     }
-    // );
-
-    let app = GestureDetector!(
-        on_tap = |job| println!("Tapped"),
-        child = ConstrainedBox!(
-            constraints = BoxConstraints::new_tight(50.0, 50.0),
-            child = ColorBox! {
-                color = Color::rgb(0.0, 1.0, 0.0),
-                child = PhantomBox!()
-            }
-        )
-    );
-
     let fallback = GestureDetector!(
-        on_tap = |job| println!("Fallback tapped"),
+        on_tap = |_job_builder| println!("Fallback tapped"),
         child = ConstrainedBox!(
             constraints = BoxConstraints::new_tight(30.0, 30.0),
             child = ColorBox! {
@@ -141,7 +69,7 @@ fn main() {
         .app(app)
         .tokio_handle(
             tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+                .worker_threads(1)
                 .thread_name("tokio pool")
                 .enable_time()
                 .build()

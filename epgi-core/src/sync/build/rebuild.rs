@@ -71,9 +71,7 @@ impl<E: FullElement> ElementNode<E> {
         // None means suspended, Some means ready
         // Some(Some()) means ready and render object attached, Some(None) means ready and render object detached
         // Remember that suspended and detached are two sets of state!
-        render_object: Option<
-            <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
-        >,
+        render_object: Option<<<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,

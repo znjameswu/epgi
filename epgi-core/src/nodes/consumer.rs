@@ -17,7 +17,11 @@ pub trait ConsumerWidget<P: Protocol>:
     #[allow(unused_variables)]
     fn get_consumed_types(&self) -> &[TypeKey];
 
-    fn build(&self, ctx: &mut BuildContext, provider_values: InlinableDwsizeVec<Arc<dyn Provide>>) -> ArcChildWidget<P>;
+    fn build(
+        &self,
+        ctx: &mut BuildContext,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> ArcChildWidget<P>;
 }
 
 impl<P: Protocol> ArcWidget for Asc<dyn ConsumerWidget<P>> {
@@ -122,10 +126,23 @@ where
         std::array::from_ref(&self.type_key)
     }
 
-    fn build(&self, ctx: &mut BuildContext,  provider_values: InlinableDwsizeVec<Arc<dyn Provide>>) -> ArcChildWidget<P> {
-        assert_eq!(provider_values.len(), 1, "Consumer widget should only receive exactly one provider value");
-        let value = provider_values.into_iter().next().expect("Impossible to fail");
-        let value = value.downcast_asc::<T>().expect("Received provider value should be of correct type");
+    fn build(
+        &self,
+        ctx: &mut BuildContext,
+        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> ArcChildWidget<P> {
+        assert_eq!(
+            provider_values.len(),
+            1,
+            "Consumer widget should only receive exactly one provider value"
+        );
+        let value = provider_values
+            .into_iter()
+            .next()
+            .expect("Impossible to fail");
+        let value = value
+            .downcast_asc::<T>()
+            .expect("Received provider value should be of correct type");
         (self.builder)(ctx, value)
     }
 }

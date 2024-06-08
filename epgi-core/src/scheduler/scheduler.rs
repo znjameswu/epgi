@@ -13,7 +13,9 @@ use crate::{
     },
 };
 
-use super::{get_current_scheduler, BatchId, BatchResult, FrameResults, JobBatcher, SchedulerHandle};
+use super::{
+    get_current_scheduler, BatchId, BatchResult, FrameResults, JobBatcher, SchedulerHandle,
+};
 
 // TODO: BuildAndLayout vs other event can be modeled as RwLock.
 pub(super) enum SchedulerTask {
@@ -179,9 +181,9 @@ where
                             .map(|waker| PtrEq(waker.element_context.clone()))
                             .collect(),
                     );
-                    build_states.dispatch_async_batches();
                     self.extension.on_frame_begin(&build_states);
                     let commited_sync_batch = build_states.dispatch_sync_batch();
+                    build_states.dispatch_async_batches();
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
                     }

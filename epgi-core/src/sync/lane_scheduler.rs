@@ -6,7 +6,9 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     foundation::{Asc, PtrEq},
-    scheduler::{get_current_scheduler, BatchConf, BatchId, BatchResult, JobBatcher, LaneMask, LanePos},
+    scheduler::{
+        get_current_scheduler, BatchConf, BatchId, BatchResult, JobBatcher, LaneMask, LanePos,
+    },
     tree::{ArcAnyElementNode, AweakAnyElementNode, AweakElementContextNode},
 };
 
