@@ -94,16 +94,16 @@ fn main() {
         child = SuspendableBuilder!(
             builder = move |ctx| {
                 let (transited, set_transited) = ctx.use_state(false);
-                // let _res = ctx.use_future(
-                //     |_| {
-                //         tokio::spawn(async {
-                //             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                //             println!("Future resolved!")
-                //         })
-                //         .map(Result::unwrap)
-                //     },
-                //     transited,
-                // )?;
+                let _res = ctx.use_future(
+                    |_| {
+                        tokio::spawn(async {
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            println!("Future resolved!")
+                        })
+                        .map(Result::unwrap)
+                    },
+                    transited,
+                )?;
                 let (pending, start_transition) = ctx.use_transition();
                 println!("transited {}, pending {}", transited, pending);
                 Ok(GestureDetector!(

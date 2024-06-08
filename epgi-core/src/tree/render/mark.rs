@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering::*};
 
-pub(crate) struct RenderMark {
+pub struct RenderMark {
     needs_layout: AtomicBool,
     descendant_has_layout: AtomicBool,
     parent_use_size: AtomicBool,

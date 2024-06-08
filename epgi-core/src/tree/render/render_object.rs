@@ -134,6 +134,7 @@ impl<R: FullRender> ChildRenderObject<R::ParentProtocol> for RenderObject<R> {
 
 pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send + Sync {
     fn element_context(&self) -> &ElementContextNode;
+    fn render_mark(&self) -> &RenderMark;
     fn detach_render_object(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 
@@ -159,9 +160,15 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         todo!()
     }
 
+    fn render_mark(&self) -> &RenderMark {
+        &self.mark
+    }
+
     fn detach_render_object(&self) {
         self.mark.set_is_detached();
-        todo!()
+        if !R::NOOP_DETACH {
+            self.inner.lock().render.detach();
+        }
     }
 
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
