@@ -1,6 +1,7 @@
 - Use task-local storage to pass environmental variables such as is_self_sync to enforce certain invariants during debugging.
-- NOW: Async suspense
+- ~~NOW: Async suspense~~
     - Allow suspended async under inflated-suspense to commit
+    - Async reconcile has_mailbox_update optimization
 - Layout intrinsics
 - Render text
 - Pointer add/remove

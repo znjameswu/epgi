@@ -95,10 +95,10 @@ fn main() {
             builder = move |ctx| {
                 let (transited, set_transited) = ctx.use_state(false);
                 let _res = ctx.use_future(
-                    |_| {
-                        tokio::spawn(async {
+                    |transited| {
+                        tokio::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            println!("Future resolved!")
+                            println!("Future resolved with {}!", transited)
                         })
                         .map(Result::unwrap)
                     },
@@ -109,16 +109,16 @@ fn main() {
                 Ok(GestureDetector!(
                     on_tap = move |job_builder| {
                         println!("Tapped!");
-                        set_transited.set(!transited, job_builder);
-                        // start_transition.start(
-                        //     |job_builder| {
-                        //     },
-                        //     job_builder,
-                        // );
+                        start_transition.start(
+                            |job_builder| {
+                                set_transited.set(!transited, job_builder);
+                            },
+                            job_builder,
+                        );
                     },
                     child = ConstrainedBox!(
                         constraints = BoxConstraints::new_tight(
-                            100.0, //if pending { 50.0 } else { 100.0 },
+                            if pending { 50.0 } else { 100.0 },
                             if transited { 100.0 } else { 50.0 }
                         ),
                         child = ColorBox! {
@@ -141,7 +141,7 @@ fn main() {
         .app(app)
         .tokio_handle(
             tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(1)
+                .worker_threads(2)
                 .thread_name("tokio pool")
                 .enable_time()
                 .build()

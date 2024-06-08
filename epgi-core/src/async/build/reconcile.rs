@@ -7,7 +7,7 @@ use crate::{
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
-        apply_hook_updates, no_widget_update, ArcChildElementNode, AsyncOutput,
+        apply_hook_updates_async, no_widget_update, ArcChildElementNode, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, Element, ElementBase, ElementLockHeldToken,
         ElementNode, FullElement, HooksWithEffects, ImplProvide, Mainline, WorkContext, WorkHandle,
     },
@@ -329,7 +329,7 @@ impl<E: FullElement> ElementNode<E> {
 
         match states {
             Ok((last_element, mut hooks, children)) => {
-                apply_hook_updates(&self.context, child_work_context.job_ids(), &mut hooks);
+                apply_hook_updates_async(&self.context, child_work_context.job_ids(), &mut hooks);
                 self.perform_rebuild_node_async(
                     widget.as_ref().unwrap_or(&old_widget),
                     last_element,
@@ -342,7 +342,7 @@ impl<E: FullElement> ElementNode<E> {
                 )
             }
             Err(mut suspended_hooks) => {
-                apply_hook_updates(
+                apply_hook_updates_async(
                     &self.context,
                     child_work_context.job_ids(),
                     &mut suspended_hooks,

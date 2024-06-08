@@ -6,10 +6,10 @@ use crate::{
         RenderObjectCommitResult,
     },
     tree::{
-        ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput,
-        AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element, ElementNode,
-        ElementSnapshotInner, FullElement, HookContextMode, HooksWithCleanups, ImplElementNode,
-        ImplProvide, Mainline, MainlineState, SubscriptionDiff,
+        purge_mailbox_updates_async, ArcChildElementNode, ArcElementContextNode, AsyncInflating,
+        AsyncOutput, AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element,
+        ElementNode, ElementSnapshotInner, FullElement, HookContextMode, HooksWithCleanups,
+        ImplElementNode, ImplProvide, Mainline, MainlineState, SubscriptionDiff,
     },
 };
 
@@ -439,6 +439,8 @@ where
         } else {
             debug_assert!(spawned_consumers.is_none());
         }
+
+        purge_mailbox_updates_async(&self.context, work_context.job_ids());
 
         match output {
             AsyncOutput::Suspended {

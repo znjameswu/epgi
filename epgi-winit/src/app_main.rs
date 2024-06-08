@@ -129,20 +129,20 @@ impl AppLauncher {
             Ok(())
         };
 
-        let sync_threadpool = self
-            .sync_threadpool_builder
-            .unwrap_or_else(|| {
-                rayon::ThreadPoolBuilder::new()
-                    .thread_name(|index| format!("epgi sync pool {}", index))
-            })
-            .spawn_handler(rayon_spawn_handler)
-            .build()
-            .unwrap();
         let async_threadpool = self
             .async_threadpool_builder
             .unwrap_or_else(|| {
                 rayon::ThreadPoolBuilder::new()
                     .thread_name(|index| format!("epgi async pool {}", index))
+            })
+            .spawn_handler(rayon_spawn_handler)
+            .build()
+            .unwrap();
+        let sync_threadpool = self
+            .sync_threadpool_builder
+            .unwrap_or_else(|| {
+                rayon::ThreadPoolBuilder::new()
+                    .thread_name(|index| format!("epgi sync pool {}", index))
             })
             .spawn_handler(rayon_spawn_handler)
             .build()

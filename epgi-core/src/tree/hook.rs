@@ -113,7 +113,7 @@ pub trait HookState: AsAny + 'static + Send + Sync {
 
 impl Clone for Box<dyn HookState> {
     fn clone(&self) -> Self {
-        self.clone_box()
+        (&**self).clone_box()
     }
 }
 
@@ -205,13 +205,13 @@ where
     T: FnOnce(&mut dyn HookState) -> Result<(), Error> + Clone + 'static + Send + Sync,
 {
     fn clone_box(&self) -> Box<dyn HookCallback> {
-        Box::new(self.clone())
+        Box::new(<T as Clone>::clone(self))
     }
 }
 
 impl Clone for Box<dyn HookCallback> {
     fn clone(&self) -> Box<dyn HookCallback> {
-        self.clone_box()
+        (&**self).clone_box()
     }
 }
 
@@ -223,18 +223,42 @@ pub(crate) enum HookContextMode {
     // Retry,
 }
 
-pub(crate) fn apply_hook_updates<T>(
+pub(crate) fn apply_hook_updates_sync<T>(
     element_context: &ElementContextNode,
     job_ids: &Inlinable64Vec<JobId>,
     hooks: &mut HooksWith<T>,
 ) {
-    let mut jobs = {
+    let jobs = {
         element_context
             .mailbox
             .lock()
             .extract_if(|job_id, _| job_ids.contains(job_id))
             .collect::<Vec<_>>()
     };
+    update_hooks(jobs, hooks);
+}
+
+pub(crate) fn apply_hook_updates_async<T>(
+    element_context: &ElementContextNode,
+    job_ids: &Inlinable64Vec<JobId>,
+    hooks: &mut HooksWith<T>,
+) {
+    let jobs = {
+        element_context
+            .mailbox
+            .lock()
+            .iter()
+            .filter_map(|(job_id, updates)| {
+                job_ids
+                    .contains(job_id)
+                    .then(|| (job_id.clone(), updates.clone()))
+            })
+            .collect::<Vec<_>>()
+    };
+    update_hooks(jobs, hooks);
+}
+
+fn update_hooks<T>(mut jobs: Vec<(JobId, Vec<Update>)>, hooks: &mut HooksWith<T>) {
     jobs.sort_by_key(|(job_id, ..)| *job_id);
 
     let updates = jobs
@@ -253,4 +277,14 @@ pub(crate) fn apply_hook_updates<T>(
         .ok()
         .expect("We currently do not handle hook failure") //TODO
     }
+}
+
+pub(crate) fn purge_mailbox_updates_async(
+    element_context: &ElementContextNode,
+    job_ids: &Inlinable64Vec<JobId>,
+) {
+    element_context
+        .mailbox
+        .lock()
+        .retain(|job_id, _| !job_ids.contains(job_id))
 }

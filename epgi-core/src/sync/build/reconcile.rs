@@ -3,7 +3,7 @@ use crate::{
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
-        apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementNode,
+        apply_hook_updates_sync, no_widget_update, ArcChildElementNode, Element, ElementNode,
         FullElement, HooksWithCleanups, ImplElementNode, MainlineState,
     },
 };
@@ -233,7 +233,7 @@ impl<E: FullElement> ElementNode<E> {
             } => {
                 assert!(!has_poll, "A non-suspended node should not be polled");
                 if has_mailbox_update {
-                    apply_hook_updates(&self.context, job_ids, &mut hooks);
+                    apply_hook_updates_sync(&self.context, job_ids, &mut hooks);
                 }
                 self.perform_rebuild_node_sync(
                     new_widget,
@@ -256,7 +256,7 @@ impl<E: FullElement> ElementNode<E> {
             } => {
                 waker.abort();
                 if has_mailbox_update {
-                    apply_hook_updates(&self.context, job_ids, &mut suspended_hooks);
+                    apply_hook_updates_sync(&self.context, job_ids, &mut suspended_hooks);
                 }
                 self.perform_rebuild_node_sync(
                     new_widget,
@@ -277,7 +277,7 @@ impl<E: FullElement> ElementNode<E> {
             } => {
                 waker.abort();
                 if has_mailbox_update {
-                    apply_hook_updates(&self.context, job_ids, &mut suspended_hooks);
+                    apply_hook_updates_sync(&self.context, job_ids, &mut suspended_hooks);
                     // TODO: This is impossible and should trigger a warning
                 }
                 self.perform_inflate_node_sync::<false>(
