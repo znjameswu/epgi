@@ -1230,6 +1230,7 @@ dependencies = [
 name = "epgi-winit"
 version = "0.1.0"
 dependencies = [
+ "derivative",
  "epgi-2d",
  "epgi-common",
  "epgi-core",
@@ -1239,6 +1240,7 @@ dependencies = [
  "pretty_env_logger",
  "rayon",
  "time",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "typed-builder",

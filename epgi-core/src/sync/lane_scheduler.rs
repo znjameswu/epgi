@@ -6,7 +6,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     foundation::{Asc, PtrEq},
-    scheduler::{BatchConf, BatchId, BatchResult, JobBatcher, LaneMask, LanePos},
+    scheduler::{get_current_scheduler, BatchConf, BatchId, BatchResult, JobBatcher, LaneMask, LanePos},
     tree::{ArcAnyElementNode, AweakAnyElementNode, AweakElementContextNode},
 };
 
@@ -131,7 +131,7 @@ impl LaneScheduler {
         }
         if !finished_lanes.is_empty() {
             let root_element = root_element.clone();
-            rayon::scope(move |scope| {
+            get_current_scheduler().sync_threadpool.scope(move |scope| {
                 root_element.visit_and_commit_async_any(finished_lanes, scope, self);
             })
         }
@@ -145,7 +145,7 @@ impl LaneScheduler {
             return None;
         };
         let root_element = root_element.clone();
-        rayon::scope(|scope| {
+        get_current_scheduler().sync_threadpool.scope(|scope| {
             root_element.visit_and_work_sync_any(&sync_batch.job_ids, scope, self);
         });
         let batch_id = sync_batch.id;

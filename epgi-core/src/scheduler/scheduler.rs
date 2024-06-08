@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use super::{BatchId, BatchResult, FrameResults, JobBatcher, SchedulerHandle};
+use super::{get_current_scheduler, BatchId, BatchResult, FrameResults, JobBatcher, SchedulerHandle};
 
 // TODO: BuildAndLayout vs other event can be modeled as RwLock.
 pub(super) enum SchedulerTask {
@@ -74,7 +74,7 @@ impl BuildStates {
         &self,
         layer_render_objects: HashSet<PtrEq<AweakAnyLayerRenderObject>>,
     ) {
-        rayon::scope(|scope| {
+        get_current_scheduler().sync_threadpool.scope(|scope| {
             for PtrEq(layer_render_object) in layer_render_objects {
                 let Some(layer_render_objects) = layer_render_object.upgrade() else {
                     continue;

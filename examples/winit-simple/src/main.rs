@@ -105,15 +105,16 @@ fn main() {
                     transited,
                 )?;
                 let (pending, start_transition) = ctx.use_transition();
+                println!("transited {}, pending {}", transited, pending);
                 Ok(GestureDetector!(
                     on_tap = move |job_builder| {
                         println!("Tapped!");
-                        start_transition.start(
-                            |job_builder| {
-                                set_transited.set(!transited, job_builder);
-                            },
-                            job_builder,
-                        );
+                        set_transited.set(!transited, job_builder);
+                        // start_transition.start(
+                        //     |job_builder| {
+                        //     },
+                        //     job_builder,
+                        // );
                     },
                     child = ConstrainedBox!(
                         constraints = BoxConstraints::new_tight(
@@ -129,51 +130,6 @@ fn main() {
             }
         ),
     );
-    let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .thread_name("tokio pool")
-        .thread_stack_size(3 * 1024 * 1024)
-        .enable_time()
-        .build()
-        .unwrap();
-    let tokio_handle = tokio_runtime.handle().clone();
-    let rayon_spawn_handler = |thread: rayon::ThreadBuilder| {
-        // Adapted from rayon documentation
-        let mut b = std::thread::Builder::new();
-        if let Some(name) = thread.name() {
-            b = b.name(name.to_owned());
-        }
-        if let Some(stack_size) = thread.stack_size() {
-            b = b.stack_size(stack_size);
-        }
-        let tokio_handle = tokio_handle.clone();
-        b.spawn(move || {
-            let _guard = tokio_handle.enter();
-            thread.run();
-        })?;
-        Ok(())
-    };
-    let sync_threadpool = rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
-        .thread_name(|index| format!("epgi sync pool {}", index))
-        .spawn_handler(rayon_spawn_handler.clone())
-        .build()
-        .unwrap();
-    let async_threadpool = rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
-        .thread_name(|index| format!("epgi sync pool {}", index))
-        .spawn_handler(rayon_spawn_handler)
-        .build()
-        .unwrap();
-
-    sync_threadpool.broadcast(|_| {
-        let _guard = tokio_runtime.enter();
-        std::mem::forget(_guard);
-    });
-    async_threadpool.broadcast(|_| {
-        let _guard = tokio_runtime.enter();
-        std::mem::forget(_guard);
-    });
 
     let window_size = LogicalSize::new(400.0, 400.0);
     let window_attributes = Window::default_attributes()
@@ -183,8 +139,26 @@ fn main() {
 
     AppLauncher::builder()
         .app(app)
-        .sync_threadpool_builder(sync_threadpool)
-        .async_threadpool_builder(async_threadpool)
+        .tokio_handle(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .thread_name("tokio pool")
+                .enable_time()
+                .build()
+                .unwrap()
+                .handle()
+                .clone(),
+        )
+        .sync_threadpool_builder(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(1)
+                .thread_name(|index| format!("epgi sync pool {}", index)),
+        )
+        .async_threadpool_builder(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(1)
+                .thread_name(|index| format!("epgi async pool {}", index)),
+        )
         .window(window_attributes)
         .build()
         .run();

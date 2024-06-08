@@ -65,8 +65,14 @@ struct MainState<'a> {
 #[derive(TypedBuilder)]
 pub struct AppLauncher {
     app: ArcChildWidget<BoxProtocol>,
-    sync_threadpool_builder: rayon::ThreadPool,
-    async_threadpool_builder: rayon::ThreadPool,
+    #[builder(default, setter(strip_option))]
+    sync_threadpool_builder: Option<rayon::ThreadPoolBuilder>,
+    #[builder(default, setter(strip_option))]
+    async_threadpool_builder: Option<rayon::ThreadPoolBuilder>,
+    #[cfg(feature = "tokio")]
+    #[builder(default, setter(strip_option))]
+    tokio_handle: Option<tokio::runtime::Handle>,
+
     window: WindowAttributes,
     #[builder(default = EventLoop::new().unwrap(), setter(skip))]
     event_loop: EventLoop<()>,
@@ -90,42 +96,122 @@ impl AppLauncher {
             pointer_event_converter: WinitPointerEventConverter::new(tx),
         };
 
+        #[cfg(feature = "tokio")]
+        let tokio_handle = self.tokio_handle.unwrap_or_else(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .thread_name("tokio pool")
+                .enable_time()
+                .build()
+                .unwrap()
+                .handle()
+                .clone()
+        });
+
+        let spawn_hook = ();
+
+        #[cfg(feature = "tokio")]
+        let spawn_hook = (spawn_hook, tokio_handle);
+
+        let rayon_spawn_handler = |thread: rayon::ThreadBuilder| {
+            // Adapted from rayon documentation
+            let mut b = std::thread::Builder::new();
+            if let Some(name) = thread.name() {
+                b = b.name(name.to_owned());
+            }
+            if let Some(stack_size) = thread.stack_size() {
+                b = b.stack_size(stack_size);
+            }
+            let spawn_hook = spawn_hook.clone();
+            b.spawn(move || {
+                let _guard = spawn_hook.enter();
+                thread.run();
+            })?;
+            Ok(())
+        };
+
+        let sync_threadpool = self
+            .sync_threadpool_builder
+            .unwrap_or_else(|| {
+                rayon::ThreadPoolBuilder::new()
+                    .thread_name(|index| format!("epgi sync pool {}", index))
+            })
+            .spawn_handler(rayon_spawn_handler)
+            .build()
+            .unwrap();
+        let async_threadpool = self
+            .async_threadpool_builder
+            .unwrap_or_else(|| {
+                rayon::ThreadPoolBuilder::new()
+                    .thread_name(|index| format!("epgi async pool {}", index))
+            })
+            .spawn_handler(rayon_spawn_handler)
+            .build()
+            .unwrap();
+
         // If there is no default tracing subscriber, we set our own. If one has
         // already been set, we get an error which we swallow.
         // By now, we're about to take control of the event loop. The user is unlikely
         // to try to set their own subscriber once the event loop has started.
         let _ = try_init_tracing();
 
-        initialize_scheduler_handle(self.sync_threadpool_builder, self.async_threadpool_builder);
-        main_state.start_scheduler_with(self.app, rx);
+        initialize_scheduler_handle(sync_threadpool, async_threadpool);
+        main_state.start_scheduler_with(self.app, rx, spawn_hook);
 
         self.event_loop.run_app(&mut main_state).unwrap()
+    }
+}
 
-        // let event_loop = EventLoop::new().unwrap();
-        // event_loop.set_control_flow(ControlFlow::Wait);
-        // // let _guard = self.app.rt.enter();
-        // let window = WindowBuilder::new()
-        //     .with_inner_size(winit::dpi::LogicalSize {
-        //         width: 1024.,
-        //         height: 768.,
-        //     })
-        //     .build(&event_loop)
-        //     .unwrap();
-        // let mut main_state = MainState::new(window);
+pub trait SpawnHook: Clone + Send + 'static {
+    type Guard<'a>
+    where
+        Self: 'a;
 
-        // let (tx, rx) = unbounded_channel_sync();
-        // let window = main_state.window.clone();
-        // initialize_scheduler_handle(
-        //     self.sync_threadpool_builder,
-        //     self.async_threadpool_builder,
-        //     move || {
-        //         window.request_redraw();
-        //     },
-        // );
-        // main_state.start_scheduler_with(self.app, rx);
-        // let mut pointer_event_converter = WinitPointerEventConverter::new(tx);
+    fn enter(&self) -> Self::Guard<'_>;
+}
 
-        // event_loop.run_app(&mut main_state).unwrap();
+impl<T1, T2> SpawnHook for (T1, T2)
+where
+    T1: SpawnHook,
+    T2: SpawnHook,
+{
+    type Guard<'a> = (T1::Guard<'a> , T2::Guard<'a>)
+    where
+        Self: 'a;
+
+    fn enter(&self) -> Self::Guard<'_> {
+        (self.0.enter(), self.1.enter())
+    }
+}
+
+impl<F, G> SpawnHook for F
+where
+    F: Fn() -> G + Clone + Send + 'static,
+{
+    type Guard<'a> = G
+    where
+        Self: 'a;
+
+    fn enter(&self) -> Self::Guard<'_> {
+        self()
+    }
+}
+
+impl SpawnHook for () {
+    type Guard<'a> = ()
+    where
+        Self: 'a;
+
+    fn enter(&self) -> Self::Guard<'_> {}
+}
+
+#[cfg(feature = "tokio")]
+impl SpawnHook for tokio::runtime::Handle {
+    type Guard<'a> = tokio::runtime::EnterGuard<'a>
+    where
+        Self: 'a;
+
+    fn enter(&self) -> Self::Guard<'_> {
+        self.enter()
     }
 }
 
@@ -379,6 +465,7 @@ impl<'a> MainState<'a> {
         &mut self,
         app: ArcChildWidget<BoxProtocol>,
         rx: SyncMpscReceiver<PointerEvent>,
+        spawn_hook: impl SpawnHook,
     ) {
         // Now we wrap the application in wrapper widgets that provides bindigns to basic functionalities,
         // such as window size and frame information.
@@ -407,9 +494,14 @@ impl<'a> MainState<'a> {
             get_current_scheduler(),
             EpgiGlazierSchedulerExtension::new(rx),
         );
-        let join_handle = std::thread::spawn(move || {
-            scheduler.start_event_loop(get_current_scheduler());
-        });
+        let join_handle = std::thread::Builder::new()
+            .name("epgi scheduler".into())
+            .spawn(move || {
+                let _guard = spawn_hook.enter();
+                get_current_scheduler().sync_threadpool.install(|| {});
+                scheduler.start_event_loop(get_current_scheduler());
+            })
+            .unwrap();
 
         self.scheduler_join_handle = Some(join_handle);
     }

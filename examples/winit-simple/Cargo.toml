@@ -7,7 +7,7 @@ keywords.workspace = true
 license.workspace = true
 
 [dependencies]
-epgi-winit = { workspace = true }
+epgi-winit = { workspace = true, features = ["tokio"] }
 epgi-core = { workspace = true }
 epgi-common = { workspace = true }
 epgi-2d = { workspace = true }
