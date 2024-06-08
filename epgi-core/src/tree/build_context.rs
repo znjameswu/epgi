@@ -2,7 +2,7 @@ use crate::{foundation::VecPushLastExt, scheduler::LanePos};
 
 use super::{
     ArcElementContextNode, Effect, Hook, HookContextMode, HookIndex, HooksWithEffects,
-    HooksWithTearDowns,
+    HooksWithCleanups,
 };
 
 // pub trait BuildContext {
@@ -35,12 +35,12 @@ pub(crate) struct HookContext<'a> {
 }
 
 pub(crate) enum Hooks<'a> {
-    Sync(&'a mut HooksWithTearDowns),
+    Sync(&'a mut HooksWithCleanups),
     Async(&'a mut HooksWithEffects),
 }
 
 impl<'a> HookContext<'a> {
-    pub(crate) fn new_sync(hooks: &'a mut HooksWithTearDowns, mode: HookContextMode) -> Self {
+    pub(crate) fn new_sync(hooks: &'a mut HooksWithCleanups, mode: HookContextMode) -> Self {
         Self {
             hooks: Hooks::Sync(hooks),
             index: 0,
@@ -114,7 +114,7 @@ impl<'a> BuildContext<'a> {
     }
 }
 
-impl HooksWithTearDowns {
+impl HooksWithCleanups {
     fn reconcile_array_hook<T: Hook>(&mut self, hook: T, index: usize) -> &mut T::HookState {
         let (hook_state, tear_down) = self.array_hooks.get_mut(index).expect("Impossible to fail");
         let hook_state = hook_state

@@ -228,6 +228,20 @@ Desicion:
 4. We will clean up the executing work when we perform the unmount.
 
 
+# Render object detach behavior on element suspend?
+Concensus: If element node A suspends, then any render objects on the the minimal path between A and its nearest ancestor suspense B must be detached.
+
+Question: 
+1. Should we also detach render objects of the descendants of A?
+2. Should we also detach render objects in the sibling subtress below B?
+3. (The above two question should share the same answer)
+
+1. If we do not detach unrelated render objects, then 
+    1. (Solved problem) when A resumes, it (and all the render objects between A and B) has to gather child render objects.
+    2. When A resumes, A must correctly report itself as a new render object to trigger ancestor updating, even though A's children will report no new render object.
+2. If we do detach unrelated render objects, then
+    1. This is so hard to impl. FATAL
+
 # Problems with detached renderobject being relayout boundary/repaint boundary.
 If we only detach a minimal path from the suspended to the nearest suspense, then there will exist some render subtree without a attached parent render objects. Normally this won't be of much problem since we only need the parent reference for up-marking, which is already covered by element context nodes. However, if we need an ancestor for relayout/repaint boundary, this is problematic.
 

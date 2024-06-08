@@ -4,7 +4,7 @@ use crate::{
     sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
         apply_hook_updates, no_widget_update, ArcChildElementNode, Element, ElementNode,
-        FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
+        FullElement, HooksWithCleanups, ImplElementNode, MainlineState,
     },
 };
 
@@ -62,7 +62,7 @@ struct SyncReconcile<E: Element> {
     has_mailbox_update: bool,
     old_widget: E::ArcWidget,
     new_widget: Option<E::ArcWidget>,
-    state: MainlineState<E, HooksWithTearDowns>,
+    state: MainlineState<E, HooksWithCleanups>,
     async_cancel:
         Option<AsyncCancel<ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>>>,
 }
@@ -240,7 +240,7 @@ impl<E: FullElement> ElementNode<E> {
                     element,
                     children,
                     hooks,
-                    render_object,
+                    Some(render_object),
                     consumed_values,
                     job_ids,
                     scope,
@@ -263,7 +263,7 @@ impl<E: FullElement> ElementNode<E> {
                     element,
                     children,
                     suspended_hooks,
-                    Default::default(),
+                    None,
                     consumed_values,
                     job_ids,
                     scope,

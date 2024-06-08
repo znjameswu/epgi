@@ -4,7 +4,7 @@ pub struct RenderMark {
     needs_layout: AtomicBool,
     descendant_has_layout: AtomicBool,
     parent_use_size: AtomicBool,
-    is_detached: AtomicBool,
+    pub(crate) is_detached: AtomicBool,
 }
 
 pub struct LayerMark {
@@ -48,9 +48,9 @@ impl RenderMark {
         NotDetachedToken(())
     }
 
-    pub(crate) fn set_is_detached(&self) {
-        self.is_detached.store(true, Relaxed)
-    }
+    // pub(crate) fn set_is_detached(&self) {
+    //     self.is_detached.store(true, Relaxed)
+    // }
 
     pub(crate) fn parent_use_size(&self) -> bool {
         self.parent_use_size.load(Relaxed)

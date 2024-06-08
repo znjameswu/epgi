@@ -5,7 +5,7 @@ use crate::{
 
 use super::ElementContextNode;
 
-pub(crate) type HooksWithTearDowns = HooksWith<Option<Box<dyn EffectCleanup>>>;
+pub(crate) type HooksWithCleanups = HooksWith<Option<Box<dyn EffectCleanup>>>;
 pub(crate) type HooksWithEffects = HooksWith<Option<Box<dyn Effect>>>;
 
 #[derive(Clone, Default)]
@@ -34,7 +34,7 @@ impl<T> HooksWith<T> {
 }
 
 impl HooksWithEffects {
-    pub(crate) fn fire_effects(self) -> HooksWithTearDowns {
+    pub(crate) fn fire_effects(self) -> HooksWithCleanups {
         HooksWith {
             array_hooks: self
                 .array_hooks
@@ -50,7 +50,7 @@ impl HooksWithEffects {
     }
 }
 
-impl HooksWithTearDowns {
+impl HooksWithCleanups {
     pub(crate) fn merge_with(
         &mut self,
         new_hooks: HooksWithEffects,
@@ -83,6 +83,14 @@ impl HooksWithTearDowns {
             self.array_hooks
                 .push((new_hook_state, new_effect.and_then(Effect::fire_box)));
         }
+    }
+
+    pub(crate) fn cleanup(self) {
+        self.array_hooks
+            .into_iter()
+            .for_each(|(_hook_state, cleanup)| {
+                cleanup.map(EffectCleanup::cleanup);
+            })
     }
 }
 

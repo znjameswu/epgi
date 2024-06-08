@@ -110,8 +110,8 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
             ),
 
             // The primary child has resumed, now we unmount the fallback and remount the primary
-            Right([New(child_render_object), fallback_change @ (Keep { .. } | New(_))]) => {
-                let old_fallback_child = {
+            Right([New(child_render_object), Keep { .. } | New(_)]) => {
+                let fallback_child = {
                     let mut snapshot = element_node.snapshot.lock();
                     let state = snapshot
                         .inner
@@ -134,10 +134,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
 
                 // The fallback element shall be unmounted
                 scope.spawn(|scope| {
-                    old_fallback_child.unmount(scope, lane_scheduler);
-                    if let New(fallback_render_object) = fallback_change {
-                        fallback_render_object.detach_render_object();
-                    }
+                    fallback_child.unmount(scope, lane_scheduler);
                 });
 
                 return replace_child_render_object(
@@ -159,7 +156,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
             >,
         >,
         children: &mut EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
-        render_object: &mut Option<Arc<RenderObject<RenderSuspense<P>>>>,
+        render_object: Option<Option<Arc<RenderObject<RenderSuspense<P>>>>>,
         render_object_changes: EitherParallel<
             [RenderObjectCommitResult<P>; 1],
             [RenderObjectCommitResult<P>; 2],
@@ -168,13 +165,16 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
         lane_scheduler: &'batch LaneScheduler,
         scope: &rayon::Scope<'batch>,
         _is_new_widget: bool,
-    ) -> RenderObjectCommitResult<P> {
+    ) -> (
+        Option<Arc<RenderObject<RenderSuspense<P>>>>,
+        RenderObjectCommitResult<P>,
+    ) {
         debug_assert!(_shuffle.is_none(), "Suspense cannot shuffle its child");
-        let render_object = render_object.as_mut().expect("Suspense can never suspend");
+        let render_object = render_object.flatten().expect("Suspense can never suspend");
 
         use Either::*;
         use RenderObjectCommitResult::*;
-        match render_object_changes.0 {
+        let commit_result = match render_object_changes.0 {
             Left(
                 [Keep {
                     propagated_render_action,
@@ -187,27 +187,17 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
                     subtree_has_action,
                 }],
             ) => {
-                let render_action =
+                let propagated_render_action =
                     render_object.mark_render_action(propagated_render_action, subtree_has_action);
-                return RenderObjectCommitResult::Keep {
-                    propagated_render_action: render_action,
+
+                RenderObjectCommitResult::Keep {
+                    propagated_render_action,
                     subtree_has_action,
-                };
+                }
             }
             Left([New(child_render_object)])
             | Right([Keep { .. } | Suspend, New(child_render_object)]) => {
-                let render_action = render_object
-                    .mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
-                {
-                    let mut inner = render_object.inner.lock();
-                    let [old_child_render_object] =
-                        std::mem::replace(&mut inner.children, [child_render_object]);
-                    old_child_render_object.detach_render_object();
-                }
-                return RenderObjectCommitResult::Keep {
-                    propagated_render_action: render_action,
-                    subtree_has_action: RenderAction::Relayout,
-                };
+                replace_child_render_object(&render_object, child_render_object, None)
             }
             Left([Suspend]) => {
                 // We choose to read widget right from inside the element node
@@ -226,7 +216,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
 
                 replace_suspended_primary_child(children, fallback);
 
-                return change;
+                change
             }
 
             Right([_child_change, Suspend]) => panic!(
@@ -234,27 +224,21 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
                 This is not supposed to happen. \
                 We have not decided to support cascaded suspense propagation."
             ),
-            Right([New(child_render_object), fallback_change @ (Keep { .. } | New(_))]) => {
-                let old_fallback_child = replace_fallback_child(children);
+            Right([New(child_render_object), Keep { .. } | New(_)]) => {
+                let fallback_child = replace_fallback_child(children);
 
                 scope.spawn(|scope| {
-                    old_fallback_child.unmount(scope, lane_scheduler);
-                    if let New(fallback_render_object) = fallback_change {
-                        fallback_render_object.detach_render_object();
-                    }
+                    fallback_child.unmount(scope, lane_scheduler);
                 });
 
-                return replace_child_render_object(
-                    render_object,
-                    child_render_object,
-                    Some(false),
-                );
+                replace_child_render_object(&render_object, child_render_object, Some(false))
             }
         };
+        (Some(render_object), commit_result)
     }
 
     fn rebuild_suspend_commit_render_object(
-        _render_object: Option<Arc<RenderObject<RenderSuspense<P>>>>,
+        _render_object: Option<Option<Arc<RenderObject<RenderSuspense<P>>>>>,
     ) -> RenderObjectCommitResult<P> {
         panic!("Suspense can not suspend on itself")
     }
@@ -304,6 +288,12 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
         ));
         return (Some(new_render_object.clone()), New(new_render_object));
     }
+
+    fn detach_render_object(render_object: &Option<Arc<RenderObject<RenderSuspense<P>>>>) {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.detach_render_object());
+    }
 }
 
 fn inflate_fallback<P: Protocol>(
@@ -347,11 +337,12 @@ fn replace_child_render_object<P: Protocol>(
 ) -> RenderObjectCommitResult<P> {
     {
         let mut inner = render_object.inner.lock();
-        debug_assert!(
-            inner.children[0].render_mark().is_detached().is_ok(),
-            "Replaced old child render object should have already been detached 
-            when their element was unmounted or suspended"
-        );
+        // // We use an out-of-order unmount, so we cannot really assert the child render object has been detached
+        // debug_assert!(
+        //     inner.children[0].render_mark().is_detached().is_ok(),
+        //     "Replaced old child render object should have already been detached
+        //     when their element was unmounted or suspended"
+        // );
         inner.children = [child_render_object];
         if let Some(is_suspended) = new_suspend_state {
             inner.render.is_suspended = is_suspended;

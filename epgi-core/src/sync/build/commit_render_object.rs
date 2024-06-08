@@ -7,14 +7,14 @@ use crate::{
     sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
         ArcChildElementNode, ArcElementContextNode, ChildRenderObjectsUpdateCallback, Element,
-        ElementBase, ElementNode, FullElement, HooksWithTearDowns, ImplElementNode, MainlineState,
+        ElementBase, ElementNode, FullElement, HooksWithCleanups, ImplElementNode, MainlineState,
     },
 };
 
 impl<E: FullElement> ElementNode<E> {
     pub(super) fn commit_write_element(
         self: &Arc<Self>,
-        state: MainlineState<E, HooksWithTearDowns>,
+        state: MainlineState<E, HooksWithCleanups>,
     ) {
         // Collecting async work is necessary, even if we are inflating!
         // Since it could be an InflateSuspended node and an async batch spawned a secondary root on this node.
@@ -45,7 +45,7 @@ impl<E: FullElement> ElementNode<E> {
 
     pub(super) fn commit_write_element_first_inflate(
         self: &Arc<Self>,
-        state: MainlineState<E, HooksWithTearDowns>,
+        state: MainlineState<E, HooksWithCleanups>,
     ) {
         let mut snapshot = self.snapshot.lock();
         let snapshot_reborrow = &mut *snapshot;
@@ -85,7 +85,7 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
         children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: &mut Self::OptionArcRenderObject,
+        render_object: Option<Self::OptionArcRenderObject>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             RenderObjectCommitResult<E::ChildProtocol>,
@@ -94,11 +94,14 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
         lane_scheduler: &'batch LaneScheduler,
         scope: &rayon::Scope<'batch>,
         is_new_widget: bool,
-    ) -> RenderObjectCommitResult<E::ParentProtocol>;
+    ) -> (
+        Self::OptionArcRenderObject,
+        RenderObjectCommitResult<E::ParentProtocol>,
+    );
 
     // Detach render object if any
     fn rebuild_suspend_commit_render_object(
-        render_object: Self::OptionArcRenderObject,
+        render_object: Option<Self::OptionArcRenderObject>,
     ) -> RenderObjectCommitResult<E::ParentProtocol>;
 
     fn inflate_success_commit_render_object(
@@ -115,4 +118,7 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
         Self::OptionArcRenderObject,
         RenderObjectCommitResult<E::ParentProtocol>,
     );
+
+    // Detach render object if any
+    fn detach_render_object(render_object: &Self::OptionArcRenderObject);
 }

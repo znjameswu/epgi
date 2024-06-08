@@ -8,7 +8,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput,
         AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element, ElementNode,
-        ElementSnapshotInner, FullElement, HookContextMode, HooksWithTearDowns, ImplElementNode,
+        ElementSnapshotInner, FullElement, HookContextMode, HooksWithCleanups, ImplElementNode,
         ImplProvide, Mainline, MainlineState, SubscriptionDiff,
     },
 };
@@ -456,7 +456,7 @@ where
                     } => {
                         hooks.merge_with(suspended_results.hooks, true, HookContextMode::Rebuild);
                         <<E as Element>::Impl as ImplCommitRenderObject<E>>::rebuild_suspend_commit_render_object(
-                            render_object,
+                            Some(render_object),
                         );
                         RebuildSuspended {
                             element,
@@ -516,7 +516,7 @@ where
                             render_object_changes,
                             widget,
                             hooks,
-                            render_object,
+                            Some(render_object),
                             mainline,
                             &self.context,
                             scope,
@@ -535,7 +535,7 @@ where
                             render_object_changes,
                             widget,
                             suspended_hooks,
-                            Default::default(),
+                            None,
                             mainline,
                             &self.context,
                             scope,
@@ -594,8 +594,8 @@ where
             RenderObjectCommitResult<E::ChildProtocol>,
         >,
         widget: &E::ArcWidget,
-        mut hooks: HooksWithTearDowns,
-        mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
+        mut hooks: HooksWithCleanups,
+        render_object: Option<<<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject>,
         mainline: &mut Mainline<E>,
         element_context: &ArcElementContextNode,
         scope: &rayon::Scope<'batch>,
@@ -615,12 +615,12 @@ where
             scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
         }
 
-        let change = <E as Element>::Impl::rebuild_success_commit_render_object(
+        let (render_object, change) = <E as Element>::Impl::rebuild_success_commit_render_object(
             &results.element,
             &widget,
             rebuild_state.shuffle,
             &mut results.children,
-            &mut render_object,
+            render_object,
             render_object_changes,
             element_context,
             lane_scheduler,

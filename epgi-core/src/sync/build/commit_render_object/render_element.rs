@@ -59,7 +59,7 @@ where
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
         children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        render_object: &mut Self::OptionArcRenderObject,
+        render_object: Option<Self::OptionArcRenderObject>,
         render_object_changes: ContainerOf<
             E::ChildContainer,
             RenderObjectCommitResult<E::ChildProtocol>,
@@ -68,8 +68,12 @@ where
         _lane_scheduler: &'batch LaneScheduler,
         _scope: &rayon::Scope<'batch>,
         is_new_widget: bool,
-    ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        let (new_render_object, change) = if let Some(render_object) = render_object.take() {
+    ) -> (
+        Self::OptionArcRenderObject,
+        RenderObjectCommitResult<E::ParentProtocol>,
+    ) {
+        let was_suspended = render_object.is_none();
+        let (new_render_object, change) = if let Some(render_object) = render_object.flatten() {
             rebuild_success_process_attached(
                 widget,
                 shuffle,
@@ -78,22 +82,43 @@ where
                 is_new_widget,
             )
         } else {
-            rebuild_success_process_detached(
-                element,
-                widget,
-                children,
-                render_object_changes,
-                element_context,
-            )
+            let render_object_change_summary =
+                RenderObjectCommitResult::summarize(render_object_changes.as_iter());
+            if render_object_change_summary == RenderObjectCommitSummary::HasNewNoSuspend
+                || (was_suspended && render_object_change_summary.is_keep_all())
+            {
+                let render_object = try_create_render_object(
+                    element,
+                    widget,
+                    element_context,
+                    children,
+                    render_object_changes,
+                );
+
+                if let Some(render_object) = render_object {
+                    if let Some(layer_render_object) =
+                        RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(
+                            &render_object,
+                        )
+                    {
+                        get_current_scheduler()
+                            .push_layer_render_objects_needing_paint(layer_render_object)
+                    }
+                    let change = RenderObjectCommitResult::New(render_object.clone());
+                    return (Some(render_object), change);
+                }
+            }
+            return (None, RenderObjectCommitResult::Suspend);
         };
-        *render_object = new_render_object;
-        change
+        (new_render_object, change)
     }
 
     fn rebuild_suspend_commit_render_object(
-        render_object: Option<Arc<RenderObject<E::Render>>>,
+        render_object: Option<Option<Arc<RenderObject<E::Render>>>>,
     ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        render_object.map(|render_object| render_object.detach_render_object());
+        render_object
+            .flatten()
+            .map(|render_object| render_object.detach_render_object());
         RenderObjectCommitResult::Suspend
     }
 
@@ -149,6 +174,12 @@ where
 
         (Some(new_render_object), change)
     }
+
+    fn detach_render_object(render_object: &Option<Arc<RenderObject<E::Render>>>) {
+        render_object
+            .as_ref()
+            .map(|render_object| render_object.detach_render_object());
+    }
 }
 
 #[inline(always)]
@@ -198,7 +229,7 @@ where
             };
         }
         HasSuspended => {
-            render_object.detach_render_object();
+            // render_object.detach_render_object();
             let mut snapshot = element_node.snapshot.lock();
             let state = snapshot
                 .inner
@@ -216,7 +247,7 @@ where
             match state {
                 Ready { render_object, .. } => {
                     render_object
-                        .take()
+                        .take() // We detach the render object
                         .map(|render_object| render_object.detach_render_object());
                 }
                 RebuildSuspended { .. } => panic!(
@@ -425,54 +456,6 @@ where
     };
 
     return (Some(render_object), change);
-}
-
-fn rebuild_success_process_detached<E, const PROVIDE_ELEMENT: bool>(
-    element: &E,
-    widget: &E::ArcWidget,
-    children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-    render_object_changes: ContainerOf<
-        E::ChildContainer,
-        RenderObjectCommitResult<E::ChildProtocol>,
-    >,
-    element_context: &ArcElementContextNode,
-) -> (
-    Option<Arc<RenderObject<E::Render>>>,
-    RenderObjectCommitResult<E::ParentProtocol>,
-)
-where
-    E: RenderElement,
-    ElementImpl<true, PROVIDE_ELEMENT>:
-        ImplElementNode<E, OptionArcRenderObject = Option<Arc<RenderObject<E::Render>>>>,
-{
-    let render_object_change_summary =
-        RenderObjectCommitResult::summarize(render_object_changes.as_iter());
-
-    if let RenderObjectCommitSummary::KeepAll { .. } | RenderObjectCommitSummary::HasSuspended =
-        render_object_change_summary
-    {
-        return (None, RenderObjectCommitResult::Suspend);
-    };
-
-    let render_object = try_create_render_object(
-        element,
-        widget,
-        element_context,
-        children,
-        render_object_changes,
-    );
-
-    if let Some(render_object) = render_object {
-        if let Some(layer_render_object) =
-            RenderObject::<E::Render>::try_as_aweak_any_layer_render_object(&render_object)
-        {
-            get_current_scheduler().push_layer_render_objects_needing_paint(layer_render_object)
-        }
-        let change = RenderObjectCommitResult::New(render_object.clone());
-        (Some(render_object), change)
-    } else {
-        return (None, RenderObjectCommitResult::Suspend);
-    }
 }
 
 #[inline(never)]

@@ -1,11 +1,11 @@
 use crate::{
     foundation::Arc,
     sync::LaneScheduler,
-    tree::{ElementNode, FullElement, SuspendWaker},
+    tree::{Element, ElementNode, FullElement, MainlineState},
 };
 use core::sync::atomic::Ordering::*;
 
-use super::provider::AsyncWorkNeedsRestarting;
+use super::{provider::AsyncWorkNeedsRestarting, ImplCommitRenderObject};
 
 pub trait AnyElementNodeUnmountExt {
     fn unmount<'batch>(
@@ -65,10 +65,39 @@ impl<E: FullElement> ElementNode<E> {
             // Read mainline children and drop suspended work.
             let state = mainline
                 .state
-                .as_ref()
+                .take() // We have to take the states because we need to clean up hooks
                 .expect("A mainline tree walk should not encounter another sync work");
-            let children = state.children_cloned();
-            state.waker_ref().map(SuspendWaker::abort);
+            use MainlineState::*;
+            let (children, hooks) = match state {
+                Ready {
+                    element: _,
+                    hooks,
+                    children,
+                    render_object,
+                } => {
+                    <<E as Element>::Impl as ImplCommitRenderObject<E>>::detach_render_object(
+                        &render_object,
+                    );
+                    (Some(children), hooks)
+                }
+                InflateSuspended {
+                    suspended_hooks,
+                    waker,
+                } => {
+                    waker.abort();
+                    (None, suspended_hooks)
+                }
+                RebuildSuspended {
+                    element: _,
+                    suspended_hooks,
+                    children,
+                    waker,
+                } => {
+                    waker.abort();
+                    (Some(children), suspended_hooks)
+                }
+            };
+            hooks.cleanup();
             (children, snapshot.widget.clone(), async_cancel)
         };
 

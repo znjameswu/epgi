@@ -7,7 +7,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncWorkQueue, BuildContext, Element,
         ElementBase, ElementContextNode, ElementNode, ElementSnapshotInner, FullElement,
-        HookContext, HookContextMode, HooksWithTearDowns, Mainline, MainlineState, Widget,
+        HookContext, HookContextMode, HooksWithCleanups, Mainline, MainlineState, Widget,
     },
 };
 
@@ -83,7 +83,7 @@ impl<E: FullElement> ElementNode<E> {
     pub(super) fn perform_inflate_node_sync<const FIRST_INFLATE: bool>(
         self: &Arc<Self>,
         widget: &E::ArcWidget,
-        suspended_hooks: Option<HooksWithTearDowns>,
+        suspended_hooks: Option<HooksWithCleanups>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         lane_scheduler: &LaneScheduler,
     ) -> CommitResult<E::ParentProtocol> {

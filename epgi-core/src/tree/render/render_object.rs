@@ -165,9 +165,14 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
     }
 
     fn detach_render_object(&self) {
-        self.mark.set_is_detached();
-        if !R::NOOP_DETACH {
-            self.inner.lock().render.detach();
+        let old_is_detached = self
+            .mark
+            .is_detached
+            .swap(true, std::sync::atomic::Ordering::Relaxed);
+        if !old_is_detached {
+            if !R::NOOP_DETACH {
+                self.inner.lock().render.detach();
+            }
         }
     }
 

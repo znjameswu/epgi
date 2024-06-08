@@ -6,7 +6,7 @@ use crate::{
     sync::LaneScheduler,
     tree::{
         ArcChildElementNode, BuildContext, Element, ElementNode, ElementReconcileItem,
-        ElementWidgetPair, FullElement, HookContext, HookContextMode, HooksWithTearDowns,
+        ElementWidgetPair, FullElement, HookContext, HookContextMode, HooksWithCleanups,
         ImplElementNode, MainlineState,
     },
 };
@@ -67,8 +67,13 @@ impl<E: FullElement> ElementNode<E> {
         widget: &E::ArcWidget,
         mut element: E,
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        mut hooks: HooksWithTearDowns,
-        mut render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
+        mut hooks: HooksWithCleanups,
+        // None means suspended, Some means ready
+        // Some(Some()) means ready and render object attached, Some(None) means ready and render object detached
+        // Remember that suspended and detached are two sets of state!
+        render_object: Option<
+            <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
+        >,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         job_ids: &Inlinable64Vec<JobId>,
         scope: &rayon::Scope<'batch>,
@@ -118,18 +123,19 @@ impl<E: FullElement> ElementNode<E> {
                 let (mut children, changes) = results
                     .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
-                let change = <E as Element>::Impl::rebuild_success_commit_render_object(
-                    &element,
-                    widget,
-                    shuffle,
-                    &mut children,
-                    &mut render_object,
-                    changes,
-                    &self.context,
-                    lane_scheduler,
-                    scope,
-                    is_new_widget,
-                );
+                let (render_object, change) =
+                    <E as Element>::Impl::rebuild_success_commit_render_object(
+                        &element,
+                        widget,
+                        shuffle,
+                        &mut children,
+                        render_object,
+                        changes,
+                        &self.context,
+                        lane_scheduler,
+                        scope,
+                        is_new_widget,
+                    );
                 (
                     MainlineState::Ready {
                         element,
