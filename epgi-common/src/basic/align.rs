@@ -1,12 +1,15 @@
 use epgi_2d::{
-    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxSize, ShiftedBoxRender,
-    ShiftedBoxRenderTemplate,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
+    BoxSingleChildElement, BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize,
+    ShiftedBoxRender, ShiftedBoxRenderTemplate,
 };
-use epgi_core::{foundation::Asc, template::ImplByTemplate};
+use epgi_core::{
+    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide}, max, template::ImplByTemplate, tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget}
+};
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-#[derive(Declarative, TypedBuilder)]
+#[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Align>))]
 pub struct Align {
     pub alignment: Alignment,
@@ -17,6 +20,7 @@ pub struct Align {
     pub child: ArcBoxWidget,
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct Alignment {
     pub x: f32,
     pub y: f32,
@@ -33,7 +37,62 @@ impl Alignment {
     }
 }
 
+impl Widget for Align {
+    type ParentProtocol = BoxProtocol;
+    type ChildProtocol = BoxProtocol;
+    type Element = AlignElement;
+
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+        self
+    }
+}
+
+#[derive(Clone)]
 pub struct AlignElement {}
+
+impl ImplByTemplate for AlignElement {
+    type Template = BoxSingleChildElementTemplate<true, false>;
+}
+
+impl BoxSingleChildElement for AlignElement {
+    type ArcWidget = Asc<Align>;
+
+    fn get_child_widget(
+        _element: Option<&mut Self>,
+        widget: &Self::ArcWidget,
+        _ctx: &mut BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<ArcChildWidget<epgi_2d::BoxProtocol>, BuildSuspendedError> {
+        Ok(widget.child.clone())
+    }
+
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
+        Self {}
+    }
+}
+
+impl BoxSingleChildRenderElement for AlignElement {
+    type Render = RenderPositionedBox;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
+        RenderPositionedBox {
+            alignment: widget.alignment,
+            width_factor: widget.width_factor,
+            height_factor: widget.height_factor,
+        }
+    }
+
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
+        max!(
+            set_if_changed(&mut render.alignment, widget.alignment)
+                .then_some(RenderAction::Relayout),
+            set_if_changed(&mut render.width_factor, widget.width_factor)
+                .then_some(RenderAction::Relayout),
+            set_if_changed(&mut render.height_factor, widget.height_factor)
+                .then_some(RenderAction::Relayout),
+        )
+    }
+}
 
 pub struct RenderPositionedBox {
     pub alignment: Alignment,
