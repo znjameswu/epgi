@@ -5,7 +5,7 @@ Specialization and Inheritance
 Element & Render have different flavor/variant that have significant behavior differences and type contracts, **while** they also share a great amount of similar behavior similarities. 
 - Element provide value vs no value
 - Element has a render object vs no render object
-- Dry layout vs "wet" layout
+- Layout-by-parent vs normal layout
 - Non-layer vs layer
 - Layer has a cache vs no cache
 - Layer is orphan vs not
@@ -17,7 +17,7 @@ If we construct different generic node type for all those behavior combinations,
 These specializations actually have very different effects.
 1. Pure behavior changes. 
     1. Their change is strictly confined in procedural code implementations.
-    2. Example: dry layout vs wet layout, provide value vs no value. 
+    2. Example: sized-by-parent vs normal layout, provide value vs no value. 
 2. Type layout changes.
     1. They also change the presence of some fields in their nodes.
     2. Example: RenderObjectElement needs to store render object pointer. LayerRenderObject needs to store layer cache. Cached layer needs to store extra composition cache.

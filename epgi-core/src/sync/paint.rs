@@ -135,10 +135,10 @@ pub trait ImplPaint<R: Render<Impl = Self>> {
 
 impl<
         R: Render<Impl = Self>,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplPaint<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplPaint<R> for RenderImpl<SIZED_BY_PARENT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: Paint,
 {
@@ -157,8 +157,8 @@ where
     }
 }
 
-impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
-    for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, false>
+impl<R: Render<Impl = Self>, const SIZED_BY_PARENT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
+    for RenderImpl<SIZED_BY_PARENT, true, CACHED_COMPOSITE, false>
 where
     Self: ImplRender<R>,
     Self: ImplMaybeLayer<R>,
@@ -183,8 +183,8 @@ where
     }
 }
 
-impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
-    for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, true>
+impl<R: Render<Impl = Self>, const SIZED_BY_PARENT: bool, const CACHED_COMPOSITE: bool> ImplPaint<R>
+    for RenderImpl<SIZED_BY_PARENT, true, CACHED_COMPOSITE, true>
 where
     Self: ImplRender<R>,
     Self: ImplMaybeLayer<R>,

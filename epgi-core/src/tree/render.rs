@@ -59,13 +59,13 @@ where
     type Impl = R::Impl;
 }
 
-/// Dry layout means that under all circumstances, this render object's size is solely determined
+/// Layout-by-parent means that under all circumstances, this render object's size is solely determined
 /// by the constraints given by its parents.
 ///
 /// Since the size of its children does not affect its own size,
 /// this render object will always serves as a relayout boundary.
 ///
-/// Contrary to what you may assume, dry-layout itself does not bring
+/// Contrary to what you may assume, layout-by-parent itself does not bring
 /// any additional optimization during the actual layout visit.
 /// It still needs to layout its children if dirty or receiving a new constraints.
 /// It merely serves a boundary to halt relayout propagation.
@@ -77,8 +77,8 @@ pub trait Layout: RenderBase {
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 }
 
-pub trait DryLayout: RenderBase {
-    fn compute_dry_layout(
+pub trait LayoutByParent: RenderBase {
+    fn compute_size_by_parent(
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
     ) -> <Self::ParentProtocol as Protocol>::Size;

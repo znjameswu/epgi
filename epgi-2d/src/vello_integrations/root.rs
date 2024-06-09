@@ -9,9 +9,10 @@ use epgi_core::{
 
 use crate::{
     Affine2dCanvas, Affine2dEncoding, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset,
-    BoxProtocol, BoxSingleChildCachedComposite, BoxSingleChildDryLayout, BoxSingleChildElement,
+    BoxProtocol, BoxSingleChildCachedComposite, BoxSingleChildElement,
     BoxSingleChildElementTemplate, BoxSingleChildHitTest, BoxSingleChildLayerPaint,
-    BoxSingleChildRender, BoxSingleChildRenderElement, BoxSingleChildRenderTemplate, BoxSize,
+    BoxSingleChildLayoutByParent, BoxSingleChildRender, BoxSingleChildRenderElement,
+    BoxSingleChildRenderTemplate, BoxSize,
 };
 
 pub struct RootView {
@@ -84,8 +85,8 @@ impl BoxSingleChildRender for RenderRoot {
     type LayoutMemo = ();
 }
 
-impl BoxSingleChildDryLayout for RenderRoot {
-    fn compute_dry_layout(&self, _constraints: &BoxConstraints) -> BoxSize {
+impl BoxSingleChildLayoutByParent for RenderRoot {
+    fn compute_size_by_parent(&self, _constraints: &BoxConstraints) -> BoxSize {
         BoxSize::INFINITY
     }
 

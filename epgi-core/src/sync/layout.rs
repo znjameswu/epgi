@@ -2,8 +2,8 @@ use crate::{
     foundation::{Container, HktContainer, Protocol},
     scheduler::get_current_scheduler,
     tree::{
-        ArcChildRenderObject, DryLayout, Layout, LayoutResults, Render, RenderBase, RenderImpl,
-        RenderObject,
+        ArcChildRenderObject, Layout, LayoutByParent, LayoutResults, Render, RenderBase,
+        RenderImpl, RenderObject,
     },
 };
 
@@ -25,7 +25,7 @@ where
     R::Impl: ImplLayout<R>,
 {
     fn visit_and_layout(&self) {
-        let is_relayout_boundary = R::Impl::DRY_LAYOUT || !self.mark.parent_use_size();
+        let is_relayout_boundary = R::Impl::SIZED_BY_PARENT || !self.mark.parent_use_size();
         let needs_layout = self.mark.needs_layout();
         let descendant_has_layout = self.mark.descendant_has_layout();
         debug_assert!(
@@ -91,7 +91,7 @@ where
                 }
             }
         }
-        let (size, memo) = R::Impl::perform_wet_layout(
+        let (size, memo) = R::Impl::perform_full_layout(
             &mut inner_reborrow.render,
             &constraints,
             &inner_reborrow.children,
@@ -116,7 +116,7 @@ where
                 }
             }
         }
-        let (size, memo) = R::Impl::perform_wet_layout(
+        let (size, memo) = R::Impl::perform_full_layout(
             &mut inner_reborrow.render,
             &constraints,
             &inner_reborrow.children,
@@ -130,7 +130,7 @@ where
 }
 
 pub trait ImplLayout<R: RenderBase> {
-    const DRY_LAYOUT: bool;
+    const SIZED_BY_PARENT: bool;
     fn perform_layout_without_resize(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
@@ -139,7 +139,7 @@ pub trait ImplLayout<R: RenderBase> {
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> R::LayoutMemo;
-    fn perform_wet_layout(
+    fn perform_full_layout(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
         children: &<R::ChildContainer as HktContainer>::Container<
@@ -157,7 +157,7 @@ impl<
 where
     R: Layout,
 {
-    const DRY_LAYOUT: bool = false;
+    const SIZED_BY_PARENT: bool = false;
     fn perform_layout_without_resize(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
@@ -171,7 +171,7 @@ where
         memo
     }
 
-    fn perform_wet_layout(
+    fn perform_full_layout(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
         children: &<R::ChildContainer as HktContainer>::Container<
@@ -189,9 +189,9 @@ impl<
         const ORPHAN_LAYER: bool,
     > ImplLayout<R> for RenderImpl<true, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
-    R: DryLayout,
+    R: LayoutByParent,
 {
-    const DRY_LAYOUT: bool = true;
+    const SIZED_BY_PARENT: bool = true;
     fn perform_layout_without_resize(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
@@ -203,14 +203,14 @@ where
         render.perform_layout(constraints, size, children)
     }
 
-    fn perform_wet_layout(
+    fn perform_full_layout(
         render: &mut R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
         children: &<R::ChildContainer as HktContainer>::Container<
             ArcChildRenderObject<R::ChildProtocol>,
         >,
     ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
-        let size = render.compute_dry_layout(constraints);
+        let size = render.compute_size_by_parent(constraints);
         let memo = render.perform_layout(constraints, &size, children);
         (size, memo)
     }

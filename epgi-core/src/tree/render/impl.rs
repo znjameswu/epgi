@@ -22,7 +22,7 @@ impl<I, R: Render<Impl = Self>> ImplFullRender<R> for I where
 }
 
 pub struct RenderImpl<
-    const DRY_LAYOUT: bool,
+    const SIZED_BY_PARENT: bool,
     const LAYER_PAINT: bool,
     const CACHED_COMPOSITE: bool,
     const ORPHAN_LAYER: bool,
@@ -56,10 +56,10 @@ pub trait ImplMaybeLayer<R: Render<Impl = Self>> {
 
 impl<
         R: Render<Impl = Self>,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplMaybeLayer<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplMaybeLayer<R> for RenderImpl<SIZED_BY_PARENT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     Self: ImplRender<R>,
     Self: ImplPaint<R>,
@@ -98,10 +98,10 @@ where
 
 impl<
         R: Render<Impl = Self>,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplMaybeLayer<R> for RenderImpl<DRY_LAYOUT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplMaybeLayer<R> for RenderImpl<SIZED_BY_PARENT, true, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     Self: ImplRender<R>,
     Self: ImplComposite<R>,

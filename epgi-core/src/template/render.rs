@@ -6,10 +6,10 @@ use crate::{
         PaintContext, Protocol,
     },
     tree::{
-        ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, Composite, DryLayout,
-        HitTest, HitTestBehavior, HitTestContext, HitTestResult, ImplRender,
-        LayerCompositionConfig, LayerPaint, Layout, OrphanLayer, Paint, PaintResults,
-        RecordedChildLayer, Render, RenderBase, RenderObject,
+        ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, Composite, HitTest,
+        HitTestBehavior, HitTestContext, HitTestResult, ImplRender, LayerCompositionConfig,
+        LayerPaint, Layout, LayoutByParent, OrphanLayer, Paint, PaintResults, RecordedChildLayer,
+        Render, RenderBase, RenderObject,
     },
 };
 
@@ -80,8 +80,8 @@ where
     }
 }
 
-pub trait TemplateDryLayout<R: RenderBase> {
-    fn compute_dry_layout(
+pub trait TemplateLayoutByParent<R: RenderBase> {
+    fn compute_size_by_parent(
         render: &R,
         constraints: &<R::ParentProtocol as Protocol>::Constraints,
     ) -> <R::ParentProtocol as Protocol>::Size;
@@ -94,17 +94,17 @@ pub trait TemplateDryLayout<R: RenderBase> {
     ) -> R::LayoutMemo;
 }
 
-impl<R> DryLayout for R
+impl<R> LayoutByParent for R
 where
     R: ImplByTemplate,
-    R::Template: TemplateDryLayout<R>,
+    R::Template: TemplateLayoutByParent<R>,
     R: RenderBase,
 {
-    fn compute_dry_layout(
+    fn compute_size_by_parent(
         &self,
         constraints: &<Self::ParentProtocol as Protocol>::Constraints,
     ) -> <Self::ParentProtocol as Protocol>::Size {
-        R::Template::compute_dry_layout(self, constraints)
+        R::Template::compute_size_by_parent(self, constraints)
     }
 
     fn perform_layout(

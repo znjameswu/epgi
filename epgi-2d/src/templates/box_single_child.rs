@@ -8,10 +8,10 @@ use epgi_core::{
         Key, PaintContext, Protocol, Provide, TypeKey,
     },
     template::{
-        ImplByTemplate, TemplateCachedComposite, TemplateComposite, TemplateDryLayout,
-        TemplateElement, TemplateElementBase, TemplateHitTest, TemplateLayerPaint, TemplateLayout,
-        TemplateOrphanLayer, TemplatePaint, TemplateProvideElement, TemplateRenderBase,
-        TemplateRenderElement,
+        ImplByTemplate, TemplateCachedComposite, TemplateComposite, TemplateElement,
+        TemplateElementBase, TemplateHitTest, TemplateLayerPaint, TemplateLayout,
+        TemplateLayoutByParent, TemplateOrphanLayer, TemplatePaint, TemplateProvideElement,
+        TemplateRenderBase, TemplateRenderElement,
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, ChildLayerProducingIterator,
@@ -179,7 +179,7 @@ where
 }
 
 pub struct BoxSingleChildRenderTemplate<
-    const DRY_LAYOUT: bool,
+    const SIZED_BY_PARENT: bool,
     const LAYER_PAINT: bool,
     const CACHED_COMPOSITE: bool,
     const ORPHAN_LAYER: bool,
@@ -194,12 +194,12 @@ pub trait BoxSingleChildRender: Send + Sync + Sized + 'static {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateRenderBase<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildRender,
@@ -219,26 +219,26 @@ where
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateRender<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: RenderBase,
-    RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>: ImplRender<R>,
+    RenderImpl<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>: ImplRender<R>,
 {
-    type RenderImpl = RenderImpl<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>;
+    type RenderImpl = RenderImpl<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>;
 }
 
-/// Dry layout means that under all circumstances, this render object's size is solely determined
+/// Layout-by-parent means that under all circumstances, this render object's size is solely determined
 /// by the constraints given by its parents.
 ///
 /// Since the size of its children does not affect its own size,
 /// this render object will always serves as a relayout boundary.
 ///
-/// Contrary to what you may assume, dry-layout itself does not bring
+/// Contrary to what you may assume, layout-by-parent itself does not bring
 /// any additional optimization during the actual layout visit.
 /// It still needs to layout its children if dirty or receiving a new constraints.
 /// It merely serves a boundary to halt relayout propagation.
@@ -252,12 +252,12 @@ pub trait BoxSingleChildLayout: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateLayout<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildLayout,
@@ -271,8 +271,8 @@ where
     }
 }
 
-pub trait BoxSingleChildDryLayout: BoxSingleChildRender {
-    fn compute_dry_layout(&self, constraints: &BoxConstraints) -> BoxSize;
+pub trait BoxSingleChildLayoutByParent: BoxSingleChildRender {
+    fn compute_size_by_parent(&self, constraints: &BoxConstraints) -> BoxSize;
 
     fn perform_layout(
         &mut self,
@@ -284,18 +284,18 @@ pub trait BoxSingleChildDryLayout: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > TemplateDryLayout<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > TemplateLayoutByParent<R>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
-    R: BoxSingleChildDryLayout,
+    R: BoxSingleChildLayoutByParent,
 {
-    fn compute_dry_layout(render: &R, constraints: &BoxConstraints) -> BoxSize {
-        R::compute_dry_layout(render, constraints)
+    fn compute_size_by_parent(render: &R, constraints: &BoxConstraints) -> BoxSize {
+        R::compute_size_by_parent(render, constraints)
     }
 
     fn perform_layout(
@@ -321,12 +321,12 @@ pub trait BoxSingleChildPaint: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplatePaint<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildPaint,
@@ -362,12 +362,12 @@ pub trait BoxSingleChildLayerPaint: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateLayerPaint<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildLayerPaint,
@@ -399,12 +399,12 @@ pub trait BoxSingleChildComposite: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateComposite<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildComposite,
@@ -437,12 +437,12 @@ pub trait BoxSingleChildCachedComposite: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateCachedComposite<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildCachedComposite,
@@ -472,12 +472,12 @@ pub trait BoxSingleChildOrphanLayer: BoxSingleChildLayerPaint {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateOrphanLayer<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildOrphanLayer,
@@ -563,12 +563,12 @@ pub trait BoxSingleChildHitTest: BoxSingleChildRender {
 
 impl<
         R,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
     > TemplateHitTest<R>
-    for BoxSingleChildRenderTemplate<DRY_LAYOUT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
+    for BoxSingleChildRenderTemplate<SIZED_BY_PARENT, LAYER_PAINT, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     R: ImplByTemplate<Template = Self>,
     R: BoxSingleChildHitTest,

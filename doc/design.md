@@ -430,7 +430,7 @@ Decision: Prototype with Solution 1 and later try Solution 2-2 or 3. Solution 1 
 
 Therefore we can get rid of that ugly LayoutExecutor, since now every layout operation is structured.
 
-Also, it means that dry layout no long triggers a detached layout optimization! Dry layout now serves only as a boundary hint, NOT OPTIMIZATION!
+Also, it means that layout-by-parent no long triggers a detached layout optimization! Layout-by-parent now serves only as a boundary hint, NOT OPTIMIZATION!
 
 
 # Composite phase design notes

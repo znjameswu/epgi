@@ -182,12 +182,12 @@ where
 
 impl<
         R: RenderBase,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const ORPHAN_LAYER: bool,
         CC: Canvas,
         PC: Canvas,
-    > ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, false, ORPHAN_LAYER>
+    > ImplComposite<R> for RenderImpl<SIZED_BY_PARENT, LAYER_PAINT, false, ORPHAN_LAYER>
 where
     R::ParentProtocol: Protocol<Canvas = PC>,
     R::ChildProtocol: Protocol<Canvas = CC>,
@@ -252,11 +252,11 @@ where
 
 impl<
         R: RenderBase,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const LAYER_PAINT: bool,
         const ORPHAN_LAYER: bool,
         CM,
-    > ImplComposite<R> for RenderImpl<DRY_LAYOUT, LAYER_PAINT, true, ORPHAN_LAYER>
+    > ImplComposite<R> for RenderImpl<SIZED_BY_PARENT, LAYER_PAINT, true, ORPHAN_LAYER>
 where
     Self: ImplRenderObject<
         R,

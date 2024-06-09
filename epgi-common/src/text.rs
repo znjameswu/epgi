@@ -1,9 +1,9 @@
 use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset};
 use epgi_core::foundation::{Intrinsics, Protocol};
 
-pub enum TextDirection{
+pub enum TextDirection {
     LTR,
-    RTL
+    RTL,
 }
 
 #[derive(Clone, Copy, Debug)]

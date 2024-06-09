@@ -86,24 +86,24 @@ pub trait ImplRenderObject<R: RenderBase> {
 
 impl<
         R: RenderBase,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplRenderObject<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplRenderObject<R> for RenderImpl<SIZED_BY_PARENT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 {
     type LayerMark = ();
     type LayerCache = ();
 }
 
-impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
-    for RenderImpl<DRY_LAYOUT, true, false, ORPHAN_LAYER>
+impl<R: RenderBase, const SIZED_BY_PARENT: bool, const ORPHAN_LAYER: bool> ImplRenderObject<R>
+    for RenderImpl<SIZED_BY_PARENT, true, false, ORPHAN_LAYER>
 {
     type LayerMark = LayerMark;
     type LayerCache = LayerCache<<R::ChildProtocol as Protocol>::Canvas, ()>;
 }
 
-impl<R: RenderBase, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool, CM> ImplRenderObject<R>
-    for RenderImpl<DRY_LAYOUT, true, true, ORPHAN_LAYER>
+impl<R: RenderBase, const SIZED_BY_PARENT: bool, const ORPHAN_LAYER: bool, CM> ImplRenderObject<R>
+    for RenderImpl<SIZED_BY_PARENT, true, true, ORPHAN_LAYER>
 where
     R: CachedComposite<CompositionMemo = CM>,
     CM: Clone + Send + Sync,

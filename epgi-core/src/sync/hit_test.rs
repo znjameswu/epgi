@@ -104,10 +104,10 @@ pub trait ImplHitTest<R: Render<Impl = Self>>: ImplRender<R> {
 
 impl<
         R: Render<Impl = Self>,
-        const DRY_LAYOUT: bool,
+        const SIZED_BY_PARENT: bool,
         const CACHED_COMPOSITE: bool,
         const ORPHAN_LAYER: bool,
-    > ImplHitTest<R> for RenderImpl<DRY_LAYOUT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
+    > ImplHitTest<R> for RenderImpl<SIZED_BY_PARENT, false, CACHED_COMPOSITE, ORPHAN_LAYER>
 where
     Self: ImplRender<R>,
     R: HitTest,
@@ -135,8 +135,8 @@ where
     }
 }
 
-impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplHitTest<R>
-    for RenderImpl<DRY_LAYOUT, true, false, ORPHAN_LAYER>
+impl<R: Render<Impl = Self>, const SIZED_BY_PARENT: bool, const ORPHAN_LAYER: bool> ImplHitTest<R>
+    for RenderImpl<SIZED_BY_PARENT, true, false, ORPHAN_LAYER>
 where
     Self: ImplRender<R>,
     R: HitTest,
@@ -171,8 +171,8 @@ where
     }
 }
 
-impl<R: Render<Impl = Self>, const DRY_LAYOUT: bool, const ORPHAN_LAYER: bool> ImplHitTest<R>
-    for RenderImpl<DRY_LAYOUT, true, true, ORPHAN_LAYER>
+impl<R: Render<Impl = Self>, const SIZED_BY_PARENT: bool, const ORPHAN_LAYER: bool> ImplHitTest<R>
+    for RenderImpl<SIZED_BY_PARENT, true, true, ORPHAN_LAYER>
 where
     Self: ImplRender<R>,
     R: HitTest,

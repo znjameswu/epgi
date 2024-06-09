@@ -207,7 +207,7 @@ where
     R: ImplByTemplate<Template = Self>,
     R: LeafRender,
 {
-    // Pointeless to dry-layout
+    // Pointless to be layout-by-parent
     type RenderImpl = RenderImpl<false, false, false, false>;
 }
 
