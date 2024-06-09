@@ -1,6 +1,7 @@
 use epgi_core::{
     foundation::{Intrinsics, LayerProtocol, Protocol},
     tree::{ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, LayerCompositionConfig},
+    Provider,
 };
 
 use crate::{Affine2d, Affine2dCanvas, Point2d};
@@ -11,6 +12,7 @@ pub struct BoxProtocol {}
 pub type ArcBoxWidget = ArcChildWidget<BoxProtocol>;
 pub type ArcBoxElementNode = ArcChildElementNode<BoxProtocol>;
 pub type ArcBoxRenderObject = ArcChildRenderObject<BoxProtocol>;
+pub type BoxProvider<T> = Provider<T, BoxProtocol>;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoxConstraints {

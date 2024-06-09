@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod basic;
+pub use basic::*;
+
 mod color_box;
 pub use color_box::*;
 
@@ -18,3 +21,4 @@ pub use text::*;
 
 mod utils;
 pub use utils::*;
+
