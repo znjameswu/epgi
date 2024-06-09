@@ -42,14 +42,14 @@ impl BoxConstraints {
     }
 
     pub fn biggest(&self) -> BoxSize {
-        self.constrains(BoxSize {
+        self.constrain(BoxSize {
             width: f32::INFINITY,
             height: f32::INFINITY,
         })
     }
 
     pub fn smallest(&self) -> BoxSize {
-        self.constrains(BoxSize::ZERO)
+        self.constrain(BoxSize::ZERO)
     }
 
     pub fn is_tight(&self) -> Option<BoxSize> {
@@ -63,10 +63,19 @@ impl BoxConstraints {
         }
     }
 
-    fn constrains(&self, size: BoxSize) -> BoxSize {
+    pub fn constrain(&self, size: BoxSize) -> BoxSize {
         BoxSize {
             width: size.width.clamp(self.min_width, self.max_width),
             height: size.height.clamp(self.min_height, self.max_height),
+        }
+    }
+
+    pub fn loosen(&self) -> Self {
+        Self {
+            min_width: 0.0,
+            max_width: self.max_width,
+            min_height: 0.0,
+            max_height: self.max_height,
         }
     }
 }

@@ -1,8 +1,12 @@
 use epgi_2d::{
-    Affine2dCanvas, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProxyRender, BoxProxyRenderTemplate, BoxSingleChildDryLayout, BoxSingleChildLayout, BoxSingleChildPaint, BoxSingleChildRender, BoxSingleChildRenderTemplate, BoxSize
+    Affine2dCanvas, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProxyRender,
+    BoxProxyRenderTemplate, BoxSingleChildDryLayout, BoxSingleChildLayout, BoxSingleChildPaint,
+    BoxSingleChildRender, BoxSingleChildRenderTemplate, BoxSize,
 };
 use epgi_core::{
-    foundation::PaintContext, template::ImplByTemplate, tree::{HitTestContext, HitTestResult}
+    foundation::PaintContext,
+    template::ImplByTemplate,
+    tree::{HitTestContext, HitTestResult},
 };
 
 pub struct Align {
@@ -15,6 +19,17 @@ pub struct Align {
 pub struct Alignment {
     pub x: f32,
     pub y: f32,
+}
+
+impl Alignment {
+    pub fn along_offset(&self, offset: BoxOffset) -> BoxOffset {
+        let center_x = offset.x / 2.0;
+        let center_y = offset.y / 2.0;
+        return BoxOffset {
+            x: center_x + center_x * self.x,
+            y: center_y + center_y * self.y,
+        };
+    }
 }
 
 pub struct AlignElement {}
@@ -46,7 +61,7 @@ impl BoxSingleChildLayout for RenderPositionedBox {
         let shrink_warp_height =
             self.height_factor.is_some() || constraints.max_height == f32::INFINITY;
 
-        let child_size = child.layout_use_size(constraints.loosen());
+        let child_size = child.layout_use_size(&constraints.loosen());
 
         let size = constraints.constrain(BoxSize {
             width: if shrink_warp_width {
