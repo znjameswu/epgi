@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use epgi_core::{
     foundation::{Intrinsics, LayerProtocol, Protocol},
     tree::{ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, LayerCompositionConfig},
@@ -117,6 +119,28 @@ pub struct BoxOffset {
 
 impl BoxOffset {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+}
+
+impl Add<BoxOffset> for BoxOffset {
+    type Output = BoxOffset;
+
+    fn add(self, rhs: BoxOffset) -> Self::Output {
+        BoxOffset {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl Add<&'_ BoxOffset> for &'_ BoxOffset {
+    type Output = BoxOffset;
+
+    fn add(self, rhs: &BoxOffset) -> Self::Output {
+        BoxOffset {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
 }
 
 impl From<[f32; 2]> for BoxOffset {

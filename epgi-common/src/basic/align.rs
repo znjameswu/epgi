@@ -1,17 +1,18 @@
 use epgi_2d::{
-    Affine2dCanvas, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProxyRender,
-    BoxProxyRenderTemplate, BoxSingleChildLayout, BoxSingleChildLayoutByParent,
-    BoxSingleChildPaint, BoxSingleChildRender, BoxSingleChildRenderTemplate, BoxSize,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxSize, ShiftedBoxRender,
+    ShiftedBoxRenderTemplate,
 };
-use epgi_core::{
-    foundation::PaintContext,
-    template::ImplByTemplate,
-    tree::{HitTestContext, HitTestResult},
-};
+use epgi_core::{foundation::Asc, template::ImplByTemplate};
+use epgi_macro::Declarative;
+use typed_builder::TypedBuilder;
 
+#[derive(Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<Align>))]
 pub struct Align {
     pub alignment: Alignment,
+    #[builder(default)]
     pub width_factor: Option<f32>,
+    #[builder(default)]
     pub height_factor: Option<f32>,
     pub child: ArcBoxWidget,
 }
@@ -41,16 +42,21 @@ pub struct RenderPositionedBox {
 }
 
 impl ImplByTemplate for RenderPositionedBox {
-    type Template = BoxSingleChildRenderTemplate<false, false, false, false>;
+    type Template = ShiftedBoxRenderTemplate;
 }
 
-impl BoxSingleChildRender for RenderPositionedBox {
+impl ShiftedBoxRender for RenderPositionedBox {
     type LayoutMemo = BoxOffset;
 
-    const NOOP_DETACH: bool = true;
-}
+    fn get_child_offset(
+        &self,
+        _size: &BoxSize,
+        offset: &BoxOffset,
+        child_extra_offset: &Self::LayoutMemo,
+    ) -> BoxOffset {
+        offset + child_extra_offset
+    }
 
-impl BoxSingleChildLayout for RenderPositionedBox {
     fn perform_layout(
         &mut self,
         constraints: &BoxConstraints,
@@ -76,23 +82,10 @@ impl BoxSingleChildLayout for RenderPositionedBox {
             },
         });
 
-        let child_offset = self.alignment.along_offset(BoxOffset {
+        let child_extra_offset = self.alignment.along_offset(BoxOffset {
             x: size.width - child_size.width,
             y: size.height - child_size.height,
         });
-        (size, child_offset)
-    }
-}
-
-impl BoxSingleChildPaint for RenderPositionedBox {
-    fn perform_paint(
-        &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        memo: &Self::LayoutMemo,
-        child: &ArcBoxRenderObject,
-        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
-    ) {
-        todo!()
+        (size, child_extra_offset)
     }
 }
