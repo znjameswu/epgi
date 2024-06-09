@@ -205,19 +205,24 @@ where
         )
     }
 
-    #[allow(unused_variables)]
     fn hit_test_self(
-        render: &R,
-        position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<R::Protocol as Protocol>::Size,
-        offset: &<R::Protocol as Protocol>::Offset,
+        _render: &R,
+        _position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
+        _size: &<R::Protocol as Protocol>::Size,
+        _offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
     ) -> bool {
-        R::hit_test_self(render, position, size, offset)
+        unreachable!(
+            "TemplatePaint has already provided a hit_test implementation, \
+            but hit_test_self is still invoked somehow. This indicates a framework bug."
+        )
     }
 
-    fn hit_test_behavior(render: &R) -> HitTestBehavior {
-        R::hit_test_behavior(render)
+    fn hit_test_behavior(_render: &R) -> HitTestBehavior {
+        unreachable!(
+            "TemplatePaint has already provided a hit_test implementation, \
+            but hit_test_behavior is still invoked somehow. This indicates a framework bug."
+        )
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]

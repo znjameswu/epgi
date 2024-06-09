@@ -16,26 +16,34 @@ use crate::{
     Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
 };
 
-pub struct BoxProxyRenderTemplate;
+pub struct ShiftedBoxRenderTemplate;
 
-pub trait BoxProxyRender: Send + Sync + Sized + 'static {
+pub trait ShiftedBoxRender: Send + Sync + Sized + 'static {
+    type LayoutMemo: Send + Sync;
+
+    fn get_child_offset(
+        &self,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
+    ) -> BoxOffset;
+
     fn perform_layout(
         &mut self,
         constraints: &BoxConstraints,
         child: &ArcBoxRenderObject,
-    ) -> BoxSize {
-        child.layout_use_size(constraints)
-    }
+    ) -> (BoxSize, Self::LayoutMemo);
 
     #[allow(unused_variables)]
     fn perform_paint(
         &self,
         size: &BoxSize,
         offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
         child: &ArcBoxRenderObject,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
-        paint_ctx.paint(child, offset)
+        paint_ctx.paint(child, &self.get_child_offset(size, offset, memo))
     }
 
     /// The actual method that was invoked for hit-testing.
@@ -51,16 +59,17 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
         ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &BoxSize,
         offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
         child: &ArcBoxRenderObject,
     ) -> HitTestResult {
         use HitTestResult::*;
-        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset);
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
         if !hit_self {
             // Stop hit-test children if the hit is outside of parent
             return NotHit;
         }
 
-        let hit_children = self.hit_test_child(ctx, size, offset, child);
+        let hit_children = self.hit_test_child(ctx, size, offset, memo, child);
         if hit_children {
             return Hit;
         }
@@ -79,13 +88,20 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
         ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &BoxSize,
         offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
         child: &ArcBoxRenderObject,
     ) -> bool {
         ctx.hit_test(child.clone())
     }
 
     #[allow(unused_variables)]
-    fn hit_test_self(&self, position: &Point2d, size: &BoxSize, offset: &BoxOffset) -> bool {
+    fn hit_test_self(
+        &self,
+        position: &Point2d,
+        size: &BoxSize,
+        offset: &BoxOffset,
+        memo: &Self::LayoutMemo,
+    ) -> bool {
         BoxProtocol::position_in_shape(position, offset, size)
     }
 
@@ -104,16 +120,16 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
     const NOOP_DETACH: bool = false;
 }
 
-impl<R> TemplateRenderBase<R> for BoxProxyRenderTemplate
+impl<R> TemplateRenderBase<R> for ShiftedBoxRenderTemplate
 where
     R: ImplByTemplate<Template = Self>,
-    R: BoxProxyRender,
+    R: ShiftedBoxRender,
 {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = BoxProtocol;
     type ChildContainer = ArrayContainer<1>;
 
-    type LayoutMemo = ();
+    type LayoutMemo = R::LayoutMemo;
 
     fn detach(render: &mut R) {
         R::detach(render)
@@ -122,57 +138,56 @@ where
     const NOOP_DETACH: bool = R::NOOP_DETACH;
 }
 
-impl<R> TemplateRender<R> for BoxProxyRenderTemplate
+impl<R> TemplateRender<R> for ShiftedBoxRenderTemplate
 where
     R: ImplByTemplate<Template = Self>,
-    R: BoxProxyRender,
+    R: ShiftedBoxRender,
 {
     type RenderImpl = RenderImpl<false, false, false, false>;
 }
 
-impl<R> TemplateLayout<R> for BoxProxyRenderTemplate
+impl<R> TemplateLayout<R> for ShiftedBoxRenderTemplate
 where
     R: ImplByTemplate<Template = Self>,
-    R: BoxProxyRender,
+    R: ShiftedBoxRender,
 {
     fn perform_layout(
         render: &mut R,
         constraints: &BoxConstraints,
         [child]: &[ArcBoxRenderObject; 1],
-    ) -> (BoxSize, ()) {
-        let size = R::perform_layout(render, constraints, child);
-        (size, ())
+    ) -> (BoxSize, R::LayoutMemo) {
+        R::perform_layout(render, constraints, child)
     }
 }
 
-impl<R> TemplatePaint<R> for BoxProxyRenderTemplate
+impl<R> TemplatePaint<R> for ShiftedBoxRenderTemplate
 where
     R: ImplByTemplate<Template = Self>,
-    R: BoxProxyRender,
+    R: ShiftedBoxRender,
 {
     fn perform_paint(
         render: &R,
         size: &BoxSize,
         offset: &BoxOffset,
-        _memo: &(),
+        memo: &R::LayoutMemo,
         [child]: &[ArcBoxRenderObject; 1],
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
-        R::perform_paint(render, size, offset, child, paint_ctx)
+        R::perform_paint(render, size, offset, memo, child, paint_ctx)
     }
 }
 
-impl<R> TemplateHitTest<R> for BoxProxyRenderTemplate
+impl<R> TemplateHitTest<R> for ShiftedBoxRenderTemplate
 where
     R: ImplByTemplate<Template = Self>,
-    R: BoxProxyRender,
+    R: ShiftedBoxRender,
 {
     fn hit_test(
         render: &R,
         ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &BoxSize,
         offset: &BoxOffset,
-        _memo: &(),
+        memo: &R::LayoutMemo,
         [child]: &[ArcBoxRenderObject; 1],
         adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> HitTestResult {
@@ -180,7 +195,7 @@ where
             adopted_children.is_empty(),
             "Proxy render does not take adoption"
         );
-        R::hit_test(render, ctx, size, offset, child)
+        R::hit_test(render, ctx, size, offset, memo, child)
     }
 
     fn hit_test_children(
@@ -188,7 +203,7 @@ where
         _ctx: &mut HitTestContext<Affine2dCanvas>,
         _size: &BoxSize,
         _offset: &BoxOffset,
-        _memo: &(),
+        _memo: &R::LayoutMemo,
         [_child]: &[ArcBoxRenderObject; 1],
         _adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
@@ -203,7 +218,7 @@ where
         _position: &Point2d,
         _size: &BoxSize,
         _offset: &BoxOffset,
-        _memo: &(),
+        _memo: &R::LayoutMemo,
     ) -> bool {
         unreachable!(
             "TemplatePaint has already provided a hit_test implementation, \
@@ -222,6 +237,6 @@ where
     where
         R: Render,
     {
-        <R as BoxProxyRender>::all_hit_test_interfaces()
+        <R as ShiftedBoxRender>::all_hit_test_interfaces()
     }
 }

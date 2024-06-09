@@ -202,7 +202,7 @@ where
         })
     }
 
-    pub fn hit_test_w_adopted_layerith_paint_transform(
+    pub fn hit_test_adopted_layer_with_paint_transform(
         &mut self,
         render_object: ArcChildLayerRenderObject<C>,
         paint_transform: &C::Transform,

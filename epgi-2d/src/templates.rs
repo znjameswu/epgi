@@ -3,3 +3,6 @@ pub use box_single_child::*;
 
 mod box_proxy;
 pub use box_proxy::*;
+
+mod shifted_box;
+pub use shifted_box::*;
