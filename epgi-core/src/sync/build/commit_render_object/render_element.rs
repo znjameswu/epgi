@@ -213,8 +213,8 @@ where
             };
         }
         HasNewNoSuspend => {
-            let render_action =
-                render_object.mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
+            let render_action = render_object
+                .mark_render_action(Some(RenderAction::Relayout), Some(RenderAction::Relayout));
             render_object.update(|_render, children| {
                 update_children::<E::Render>(
                     children,
@@ -225,7 +225,7 @@ where
             });
             return RenderObjectCommitResult::Keep {
                 propagated_render_action: render_action,
-                subtree_has_action: RenderAction::Relayout,
+                subtree_has_action: Some(RenderAction::Relayout),
             };
         }
         HasSuspended => {
@@ -415,7 +415,7 @@ where
         return (None, RenderObjectCommitResult::Suspend);
     }
 
-    let mut self_render_action = RenderAction::None;
+    let mut self_render_action = None;
 
     if shuffle.is_some()
         || !render_object_change_summary.is_keep_all()
@@ -441,7 +441,7 @@ where
     {
         (propagated_render_action, descendant_has_action)
     } else {
-        (RenderAction::Relayout, RenderAction::Relayout)
+        (Some(RenderAction::Relayout), Some(RenderAction::Relayout))
     };
 
     let self_render_action = std::cmp::max(self_render_action, propagated_render_action);

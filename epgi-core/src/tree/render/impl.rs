@@ -47,9 +47,9 @@ pub trait ImplMaybeLayer<R: Render<Impl = Self>> {
     /// because some of the action may be absorbed by the corresponding boundaries.
     fn maybe_layer_mark_render_action(
         render_object: &Arc<RenderObject<R>>,
-        self_render_action: RenderAction,
-        descendant_has_action: RenderAction,
-    ) -> RenderAction
+        propagated_render_action: Option<RenderAction>,
+        descendant_has_action: Option<RenderAction>,
+    ) -> Option<RenderAction>
     where
         Self: ImplFullRender<R>;
 }
@@ -86,13 +86,13 @@ where
 
     fn maybe_layer_mark_render_action(
         _render_object: &Arc<RenderObject<R>>,
-        self_render_action: RenderAction,
-        _descendant_has_action: RenderAction,
-    ) -> RenderAction
+        propagated_render_action: Option<RenderAction>,
+        _descendant_has_action: Option<RenderAction>,
+    ) -> Option<RenderAction>
     where
         Self: ImplFullRender<R>,
     {
-        self_render_action
+        propagated_render_action
     }
 }
 
@@ -131,20 +131,20 @@ where
 
     fn maybe_layer_mark_render_action(
         render_object: &Arc<RenderObject<R>>,
-        mut self_render_action: RenderAction,
-        _descendant_has_action: RenderAction,
-    ) -> RenderAction
+        mut propagated_render_action: Option<RenderAction>,
+        _descendant_has_action: Option<RenderAction>,
+    ) -> Option<RenderAction>
     where
         Self: ImplFullRender<R>,
     {
-        if self_render_action == RenderAction::Repaint {
+        if propagated_render_action == Some(RenderAction::Repaint) {
             get_current_scheduler()
                 .push_layer_render_objects_needing_paint(Arc::downgrade(render_object) as _);
-            self_render_action = RenderAction::Recomposite
+            propagated_render_action = Some(RenderAction::Recomposite)
         }
-        if self_render_action == RenderAction::Recomposite {
+        if propagated_render_action == Some(RenderAction::Recomposite) {
             render_object.layer_mark.set_needs_composite()
         }
-        return self_render_action;
+        return propagated_render_action;
     }
 }

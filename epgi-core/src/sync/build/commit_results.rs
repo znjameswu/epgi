@@ -92,9 +92,9 @@ pub enum RenderObjectCommitResult<P: Protocol> {
     /// Nothing has changed since the last commit.
     Keep {
         // You have to ensure child >= subtree
-        propagated_render_action: RenderAction,
+        propagated_render_action: Option<RenderAction>,
         /// This field pass through without being absorbed by some boundaries.
-        subtree_has_action: RenderAction,
+        subtree_has_action: Option<RenderAction>,
     },
     New(ArcChildRenderObject<P>),
     Suspend,
@@ -103,8 +103,8 @@ pub enum RenderObjectCommitResult<P: Protocol> {
 impl<P: Protocol> RenderObjectCommitResult<P> {
     pub const fn new_no_update() -> Self {
         Self::Keep {
-            propagated_render_action: RenderAction::None,
-            subtree_has_action: RenderAction::None,
+            propagated_render_action: None,
+            subtree_has_action: None,
         }
     }
     pub fn is_suspend(&self) -> bool {
@@ -162,8 +162,8 @@ impl<P: Protocol> RenderObjectCommitResult<P> {
 pub(crate) enum RenderObjectCommitSummary {
     KeepAll {
         // You have to ensure child >= subtree
-        propagated_render_action: RenderAction,
-        descendant_has_action: RenderAction,
+        propagated_render_action: Option<RenderAction>,
+        descendant_has_action: Option<RenderAction>,
     },
     HasNewNoSuspend,
     HasSuspended,
@@ -172,8 +172,8 @@ pub(crate) enum RenderObjectCommitSummary {
 impl RenderObjectCommitSummary {
     pub(crate) fn new() -> Self {
         Self::KeepAll {
-            propagated_render_action: RenderAction::None,
-            descendant_has_action: RenderAction::None,
+            propagated_render_action: None,
+            descendant_has_action: None,
         }
     }
 

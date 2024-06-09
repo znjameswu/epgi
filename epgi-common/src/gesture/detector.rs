@@ -163,7 +163,7 @@ impl BoxSingleChildRenderElement for RawGestureDetectorElement {
         }
     }
 
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
         let new_recognizers = widget
             .recognizer_factories
             .iter()
@@ -180,7 +180,7 @@ impl BoxSingleChildRenderElement for RawGestureDetectorElement {
         old_recognizers
             .values()
             .for_each(|recognizer| recognizer.on_detach());
-        RenderAction::None
+        None
     }
 }
 

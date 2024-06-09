@@ -136,7 +136,7 @@ pub trait TemplateRenderElement<E: ElementBase> {
     /// Called during the commit phase, when the widget is updated.
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(render: &mut Self::Render, widget: &E::ArcWidget) -> RenderAction;
+    fn update_render(render: &mut Self::Render, widget: &E::ArcWidget) -> Option<RenderAction>;
 
     /// Whether [Render::update_render_object] is a no-op and always returns None
     ///
@@ -160,7 +160,7 @@ where
         E::Template::create_render(self, widget)
     }
 
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
         E::Template::update_render(render, widget)
     }
 }

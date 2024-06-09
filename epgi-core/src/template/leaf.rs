@@ -53,8 +53,8 @@ pub trait LeafElement: Clone + Send + Sync + Sized + 'static {
     /// Always called after [RenderElement::try_update_render_object_children].
     /// If that call failed to update children (indicating suspense), then this call will be skipped.
     #[allow(unused_variables)]
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
-        RenderAction::None
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
+        None
     }
 
     /// Whether [Render::update_render_object] is a no-op and always returns None
@@ -134,7 +134,7 @@ where
     fn update_render(
         render: &mut Self::Render,
         widget: &<E as ElementBase>::ArcWidget,
-    ) -> RenderAction {
+    ) -> Option<RenderAction> {
         E::update_render(render, widget)
     }
 

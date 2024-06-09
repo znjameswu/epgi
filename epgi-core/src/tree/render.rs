@@ -161,29 +161,12 @@ where
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum RenderAction {
-    None,
-    Recomposite,
-    Repaint,
-    Relayout,
-}
-
-impl Default for RenderAction {
-    fn default() -> Self {
-        RenderAction::None
-    }
+    Recomposite = 1,
+    Repaint = 2,
+    Relayout = 3,
 }
 
 impl RenderAction {
-    pub fn downgrade(self) -> Self {
-        use RenderAction::*;
-        match self {
-            None => None,
-            Recomposite => None,
-            Repaint => Recomposite,
-            Relayout => Repaint,
-        }
-    }
-
     pub fn absorb_relayout(self) -> Self {
         use RenderAction::*;
         match self {
@@ -200,11 +183,11 @@ impl RenderAction {
         }
     }
 
-    pub fn absorb_recomposite(self) -> Self {
+    pub fn absorb_recomposite(self) -> Option<Self> {
         use RenderAction::*;
         match self {
             Recomposite => None,
-            other => other,
+            other => Some(other),
         }
     }
 }

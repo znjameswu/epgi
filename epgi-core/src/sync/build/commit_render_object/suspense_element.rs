@@ -353,13 +353,13 @@ fn replace_child_render_object<P: Protocol>(
         //     // If the change is from suspended to resumed, then we don't need to detach here. Later, unmount will detach the render object.
         // }
     }
-    let propagated_render_action =
-        render_object.mark_render_action(RenderAction::Relayout, RenderAction::Relayout);
+    let propagated_render_action = render_object
+        .mark_render_action(Some(RenderAction::Relayout), Some(RenderAction::Relayout));
 
     // Suspense will always return Keep during rebuild
     return RenderObjectCommitResult::Keep {
         propagated_render_action,
-        subtree_has_action: RenderAction::Relayout,
+        subtree_has_action: Some(RenderAction::Relayout),
     };
 }
 

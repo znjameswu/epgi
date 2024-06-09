@@ -4,7 +4,7 @@ use epgi_2d::{
     FillPainter, Painter, Rect,
 };
 use epgi_core::{
-    foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
+    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
 };
@@ -64,13 +64,8 @@ impl BoxSingleChildRenderElement for ColorBoxElement {
         }
     }
 
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
-        if render.color != widget.color {
-            render.color = widget.color;
-            RenderAction::Repaint
-        } else {
-            RenderAction::None
-        }
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
+        set_if_changed(&mut render.color, widget.color).then_some(RenderAction::Repaint)
     }
 }
 

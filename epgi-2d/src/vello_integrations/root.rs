@@ -70,8 +70,11 @@ impl BoxSingleChildRenderElement for RootElement {
         RenderRoot {}
     }
 
-    fn update_render(_render: &mut Self::Render, _widget: &Self::ArcWidget) -> RenderAction {
-        RenderAction::None
+    fn update_render(
+        _render: &mut Self::Render,
+        _widget: &Self::ArcWidget,
+    ) -> Option<RenderAction> {
+        None
     }
 }
 

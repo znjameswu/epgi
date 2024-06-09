@@ -5,7 +5,7 @@ use epgi_2d::{
     BoxSingleChildRenderElement, BoxSize,
 };
 use epgi_core::{
-    foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
+    foundation::{set_if_changed, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
@@ -65,12 +65,9 @@ impl BoxSingleChildRenderElement for ConstrainedBoxElement {
         }
     }
 
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> RenderAction {
-        if render.constraints != widget.constraints {
-            render.constraints = widget.constraints.clone();
-            return RenderAction::Relayout;
-        }
-        return RenderAction::None;
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
+        set_if_changed(&mut render.constraints, widget.constraints)
+            .then_some(RenderAction::Relayout)
     }
 }
 

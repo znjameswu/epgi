@@ -140,9 +140,9 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send 
 
     fn mark_render_action(
         self: &Arc<Self>,
-        propagated_render_action: RenderAction,
-        descendant_has_action: RenderAction,
-    ) -> RenderAction
+        propagated_render_action: Option<RenderAction>,
+        descendant_has_action: Option<RenderAction>,
+    ) -> Option<RenderAction>
     where
         Self: Sized;
 
@@ -188,21 +188,21 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
 
     fn mark_render_action(
         self: &Arc<Self>,
-        mut self_render_action: RenderAction,
-        descendant_has_action: RenderAction,
-    ) -> RenderAction {
-        if self_render_action == RenderAction::Relayout {
+        mut propagated_render_action: Option<RenderAction>,
+        descendant_has_action: Option<RenderAction>,
+    ) -> Option<RenderAction> {
+        if propagated_render_action == Some(RenderAction::Relayout) {
             self.mark.set_self_needs_layout();
             if !self.mark.parent_use_size() {
-                self_render_action = RenderAction::Repaint;
+                propagated_render_action = Some(RenderAction::Repaint);
             }
         }
-        if descendant_has_action == RenderAction::Relayout {
+        if descendant_has_action == Some(RenderAction::Relayout) {
             self.mark.set_descendant_has_layout();
         }
         <R as FullRender>::Impl::maybe_layer_mark_render_action(
             self,
-            self_render_action,
+            propagated_render_action,
             descendant_has_action,
         )
     }
