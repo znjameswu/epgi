@@ -8,7 +8,7 @@ use crate::{
     tree::{
         ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ArcWidget, BuildContext,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        FullRender, HitTestBehavior, HitTestContext, RecordedChildLayer, Render, RenderAction,
+        FullRender, HitTestContext, HitTestResult, RecordedChildLayer, Render, RenderAction,
         RenderImpl, RenderObject,
     },
 };
@@ -165,12 +165,8 @@ pub trait LeafRender: Send + Sync + Sized + 'static {
         position: &<<Self::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
         size: &<Self::Protocol as Protocol>::Size,
         offset: &<Self::Protocol as Protocol>::Offset,
-    ) -> bool {
-        Self::Protocol::position_in_shape(position, offset, size)
-    }
-
-    fn hit_test_behavior(&self) -> HitTestBehavior {
-        HitTestBehavior::DeferToChild
+    ) -> HitTestResult {
+        HitTestResult::NotHit
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -266,12 +262,8 @@ where
         size: &<R::Protocol as Protocol>::Size,
         offset: &<R::Protocol as Protocol>::Offset,
         _memo: &(),
-    ) -> bool {
+    ) -> HitTestResult {
         R::hit_test_self(render, position, size, offset)
-    }
-
-    fn hit_test_behavior(render: &R) -> HitTestBehavior {
-        R::hit_test_behavior(render)
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]

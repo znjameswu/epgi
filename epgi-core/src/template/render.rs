@@ -7,9 +7,9 @@ use crate::{
     },
     tree::{
         ArcChildRenderObject, CachedComposite, ChildLayerProducingIterator, Composite, HitTest,
-        HitTestBehavior, HitTestContext, HitTestResult, ImplRender, LayerCompositionConfig,
-        LayerPaint, Layout, LayoutByParent, OrphanLayer, Paint, PaintResults, RecordedChildLayer,
-        Render, RenderBase, RenderObject,
+        HitTestContext, HitTestResult, ImplRender, LayerCompositionConfig, LayerPaint, Layout,
+        LayoutByParent, OrphanLayer, Paint, PaintResults, RecordedChildLayer, Render, RenderBase,
+        RenderObject,
     },
 };
 
@@ -269,9 +269,8 @@ pub trait TemplateHitTest<R: RenderBase> {
         adopted_children: &[RecordedChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
-        let hit_self = Self::hit_test_self(render, ctx.curr_position(), size, offset, memo);
-        if !hit_self {
-            // Stop hit-test children if the hit is outside of parent
+        let hit_in_bound = R::ParentProtocol::position_in_shape(ctx.curr_position(), offset, size);
+        if !hit_in_bound {
             return NotHit;
         }
 
@@ -280,13 +279,9 @@ pub trait TemplateHitTest<R: RenderBase> {
         if hit_children {
             return Hit;
         }
-
-        use HitTestBehavior::*;
-        match Self::hit_test_behavior(render) {
-            DeferToChild => NotHit,
-            Transparent => HitThroughSelf,
-            Opaque => Hit,
-        }
+        // We have not hit any children. Now it up to us ourself.
+        let hit_self = Self::hit_test_self(render, ctx.curr_position(), size, offset, memo);
+        return hit_self;
     }
 
     fn hit_test_children(
@@ -306,13 +301,8 @@ pub trait TemplateHitTest<R: RenderBase> {
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
-    ) -> bool {
-        R::ParentProtocol::position_in_shape(position, offset, size)
-    }
-
-    #[allow(unused_variables)]
-    fn hit_test_behavior(render: &R) -> HitTestBehavior {
-        HitTestBehavior::DeferToChild
+    ) -> HitTestResult {
+        HitTestResult::NotHit
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
@@ -358,16 +348,15 @@ where
 
     fn hit_test_self(
         &self,
-        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::ParentProtocol as Protocol>::Size,
-        offset: &<Self::ParentProtocol as Protocol>::Offset,
-        memo: &Self::LayoutMemo,
-    ) -> bool {
-        R::Template::hit_test_self(self, position, size, offset, memo)
-    }
-
-    fn hit_test_behavior(&self) -> HitTestBehavior {
-        R::Template::hit_test_behavior(&self)
+        _position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        _size: &<Self::ParentProtocol as Protocol>::Size,
+        _offset: &<Self::ParentProtocol as Protocol>::Offset,
+        _memo: &Self::LayoutMemo,
+    ) -> HitTestResult {
+        unreachable!(
+            "TemplateHitTest has already provided a hit_test implementation, \
+            but hit_test_self is still invoked somehow. This indicates a framework bug."
+        )
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]

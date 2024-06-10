@@ -29,9 +29,9 @@ pub trait HitTest: RenderBase {
         adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
-        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
-        if !hit_self {
-            // Stop hit-test children if the hit is outside of parent
+        let hit_in_bound =
+            Self::ParentProtocol::position_in_shape(ctx.curr_position(), offset, size);
+        if !hit_in_bound {
             return NotHit;
         }
 
@@ -40,13 +40,9 @@ pub trait HitTest: RenderBase {
         if hit_children {
             return Hit;
         }
-
-        use HitTestBehavior::*;
-        match self.hit_test_behavior() {
-            DeferToChild => NotHit,
-            Transparent => HitThroughSelf,
-            Opaque => Hit,
-        }
+        // We have not hit any children. Now it up to us ourself.
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
+        return hit_self;
     }
 
     /// Returns: If a child has claimed the hit
@@ -69,12 +65,8 @@ pub trait HitTest: RenderBase {
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-    ) -> bool {
-        Self::ParentProtocol::position_in_shape(position, offset, size)
-    }
-
-    fn hit_test_behavior(&self) -> HitTestBehavior {
-        HitTestBehavior::DeferToChild
+    ) -> HitTestResult {
+        HitTestResult::NotHit
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -89,15 +81,18 @@ pub trait HitTest: RenderBase {
 pub enum HitTestResult {
     NotHit,
     /// Add self to hit list, but pretend to the parent that the hit inside subtree has never happened
+    ///
+    /// Does not have any effect to its parent, since its parent can only get a boolean hit-or-no-hit answer.
+    /// The purpose of this variant is only to notify hit test results to include this node, which is strictly local.
     HitThroughSelf,
     Hit,
 }
 
-pub enum HitTestBehavior {
-    Transparent,
-    DeferToChild,
-    Opaque,
-}
+// pub enum HitTestBehavior {
+//     Transparent,
+//     DeferToChild,
+//     Opaque,
+// }
 
 pub struct HitTestContext<C: Canvas> {
     position: C::HitPosition,

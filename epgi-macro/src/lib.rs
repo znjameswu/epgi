@@ -11,7 +11,7 @@ pub fn derive_declarative(input: TokenStream) -> TokenStream {
 
     let _struct_name = format_ident!("_{}", struct_name);
     // The following macro is nothing but a quirk of miracle
-    // If you don't `pub use` the macro, then you get https://github.com/rust-lang/rust/pull/52234#issuecomment-786557648. 
+    // If you don't `pub use` the macro, then you get https://github.com/rust-lang/rust/pull/52234#issuecomment-786557648.
     // Basically, you won't be able to use the macro inside its origin crate except for direct sibling module (not even inside cousin module or uncle modules)
     // If you do `pub use` but not rename, you get error.
     // If you do `pub use`, rename to _struct_name, but also rename inside the expanded body to _struct_name, you get macro expand failure.

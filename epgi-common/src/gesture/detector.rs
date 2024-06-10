@@ -5,13 +5,13 @@ use epgi_2d::{
     BoxSingleChildRenderElement, BoxSize, Point2d,
 };
 use epgi_core::{
-    foundation::{AnyRawPointer, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
+    foundation::{AnyRawPointer, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     hit_test_interface_query_table,
     nodes::{ComponentElement, ComponentWidget},
     scheduler::JobBuilder,
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{
-        ArcChildWidget, BuildContext, ElementBase, HitTestBehavior, RenderAction, RenderObject,
+        ArcChildWidget, BuildContext, ElementBase, HitTestResult, RenderAction, RenderObject,
         Widget,
     },
 };
@@ -195,12 +195,13 @@ impl ImplByTemplate for RenderRawGestureDetector {
 impl ProxyRender for RenderRawGestureDetector {
     type Protocol = BoxProtocol;
 
-    fn hit_test_self(&self, position: &Point2d, size: &BoxSize, offset: &BoxOffset) -> bool {
-        BoxProtocol::position_in_shape(position, offset, size)
-    }
-
-    fn hit_test_behavior(&self) -> HitTestBehavior {
-        HitTestBehavior::Opaque
+    fn hit_test_self(
+        &self,
+        _position: &Point2d,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+    ) -> HitTestResult {
+        HitTestResult::Hit
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]

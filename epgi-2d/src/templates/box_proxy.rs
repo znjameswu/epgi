@@ -6,10 +6,7 @@ use epgi_core::{
         ImplByTemplate, TemplateHitTest, TemplateLayout, TemplatePaint, TemplateRender,
         TemplateRenderBase,
     },
-    tree::{
-        HitTestBehavior, HitTestContext, HitTestResult, RecordedChildLayer, Render, RenderImpl,
-        RenderObject,
-    },
+    tree::{HitTestContext, HitTestResult, RecordedChildLayer, Render, RenderImpl, RenderObject},
 };
 
 use crate::{
@@ -54,9 +51,8 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
         child: &ArcBoxRenderObject,
     ) -> HitTestResult {
         use HitTestResult::*;
-        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset);
-        if !hit_self {
-            // Stop hit-test children if the hit is outside of parent
+        let hit_in_bound = BoxProtocol::position_in_shape(ctx.curr_position(), offset, size);
+        if !hit_in_bound {
             return NotHit;
         }
 
@@ -64,13 +60,9 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
         if hit_children {
             return Hit;
         }
-
-        use HitTestBehavior::*;
-        match self.hit_test_behavior() {
-            DeferToChild => NotHit,
-            Transparent => HitThroughSelf,
-            Opaque => Hit,
-        }
+        // We have not hit any children. Now it up to us ourself.
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset);
+        return hit_self;
     }
 
     #[allow(unused_variables)]
@@ -85,12 +77,13 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
     }
 
     #[allow(unused_variables)]
-    fn hit_test_self(&self, position: &Point2d, size: &BoxSize, offset: &BoxOffset) -> bool {
-        BoxProtocol::position_in_shape(position, offset, size)
-    }
-
-    fn hit_test_behavior(&self) -> HitTestBehavior {
-        HitTestBehavior::DeferToChild
+    fn hit_test_self(
+        &self,
+        position: &Point2d,
+        size: &BoxSize,
+        offset: &BoxOffset,
+    ) -> HitTestResult {
+        HitTestResult::NotHit
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -204,17 +197,10 @@ where
         _size: &BoxSize,
         _offset: &BoxOffset,
         _memo: &(),
-    ) -> bool {
+    ) -> HitTestResult {
         unreachable!(
             "TemplatePaint has already provided a hit_test implementation, \
             but hit_test_self is still invoked somehow. This indicates a framework bug."
-        )
-    }
-
-    fn hit_test_behavior(_render: &R) -> HitTestBehavior {
-        unreachable!(
-            "TemplatePaint has already provided a hit_test implementation, \
-            but hit_test_behavior is still invoked somehow. This indicates a framework bug."
         )
     }
 

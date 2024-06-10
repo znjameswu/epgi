@@ -6,11 +6,9 @@ use epgi_2d::{
     BoxSingleChildRenderElement, BoxSize, Point2d,
 };
 use epgi_core::{
-    foundation::{
-        set_if_changed, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
-    },
+    foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::ImplByTemplate,
-    tree::{BuildContext, HitTestContext, RenderAction, Widget},
+    tree::{BuildContext, HitTestContext, HitTestResult, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -18,8 +16,10 @@ use typed_builder::TypedBuilder;
 use crate::PhantomBox;
 
 #[derive(Debug, Declarative, TypedBuilder)]
-pub struct CustomPaint<P: CustomPainter> {
-    pub painter: P,
+#[builder(build_method(into = Asc<CustomPaint<B, F>>))]
+pub struct CustomPaint<B: CustomPainter, F: CustomPainter = ()> {
+    pub painter: B,
+    pub foreground_painter: F,
     #[cfg(feature = "box_intrinsics")]
     #[builder(default = BoxSize::ZERO)]
     pub size: BoxSize, // This field is for intrincis only
@@ -28,60 +28,57 @@ pub struct CustomPaint<P: CustomPainter> {
 }
 
 pub trait CustomPainter: Clone + std::fmt::Debug + Send + Sync + 'static {
-    fn perform_paint_background(
+    #[allow(unused_variables)]
+    fn perform_paint(
         &self,
         size: &BoxSize,
         offset: &BoxOffset,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
-    );
-
-    fn perform_paint_foreground(
-        &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
-    );
+    ) {
+    }
 
     fn should_repaint(&self, other: &Self) -> bool;
 
-    fn hit_test_background(
+    #[allow(unused_variables)]
+    fn hit_test(
         &self,
         position: &Point2d,
         size: &BoxSize,
         offset: &BoxOffset,
-    ) -> Option<bool>;
-
-    fn hit_test_foreground(
-        &self,
-        position: &Point2d,
-        size: &BoxSize,
-        offset: &BoxOffset,
-    ) -> Option<bool>;
+    ) -> Option<HitTestResult> {
+        None
+    }
 }
 
-impl<P: CustomPainter> Widget for CustomPaint<P> {
+impl CustomPainter for () {
+    fn should_repaint(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+impl<B: CustomPainter, F: CustomPainter> Widget for CustomPaint<B, F> {
     type ParentProtocol = BoxProtocol;
 
     type ChildProtocol = BoxProtocol;
 
-    type Element = CustomPaintElement<P>;
+    type Element = CustomPaintElement<B, F>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> Asc<CustomPaint<P>> {
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> Asc<CustomPaint<B, F>> {
         self
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct CustomPaintElement<P: CustomPainter> {
-    phantom: PhantomData<P>,
+pub struct CustomPaintElement<B: CustomPainter, F: CustomPainter> {
+    phantom: PhantomData<(F, B)>,
 }
 
-impl<P: CustomPainter> ImplByTemplate for CustomPaintElement<P> {
+impl<B: CustomPainter, F: CustomPainter> ImplByTemplate for CustomPaintElement<B, F> {
     type Template = BoxSingleChildElementTemplate<true, false>;
 }
 
-impl<P: CustomPainter> BoxSingleChildElement for CustomPaintElement<P> {
-    type ArcWidget = Asc<CustomPaint<P>>;
+impl<B: CustomPainter, F: CustomPainter> BoxSingleChildElement for CustomPaintElement<B, F> {
+    type ArcWidget = Asc<CustomPaint<B, F>>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
@@ -99,17 +96,18 @@ impl<P: CustomPainter> BoxSingleChildElement for CustomPaintElement<P> {
     }
 }
 
-impl<P: CustomPainter> BoxSingleChildRenderElement for CustomPaintElement<P> {
-    type Render = RenderCustomPaint<P>;
+impl<B: CustomPainter, F: CustomPainter> BoxSingleChildRenderElement for CustomPaintElement<B, F> {
+    type Render = RenderCustomPaint<B, F>;
 
-    fn create_render(&self, widget: &Self::ArcWidget) -> RenderCustomPaint<P> {
+    fn create_render(&self, widget: &Self::ArcWidget) -> RenderCustomPaint<B, F> {
         RenderCustomPaint {
             painter: widget.painter.clone(),
+            foreground_painter: widget.foreground_painter.clone(),
         }
     }
 
     fn update_render(
-        render: &mut RenderCustomPaint<P>,
+        render: &mut RenderCustomPaint<B, F>,
         widget: &Self::ArcWidget,
     ) -> Option<RenderAction> {
         if render.painter.should_repaint(&widget.painter) {
@@ -120,15 +118,16 @@ impl<P: CustomPainter> BoxSingleChildRenderElement for CustomPaintElement<P> {
     }
 }
 
-pub struct RenderCustomPaint<P: CustomPainter> {
-    pub painter: P,
+pub struct RenderCustomPaint<B: CustomPainter, F: CustomPainter> {
+    pub painter: B,
+    pub foreground_painter: F,
 }
 
-impl<P: CustomPainter> ImplByTemplate for RenderCustomPaint<P> {
+impl<B: CustomPainter, F: CustomPainter> ImplByTemplate for RenderCustomPaint<B, F> {
     type Template = BoxProxyRenderTemplate;
 }
 
-impl<P: CustomPainter> BoxProxyRender for RenderCustomPaint<P> {
+impl<B: CustomPainter, F: CustomPainter> BoxProxyRender for RenderCustomPaint<B, F> {
     fn perform_paint(
         &self,
         size: &BoxSize,
@@ -136,11 +135,10 @@ impl<P: CustomPainter> BoxProxyRender for RenderCustomPaint<P> {
         child: &ArcBoxRenderObject,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
-        self.painter
-            .perform_paint_background(size, offset, paint_ctx);
+        self.painter.perform_paint(size, offset, paint_ctx);
         paint_ctx.paint(child, offset);
-        self.painter
-            .perform_paint_background(size, offset, paint_ctx);
+        self.foreground_painter
+            .perform_paint(size, offset, paint_ctx);
     }
 
     fn hit_test_child(
@@ -150,18 +148,25 @@ impl<P: CustomPainter> BoxProxyRender for RenderCustomPaint<P> {
         offset: &BoxOffset,
         child: &ArcBoxRenderObject,
     ) -> bool {
-        if let Some(true) = self
-            .painter
-            .hit_test_foreground(ctx.curr_position(), size, offset)
-        {
+        let foreground_hit = self
+            .foreground_painter
+            .hit_test(ctx.curr_position(), size, offset)
+            .unwrap_or(HitTestResult::NotHit);
+        if foreground_hit == HitTestResult::Hit {
             return true;
         }
-        ctx.hit_test(child.clone())
+        let children_hit = ctx.hit_test(child.clone());
+        return children_hit || foreground_hit == HitTestResult::HitThroughSelf;
     }
 
-    fn hit_test_self(&self, position: &Point2d, size: &BoxSize, offset: &BoxOffset) -> bool {
+    fn hit_test_self(
+        &self,
+        position: &Point2d,
+        size: &BoxSize,
+        offset: &BoxOffset,
+    ) -> HitTestResult {
         self.painter
-            .hit_test_background(position, size, offset)
-            .unwrap_or(true)
+            .hit_test(position, size, offset)
+            .unwrap_or(HitTestResult::Hit)
     }
 }

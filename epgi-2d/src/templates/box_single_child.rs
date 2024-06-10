@@ -18,9 +18,8 @@ use epgi_core::{
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, ChildLayerProducingIterator,
         ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        FullRender, HitTestBehavior, HitTestContext, HitTestResult, ImplElement,
-        LayerCompositionConfig, PaintResults, RecordedChildLayer, Render, RenderAction,
-        RenderObject,
+        FullRender, HitTestContext, HitTestResult, ImplElement, LayerCompositionConfig,
+        PaintResults, RecordedChildLayer, Render, RenderAction, RenderObject,
     },
 };
 
@@ -512,9 +511,8 @@ pub trait BoxSingleChildHitTest: BoxSingleChildRender {
         adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
-        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
-        if !hit_self {
-            // Stop hit-test children if the hit is outside of parent
+        let hit_in_bound = BoxProtocol::position_in_shape(ctx.curr_position(), offset, size);
+        if !hit_in_bound {
             return NotHit;
         }
 
@@ -522,13 +520,9 @@ pub trait BoxSingleChildHitTest: BoxSingleChildRender {
         if hit_children {
             return Hit;
         }
-
-        use HitTestBehavior::*;
-        match self.hit_test_behavior() {
-            DeferToChild => NotHit,
-            Transparent => HitThroughSelf,
-            Opaque => Hit,
-        }
+        // We have not hit any children. Now it up to us ourself.
+        let hit_self = self.hit_test_self(ctx.curr_position(), size, offset, memo);
+        return hit_self;
     }
 
     /// Returns: If a child has claimed the hit
@@ -551,12 +545,8 @@ pub trait BoxSingleChildHitTest: BoxSingleChildRender {
         size: &BoxSize,
         offset: &BoxOffset,
         memo: &Self::LayoutMemo,
-    ) -> bool {
-        BoxProtocol::position_in_shape(position, offset, size)
-    }
-
-    fn hit_test_behavior(&self) -> HitTestBehavior {
-        HitTestBehavior::DeferToChild
+    ) -> HitTestResult {
+        HitTestResult::NotHit
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<Self>) -> AnyRawPointer)]
@@ -593,29 +583,31 @@ where
 
     /// Returns: If a child has claimed the hit
     fn hit_test_children(
-        render: &R,
-        ctx: &mut HitTestContext<Affine2dCanvas>,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        memo: &R::LayoutMemo,
-        [child]: &[ArcBoxRenderObject; 1],
-        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
+        _render: &R,
+        _ctx: &mut HitTestContext<Affine2dCanvas>,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+        _memo: &R::LayoutMemo,
+        [_child]: &[ArcBoxRenderObject; 1],
+        _adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
-        R::hit_test_child(render, ctx, size, offset, memo, child, adopted_children)
+        unreachable!(
+            "TemplatePaint has already provided a hit_test implementation, \
+            but hit_test_children is still invoked somehow. This indicates a framework bug."
+        )
     }
 
     fn hit_test_self(
-        render: &R,
-        position: &Point2d,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        memo: &R::LayoutMemo,
-    ) -> bool {
-        R::hit_test_self(render, position, size, offset, memo)
-    }
-
-    fn hit_test_behavior(render: &R) -> HitTestBehavior {
-        R::hit_test_behavior(render)
+        _render: &R,
+        _position: &Point2d,
+        _size: &BoxSize,
+        _offset: &BoxOffset,
+        _memo: &R::LayoutMemo,
+    ) -> HitTestResult {
+        unreachable!(
+            "TemplatePaint has already provided a hit_test implementation, \
+            but hit_test_self is still invoked somehow. This indicates a framework bug."
+        )
     }
 
     fn all_hit_test_interfaces() -> &'static [(TypeId, fn(*mut RenderObject<R>) -> AnyRawPointer)]
