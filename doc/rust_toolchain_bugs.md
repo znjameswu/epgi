@@ -12,6 +12,10 @@ Performance hazard
 Code-style hazard
 - Async captures too many witness type
 - Rust Analyzer errorneously resolves `Option::take`. https://github.com/rust-lang/rust-analyzer/issues/14933
+    - Explicitly specify &mut reference solves this
+        - Rust Analyzer also errorneously reports unexhausted branch if the branch has nest patterns
+    - Restart rust-analyzer server usually solves this
+        - Use #[macro_use] on another crate and use macro inside that same crate sometimes breaks this workaround
 - No object safety when supertrait dependes on associated type. https://github.com/rust-lang/rust/issues/40533
     1. Effect: No longer able to hide virtual methods with associated types behind a private supertrait.
     2. Workaround: Replace associated types with generic traits

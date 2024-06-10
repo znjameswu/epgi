@@ -3,7 +3,6 @@ use epgi_core::foundation::Asc;
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-
 use super::{Align, Alignment};
 
 #[derive(Debug, Declarative, TypedBuilder)]
