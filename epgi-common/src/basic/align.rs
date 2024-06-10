@@ -4,7 +4,10 @@ use epgi_2d::{
     ShiftedBoxRender, ShiftedBoxRenderTemplate,
 };
 use epgi_core::{
-    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide}, max, template::ImplByTemplate, tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget}
+    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
+    max,
+    template::ImplByTemplate,
+    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -27,6 +30,8 @@ pub struct Alignment {
 }
 
 impl Alignment {
+    pub const CENTER: Self = Self { x: 0.0, y: 0.0 };
+
     pub fn along_offset(&self, offset: BoxOffset) -> BoxOffset {
         let center_x = offset.x / 2.0;
         let center_y = offset.y / 2.0;
