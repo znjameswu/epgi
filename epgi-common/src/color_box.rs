@@ -4,7 +4,9 @@ use epgi_2d::{
     FillPainter, Painter, Rect,
 };
 use epgi_core::{
-    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
+    foundation::{
+        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
+    },
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
 };
