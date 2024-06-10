@@ -13,6 +13,7 @@ pub use constrained_box::*;
 pub mod gesture;
 pub use gesture::*;
 
+#[macro_use]
 mod phantom_box;
 pub use phantom_box::*;
 

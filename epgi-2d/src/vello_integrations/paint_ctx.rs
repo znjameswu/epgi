@@ -6,13 +6,15 @@ use epgi_core::{
         RecordedOrphanLayer,
     },
 };
-use peniko::{kurbo::Stroke, BrushRef};
+use peniko::BrushRef;
 
 use crate::{
     Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
     Affine2dPaintContextExt, BlendMode, Fill, IntoKurbo, Line, Painter, ParagraphLayout, Point2d,
     StrokePainter,
 };
+
+pub use peniko::kurbo::{Cap, Dashes, Join, Stroke};
 
 /// This is the serial version of paint context
 pub struct VelloPaintContext<'a> {
