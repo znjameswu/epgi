@@ -1,6 +1,9 @@
+use std::borrow::Cow;
+
 use crate::{
     foundation::{
         Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide, TypeKey,
+        EMPTY_CONSUMED_TYPES,
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
@@ -23,8 +26,8 @@ pub trait SingleChildElement: Clone + Send + Sync + Sized + 'static {
     type ArcWidget: ArcWidget<Element = Self>;
 
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
-        &[]
+    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+        EMPTY_CONSUMED_TYPES.into()
     }
 
     fn get_child_widget(
@@ -54,6 +57,10 @@ where
     type ChildContainer = ArrayContainer<1>;
 
     type ArcWidget = E::ArcWidget;
+
+    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+        E::get_consumed_types(widget)
+    }
 
     fn perform_rebuild_element(
         element: &mut E,

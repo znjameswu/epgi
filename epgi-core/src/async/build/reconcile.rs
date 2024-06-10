@@ -188,8 +188,8 @@ impl<E: FullElement> ElementNode<E> {
                 let new_widget_ref = widget.as_ref().unwrap_or(old_widget);
                 let new_consumed_types = E::get_consumed_types(new_widget_ref);
                 let subscription_diff = Self::calc_subscription_diff(
-                    new_consumed_types,
-                    old_consumed_types,
+                    &new_consumed_types,
+                    &old_consumed_types,
                     &work_context.recorded_provider_values,
                     &self.context.provider_map,
                 );
@@ -199,8 +199,8 @@ impl<E: FullElement> ElementNode<E> {
 
                 let mut child_work_context = Cow::Borrowed(work_context.as_ref());
                 let provider_values = self.read_consumed_values_async(
-                    new_consumed_types,
-                    old_consumed_types,
+                    &new_consumed_types,
+                    &old_consumed_types,
                     &mut child_work_context,
                     &barrier,
                     element_lock_held,

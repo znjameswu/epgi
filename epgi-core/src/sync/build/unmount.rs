@@ -108,7 +108,7 @@ impl<E: FullElement> ElementNode<E> {
         // These side effect reversal does not need the node lock held
         // Because those side effects are only fired in the commit phase, which is holding sync scheduler lock, which we are also holding.
         let mut async_work_needs_restarting = AsyncWorkNeedsRestarting::new();
-        for consumed_type in E::get_consumed_types(&widget) {
+        for consumed_type in E::get_consumed_types(&widget).iter() {
             let provider_node = self
                 .context
                 .provider_map

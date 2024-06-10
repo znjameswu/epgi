@@ -144,8 +144,8 @@ impl<E: FullElement> ElementNode<E> {
 
         let mut child_work_context = Cow::Borrowed(work_context.as_ref());
         let provider_values = self.read_consumed_values_async(
-            new_consumed_types,
-            new_consumed_types, // We previously has already read all the value once
+            &new_consumed_types,
+            &new_consumed_types, // We previously has already read all the value once
             &mut child_work_context,
             &barrier,
             element_lock_held,
@@ -225,7 +225,7 @@ impl<E: FullElement> ElementNode<E> {
 
         let mut child_work_context = Cow::Borrowed(work_context.as_ref());
         let provider_values = self.read_consumed_values_async(
-            E::get_consumed_types(widget),
+            &E::get_consumed_types(widget),
             EMPTY_CONSUMED_TYPES,
             &mut child_work_context,
             &barrier,

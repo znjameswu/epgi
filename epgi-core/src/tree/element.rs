@@ -1,4 +1,6 @@
 mod context;
+use std::borrow::Cow;
+
 pub use context::*;
 
 mod node;
@@ -24,7 +26,7 @@ pub(crate) use waker::*;
 
 use crate::foundation::{
     Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
-    Provide, PtrEq, TypeKey,
+    Provide, PtrEq, TypeKey, EMPTY_CONSUMED_TYPES,
 };
 
 use super::{
@@ -46,8 +48,8 @@ pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
     // ~~TypeId::of is not constant function so we have to work around like this.~~ Reuse Element for different widget.
     // Boxed slice generates worse code than Vec due to https://github.com/rust-lang/rust/issues/59878
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> &[TypeKey] {
-        &[]
+    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+        EMPTY_CONSUMED_TYPES.into()
     }
 
     // SAFETY: No async path should poll or await the stashed continuation left behind by the sync build. Awaiting outside the sync build will cause child tasks to be run outside of sync build while still being the sync variant of the task.

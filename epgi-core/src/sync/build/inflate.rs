@@ -64,7 +64,7 @@ impl<E: FullElement> ElementNode<E> {
         });
 
         let consumed_values = read_and_update_subscriptions_sync(
-            E::get_consumed_types(widget),
+            &E::get_consumed_types(widget),
             EMPTY_CONSUMED_TYPES,
             &node.context,
             lane_scheduler,
