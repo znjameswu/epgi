@@ -5,7 +5,8 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     foundation::{
-        Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Key, Protocol, Provide, TypeKey,
+        Arc, Asc, AscProvideExt, BuildSuspendedError, InlinableDwsizeVec, Key, Protocol, Provide,
+        TypeKey,
     },
     template::{ImplByTemplate, SingleChildElement, SingleChildElementTemplate},
     tree::{ArcAnyWidget, ArcChildWidget, ArcWidget, BuildContext, ElementBase, Widget, WidgetExt},
@@ -141,7 +142,8 @@ where
             .next()
             .expect("Impossible to fail");
         let value = value
-            .downcast_asc::<T>()
+            .downcast::<T>()
+            .ok()
             .expect("Received provider value should be of correct type");
         (self.builder)(ctx, value)
     }

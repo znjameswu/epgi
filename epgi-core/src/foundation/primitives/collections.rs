@@ -3,6 +3,33 @@ pub type Inlinable64Vec<T> = smallvec::SmallVec<[T; (std::mem::size_of::<usize>(
 pub type InlinableDwsizeVec<T, const N: usize = 1> = smallvec::SmallVec<[T; N]>;
 pub type InlinableVec<T, const N: usize> = smallvec::SmallVec<[T; N]>;
 
+pub trait SmallVecExt: Sized {
+    type Item;
+    fn try_into_array<const N: usize>(self) -> Result<[Self::Item; N], Self>;
+}
+
+impl<A: smallvec::Array> SmallVecExt for smallvec::SmallVec<A> {
+    type Item = A::Item;
+
+    // From https://doc.rust-lang.org/std/vec/struct.Vec.html#impl-TryFrom%3CVec%3CT,+A%3E%3E-for-%5BT;+N%5D
+    fn try_into_array<const N: usize>(mut self) -> Result<[Self::Item; N], Self> {
+        if self.len() != N {
+            return Err(self);
+        }
+
+        // SAFETY: `.set_len(0)` is always sound.
+        unsafe { self.set_len(0) };
+
+        // SAFETY: A `Vec`'s pointer is always aligned properly, and
+        // the alignment the array needs is the same as the items.
+        // We checked earlier that we have sufficient items.
+        // The items will not double-drop as the `set_len`
+        // tells the `Vec` not to also drop them.
+        let array = unsafe { std::ptr::read(self.as_ptr() as *const [Self::Item; N]) };
+        Ok(array)
+    }
+}
+
 pub type SmallMap<K, V> = linear_map::LinearMap<K, V>;
 pub type SmallSet<T> = linear_map::set::LinearSet<T>;
 

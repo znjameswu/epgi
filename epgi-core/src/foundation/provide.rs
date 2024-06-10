@@ -32,14 +32,17 @@ where
     }
 }
 
-impl dyn Provide {
-    // TODO: Replace all dyn Provide with dyn Any+Send+Sync. We don't really use virtual method on Provide anyway
-    pub fn downcast_asc<T: Provide>(self: Asc<Self>) -> Option<Asc<T>> {
+pub trait AscProvideExt {
+    fn downcast<T: Provide>(self) -> Result<Asc<T>, Asc<dyn Provide>>;
+}
+
+impl AscProvideExt for Asc<dyn Provide> {
+    fn downcast<T: Provide>(self) -> Result<Asc<T>, Asc<dyn Provide>> {
         if TypeId::of::<T>() == self.type_id() {
             let ptr = Asc::into_raw(self);
-            unsafe { Some(Asc::from_raw(ptr.cast())) }
+            unsafe { Ok(Asc::from_raw(ptr.cast())) }
         } else {
-            None
+            Err(self)
         }
     }
 }
