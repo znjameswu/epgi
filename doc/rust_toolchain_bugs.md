@@ -33,6 +33,12 @@ Code-style hazard
     1. Effect: paint implementation and composite implementation could create inductive cycles.
     2. ~~Not seems to affect us in our particular case~~
 - Rustc's inability to prove certain disjointness based on orphan rules breaks our inheritance emulation https://github.com/rust-lang/rust/issues/123450
+- Rust modular macro system has serious defects. 
+    1. https://github.com/rust-lang/rust/pull/52234#issuecomment-786557648 is definitely not supposed to happen.
+    2. Despite the goodwill of the rustc implementer to allow use import macro from sibling modules, we can't even import from cousin modules, uncle modules, grandparent modules, etc.
+        1. Well maybe we can pub use the macro level-by-level? I haven't tried before I succeeded in a crappy hack.
+    3. The `pub use` workaround also produces a great deal of errors and obstacles
+    4. However, a very twisted crap just works. I can't believe this crap. Head to see the `Declarative` derive macro implementation to check out.
 
 
 
