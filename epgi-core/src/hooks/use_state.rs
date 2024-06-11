@@ -1,18 +1,13 @@
 use std::fmt::Debug;
 
-use crate::{
-    foundation::Arc,
-    scheduler::JobBuilder,
-    tree::{AweakElementContextNode, BuildContext, Effect, Hook, HookIndex, HookState},
-};
+use crate::{scheduler::JobBuilder, tree::BuildContext};
 
-use super::use_reducer::DispatchReducer;
+use super::{use_reducer::DispatchReducer, Reduce};
 
 impl<'a> BuildContext<'a> {
     pub fn use_state_ref_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (&T, SetState<T>) {
-        let node = Arc::downgrade(self.element_context);
-        let (hook_state, index) = self.use_hook(StateHook { init });
-        (&hook_state.value, SetState::new(node, index))
+        let (state, dispatch) = self.use_reducer_ref_with(|| UseStateReducer { value: init() });
+        (&state.value, SetState { dispatch })
     }
 
     pub fn use_state_ref<T: State>(&mut self, init: T) -> (&T, SetState<T>) {
@@ -39,76 +34,36 @@ impl<'a> BuildContext<'a> {
     }
 }
 
-pub trait State: 'static + Debug + Send + Sync + Clone {}
+pub trait State: Clone + Debug + Send + Sync + 'static {}
 
-impl<T> State for T where T: 'static + Debug + Send + Sync + Clone {}
+impl<T> State for T where T: Clone + Debug + Send + Sync + 'static {}
 
-pub(super) struct StateHook<T: State, F: FnOnce() -> T> {
-    pub(super) init: F,
+#[derive(Clone, Debug)]
+struct UseStateReducer<T> {
+    value: T,
 }
 
-impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
-    type HookState = StateHookState<T>;
+impl<T> Reduce for UseStateReducer<T>
+where
+    T: State,
+{
+    type Action = T;
 
-    fn create_hook_state(self) -> (Self::HookState, Option<impl Effect>) {
-        (
-            StateHookState {
-                value: (self.init)(),
-            },
-            None::<()>,
-        )
-    }
-
-    fn update_hook_state(self, _state: &mut Self::HookState) -> Option<impl Effect> {
-        None::<()>
-    }
-}
-
-#[derive(Clone)]
-pub(super) struct StateHookState<T: State> {
-    pub(super) value: T,
-}
-
-impl<T: State> HookState for StateHookState<T> {
-    fn clone_box(&self) -> Box<dyn HookState> {
-        Box::new(self.clone())
+    fn reduce(&mut self, action: Self::Action) {
+        self.value = action
     }
 }
 
 #[derive(Clone)]
 pub struct SetState<T> {
-    dispatch_reducer: DispatchReducer<T>,
+    dispatch: DispatchReducer<UseStateReducer<T>>,
 }
 
 impl<T> SetState<T>
 where
     T: State,
 {
-    // fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
-    //     Self {
-    //         node,
-    //         self_index,
-    //         phantom: Default::default(),
-    //     }
-    // }
-    // pub fn set(&self, value: T, job_builder: &mut JobBuilder) -> bool {
-    //     let Some(node) = self.node.upgrade() else {
-    //         return false;
-    //     };
-    //     node.push_update(
-    //         Update::new::<StateHookState<T>>(self.self_index, move |hook| hook.value = value),
-    //         job_builder,
-    //     );
-    //     return true;
-    // }
-
-    fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
-        Self {
-            dispatch_reducer: DispatchReducer::new(node, self_index),
-        }
-    }
-
     pub fn set(&self, value: T, job_builder: &mut JobBuilder) -> bool {
-        self.dispatch_reducer.dispatch(|_| value, job_builder)
+        self.dispatch.dispatch(value, job_builder)
     }
 }
