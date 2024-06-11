@@ -14,7 +14,7 @@ use crate::{
     StrokePainter,
 };
 
-pub use peniko::kurbo::{Cap, Dashes, Join, Stroke};
+pub use peniko::kurbo::{Cap as StrokeCap, Dashes, Join, Stroke};
 
 /// This is the serial version of paint context
 pub struct VelloPaintContext<'a> {

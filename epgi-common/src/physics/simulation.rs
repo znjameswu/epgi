@@ -24,8 +24,17 @@ impl Clone for Box<dyn Simulation> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct SimulationState {
     pub x: f32,
     pub dx: f32,
     pub completed: bool,
+}
+
+impl SimulationState {
+    pub const ZERO: Self = Self {
+        x: 0.0,
+        dx: 0.0,
+        completed: false,
+    };
 }

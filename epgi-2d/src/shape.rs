@@ -144,9 +144,17 @@ pub struct CircularArc {
     pub sweep_angle: f32,
 }
 
+// pub struct EllipticalArc {
+//     pub sweep_angle: f32,
+//     pub affine: Affine2d,
+// }
+
 pub struct EllipticalArc {
+    pub c: Point2d,
+    pub r: (f32, f32),
+    pub start_angle: f32,
     pub sweep_angle: f32,
-    pub affine: Affine2d,
+    pub x_rotation: f32,
 }
 
 pub struct QuadBez {

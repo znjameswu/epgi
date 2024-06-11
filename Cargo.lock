@@ -1227,6 +1227,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "epgi-material"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.5.0",
+ "epgi-2d",
+ "epgi-common",
+ "epgi-core",
+ "epgi-macro",
+ "glazier",
+ "hashbrown",
+ "lazy_static",
+ "smallvec",
+ "typed-builder",
+]
+
+[[package]]
 name = "epgi-winit"
 version = "0.1.0"
 dependencies = [
