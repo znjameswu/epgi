@@ -1,22 +1,33 @@
 use std::time::{Duration, Instant};
 
-use epgi_core::{hooks::DispatchReducer, scheduler::JobBuilder, tree::BuildContext};
+use epgi_core::{
+    hooks::{DispatchReducer, Reduce},
+    scheduler::JobBuilder,
+    tree::BuildContext,
+};
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use crate::{lerp, AnimationFrame, Simulation};
+use crate::{lerp, AnimationFrame, Simulation, SimulationState};
 
 pub trait BuildContextUseAnimationControllerExt {
     fn use_animation_controller(
         &mut self,
         init: impl FnOnce() -> AnimationControllerState,
-        animation_frame: AnimationFrame,
+        animation_frame: Option<&AnimationFrame>,
     ) -> (f32, AnimationController);
 
     fn use_animation_controller_with_simulation(
         &mut self,
         simulation: impl Simulation,
-        animation_frame: AnimationFrame,
+        animation_frame: Option<&AnimationFrame>,
+    ) -> (f32, AnimationController);
+
+    fn use_animation_controller_repeating_with(
+        &mut self,
+        reverse: bool,
+        conf: AnimationControllerConf,
+        animation_frame: Option<&AnimationFrame>,
     ) -> (f32, AnimationController);
 }
 
@@ -24,7 +35,7 @@ impl BuildContextUseAnimationControllerExt for BuildContext<'_> {
     fn use_animation_controller(
         &mut self,
         init: impl FnOnce() -> AnimationControllerState,
-        animation_frame: AnimationFrame,
+        animation_frame: Option<&AnimationFrame>,
     ) -> (f32, AnimationController) {
         use_animation_controller(self, init, animation_frame)
     }
@@ -32,11 +43,32 @@ impl BuildContextUseAnimationControllerExt for BuildContext<'_> {
     fn use_animation_controller_with_simulation(
         &mut self,
         simulation: impl Simulation,
-        animation_frame: AnimationFrame,
+        animation_frame: Option<&AnimationFrame>,
     ) -> (f32, AnimationController) {
         use_animation_controller(
             self,
-            || AnimationControllerState!(simulation),
+            || AnimationControllerState!(simulation_state = SimulationState::ZERO, simulation),
+            animation_frame,
+        )
+    }
+
+    fn use_animation_controller_repeating_with(
+        &mut self,
+        reverse: bool,
+        conf: AnimationControllerConf,
+        animation_frame: Option<&AnimationFrame>,
+    ) -> (f32, AnimationController) {
+        use_animation_controller(
+            self,
+            || {
+                let now = Instant::now();
+                let mut state = AnimationControllerState!(
+                    origin_time = now,
+                    simulation_state = SimulationState::ZERO,
+                );
+                state.reduce((now, AnimationControllerAction::Repeat { reverse }, conf));
+                state
+            },
             animation_frame,
         )
     }
@@ -45,13 +77,17 @@ impl BuildContextUseAnimationControllerExt for BuildContext<'_> {
 pub fn use_animation_controller(
     ctx: &mut BuildContext<'_>,
     init: impl FnOnce() -> AnimationControllerState,
-    animation_frame: AnimationFrame,
+    animation_frame: Option<&AnimationFrame>,
 ) -> (f32, AnimationController) {
     let (state, dispatch_reducer) = ctx.use_reducer_ref_with(init);
-    let x = state
-        .simulation
-        .x(animation_frame.time.duration_since(state.origin_time));
-    (x, AnimationController::new(dispatch_reducer))
+    let controller = AnimationController::new(dispatch_reducer);
+    if let Some(animation_frame) = animation_frame {
+        if let Some(simulation) = state.simulation.as_ref() {
+            let x = simulation.x(animation_frame.time.duration_since(state.origin_time));
+            return (x, controller);
+        }
+    };
+    (state.simulation_state.x, controller)
 }
 
 pub struct AnimationController {
@@ -78,48 +114,25 @@ impl AnimationController {
         job_builder: &mut JobBuilder,
     ) -> bool {
         self.dispatch_reducer.dispatch(
-            move |state| {
-                let now = Instant::now();
-                let time = now.duration_since(state.origin_time);
-                let x = state.simulation.x(time);
-                let min = conf.lower_bound.unwrap_or(state.lower_bound);
-                let max = conf.upper_bound.unwrap_or(state.upper_bound);
-                let period = conf.duration.or(state.duration).expect(
-                    "Animation controller's duration should be set before starting an animation",
-                );
-                let mut initial_percent = (x - min) / (max - min);
-                if reverse && state.simulation.dx(time) < 0.0 {
-                    initial_percent = 2.0 - initial_percent;
-                }
-                AnimationControllerState!(
-                    origin_time = now,
-                    simulation = RepeatingSimulation {
-                        initial_percent,
-                        min,
-                        max,
-                        reverse,
-                        period,
-                    },
-                    duration = state.duration,
-                    reverse_duration = state.reverse_duration,
-                    lower_bound = state.lower_bound,
-                    upper_bound = state.upper_bound,
-                )
-            },
+            (
+                Instant::now(),
+                AnimationControllerAction::Repeat { reverse },
+                conf,
+            ),
             job_builder,
         )
     }
 }
 
-#[derive(Clone, Debug, Declarative, TypedBuilder)]
+#[derive(Clone, Debug, Default, Declarative, TypedBuilder)]
 pub struct AnimationControllerConf {
-    #[builder(default)]
+    #[builder(default, setter(into))]
     duration: Option<Duration>,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     reverse_duration: Option<Duration>,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     lower_bound: Option<f32>,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     upper_bound: Option<f32>,
 }
 
@@ -128,8 +141,9 @@ pub struct AnimationControllerState {
     // Animation states
     #[builder(default = std::time::Instant::now())]
     origin_time: Instant,
-    #[builder(setter(transform = |simulation: impl Simulation| Box::new(simulation) as _))]
-    simulation: Box<dyn Simulation>,
+    simulation_state: SimulationState,
+    #[builder(default, setter(transform = |simulation: impl Simulation| Some(Box::new(simulation) as _)))]
+    simulation: Option<Box<dyn Simulation>>,
 
     // Configuration states (To generate new simulations on demand)
     #[builder(default)]
@@ -140,6 +154,47 @@ pub struct AnimationControllerState {
     lower_bound: f32,
     #[builder(default = 1.0)]
     upper_bound: f32,
+}
+
+#[derive(Clone, Debug)]
+pub enum AnimationControllerAction {
+    Repeat { reverse: bool },
+}
+
+impl Reduce for AnimationControllerState {
+    type Action = (Instant, AnimationControllerAction, AnimationControllerConf);
+
+    fn reduce(&mut self, (time, action, conf): Self::Action) {
+        if let Some(simulation) = self.simulation.as_ref() {
+            // Update the old simulation state for the last time
+            // to ensure a smooth transition
+            self.simulation_state = simulation.state(time.duration_since(self.origin_time));
+        }
+        self.duration = conf.duration.or(self.duration);
+        self.reverse_duration = conf.reverse_duration.or(self.reverse_duration);
+        self.lower_bound = conf.lower_bound.unwrap_or(self.lower_bound);
+        self.upper_bound = conf.upper_bound.unwrap_or(self.upper_bound);
+        use AnimationControllerAction::*;
+        match action {
+            Repeat { reverse } => {
+                let mut initial_percent = (self.simulation_state.x - self.lower_bound)
+                    / (self.upper_bound - self.lower_bound);
+                if reverse && self.simulation_state.dx < 0.0 {
+                    initial_percent = 2.0 - initial_percent;
+                }
+                self.simulation = Some(Box::new(RepeatingSimulation {
+                    initial_percent,
+                    min: self.lower_bound,
+                    max: self.upper_bound,
+                    reverse,
+                    period: self.duration.expect(
+                        "Duration of an animation controller needs to be set \
+                        before a repeat action can be issued",
+                    ),
+                }) as _);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
