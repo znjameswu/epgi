@@ -44,3 +44,9 @@ pub type ArcJobCallback = Asc<dyn Fn(&mut JobBuilder) + Send + Sync>;
 //         (self)(t)
 //     }
 // }
+
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    // // https://godbolt.org/z/sjzzWYWY8
+    // a * (1.0 - t) + b * t
+    a + (b - a) * t
+}

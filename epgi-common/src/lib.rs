@@ -1,5 +1,5 @@
-#[macro_use]
-extern crate lazy_static;
+mod animation;
+pub use animation::*;
 
 mod basic;
 pub use basic::*;
@@ -13,9 +13,11 @@ pub use constrained_box::*;
 pub mod gesture;
 pub use gesture::*;
 
-#[macro_use]
 mod phantom_box;
 pub use phantom_box::*;
+
+mod physics;
+pub use physics::*;
 
 mod text;
 pub use text::*;

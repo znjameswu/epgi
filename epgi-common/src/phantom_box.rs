@@ -9,7 +9,7 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-lazy_static! {
+lazy_static::lazy_static! {
     static ref ARC_PHANTOM_BOX: Asc<PhantomBox> = Asc::new(PhantomBox {});
 }
 
