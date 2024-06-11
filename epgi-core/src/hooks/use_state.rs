@@ -1,10 +1,12 @@
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
 
 use crate::{
     foundation::Arc,
     scheduler::JobBuilder,
-    tree::{AweakElementContextNode, BuildContext, Effect, Hook, HookIndex, HookState, Update},
+    tree::{AweakElementContextNode, BuildContext, Effect, Hook, HookIndex, HookState},
 };
+
+use super::use_reducer::DispatchReducer;
 
 impl<'a> BuildContext<'a> {
     pub fn use_state_ref_with<T: State>(&mut self, init: impl FnOnce() -> T) -> (&T, SetState<T>) {
@@ -41,8 +43,8 @@ pub trait State: 'static + Debug + Send + Sync + Clone {}
 
 impl<T> State for T where T: 'static + Debug + Send + Sync + Clone {}
 
-struct StateHook<T: State, F: FnOnce() -> T> {
-    init: F,
+pub(super) struct StateHook<T: State, F: FnOnce() -> T> {
+    pub(super) init: F,
 }
 
 impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
@@ -63,8 +65,8 @@ impl<T: State, F: FnOnce() -> T> Hook for StateHook<T, F> {
 }
 
 #[derive(Clone)]
-struct StateHookState<T: State> {
-    value: T,
+pub(super) struct StateHookState<T: State> {
+    pub(super) value: T,
 }
 
 impl<T: State> HookState for StateHookState<T> {
@@ -75,30 +77,38 @@ impl<T: State> HookState for StateHookState<T> {
 
 #[derive(Clone)]
 pub struct SetState<T> {
-    node: AweakElementContextNode,
-    self_index: HookIndex,
-    phantom: PhantomData<T>,
+    dispatch_reducer: DispatchReducer<T>,
 }
 
 impl<T> SetState<T>
 where
     T: State,
 {
+    // fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
+    //     Self {
+    //         node,
+    //         self_index,
+    //         phantom: Default::default(),
+    //     }
+    // }
+    // pub fn set(&self, value: T, job_builder: &mut JobBuilder) -> bool {
+    //     let Some(node) = self.node.upgrade() else {
+    //         return false;
+    //     };
+    //     node.push_update(
+    //         Update::new::<StateHookState<T>>(self.self_index, move |hook| hook.value = value),
+    //         job_builder,
+    //     );
+    //     return true;
+    // }
+
     fn new(node: AweakElementContextNode, self_index: HookIndex) -> Self {
         Self {
-            node,
-            self_index,
-            phantom: Default::default(),
+            dispatch_reducer: DispatchReducer::new(node, self_index),
         }
     }
+
     pub fn set(&self, value: T, job_builder: &mut JobBuilder) -> bool {
-        let Some(node) = self.node.upgrade() else {
-            return false;
-        };
-        node.push_update(
-            Update::new::<StateHookState<T>>(self.self_index, move |hook| hook.value = value),
-            job_builder,
-        );
-        return true;
+        self.dispatch_reducer.dispatch(|_| value, job_builder)
     }
 }
