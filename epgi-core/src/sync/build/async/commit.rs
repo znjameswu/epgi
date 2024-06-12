@@ -91,7 +91,7 @@ where
                     ),
                 }
             }
-            InflateSuspended => RenderObjectCommitResult::Suspend,
+            CommitSuspended => unimplemented!("Async suspended commit is still not implemented."), // We left this unimplemented
             SkipAndReturn => RenderObjectCommitResult::new_no_update(),
         };
         self.context.purge_lanes(finished_lanes);
@@ -111,7 +111,7 @@ enum SetupCommitAsyncResult<E: Element> {
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         next: NextAction<E>,
     },
-    InflateSuspended,
+    CommitSuspended,
     SkipAndReturn,
 }
 
@@ -167,7 +167,7 @@ where
                             }),
                             async_queue: AsyncWorkQueue::new_empty(),
                         });
-                        return InflateSuspended;
+                        return CommitSuspended;
                     }
                     AsyncOutput::Uninitiated { barrier: _barrier }
                     | AsyncOutput::Suspended {
@@ -200,15 +200,29 @@ where
                 // };
                 match current {
                     Some(current) if finished_lanes.contains(current.work_context.lane_pos) => {
-                        return VisitChildrenAnd {
-                            children: state.children_cloned().expect(
-                                "Async commit walk should not walk into a \
-                                inflate suspended node that it has no work on. \
-                                Inflate suspended node has no children \
-                                and therefore impossible to have work in its descendants",
-                            ),
-                            next: NextAction::Commit,
-                        }
+                        match &current.stash.output {
+                            AsyncOutput::Completed(results) => {
+                                return VisitChildrenAnd {
+                                    children: results.children.map_ref_collect(Clone::clone),
+                                    next: NextAction::Commit,
+                                };
+                            }
+                            AsyncOutput::Suspended {
+                                suspended_results: Some(_),
+                                barrier: None,
+                            } => return CommitSuspended,
+                            AsyncOutput::Uninitiated { .. }
+                            | AsyncOutput::Suspended {
+                                barrier: Some(_), ..
+                            } => panic!("CommitBarrier should not be encountered during commit"),
+                            AsyncOutput::Gone
+                            | AsyncOutput::Suspended {
+                                suspended_results: None,
+                                ..
+                            } => {
+                                panic!("Async results are gone before commit")
+                            }
+                        };
                     }
                     _ => {
                         // No work in this node, check descendant

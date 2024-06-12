@@ -353,6 +353,10 @@ pub(crate) struct BuildSuspendResults {
     // widget: E::ArcWidget,
     pub(crate) hooks: HooksWithEffects,
     pub(crate) waker: ArcSuspendWaker,
+    // // ~~To check whether we store this result while inflating (new inflate or reconcile on InflateSuspended) or rebuilding~~
+    // // Actually we don't need to check. This state can be inferred by the ElementNode state when initiating and commiting the work.
+    // // (Because any change to the ElementNode state will cancel the async work, so we can be confident that the ElementNode state has not changed between committing and initiating the async work)
+    // pub(crate) is_rebuild: bool,
 }
 
 impl BuildSuspendResults {
