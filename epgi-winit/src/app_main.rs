@@ -1,7 +1,7 @@
 use epgi_2d::{
     Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxProvider, BoxSize, RootView,
 };
-use epgi_common::{ConstrainedBox, PointerEvent};
+use epgi_common::{ConstrainedBox, FrameInfo, PointerEvent};
 use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
     hooks::SetState,
@@ -443,23 +443,6 @@ impl<'a> MainState<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
-struct FrameInfo {
-    instant: Instant,
-    system_time: SystemTime,
-    frame_count: u64,
-}
-
-impl FrameInfo {
-    pub fn now(frame_count: u64) -> Self {
-        Self {
-            instant: Instant::now(),
-            system_time: SystemTime::now(),
-            frame_count,
-        }
-    }
-}
-
 impl<'a> MainState<'a> {
     fn start_scheduler_with(
         &mut self,
@@ -550,13 +533,7 @@ fn bind_frame_info(
             let child = child.clone();
             let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
             ctx.use_effect_nodep(move || *frame_binding.lock() = Some(set_frame));
-            BoxProvider::value_inner(
-                frame.frame_count,
-                BoxProvider::value_inner(
-                    frame.system_time,
-                    BoxProvider::value_inner(frame.instant, child),
-                ),
-            )
+            BoxProvider::value_inner(frame, child)
         },
     });
     (child, result)

@@ -2,6 +2,7 @@ use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
 use epgi_core::{SuspendableBuilder, Suspense};
+use epgi_material::{CircularProgressIndicator, MaterialApp};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
@@ -10,10 +11,7 @@ fn main() {
         on_tap = |_job_builder| println!("Fallback tapped"),
         child = ConstrainedBox!(
             constraints = BoxConstraints::new_tight(30.0, 30.0),
-            child = ColorBox! {
-                color = Color::rgb(1.0, 0.0, 0.0),
-                child = PhantomBox!()
-            }
+            child = CircularProgressIndicator!()
         )
     );
 
@@ -58,6 +56,8 @@ fn main() {
             }
         ),
     );
+
+    let app = MaterialApp!(child = app);
 
     let window_size = LogicalSize::new(400.0, 400.0);
     let window_attributes = Window::default_attributes()

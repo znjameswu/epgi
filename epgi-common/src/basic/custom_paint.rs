@@ -16,7 +16,7 @@ use typed_builder::TypedBuilder;
 use crate::PhantomBox;
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into = Asc<CustomPaint<B, F>>))]
+#[builder(build_method(into=Asc<CustomPaint<B, F>>))]
 pub struct CustomPaint<B: CustomPainter, F: CustomPainter = ()> {
     pub painter: B,
     pub foreground_painter: F,

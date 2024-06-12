@@ -28,9 +28,13 @@ use crate::ThemeData;
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<CircularProgressIndicator>))]
 pub struct CircularProgressIndicator {
+    #[builder(default)]
     pub value: Option<f32>,
+    #[builder(default)]
     pub background_color: Option<Color>,
+    #[builder(default)]
     pub color: Option<Color>,
+    #[builder(default)]
     pub value_color: Option<Color>,
     #[builder(default = 4.0)]
     pub stroke_width: f32,
@@ -174,7 +178,7 @@ impl ConsumerWidget<BoxProtocol> for CircularProgressIndicator {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Default, Clone, Debug)]
 pub struct ProgressIndicatorThemeData {
     pub color: Option<Color>,
     pub linear_track_color: Option<Color>,

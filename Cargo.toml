@@ -36,6 +36,10 @@ path = "./epgi-common"
 # package = "epgi-glazier"
 # path = "./epgi-glazier"
 
+[workspace.dependencies.epgi-material]
+package = "epgi-material"
+path = "./epgi-material"
+
 [workspace.dependencies.epgi-winit]
 package = "epgi-winit"
 path = "./epgi-winit"

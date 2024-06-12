@@ -11,7 +11,8 @@ epgi-winit = { workspace = true, features = ["tokio"] }
 epgi-core = { workspace = true }
 epgi-common = { workspace = true }
 epgi-2d = { workspace = true }
+epgi-material = { workspace = true }
 dpi = { workspace = true }
 tokio = { version = "1.37.0", features = ["full"] }
-rayon ={ workspace = true }
+rayon = { workspace = true }
 futures = "0.3.30"
