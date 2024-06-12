@@ -1,3 +1,6 @@
+mod box_multi_child;
+pub use box_multi_child::*;
+
 mod box_single_child;
 pub use box_single_child::*;
 

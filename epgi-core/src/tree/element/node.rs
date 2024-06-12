@@ -1,9 +1,10 @@
-use crate::foundation::{Arc, Protocol, SyncMutex};
+use crate::foundation::{Arc, Key, Protocol, SyncMutex};
 
 use super::{
     ArcAnyElementNode, ArcAnyRenderObject, ArcChildElementNode, ArcChildRenderObject,
-    ArcChildWidget, ArcElementContextNode, Element, ElementContextNode, ElementReconcileItem,
-    ElementSnapshot, ElementSnapshotInner, FullElement, ImplElementNode, Mainline, MainlineState,
+    ArcChildWidget, ArcElementContextNode, ArcWidget, Element, ElementContextNode,
+    ElementReconcileItem, ElementSnapshot, ElementSnapshotInner, FullElement, ImplElementNode,
+    Mainline, MainlineState,
 };
 
 pub struct ElementNode<E: Element> {
@@ -67,6 +68,8 @@ pub trait ChildElementNode<PP: Protocol>:
         widget: ArcChildWidget<PP>,
     ) -> Result<ElementReconcileItem<PP>, (ArcChildElementNode<PP>, ArcChildWidget<PP>)>;
 
+    fn widget_key(&self) -> Option<Box<dyn Key>>;
+
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<PP>>;
 }
 
@@ -86,6 +89,10 @@ impl<E: FullElement> ChildElementNode<E::ParentProtocol> for ElementNode<E> {
         ),
     > {
         Self::can_rebuild_with(self, widget).map_err(|(element, widget)| (element as _, widget))
+    }
+
+    fn widget_key(&self) -> Option<Box<dyn Key>> {
+        self.snapshot.lock().widget.key().map(|key| key.clone_box())
     }
 
     fn get_current_subtree_render_object(&self) -> Option<ArcChildRenderObject<E::ParentProtocol>> {

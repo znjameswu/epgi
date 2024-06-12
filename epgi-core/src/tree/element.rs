@@ -126,6 +126,7 @@ pub type ChildRenderObjectsUpdateCallback<C, CP> = Box<
         + Sync,
 >;
 
+#[derive(Clone)]
 pub enum RenderObjectSlots<P: Protocol> {
     Inflate,
     Reuse(ArcChildRenderObject<P>),

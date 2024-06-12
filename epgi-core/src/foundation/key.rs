@@ -8,6 +8,7 @@ pub trait Key: Any + Debug + Send + Sync {
     fn eq_key(&self, other: &dyn Key) -> bool;
     fn hash(&self, state: &mut dyn std::hash::Hasher);
     fn as_any(&self) -> &dyn Any;
+    fn clone_box(&self) -> Box<dyn Key>;
 }
 
 impl Hash for dyn Key {
@@ -26,7 +27,7 @@ impl Eq for dyn Key {}
 
 impl<T> Key for T
 where
-    T: Any + Debug + Hash + Eq + Send + Sync,
+    T: Clone + Any + Debug + Hash + Eq + Send + Sync,
 {
     fn eq_key(&self, other: &dyn Key) -> bool {
         match other.as_any().downcast_ref::<T>() {
@@ -41,6 +42,10 @@ where
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn clone_box(&self) -> Box<dyn Key> {
+        Box::new(self.clone())
     }
 }
 
