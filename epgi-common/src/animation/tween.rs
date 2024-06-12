@@ -1,7 +1,7 @@
 pub trait Tween {
     type Output;
 
-    fn lerp(&self, t: f32) -> Self::Output;
+    fn interp(&self, t: f32) -> Self::Output;
 
     fn chain_before<T: Tween>(self, other: T) -> ChainedTween<Self, T>
     where
@@ -31,7 +31,7 @@ where
 {
     type Output = B::Output;
 
-    fn lerp(&self, t: f32) -> Self::Output {
-        self.b.lerp(self.a.lerp(t))
+    fn interp(&self, t: f32) -> Self::Output {
+        self.b.interp(self.a.interp(t))
     }
 }

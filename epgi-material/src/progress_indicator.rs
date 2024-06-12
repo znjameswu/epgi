@@ -1,25 +1,23 @@
 use std::{
     borrow::Cow,
+    f32::consts::{FRAC_PI_2, PI},
     ops::Deref,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use epgi_2d::{
-    Affine2d, Affine2dCanvas, Affine2dPaintContextExt, ArcBoxWidget, BoxConstraints, BoxOffset,
-    BoxProtocol, BoxSize, Brush, CircularArc, Color, EllipticalArc, Point2d, Stroke, StrokeCap,
-    StrokePainter,
+    Affine2dCanvas, Affine2dPaintContextExt, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
+    BoxSize, Brush, Color, EllipticalArc, Point2d, Stroke, StrokeCap, StrokePainter,
 };
 use epgi_common::{
     AnimationControllerConf, AnimationFrame, BuildContextUseAnimationControllerExt, ConstrainedBox,
-    CustomPaint, CustomPainter,
+    CustomPaint, CustomPainter, Interval, SawTooth, Tween, FAST_OUT_SLOW_IN,
 };
 use epgi_core::{
-    foundation::{
-        Arc, Asc, AscProvideExt, InlinableDwsizeVec, PaintContext, Provide, SmallVecExt, TypeKey,
-    },
+    foundation::{Arc, Asc, AscProvideExt, InlinableDwsizeVec, PaintContext, Provide, TypeKey},
     nodes::{ConsumerElement, ConsumerWidget},
-    read_one_provider_into, read_providers,
-    tree::{BuildContext, HitTestResult, Widget},
+    read_one_provider_into,
+    tree::{BuildContext, Widget},
 };
 use epgi_macro::Declarative;
 use lazy_static::lazy_static;
@@ -70,6 +68,10 @@ const MIN_CIRCULAR_PROGRESS_INDICATOR_SIZE: f32 = 36.0;
 
 const INTETERMINATE_CIRCULAR_DURATION: Duration = Duration::from_millis(1333 * 2222);
 
+const PATH_COUNT: u32 = 2222;
+
+const ROTATION_COUNT: u32 = 1333;
+
 impl ConsumerWidget<BoxProtocol> for CircularProgressIndicator {
     fn get_consumed_types(&self) -> Cow<[TypeKey]> {
         if self.value.is_some() {
@@ -115,6 +117,39 @@ impl ConsumerWidget<BoxProtocol> for CircularProgressIndicator {
             animation_frame.as_deref(),
         );
 
+        let (start_angle, sweep_angle) = if let Some(value) = self.value {
+            (-FRAC_PI_2, value.clamp(0.0, 1.0) * (2.0 * PI))
+        } else {
+            let head_curve = FAST_OUT_SLOW_IN
+                .chain_after(Interval {
+                    begin: 0.0,
+                    end: 0.5,
+                })
+                .chain_after(SawTooth { count: PATH_COUNT });
+
+            let tail_curve = FAST_OUT_SLOW_IN
+                .chain_after(Interval {
+                    begin: 0.5,
+                    end: 1.0,
+                })
+                .chain_after(SawTooth { count: PATH_COUNT });
+
+            let offset_curve = SawTooth { count: PATH_COUNT };
+            let rotation_curve = SawTooth {
+                count: ROTATION_COUNT,
+            };
+
+            let head_value = head_curve.interp(x);
+            let tail_value = tail_curve.interp(x);
+            let offset_value = offset_curve.interp(x);
+            let rotation_value = rotation_curve.interp(x);
+
+            let start_angle = -FRAC_PI_2
+                + (tail_value * 0.75 + rotation_value + offset_value * 0.25) * (2.0 * PI);
+            let sweep_angle = (head_value - tail_value) * (0.75 * PI);
+            (start_angle, sweep_angle)
+        };
+
         ConstrainedBox!(
             constraints = BoxConstraints {
                 min_width: MIN_CIRCULAR_PROGRESS_INDICATOR_SIZE,
@@ -126,12 +161,12 @@ impl ConsumerWidget<BoxProtocol> for CircularProgressIndicator {
                 painter = CircularProgressIndicatorPainter {
                     background_color: track_color,
                     value_color,
-                    head_value: todo!(),
-                    tail_value: todo!(),
+                    start_angle,
+                    sweep_angle,
                     stroke_width: self.stroke_width,
                     stroke_align: self.stroke_align,
                     stroke_cap: self.stroke_cap,
-                    indeterminate_mode: false,
+                    indeterminate_mode: self.value.is_none(),
                 },
                 foreground_painter = ()
             )
@@ -152,8 +187,8 @@ pub struct ProgressIndicatorThemeData {
 struct CircularProgressIndicatorPainter {
     background_color: Option<Color>,
     value_color: Color,
-    head_value: f32,
-    tail_value: f32,
+    start_angle: f32,
+    sweep_angle: f32,
     stroke_width: f32,
     stroke_align: f32,
     stroke_cap: Option<StrokeCap>,
@@ -177,7 +212,7 @@ impl CustomPainter for CircularProgressIndicatorPainter {
                     c: center,
                     r: (size.width / 2.0, size.height / 2.0),
                     start_angle: 0.0,
-                    sweep_angle: 2.0 * std::f32::consts::PI,
+                    sweep_angle: 2.0 * PI,
                     x_rotation: 0.0,
                 },
                 StrokePainter {
@@ -197,8 +232,8 @@ impl CustomPainter for CircularProgressIndicatorPainter {
             EllipticalArc {
                 c: center,
                 r: (size.width / 2.0, size.height / 2.0),
-                start_angle: 0.0,
-                sweep_angle: 2.0 * std::f32::consts::PI,
+                start_angle: self.start_angle,
+                sweep_angle: self.sweep_angle,
                 x_rotation: 0.0,
             },
             StrokePainter {
