@@ -9,11 +9,7 @@ use epgi_core::{
     scheduler::{get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle},
     tree::{ArcChildWidget, LayoutResults},
 };
-use std::{
-    num::NonZeroUsize,
-    sync::atomic::Ordering,
-    time::{Instant, SystemTime},
-};
+use std::{num::NonZeroUsize, sync::atomic::Ordering};
 use tracing::subscriber::SetGlobalDefaultError;
 use typed_builder::TypedBuilder;
 use vello::{

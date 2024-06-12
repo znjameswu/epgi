@@ -28,19 +28,17 @@ use crate::ThemeData;
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<CircularProgressIndicator>))]
 pub struct CircularProgressIndicator {
-    #[builder(default)]
+    #[builder(default, setter(into))]
     pub value: Option<f32>,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     pub background_color: Option<Color>,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     pub color: Option<Color>,
-    #[builder(default)]
-    pub value_color: Option<Color>,
     #[builder(default = 4.0)]
     pub stroke_width: f32,
     #[builder(default = 0.0)]
     pub stroke_align: f32,
-    #[builder(default)]
+    #[builder(default, setter(into))]
     pub stroke_cap: Option<StrokeCap>,
 }
 
@@ -110,7 +108,7 @@ impl ConsumerWidget<BoxProtocol> for CircularProgressIndicator {
             .background_color
             .or(indicator_theme.circular_track_color);
         let value_color = self
-            .value_color
+            .color
             .or(indicator_theme.color)
             // .or(todo!()) // _CircularProgressIndicatorDefaultsM3/2 just gives the same default value
             .unwrap_or(theme.color_scheme.primary);

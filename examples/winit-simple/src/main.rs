@@ -7,13 +7,7 @@ use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
 fn main() {
-    let fallback = GestureDetector!(
-        on_tap = |_job_builder| println!("Fallback tapped"),
-        child = ConstrainedBox!(
-            constraints = BoxConstraints::new_tight(30.0, 30.0),
-            child = CircularProgressIndicator!()
-        )
-    );
+    let fallback = CircularProgressIndicator!(color = Color::GREEN);
 
     let app = Suspense!(
         fallback = fallback,
@@ -32,6 +26,10 @@ fn main() {
                 )?;
                 let (pending, start_transition) = ctx.use_transition();
                 println!("transited {}, pending {}", transited, pending);
+
+                if pending {
+                    return Ok(CircularProgressIndicator!());
+                }
                 Ok(GestureDetector!(
                     on_tap = move |job_builder| {
                         println!("Tapped!");

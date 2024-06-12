@@ -1,8 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{any::Any, rc::Rc, sync::Arc};
 
 pub trait AsAny: Any {
     fn as_any(&self) -> &dyn Any;
