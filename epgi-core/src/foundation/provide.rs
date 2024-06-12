@@ -38,7 +38,7 @@ pub trait AscProvideExt {
 
 impl AscProvideExt for Asc<dyn Provide> {
     fn downcast<T: Provide>(self) -> Result<Asc<T>, Asc<dyn Provide>> {
-        if TypeId::of::<T>() == self.type_id() {
+        if TypeId::of::<T>() == self.as_ref().type_id() {
             let ptr = Asc::into_raw(self);
             unsafe { Ok(Asc::from_raw(ptr.cast())) }
         } else {

@@ -11,7 +11,6 @@ pub trait AsAny: Any {
     fn as_any_rc(self: Rc<Self>) -> Rc<dyn Any>;
     fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 
-    fn type_id(&self) -> TypeId;
     fn type_name(&self) -> &'static str;
 }
 
@@ -39,10 +38,6 @@ where
         self
     }
 
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
     fn type_name(&self) -> &'static str {
         std::any::type_name::<Self>()
     }
@@ -59,7 +54,7 @@ where
 {
     fn identical(&self, other: &Self) -> bool {
         // If both references are in scope, point to the same address and the same concrete type, then they must be identical.
-        AsAny::type_id(self.as_ref()) == AsAny::type_id(other.as_ref())
+        self.as_ref().type_id() == other.as_ref().type_id()
         // self.as_ref().as_any().type_id() == other.as_ref().as_any().type_id() // Compare inside concrete types
             && (self.as_ref() as *const _ as *const ()) == (other.as_ref() as *const _ as *const ())
     }
