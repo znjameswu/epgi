@@ -513,7 +513,8 @@ pub trait BoxMultiChildHitTest: BoxMultiChildRender {
             return NotHit;
         }
 
-        let hit_children = self.hit_test_child(ctx, size, offset, memo, children, adopted_children);
+        let hit_children =
+            self.hit_test_children(ctx, size, offset, memo, children, adopted_children);
         if hit_children {
             return Hit;
         }
@@ -523,7 +524,8 @@ pub trait BoxMultiChildHitTest: BoxMultiChildRender {
     }
 
     /// Returns: If a child has claimed the hit
-    fn hit_test_child(
+    #[allow(unused_variables)]
+    fn hit_test_children(
         &self,
         ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &BoxSize,
@@ -531,7 +533,14 @@ pub trait BoxMultiChildHitTest: BoxMultiChildRender {
         memo: &Self::LayoutMemo,
         children: &Vec<ArcBoxRenderObject>,
         adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
-    ) -> bool;
+    ) -> bool {
+        for child in children.iter() {
+            if ctx.hit_test(child.clone()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // The reason we separate hit_test_self from hit_test_children is that we do not wish to leak hit_position into hit_test_children
     // Therefore preventing implementer to perform transform on hit_position rather than recording it in

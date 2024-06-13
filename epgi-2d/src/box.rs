@@ -33,6 +33,43 @@ impl BoxConstraints {
             max_height: height,
         }
     }
+
+    pub fn new_tight_width(width: f32) -> Self {
+        Self {
+            min_width: width,
+            max_width: width,
+            min_height: 0.0,
+            max_height: f32::INFINITY,
+        }
+    }
+
+    pub fn new_tight_height(height: f32) -> Self {
+        Self {
+            min_width: 0.0,
+            max_width: f32::INFINITY,
+            min_height: height,
+            max_height: height,
+        }
+    }
+
+    pub fn new_max_width(width: f32) -> Self {
+        Self {
+            min_width: 0.0,
+            max_width: width,
+            min_height: 0.0,
+            max_height: f32::INFINITY,
+        }
+    }
+
+    pub fn new_max_height(height: f32) -> Self {
+        Self {
+            min_width: 0.0,
+            max_width: f32::INFINITY,
+            min_height: 0.0,
+            max_height: height,
+        }
+    }
+
     #[inline(always)]
     pub fn enforce(&self, other: &Self) -> Self {
         Self {
