@@ -77,7 +77,7 @@ pub struct AppLauncher {
 impl AppLauncher {
     pub fn run(self) {
         pretty_env_logger::init();
-        let render_cx = RenderContext::new().unwrap();
+        let render_cx = RenderContext::new();
 
         let (tx, rx) = unbounded_channel_sync();
         let mut main_state = MainState {
