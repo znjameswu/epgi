@@ -7,6 +7,7 @@ Performance hazard
     3. Resolution 
 2. https://github.com/rust-lang/rust/issues/121719
     1. Effect: PointerEvent, if designed as a union of struct types, will generate horrendous asm when accessing common fields
+3. parley's layout building is single-threaded because they use a mutable global (or at least app-wide) `FontContext`
 
 
 Code-style hazard
