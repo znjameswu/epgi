@@ -10,7 +10,6 @@ use epgi_core::{
     foundation::{
         set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
     },
-    max,
     template::ImplByTemplate,
     tree::{BuildContext, ChildWidget, ElementBase, RenderAction, Widget},
 };
@@ -191,9 +190,25 @@ pub enum MainAxisSize {
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Flex>))]
 pub struct Flex {
+    /// The direction to use as the main axis.
     pub direction: Axis,
+    /// How the children should be placed along the main axis.
+    #[builder(default = MainAxisAlignment::Start)]
     pub main_axis_alignment: MainAxisAlignment,
+    /// How much space should be occupied in the main axis.
+    ///
+    /// After allocating space to children, there might be some remaining free
+    /// space. This value controls whether to maximize or minimize the amount of
+    /// free space, subject to the incoming layout constraints.
+    ///
+    /// If some children have a non-zero flex factors (and none have a fit of
+    /// [FlexFit::Loose]), they will expand to consume all the available space and
+    /// there will be no remaining free space to maximize or minimize, making this
+    /// value irrelevant to the final layout.
+    #[builder(default = MainAxisSize::Max)]
     pub main_axis_size: MainAxisSize,
+    /// How the children should be placed along the cross axis.
+    #[builder(default = CrossAxisAlignment::Center)]
     pub cross_axis_alignment: CrossAxisAlignment,
     #[builder(default = false)]
     pub flip_main_axis: bool,
@@ -287,6 +302,13 @@ impl BoxMultiChildElement for FlexElement {
     }
 }
 
+pub(super) fn get_flex_conf(children: &Vec<Flexible>) -> Vec<(u32, FlexFit)> {
+    children
+        .iter()
+        .map(|flexible| (flexible.flex, flexible.fit))
+        .collect()
+}
+
 impl BoxMultiChildRenderElement for FlexElement {
     type Render = RenderFlex;
 
@@ -296,30 +318,28 @@ impl BoxMultiChildRenderElement for FlexElement {
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flex_conf: widget
-                .children
-                .iter()
-                .map(|flexible| (flexible.flex, flexible.fit))
-                .collect(),
+            flex_conf: get_flex_conf(&widget.children),
             flip_main_axis: widget.flip_main_axis,
             flip_cross_axis: widget.flip_cross_axis,
         }
     }
 
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
-        max!(
-            set_if_changed(&mut render.direction, widget.direction)
-                .then_some(RenderAction::Relayout),
-            set_if_changed(&mut render.main_axis_alignment, widget.main_axis_alignment)
-                .then_some(RenderAction::Relayout),
-            set_if_changed(&mut render.main_axis_size, widget.main_axis_size)
-                .then_some(RenderAction::Relayout),
+        [
+            set_if_changed(&mut render.direction, widget.direction),
+            set_if_changed(&mut render.main_axis_alignment, widget.main_axis_alignment),
+            set_if_changed(&mut render.main_axis_size, widget.main_axis_size),
             set_if_changed(
                 &mut render.cross_axis_alignment,
-                widget.cross_axis_alignment
-            )
-            .then_some(RenderAction::Relayout),
-        )
+                widget.cross_axis_alignment,
+            ),
+            set_if_changed(&mut render.flex_conf, get_flex_conf(&widget.children)),
+            set_if_changed(&mut render.flip_main_axis, widget.flip_main_axis),
+            set_if_changed(&mut render.flip_cross_axis, widget.flip_cross_axis),
+        ]
+        .iter()
+        .any(|&changed| changed)
+        .then_some(RenderAction::Relayout)
     }
 }
 
