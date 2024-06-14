@@ -1,58 +1,62 @@
 use dpi::LogicalSize;
 use epgi_2d::{BoxConstraints, Color};
-use epgi_common::{ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
+use epgi_common::{Center, ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
 use epgi_core::{SuspendableBuilder, Suspense};
-use epgi_material::{CircularProgressIndicator, MaterialApp};
+use epgi_material::{CircularProgressIndicator, MaterialApp, Scaffold};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
 fn main() {
     let fallback = CircularProgressIndicator!(color = Color::GREEN);
 
-    let app = Suspense!(
-        fallback = fallback,
-        child = SuspendableBuilder!(
-            builder = move |ctx| {
-                let (transited, set_transited) = ctx.use_state(false);
-                let _res = ctx.use_future(
-                    |transited| {
-                        tokio::spawn(async move {
-                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            println!("Future resolved with {}!", transited)
-                        })
-                        .map(Result::unwrap)
-                    },
-                    transited,
-                )?;
-                let (pending, start_transition) = ctx.use_transition();
-                println!("transited {}, pending {}", transited, pending);
-
-                if pending {
-                    return Ok(CircularProgressIndicator!());
-                }
-                Ok(GestureDetector!(
-                    on_tap = move |job_builder| {
-                        println!("Tapped!");
-                        start_transition.start(
-                            |job_builder| {
-                                set_transited.set(!transited, job_builder);
+    let app = Scaffold!(
+        body = Center!(
+            child = Suspense!(
+                fallback = fallback,
+                child = SuspendableBuilder!(
+                    builder = move |ctx| {
+                        let (transited, set_transited) = ctx.use_state(false);
+                        let _res = ctx.use_future(
+                            |transited| {
+                                tokio::spawn(async move {
+                                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                                    println!("Future resolved with {}!", transited)
+                                })
+                                .map(Result::unwrap)
                             },
-                            job_builder,
-                        );
-                    },
-                    child = ConstrainedBox!(
-                        constraints = BoxConstraints::new_tight(
-                            if pending { 50.0 } else { 100.0 },
-                            if transited { 100.0 } else { 50.0 }
-                        ),
-                        child = ColorBox! {
-                            color = Color::rgb(0.0, 1.0, 0.0),
-                            child = PhantomBox!()
+                            transited,
+                        )?;
+                        let (pending, start_transition) = ctx.use_transition();
+                        println!("transited {}, pending {}", transited, pending);
+
+                        if pending {
+                            return Ok(CircularProgressIndicator!());
                         }
-                    )
-                ))
-            }
-        ),
+                        Ok(GestureDetector!(
+                            on_tap = move |job_builder| {
+                                println!("Tapped!");
+                                start_transition.start(
+                                    |job_builder| {
+                                        set_transited.set(!transited, job_builder);
+                                    },
+                                    job_builder,
+                                );
+                            },
+                            child = ConstrainedBox!(
+                                constraints = BoxConstraints::new_tight(
+                                    if pending { 50.0 } else { 100.0 },
+                                    if transited { 100.0 } else { 50.0 }
+                                ),
+                                child = ColorBox! {
+                                    color = Color::rgb(0.0, 1.0, 0.0),
+                                    child = PhantomBox!()
+                                }
+                            )
+                        ))
+                    }
+                ),
+            )
+        )
     );
 
     let app = MaterialApp!(child = app);

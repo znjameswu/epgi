@@ -293,10 +293,10 @@ impl ApplicationHandler for MainState<'_> {
                 self.render();
             }
             Resized(winit::dpi::PhysicalSize { width, height }) => {
-                // main_state.size(Size {
-                //     width: width.into(),
-                //     height: height.into(),
-                // });
+                self.update_size(BoxSize {
+                    width: width as _,
+                    height: height as _,
+                });
             }
             ModifiersChanged(modifiers) => {}
             CursorMoved { .. }
