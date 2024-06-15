@@ -1,3 +1,6 @@
+mod paragraph;
+pub use paragraph::*;
+
 use std::{borrow::Cow, sync::Arc};
 
 use epgi_core::foundation::{Asc, SyncMutex};
@@ -6,10 +9,10 @@ use crate::{BoxSize, Color};
 
 pub struct TextSpan {
     pub text: Asc<str>,
-    pub style: TextStyle,
+    pub style: LocalTextStyle,
 }
 
-pub struct TextStyle {
+pub struct LocalTextStyle {
     pub background_color: Option<Color>,
     pub color: Option<Color>,
     pub debug_label: &'static str,
