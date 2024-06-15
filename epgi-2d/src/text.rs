@@ -12,6 +12,31 @@ pub struct TextSpan {
     pub style: LocalTextStyle,
 }
 
+pub struct TextStyle {
+    pub background_color: Color,
+    pub color: Color,
+    pub debug_label: &'static str,
+    pub decoration: TextDecoration,
+    pub decoration_color: Color,
+    pub decoration_style: TextDecorationStyle,
+    pub decoration_thickness: f32,
+    pub font_family: FontFamily,
+    pub font_family_fallback: Vec<FontFamily>,
+    pub font_features: FontFeatures,
+    pub font_size: f32,
+    pub font_style: FontStyle,
+    pub font_variations: Vec<FontVariation>,
+    pub font_weight: FontWeight,
+    pub height: f32,
+    pub leading_distribution: TextLeadingDistribution,
+    pub letter_spacing: f32,
+    pub locale: Option<&'static str>,
+    pub overflow: TextOverFlow,
+    // pub shadows: Vec<>,
+    pub text_baseline: TextBaseline,
+    pub word_spacing: f32,
+}
+
 pub struct LocalTextStyle {
     pub background_color: Option<Color>,
     pub color: Option<Color>,
@@ -20,16 +45,17 @@ pub struct LocalTextStyle {
     pub decoration_color: Option<Color>,
     pub decoration_style: Option<TextDecorationStyle>,
     pub decoration_thickness: Option<f32>,
-    pub font_family: Option<&'static str>,
-    pub font_family_fallback: Option<Vec<&'static str>>,
+    pub font_family: Option<FontFamily>,
+    pub font_family_fallback: Option<Vec<FontFamily>>,
     pub font_features: Option<FontFeatures>,
     pub font_size: Option<f32>,
     pub font_style: Option<FontStyle>,
     pub font_variations: Option<Vec<FontVariation>>,
+    pub font_weight: Option<FontWeight>,
     pub height: Option<f32>,
     pub leading_distribution: Option<TextLeadingDistribution>,
     pub letter_spacing: Option<f32>,
-    pub local: Option<Locale>,
+    pub locale: Option<&'static str>,
     pub overflow: Option<TextOverFlow>,
     // pub shadows: Option<Vec<>>,
     pub text_baseline: Option<TextBaseline>,
@@ -46,11 +72,15 @@ pub enum TextDecorationStyle {
     Wavy,
 }
 
+pub type FontFamily = parley::style::FontFamily<'static>;
+
 pub struct FontFeatures {}
 
-pub struct FontStyle {}
+pub type FontStyle = parley::style::FontStyle;
 
 pub struct FontVariation {}
+
+pub type FontWeight = parley::style::FontWeight;
 
 pub enum TextLeadingDistribution {
     Proportional,
@@ -70,8 +100,6 @@ pub enum TextBaseline {
     Alphabetic,
     Ideographic,
 }
-
-
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ParleyBrush(pub vello::peniko::Brush);

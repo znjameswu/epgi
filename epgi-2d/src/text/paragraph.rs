@@ -1,24 +1,37 @@
-use std::{borrow::Cow, ops::Range};
+use std::{borrow::Cow, default, ops::Range};
 
 use epgi_core::foundation::{Arc, Asc, SyncMutex};
+use parley::style::StyleProperty;
 
-use crate::{BoxSize, LocalTextStyle, ParleyBrush, TextAlign};
+use crate::{BoxSize, LocalTextStyle, ParleyBrush, TextAlign, TextStyle};
 
 pub struct ParagraphBuilder {
     text: Cow<'static, str>,
-    current_styles: Vec<(parley::style::StyleProperty<'static, ParleyBrush>, usize)>,
-
-    styles: Vec<(
-        parley::style::StyleProperty<'static, ParleyBrush>,
-        Range<usize>,
-    )>,
+    current_styles: Vec<(StyleProperty<'static, ParleyBrush>, usize)>,
+    default_styles: Vec<StyleProperty<'static, ParleyBrush>>,
+    styles: Vec<(StyleProperty<'static, ParleyBrush>, Range<usize>)>,
 }
 
 impl ParagraphBuilder {
-    pub fn new(text: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new(text: impl Into<Cow<'static, str>>, default_style: &TextStyle) -> Self {
+        let mut default_styles = Vec::new();
+
+        StyleProperty::Locale(default_style.locale);
+        StyleProperty::LetterSpacing(default_style.letter_spacing);
+        StyleProperty::WordSpacing(default_style.word_spacing);
+        vec![
+            StyleProperty::Brush(ParleyBrush(vello::peniko::Brush::Solid(
+                default_style.color,
+            ))),
+            StyleProperty::FontSize(default_style.font_size),
+            StyleProperty::FontStyle(default_style.font_style),
+            StyleProperty::FontWeight(default_style.font_weight),
+            StyleProperty::LineHeight(default_style.height),
+        ];
         Self {
             text: text.into(),
             current_styles: Default::default(),
+            default_styles,
             styles: Default::default(),
         }
     }
@@ -39,23 +52,21 @@ pub struct Paragraph {
 
 struct ParagraphInner {
     text: Cow<'static, str>,
-    styles: Vec<(
-        parley::style::StyleProperty<'static, ParleyBrush>,
-        Range<usize>,
-    )>,
-    font_ctx: FontContext,
+    styles: Vec<(StyleProperty<'static, ParleyBrush>, Range<usize>)>,
+    default_styles: Vec<StyleProperty<'static, ParleyBrush>>,
 }
 
 impl Paragraph {
-    fn layout(&self, width: Option<f32>, alignment: TextAlign) -> ParagraphLayout {
+    pub fn layout(&self, width: Option<f32>, alignment: TextAlign) -> ParagraphLayout {
         let mut layout_ctx = parley::LayoutContext::new();
-        let mut font_ctx = self.inner.font_ctx.0.lock();
+        let mut font_ctx = GLOBAL_FONT_CONTEXT.lock();
         let mut layout_builder = layout_ctx.ranged_builder(&mut font_ctx, &self.inner.text, 1.0);
-        // layout_builder.push_default(&parley::style::StyleProperty::Brush(self.brush.clone()));
-        // builder.push_default(&StyleProperty::FontSize(self.text_size));
-        // builder.push_default(&StyleProperty::FontStack(self.font));
-        // builder.push_default(&StyleProperty::FontWeight(self.weight));
-        // builder.push_default(&StyleProperty::FontStyle(self.style));
+        for default_style in self.inner.default_styles.iter() {
+            layout_builder.push_default(default_style)
+        }
+        for (style, range) in self.inner.styles.iter() {
+            layout_builder.push(style, range.clone())
+        }
         let mut layout = layout_builder.build();
         drop(font_ctx);
         layout.break_all_lines(width, alignment);
@@ -74,6 +85,8 @@ impl ParagraphLayout {
     }
 }
 
-// For some reason, parley uses a RefCell in its FontContext
-// We have no other choice but to go for a mutex
-pub struct FontContext(Asc<SyncMutex<parley::FontContext>>);
+lazy_static::lazy_static! {
+    // For some reason, parley uses a RefCell in its FontContext
+    // We have no other choice but to go for a mutex
+    static ref GLOBAL_FONT_CONTEXT: Asc<SyncMutex<parley::FontContext>> = Asc::new(SyncMutex::new(parley::FontContext::default()));
+}

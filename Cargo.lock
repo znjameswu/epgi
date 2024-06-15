@@ -1189,6 +1189,7 @@ name = "epgi-2d"
 version = "0.1.0"
 dependencies = [
  "epgi-core",
+ "lazy_static",
  "masonry",
  "parley",
  "peniko",
