@@ -9,9 +9,7 @@ use epgi_core::{
 use peniko::BrushRef;
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
-    Affine2dPaintContextExt, BlendMode, Fill, IntoKurbo, Line, Painter, ParagraphLayout, Point2d,
-    StrokePainter,
+    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand, Affine2dPaintContextExt, BlendMode, Fill, IntoKurbo, Line, Painter, Paragraph, Point2d, StrokePainter
 };
 
 pub use peniko::kurbo::{Cap as StrokeCap, Dashes, Join, Stroke};
@@ -306,10 +304,10 @@ pub fn render_text<'a>(
     paint_ctx: &mut VelloPaintContext<'a>,
     // scratch_scene: &mut Scene,
     transform: Affine2d,
-    layout: &ParagraphLayout, // layout: &Layout<TextBrush>,
+    paragraph: &Paragraph, // layout: &Layout<TextBrush>,
 ) {
     // scratch_scene.reset();
-    for line in layout.0.lines() {
+    for line in paragraph.layout.lines() {
         let metrics = &line.metrics();
         for glyph_run in line.glyph_runs() {
             let mut x = glyph_run.offset();
