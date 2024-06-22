@@ -10,63 +10,9 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct TextSpan {
-    text: Cow<'static, str>,
-    style: Option<LocalTextStyle>,
+    pub text: Cow<'static, str>,
+    pub style: Option<LocalTextStyle>,
 }
-
-// pub struct ParagraphBuilder {
-//     pub spans: Vec<TextSpan>,
-//     pub default_style: TextStyle,
-//     // text: Cow<'a, str>,
-
-//     // current_styles: Vec<(StyleProperty<'a, ParleyBrush>, usize)>,
-//     // default_styles: Vec<StyleProperty<'a, ParleyBrush>>,
-//     // styles: Vec<(StyleProperty<'a, ParleyBrush>, Range<usize>)>,
-// }
-
-// impl<'a> ParagraphBuilder<'a> {
-//     pub fn new_empty(default_style: TextStyle) -> Self {
-//         Self {
-//             spans: Vec::new(),
-//             default_style,
-//         }
-//     }
-//     pub fn new(text: impl Into<Cow<'a, str>>, default_style: TextStyle) -> Self {
-//         // let font_stack = if default_style.font_family_fallback.is_empty() {
-//         //     FontStack::Single(default_style.font_family.clone())
-//         // } else {
-//         //     FontStack::List()
-//         // };
-//         // let mut default_styles = vec![
-//         //     StyleProperty::FontStack(FontStack::),
-//         //     StyleProperty::FontSize(default_style.font_size),
-//         //     StyleProperty::Locale(default_style.locale),
-//         //     StyleProperty::LetterSpacing(default_style.letter_spacing),
-//         //     StyleProperty::WordSpacing(default_style.word_spacing),
-//         //     StyleProperty::Brush(ParleyBrush(vello::peniko::Brush::Solid(
-//         //         default_style.color,
-//         //     ))),
-//         //     StyleProperty::FontStyle(default_style.font_style),
-//         //     StyleProperty::FontWeight(default_style.font_weight),
-//         //     StyleProperty::LineHeight(default_style.height),
-//         // ];
-//         // Self {
-//         //     text: text.into(),
-//         //     current_styles: Default::default(),
-//         //     default_styles,
-//         //     styles: Default::default(),
-//         // }
-//     }
-
-//     pub fn push(&mut self, text: impl Into<Cow<'static, str>>, style: Option<LocalTextStyle>) {
-//         self.text.to_mut().push_str(&text.into());
-//         if let Some(style) = style {}
-//     }
-
-//     pub fn build(self) -> Paragraph {
-//         todo!()
-//     }
-// }
 
 pub struct Paragraph {
     pub(crate) layout: parley::Layout<ParleyBrush>,

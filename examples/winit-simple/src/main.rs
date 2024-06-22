@@ -1,8 +1,10 @@
 use dpi::LogicalSize;
-use epgi_2d::{BoxConstraints, Color};
-use epgi_common::{Center, ColorBox, ConstrainedBox, GestureDetector, PhantomBox};
+use epgi_2d::{BoxConstraints, BoxMultiLineAdapter, Color, RichText, TextSpan};
+use epgi_common::{Center, ColorBox, ConstrainedBox, GestureDetector};
 use epgi_core::{SuspendableBuilder, Suspense};
-use epgi_material::{CircularProgressIndicator, MaterialApp, Scaffold};
+use epgi_material::{
+    black_mountain_view_body_medium, CircularProgressIndicator, MaterialApp, Scaffold,
+};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
@@ -47,10 +49,20 @@ fn main() {
                                     if pending { 50.0 } else { 100.0 },
                                     if transited { 100.0 } else { 50.0 }
                                 ),
-                                child = ColorBox! {
+                                child = ColorBox!(
                                     color = Color::rgb(0.0, 1.0, 0.0),
-                                    child = PhantomBox!()
-                                }
+                                    child = Center!(
+                                        child = BoxMultiLineAdapter!(
+                                            child = RichText!(
+                                                text = TextSpan {
+                                                    text: "Hello world!".into(),
+                                                    style: None
+                                                },
+                                                style = black_mountain_view_body_medium(),
+                                            )
+                                        )
+                                    )
+                                )
                             )
                         ))
                     }

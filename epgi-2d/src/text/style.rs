@@ -2,7 +2,7 @@ use crate::Color;
 
 #[derive(Clone, Debug)]
 pub struct TextStyle {
-    pub background_color: Color,
+    pub background_color: Option<Color>,
     pub color: Color,
     pub debug_label: &'static str,
     pub decoration: TextDecoration,
@@ -28,7 +28,7 @@ pub struct TextStyle {
 
 #[derive(Clone, Debug)]
 pub struct LocalTextStyle {
-    pub background_color: Option<Color>,
+    pub background_color: Option<Option<Color>>,
     pub color: Option<Color>,
     pub debug_label: &'static str,
     pub decoration: Option<TextDecoration>,
@@ -75,6 +75,12 @@ pub type FontFamily = parley::style::FontFamily<'static>;
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct FontFeatures {}
 
+impl Default for FontFeatures {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
 pub type FontStyle = parley::style::FontStyle;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -97,6 +103,12 @@ pub enum TextOverFlow {
     Fade,
     Ellipsis,
     Visible,
+}
+
+impl Default for TextOverFlow {
+    fn default() -> Self {
+        TextOverFlow::Clip
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]

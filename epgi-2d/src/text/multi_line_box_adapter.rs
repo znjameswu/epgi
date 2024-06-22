@@ -4,7 +4,7 @@ use epgi_core::{
         AdapterRender, AdapterRenderTemplate, ImplByTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -25,10 +25,8 @@ impl Widget for MultiLineBoxAdapter {
     type ChildProtocol = BoxProtocol;
     type Element = MultiLineBoxAdapterElement;
 
-    fn into_arc_widget(
-        self: std::sync::Arc<Self>,
-    ) -> <Self::Element as epgi_core::tree::ElementBase>::ArcWidget {
-        todo!()
+    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+        self
     }
 }
 

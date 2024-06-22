@@ -5,18 +5,24 @@ use epgi_core::{
     template::{ImplByTemplate, LeafElement, LeafElementTemplate, LeafRender, LeafRenderTemplate},
     tree::{BuildContext, ElementBase, RenderAction, Widget},
 };
+use epgi_macro::Declarative;
+use typed_builder::TypedBuilder;
 
 use crate::{
     Affine2dCanvas, Affine2dPaintContextExt, MultiLineConstraints, MultiLineOffset,
     MultiLineProtocol, MultiLineSize, Paragraph, TextAlign, TextSpan, TextStyle,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<RichText>))]
 pub struct RichText {
     /// Single item optimization
+    #[builder(default, setter(strip_option))]
     pub text: Option<TextSpan>,
+    #[builder(default)]
     pub text_spans: Vec<TextSpan>,
     pub style: TextStyle,
+    #[builder(default = TextAlign::Start)]
     pub text_align: TextAlign,
 }
 
