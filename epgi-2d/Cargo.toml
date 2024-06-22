@@ -9,12 +9,17 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bitflags = "2.5"
 epgi-core = { workspace = true }
+epgi-macro = { workspace = true }
 peniko = { workspace = true }
+tracing = { workspace = true }
+typed-builder = { workspace = true }
 vello_encoding = { workspace = true }
 vello = { workspace = true }
 parley = { workspace = true }
 masonry = { workspace = true }
+lazy_static = "1.4"
 
 [features]
 default = []

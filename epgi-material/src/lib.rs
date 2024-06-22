@@ -12,3 +12,6 @@ pub use scaffold::*;
 
 mod theme_data;
 pub use theme_data::*;
+
+mod typography;
+pub use typography::*;

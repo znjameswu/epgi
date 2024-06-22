@@ -22,8 +22,5 @@ pub use phantom_box::*;
 mod physics;
 pub use physics::*;
 
-mod text;
-pub use text::*;
-
 mod utils;
 pub use utils::*;

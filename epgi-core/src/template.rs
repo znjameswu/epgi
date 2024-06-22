@@ -1,3 +1,6 @@
+mod adapter;
+pub use adapter::*;
+
 mod element;
 pub use element::*;
 

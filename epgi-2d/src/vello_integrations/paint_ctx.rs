@@ -9,9 +9,8 @@ use epgi_core::{
 use peniko::BrushRef;
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
-    Affine2dPaintContextExt, BlendMode, Fill, IntoKurbo, Line, Painter, ParagraphLayout, Point2d,
-    StrokePainter,
+    render_text, Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding,
+    Affine2dPaintCommand, BlendMode, Fill, IntoKurbo, Painter,
 };
 
 pub use peniko::kurbo::{Cap as StrokeCap, Dashes, Join, Stroke};
@@ -63,8 +62,8 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
                 alpha,
             } => self.push_layer(blend, alpha, self.curr_config.transform, shape),
             PopClip => self.pop_layer(),
-            DrawParagraph { paragraph } => {
-                render_text(self, self.curr_config.transform, &paragraph)
+            DrawParagraph { paragraph, offset } => {
+                render_text(self, self.curr_config.transform, &paragraph, offset)
             }
         }
     }
@@ -260,182 +259,6 @@ impl<'a> VelloPaintContext<'a> {
             EllipticalArc(x) => encoding.encode_shape(&x.into_kurbo(), is_fill),
             QuadBez(x) => encoding.encode_shape(&x.into_kurbo(), is_fill),
             CubicBez(x) => encoding.encode_shape(&x.into_kurbo(), is_fill),
-        }
-    }
-}
-
-// pub fn render_text(encoding: &mut Affine2dEncoding, transform: Affine2d, layout: &ParagraphLayout) {
-//     for line in layout.0.lines() {
-//         for glyph_run in line.glyph_runs() {
-//             let mut x = glyph_run.offset();
-//             let y = glyph_run.baseline();
-//             let run = glyph_run.run();
-//             let font = run.font();
-//             let font_size = run.font_size();
-//             let font = vello::peniko::Font::new(font.data().0.clone(), font.index());
-//             let style = glyph_run.style();
-//             let coords = run
-//                 .normalized_coords()
-//                 .iter()
-//                 .map(|coord| vello::skrifa::instance::NormalizedCoord::from_bits(*coord))
-//                 .collect::<Vec<_>>();
-//             vello::DrawGlyphs::new(encoding, &font)
-//                 .brush(&style.brush.0)
-//                 .transform(transform.into_kurbo())
-//                 .font_size(font_size)
-//                 .normalized_coords(&coords)
-//                 .draw(
-//                     Fill::NonZero,
-//                     glyph_run.glyphs().map(|glyph| {
-//                         let gx = x + glyph.x;
-//                         let gy = y - glyph.y;
-//                         x += glyph.advance;
-//                         vello::glyph::Glyph {
-//                             id: glyph.id as _,
-//                             x: gx,
-//                             y: gy,
-//                         }
-//                     }),
-//                 );
-//         }
-//     }
-// }
-
-// Adapted from masonry::text_helper.rs
-pub fn render_text<'a>(
-    paint_ctx: &mut VelloPaintContext<'a>,
-    // scratch_scene: &mut Scene,
-    transform: Affine2d,
-    layout: &ParagraphLayout, // layout: &Layout<TextBrush>,
-) {
-    // scratch_scene.reset();
-    for line in layout.0.lines() {
-        let metrics = &line.metrics();
-        for glyph_run in line.glyph_runs() {
-            let mut x = glyph_run.offset();
-            let y = glyph_run.baseline();
-            let run = glyph_run.run();
-            let font = run.font();
-            let font_size = run.font_size();
-            let synthesis = run.synthesis();
-            let glyph_xform = synthesis
-                .skew()
-                .map(|angle| vello::kurbo::Affine::skew(angle.to_radians().tan() as f64, 0.0));
-            let style = glyph_run.style();
-            let coords = run
-                .normalized_coords()
-                .iter()
-                .map(|coord| vello::skrifa::instance::NormalizedCoord::from_bits(*coord))
-                .collect::<Vec<_>>();
-            // let text_brush = match &style.brush {
-            //     TextBrush::Normal(text_brush) => text_brush,
-            //     TextBrush::Highlight { text, fill } => {
-            //         encoding.fill(
-            //             Fill::EvenOdd,
-            //             transform,
-            //             fill,
-            //             None,
-            //             &Rect::from_origin_size(
-            //                 (
-            //                     glyph_run.offset() as f64,
-            //                     // The y coordinate is on the baseline. We want to draw from the top of the line
-            //                     // (Note that we are in a y-down coordinate system)
-            //                     (y - metrics.ascent - metrics.leading) as f64,
-            //                 ),
-            //                 (glyph_run.advance() as f64, metrics.size() as f64),
-            //             ),
-            //         );
-
-            //         text
-            //     }
-            // };
-            vello::DrawGlyphs::new(&mut paint_ctx.curr_fragment_encoding, &font)
-                .brush(&style.brush.0)
-                .transform(transform.into_kurbo())
-                .glyph_transform(glyph_xform)
-                .font_size(font_size)
-                .normalized_coords(&coords)
-                .draw(
-                    Fill::NonZero,
-                    glyph_run.glyphs().map(|glyph| {
-                        let gx = x + glyph.x;
-                        let gy = y - glyph.y;
-                        x += glyph.advance;
-                        vello::glyph::Glyph {
-                            id: glyph.id as _,
-                            x: gx,
-                            y: gy,
-                        }
-                    }),
-                );
-            if let Some(underline) = &style.underline {
-                let underline_brush = &underline.brush;
-                let run_metrics = glyph_run.run().metrics();
-                let offset = match underline.offset {
-                    Some(offset) => offset,
-                    None => run_metrics.underline_offset,
-                };
-                let width = match underline.size {
-                    Some(size) => size,
-                    None => run_metrics.underline_size,
-                };
-                // The `offset` is the distance from the baseline to the *top* of the underline
-                // so we move the line down by half the width
-                // Remember that we are using a y-down coordinate system
-                let y = glyph_run.baseline() - offset + width / 2.;
-
-                paint_ctx.stroke_line(
-                    Line {
-                        p0: Point2d {
-                            x: glyph_run.offset(),
-                            y,
-                        },
-                        p1: Point2d {
-                            x: glyph_run.offset() + glyph_run.advance(),
-                            y,
-                        },
-                    },
-                    StrokePainter {
-                        stroke: Stroke::new(width.into()),
-                        brush: underline_brush.0.clone(),
-                        transform: None,
-                    },
-                );
-            }
-            if let Some(strikethrough) = &style.strikethrough {
-                let strikethrough_brush = &strikethrough.brush;
-                let run_metrics = glyph_run.run().metrics();
-                let offset = match strikethrough.offset {
-                    Some(offset) => offset,
-                    None => run_metrics.strikethrough_offset,
-                };
-                let width = match strikethrough.size {
-                    Some(size) => size,
-                    None => run_metrics.strikethrough_size,
-                };
-                // The `offset` is the distance from the baseline to the *top* of the strikethrough
-                // so we move the line down by half the width
-                // Remember that we are using a y-down coordinate system
-                let y = glyph_run.baseline() - offset + width / 2.;
-
-                paint_ctx.stroke_line(
-                    Line {
-                        p0: Point2d {
-                            x: glyph_run.offset(),
-                            y,
-                        },
-                        p1: Point2d {
-                            x: glyph_run.offset() + glyph_run.advance(),
-                            y,
-                        },
-                    },
-                    StrokePainter {
-                        stroke: Stroke::new(width.into()),
-                        brush: strikethrough_brush.0.clone(),
-                        transform: None,
-                    },
-                );
-            }
         }
     }
 }
