@@ -246,7 +246,7 @@ impl LayerProtocol for BoxProtocol {
     }
 
     fn offset_layer_transform(offset: &BoxOffset, transform: &Affine2d) -> Affine2d {
-        transform.mul_translation(*offset)
+        transform.mul_translation(offset)
     }
 
     fn offset_layer_composition_config(

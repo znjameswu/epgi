@@ -1190,11 +1190,13 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.5.0",
  "epgi-core",
+ "epgi-macro",
  "lazy_static",
  "masonry",
  "parley",
  "peniko",
  "tracing",
+ "typed-builder",
  "vello 0.2.0",
  "vello_encoding 0.2.0",
 ]

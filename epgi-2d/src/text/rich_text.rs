@@ -14,9 +14,10 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct RichText {
     /// Single item optimization
-    pub text: TextSpan,
+    pub text: Option<TextSpan>,
     pub text_spans: Vec<TextSpan>,
     pub style: TextStyle,
+    pub text_align: TextAlign,
 }
 
 impl Widget for RichText {
@@ -54,11 +55,26 @@ impl LeafElement for RichTextElement {
     }
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
-        todo!()
+        let spans = widget
+            .text
+            .as_ref()
+            .map(std::slice::from_ref)
+            .unwrap_or(widget.text_spans.as_slice());
+        RenderRichText {
+            paragraph: Paragraph::new(spans, &widget.style),
+            text_align: widget.text_align,
+        }
     }
 
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
-        todo!()
+        let spans = widget
+            .text
+            .as_ref()
+            .map(std::slice::from_ref)
+            .unwrap_or(widget.text_spans.as_slice());
+        render.paragraph = Paragraph::new(spans, &widget.style);
+        render.text_align = widget.text_align;
+        Some(RenderAction::Relayout)
     }
 }
 

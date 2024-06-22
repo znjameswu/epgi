@@ -8,6 +8,7 @@ use crate::{
     TextStyle,
 };
 
+#[derive(Clone, Debug)]
 pub struct TextSpan {
     text: Cow<'static, str>,
     style: Option<LocalTextStyle>,

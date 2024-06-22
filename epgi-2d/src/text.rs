@@ -10,19 +10,17 @@ pub use single_line::*;
 mod multi_line;
 pub use multi_line::*;
 
-use epgi_core::foundation::Asc;
+mod box_multi_line_adapter;
+pub use box_multi_line_adapter::*;
+
+mod multi_line_box_adapter;
+pub use multi_line_box_adapter::*;
 
 use crate::Color;
 
 pub enum TextDirection {
     LTR,
     RTL,
-}
-
-#[derive(Clone, Debug)]
-pub struct TextSpan {
-    pub text: Asc<str>,
-    pub style: LocalTextStyle,
 }
 
 #[derive(Clone, Debug)]

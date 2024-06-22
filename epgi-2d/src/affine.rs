@@ -16,11 +16,11 @@ impl Affine2d {
         }
     }
 
-    pub fn from_translation(offset: BoxOffset) -> Self {
+    pub fn from_translation(offset: &BoxOffset) -> Self {
         Self([1.0, 0.0, 0.0, 1.0, offset.x, offset.y])
     }
 
-    pub fn mul_translation(&self, offset: BoxOffset) -> Self {
+    pub fn mul_translation(&self, offset: &BoxOffset) -> Self {
         let a = [
             offset.x * self.0[0],
             offset.x * self.0[1],

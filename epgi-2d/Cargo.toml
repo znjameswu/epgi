@@ -11,8 +11,10 @@ license.workspace = true
 [dependencies]
 bitflags = "2.5"
 epgi-core = { workspace = true }
+epgi-macro = { workspace = true }
 peniko = { workspace = true }
-tracing = {workspace = true}
+tracing = { workspace = true }
+typed-builder = { workspace = true }
 vello_encoding = { workspace = true }
 vello = { workspace = true }
 parley = { workspace = true }
