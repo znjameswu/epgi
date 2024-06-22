@@ -9,7 +9,9 @@ use epgi_core::{
 use peniko::BrushRef;
 
 use crate::{
-    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand, Affine2dPaintContextExt, BlendMode, Fill, IntoKurbo, Line, Painter, Paragraph, Point2d, StrokePainter
+    Affine2d, Affine2dCanvas, Affine2dCanvasShape, Affine2dEncoding, Affine2dPaintCommand,
+    Affine2dPaintContextExt, BlendMode, Fill, IntoKurbo, Line, Painter, Paragraph, Point2d,
+    StrokePainter,
 };
 
 pub use peniko::kurbo::{Cap as StrokeCap, Dashes, Join, Stroke};
@@ -61,7 +63,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
                 alpha,
             } => self.push_layer(blend, alpha, self.curr_config.transform, shape),
             PopClip => self.pop_layer(),
-            DrawParagraph { paragraph } => {
+            DrawParagraph { paragraph, offset } => {
                 render_text(self, self.curr_config.transform, &paragraph)
             }
         }

@@ -1188,11 +1188,13 @@ dependencies = [
 name = "epgi-2d"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.5.0",
  "epgi-core",
  "lazy_static",
  "masonry",
  "parley",
  "peniko",
+ "tracing",
  "vello 0.2.0",
  "vello_encoding 0.2.0",
 ]

@@ -1,24 +1,38 @@
 mod paragraph;
 pub use paragraph::*;
 
-use std::{borrow::Cow, sync::Arc};
+mod rich_text;
+pub use rich_text::*;
 
-use epgi_core::foundation::{Asc, SyncMutex};
+mod single_line;
+pub use single_line::*;
 
-use crate::{BoxSize, Color};
+mod multi_line;
+pub use multi_line::*;
 
+use epgi_core::foundation::Asc;
+
+use crate::Color;
+
+pub enum TextDirection {
+    LTR,
+    RTL,
+}
+
+#[derive(Clone, Debug)]
 pub struct TextSpan {
     pub text: Asc<str>,
     pub style: LocalTextStyle,
 }
 
+#[derive(Clone, Debug)]
 pub struct TextStyle {
     pub background_color: Color,
     pub color: Color,
     pub debug_label: &'static str,
     pub decoration: TextDecoration,
     pub decoration_color: Color,
-    pub decoration_style: TextDecorationStyle,
+    // pub decoration_style: TextDecorationStyle,
     pub decoration_thickness: f32,
     pub font_family: FontFamily,
     pub font_family_fallback: Vec<FontFamily>,
@@ -37,6 +51,7 @@ pub struct TextStyle {
     pub word_spacing: f32,
 }
 
+#[derive(Clone, Debug)]
 pub struct LocalTextStyle {
     pub background_color: Option<Color>,
     pub color: Option<Color>,
@@ -62,8 +77,16 @@ pub struct LocalTextStyle {
     pub word_spacing: Option<f32>,
 }
 
-pub struct TextDecoration {}
+bitflags::bitflags! {
+    #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+    pub struct TextDecoration: u8 {
+        const LINE_THROUGH = 1;
+        const OVERLINE = 0b10;
+        const UNDERLINE = 0b100;
+    }
+}
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TextDecorationStyle {
     Solid,
     Double,
@@ -74,21 +97,26 @@ pub enum TextDecorationStyle {
 
 pub type FontFamily = parley::style::FontFamily<'static>;
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct FontFeatures {}
 
 pub type FontStyle = parley::style::FontStyle;
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct FontVariation {}
 
 pub type FontWeight = parley::style::FontWeight;
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TextLeadingDistribution {
     Proportional,
     Even,
 }
 
-pub struct Locale {}
+// #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+// pub struct Locale {}
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TextOverFlow {
     Clip,
     Fade,
@@ -96,6 +124,7 @@ pub enum TextOverFlow {
     Visible,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TextBaseline {
     Alphabetic,
     Ideographic,

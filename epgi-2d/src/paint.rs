@@ -7,8 +7,8 @@ pub use peniko::{
 };
 
 use crate::{
-    Affine2d, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Paragraph, Point2d,
-    QuadBez, RRect, Rect, RingSector,
+    Affine2d, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, MultiLineOffset,
+    Paragraph, Point2d, QuadBez, RRect, Rect, RingSector,
 };
 
 pub enum Affine2dPaintCommand<'a> {
@@ -26,7 +26,7 @@ pub enum Affine2dPaintCommand<'a> {
     PopClip,
     DrawParagraph {
         paragraph: &'a Paragraph,
-        // transform: Affine2d,
+        offset: &'a MultiLineOffset, // transform: Affine2d,
     },
 }
 
@@ -174,7 +174,7 @@ pub trait Affine2dPaintContextExt {
 
     fn draw_image_rect(&mut self, image: Image, src: Rect, dst: Rect);
 
-    fn draw_paragraph(&mut self, paragraph: &Paragraph);
+    fn draw_paragraph(&mut self, paragraph: &Paragraph, offset: &MultiLineOffset);
 }
 
 impl<T: ?Sized> Affine2dPaintContextExt for T
@@ -489,8 +489,8 @@ where
     }
 
     #[inline(always)]
-    fn draw_paragraph(&mut self, paragraph: &Paragraph) {
-        self.add_command(Affine2dPaintCommand::DrawParagraph { paragraph })
+    fn draw_paragraph(&mut self, paragraph: &Paragraph, offset: &MultiLineOffset) {
+        self.add_command(Affine2dPaintCommand::DrawParagraph { paragraph, offset })
     }
 }
 
