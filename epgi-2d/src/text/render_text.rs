@@ -1,8 +1,8 @@
 use vello::kurbo::Stroke;
 
 use crate::{
-    Affine2d, Affine2dPaintContextExt, Fill, IntoKurbo, Line, Paragraph, Point2d, StrokePainter,
-    VelloPaintContext,
+    Affine2d, Affine2dPaintContextExt, Fill, IntoKurbo, Line, MultiLineOffset, Paragraph, Point2d,
+    StrokePainter, VelloPaintContext,
 };
 
 // Adapted from masonry::text_helper.rs
@@ -11,13 +11,22 @@ pub(crate) fn render_text<'a>(
     // scratch_scene: &mut Scene,
     transform: Affine2d,
     paragraph: &Paragraph, // layout: &Layout<TextBrush>,
+    offset: &MultiLineOffset,
 ) {
     // scratch_scene.reset();
-    for line in paragraph.layout.lines() {
-        let metrics = &line.metrics();
+    debug_assert_eq!(
+        offset.offsets.len(),
+        paragraph.layout.len(),
+        "A paragraph should receive the same number of offsets as its line count"
+    );
+    for (line, offset) in std::iter::zip(paragraph.layout.lines(), offset.offsets.iter()) {
+        let metrics = line.metrics();
+        let baseline_shift = offset.y - (metrics.baseline - metrics.ascent - metrics.leading * 0.5);
         for glyph_run in line.glyph_runs() {
-            let mut x = glyph_run.offset();
-            let y = glyph_run.baseline();
+            // let mut x = glyph_run.offset();
+            // let y = glyph_run.baseline(); // The glyph baseline is generated from line baseline as the glyph is generated from the iterator
+            let mut x = offset.x;
+            let y = glyph_run.baseline() + baseline_shift;
             let run = glyph_run.run();
             let font = run.font();
             let font_size = run.font_size();

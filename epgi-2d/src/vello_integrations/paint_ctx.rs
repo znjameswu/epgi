@@ -63,7 +63,7 @@ impl<'a> PaintContext for VelloPaintContext<'a> {
             } => self.push_layer(blend, alpha, self.curr_config.transform, shape),
             PopClip => self.pop_layer(),
             DrawParagraph { paragraph, offset } => {
-                render_text(self, self.curr_config.transform, &paragraph)
+                render_text(self, self.curr_config.transform, &paragraph, offset)
             }
         }
     }
