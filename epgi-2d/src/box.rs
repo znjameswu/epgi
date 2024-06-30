@@ -6,7 +6,7 @@ use epgi_core::{
     Provider,
 };
 
-use crate::{Affine2d, Affine2dCanvas, Point2d};
+use crate::{Affine2d, Affine2dCanvas, Point2d, Rect};
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoxProtocol {}
@@ -233,10 +233,7 @@ impl Protocol for BoxProtocol {
     type Canvas = Affine2dCanvas;
 
     fn position_in_shape(position: &Point2d, offset: &BoxOffset, size: &BoxSize) -> bool {
-        position.x >= offset.x
-            && position.x <= offset.x + size.width
-            && position.y >= offset.y
-            && position.y <= offset.y + size.height
+        Rect::new_point_size(*offset, *size).contains(position)
     }
 }
 

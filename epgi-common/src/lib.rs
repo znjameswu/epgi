@@ -24,3 +24,6 @@ pub use physics::*;
 
 mod utils;
 pub use utils::*;
+
+mod text;
+pub use text::*;

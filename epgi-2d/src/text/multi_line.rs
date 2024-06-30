@@ -1,6 +1,6 @@
 use epgi_core::foundation::{Intrinsics, Protocol};
 
-use crate::{Affine2dCanvas, BoxOffset, Point2d, SingleLineProtocol, SingleLineSize};
+use crate::{Affine2dCanvas, Point2d, SingleLineOffset, SingleLineProtocol, SingleLineSize};
 
 /// A simplistic multi-line text protocol.
 ///
@@ -51,7 +51,7 @@ pub struct MultiLineSize {
 
 #[derive(Clone, Debug)]
 pub struct MultiLineOffset {
-    pub offsets: Vec<BoxOffset>,
+    pub offsets: Vec<SingleLineOffset>,
 }
 
 #[derive(Clone, Copy, Debug)]

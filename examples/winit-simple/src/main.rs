@@ -1,6 +1,9 @@
 use dpi::LogicalSize;
-use epgi_2d::{BoxConstraints, BoxMultiLineAdapter, Color, RichText, TextSpan};
-use epgi_common::{Center, ColorBox, ConstrainedBox, GestureDetector};
+use epgi_2d::{BoxConstraints, Color, TextSpan};
+use epgi_common::{
+    BoxMultiLineAdapter, Center, ColorBox, ConstrainedBox, GestureDetector, MultiLine,
+    MultiLineBoxAdapter, PhantomBox, RichText,
+};
 use epgi_core::{SuspendableBuilder, Suspense};
 use epgi_material::{
     black_mountain_view_body_medium, CircularProgressIndicator, MaterialApp, Scaffold,
@@ -46,19 +49,48 @@ fn main() {
                             },
                             child = ConstrainedBox!(
                                 constraints = BoxConstraints::new_tight(
-                                    if pending { 50.0 } else { 100.0 },
-                                    if transited { 100.0 } else { 50.0 }
+                                    if transited { 150.0 } else { 200.0 },
+                                    if pending { 100.0 } else { 200.0 },
                                 ),
                                 child = ColorBox!(
                                     color = Color::rgb(0.0, 1.0, 0.0),
                                     child = Center!(
-                                        child = BoxMultiLineAdapter!(
-                                            child = RichText!(
-                                                text = TextSpan {
-                                                    text: "Hello world!".into(),
-                                                    style: None
-                                                },
-                                                style = black_mountain_view_body_medium(),
+                                        child = ColorBox!(
+                                            color = Color::rgb(0.9, 0.9, 1.0),
+                                            child = BoxMultiLineAdapter!(
+                                                child = MultiLine!(
+                                                    children = vec![
+                                                        RichText!(
+                                                            text = TextSpan {
+                                                                text: "Hello world!".into(),
+                                                                style: None
+                                                            },
+                                                            style =
+                                                                black_mountain_view_body_medium(),
+                                                        ),
+                                                        MultiLineBoxAdapter!(
+                                                            child = ConstrainedBox!(
+                                                                constraints =
+                                                                    BoxConstraints::new_tight(
+                                                                        20.0, 20.0
+                                                                    ),
+                                                                child = ColorBox!(
+                                                                    color =
+                                                                        Color::rgb(1.0, 0.0, 0.0),
+                                                                    child = PhantomBox!()
+                                                                )
+                                                            )
+                                                        ),
+                                                        RichText!(
+                                                            text = TextSpan {
+                                                                text: "Try click me".into(),
+                                                                style: None
+                                                            },
+                                                            style =
+                                                                black_mountain_view_body_medium(),
+                                                        ),
+                                                    ]
+                                                )
                                             )
                                         )
                                     )

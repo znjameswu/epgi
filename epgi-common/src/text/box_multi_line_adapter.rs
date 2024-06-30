@@ -1,3 +1,7 @@
+use epgi_2d::{
+    Affine2d, Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
+    MultiLineConstraints, MultiLineOffset, MultiLineProtocol, SingleLineOffset,
+};
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{
@@ -8,11 +12,6 @@ use epgi_core::{
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
-
-use crate::{
-    Affine2d, Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
-    MultiLineConstraints, MultiLineOffset, MultiLineProtocol,
-};
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<BoxMultiLineAdapter>))]
@@ -99,7 +98,10 @@ impl AdapterRender for RenderBoxMultiLineAdapter {
             .sizes
             .into_iter()
             .map(|size| {
-                let offset = BoxOffset { x: 0.0, y };
+                let offset = SingleLineOffset {
+                    advance: 0.0,
+                    baseline: y + size.above,
+                };
                 max_width = max_width.max(size.advance);
                 y += size.above + size.below;
                 offset

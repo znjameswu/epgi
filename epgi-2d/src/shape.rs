@@ -78,18 +78,17 @@ impl Rect {
             y: (self.t + self.b) / 2.0,
         }
     }
+
+    pub fn contains(&self, point: &Point2d) -> bool {
+        point.x >= self.l && point.x <= self.r && point.y >= self.t && point.y <= self.b
+    }
 }
 
 impl BitAnd<BoxSize> for BoxOffset {
     type Output = Rect;
 
     fn bitand(self, rhs: BoxSize) -> Self::Output {
-        Rect {
-            l: self.x,
-            t: self.y,
-            r: self.x + rhs.width,
-            b: self.y + rhs.height,
-        }
+        Rect::new_point_size(self, rhs)
     }
 }
 

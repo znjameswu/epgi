@@ -1,6 +1,5 @@
 use epgi_2d::{
-    Color, FontFamily, FontStyle, FontWeight, TextBaseline, TextDecoration,
-    TextLeadingDistribution, TextStyle,
+    Color, FontFamily, FontWeight, TextBaseline, TextDecoration, TextLeadingDistribution, TextStyle,
 };
 
 const HELSINKI_FONT_FALLBACKS: &[FontFamily] = &[

@@ -86,7 +86,7 @@ where
     > {
         let new_widgets = match E::get_child_widgets(Some(element), widget, ctx, provider_values) {
             Err(error) => return Err((children, error)),
-            Ok(child_wdiget) => child_wdiget,
+            Ok(new_widgets) => new_widgets,
         };
         Ok(default_reconcile_vec(
             children,

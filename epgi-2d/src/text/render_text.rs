@@ -1,7 +1,7 @@
 use vello::kurbo::Stroke;
 
 use crate::{
-    Affine2d, Affine2dPaintContextExt, Fill, IntoKurbo, Line, MultiLineOffset, Paragraph, Point2d,
+    Affine2d, Affine2dPaintContextExt, Fill, IntoKurbo, Line, Paragraph, Point2d, SingleLineOffset,
     StrokePainter, VelloPaintContext,
 };
 
@@ -11,22 +11,22 @@ pub(crate) fn render_text<'a>(
     // scratch_scene: &mut Scene,
     transform: Affine2d,
     paragraph: &Paragraph, // layout: &Layout<TextBrush>,
-    offset: &MultiLineOffset,
+    offsets: &[SingleLineOffset],
 ) {
     // scratch_scene.reset();
     debug_assert_eq!(
-        offset.offsets.len(),
+        offsets.len(),
         paragraph.layout.len(),
         "A paragraph should receive the same number of offsets as its line count"
     );
-    for (line, offset) in std::iter::zip(paragraph.layout.lines(), offset.offsets.iter()) {
+    for (line, offset) in std::iter::zip(paragraph.layout.lines(), offsets.iter()) {
         let metrics = line.metrics();
-        let baseline_shift = offset.y - (metrics.baseline - metrics.ascent - metrics.leading * 0.5);
+        let baseline_correction = offset.baseline - metrics.baseline;
         for glyph_run in line.glyph_runs() {
             // let mut x = glyph_run.offset();
             // let y = glyph_run.baseline(); // The glyph baseline is generated from line baseline as the glyph is generated from the iterator
-            let mut x = offset.x;
-            let y = glyph_run.baseline() + baseline_shift;
+            let mut x = offset.advance;
+            let y = glyph_run.baseline() + baseline_correction;
             let run = glyph_run.run();
             let font = run.font();
             let font_size = run.font_size();

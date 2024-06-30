@@ -1,3 +1,7 @@
+use epgi_2d::{
+    Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, MultiLineConstraints, MultiLineOffset,
+    MultiLineProtocol, MultiLineSize, SingleLineSize,
+};
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{
@@ -8,11 +12,6 @@ use epgi_core::{
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
-
-use crate::{
-    Affine2dCanvas, BoxConstraints, BoxProtocol, MultiLineConstraints, MultiLineOffset,
-    MultiLineProtocol, MultiLineSize, SingleLineSize,
-};
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<MultiLineBoxAdapter>))]
@@ -108,7 +107,7 @@ impl AdapterRender for RenderMultiLineBoxAdapter {
 
     fn perform_paint(
         &self,
-        _size: &MultiLineSize,
+        size: &MultiLineSize,
         offset: &MultiLineOffset,
         _memo: &(),
         child: &ArcChildRenderObject<BoxProtocol>,
@@ -117,7 +116,16 @@ impl AdapterRender for RenderMultiLineBoxAdapter {
         let [first_offset] = offset.offsets.as_slice() else {
             panic!("Multi-line object with a single line should only receive a single offset");
         };
-        paint_ctx.paint(child, first_offset);
+        let [first_size] = size.sizes.as_slice() else {
+            panic!("Multi-line object with a single line should only report a single size");
+        };
+        paint_ctx.paint(
+            child,
+            &BoxOffset {
+                x: first_offset.advance,
+                y: first_offset.baseline - first_size.above,
+            },
+        );
     }
 
     const NOOP_DETACH: bool = true;

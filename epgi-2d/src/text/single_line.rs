@@ -1,6 +1,6 @@
 use epgi_core::foundation::{Intrinsics, Protocol};
 
-use crate::{Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d};
+use crate::{Affine2dCanvas, BoxConstraints, Point2d, Rect};
 
 #[derive(Clone, Copy, Debug)]
 pub struct SingleLineProtocol;
@@ -21,14 +21,13 @@ impl Protocol for SingleLineProtocol {
         offset: &SingleLineOffset,
         size: &SingleLineSize,
     ) -> bool {
-        BoxProtocol::position_in_shape(
-            position,
-            offset,
-            &BoxSize {
-                width: size.advance,
-                height: size.above + size.below,
-            },
+        Rect::new_ltrb(
+            offset.advance,
+            offset.baseline - size.above,
+            offset.advance + size.advance,
+            offset.baseline + size.below,
         )
+        .contains(position)
     }
 }
 
@@ -52,7 +51,11 @@ pub struct SingleLineSize {
     // pub trailing_whitespace: f32,
 }
 
-pub type SingleLineOffset = BoxOffset;
+#[derive(Clone, Copy, Debug)]
+pub struct SingleLineOffset {
+    pub advance: f32,
+    pub baseline: f32,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct SingleLineIntrinsics;

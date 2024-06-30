@@ -1,3 +1,6 @@
+mod affine2d_multi_child;
+pub use affine2d_multi_child::*;
+
 mod box_multi_child;
 pub use box_multi_child::*;
 

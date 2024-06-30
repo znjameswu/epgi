@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use epgi_2d::{
+    Affine2dCanvas, Affine2dPaintContextExt, MultiLineConstraints, MultiLineOffset,
+    MultiLineProtocol, MultiLineSize, Paragraph, TextAlign, TextSpan, TextStyle,
+};
 use epgi_core::{
     foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{ImplByTemplate, LeafElement, LeafElementTemplate, LeafRender, LeafRenderTemplate},
@@ -7,11 +11,6 @@ use epgi_core::{
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
-
-use crate::{
-    Affine2dCanvas, Affine2dPaintContextExt, MultiLineConstraints, MultiLineOffset,
-    MultiLineProtocol, MultiLineSize, Paragraph, TextAlign, TextSpan, TextStyle,
-};
 
 #[derive(Clone, Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<RichText>))]
@@ -109,6 +108,6 @@ impl LeafRender for RenderRichText {
         offset: &MultiLineOffset,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
-        paint_ctx.draw_paragraph(&self.paragraph, offset)
+        paint_ctx.draw_paragraph(&self.paragraph, &offset.offsets)
     }
 }
