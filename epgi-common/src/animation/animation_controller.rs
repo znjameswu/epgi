@@ -215,7 +215,7 @@ impl Simulation for RepeatingSimulation {
         if self.reverse && n % 2 == 1 {
             lerp(self.max, self.min, percent)
         } else {
-            lerp(self.max, self.min, percent)
+            lerp(self.min, self.max, percent)
         }
     }
 
