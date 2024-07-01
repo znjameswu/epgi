@@ -3,7 +3,6 @@
     - Allow suspended async under inflated-suspense to commit
     - Async reconcile has_mailbox_update optimization
 - Layout intrinsics
-- Render text
 - Pointer add/remove
 - Optimize query interface probe failure cost
 

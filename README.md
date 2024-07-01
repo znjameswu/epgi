@@ -1,4 +1,4 @@
-*Warning: Experimental project
+Warning: Experimental project
 ---
 
 # EPGI: Exotically Parallel Graphical Interface
@@ -20,21 +20,36 @@ Besides, the capabilities from the Rust language and its ecosystem enables us to
 - (Almost) **Unsafe-free**. The project witnessed a single-digit trivially-provable unsafe usages. We leave most of the optimizations in the hands of compilers for Safe Rust.
 
 # Project status
-- [x] A minimal example is running, demonstrating sync reconcile, layout, paint, composite, scheduler, hooks, provider.
-- [ ] Reconciliation for async batches
-- [ ] Hit-test and event distribution
-- [ ] Keyboard
-- [ ] Complete set of hooks
-- [ ] Widgets library for actually useful UI building
+Completed:
+- A minimal example is running
+- Sync parallel reconcilliation
+- Provider and consumer
+- Basic hook system
+    - `use_state`, `use_memo`, `use_effect`, `use_reducer`
+- Suspense and transition
+- Async parallel reconcilliation
+- Basic hit-test system
+- Basic text widgets
+- Basic layout widgets
+- Prototype animation support
+
+Planned:
+- Documentation
+- Tests
+- Pointer interaction
+- Keyboard
+- Widget libraries
+    - Material design
 
 # Organization of Repo
 - `epgi-core`: Core functionalities to spin up `epgi`'s scheduler and pipeline. Does not assume canvas type, backend, or embeddings.
 - `epgi-2d`: Basic definitions and utilies for 2D affine canvas rendering. Default to use `vello` as backend.
-- `epgi-glazier`: Integrations to run `epgi` on `glazier`.
+- `epgi-winit`: Integrations to run `epgi` on `winit`.
 - `epgi-common`: Basic widget library to enabling building a minimal 2D UI.
-- [ ] `epgi-material`: Material design widget library for `epgi`.
+- `epgi-material`: Material design widget library for `epgi`.
 - [ ] `epgi-3d`: Basic definitions and utilies for 3D rendering. Default to use `bevy` as backend.
 - [ ] `epgi`: Re-export for common library users' convenience.
+- ~~`epgi-glazier`:  Integrations to run `epgi` on `glazier`.~~ (Abandoned following Xilem's decision)
 
 # License
 Licensed under either of
