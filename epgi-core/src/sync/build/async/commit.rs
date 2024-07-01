@@ -278,7 +278,7 @@ where
 
         match &mut snapshot_reborrow.inner {
             ElementSnapshotInner::AsyncInflating(async_inflating) => {
-                let (mainline, subtree_change) = Self::execute_commit_async_async_inflating(
+                let (mainline, subtree_change) = self.execute_commit_async_async_inflating(
                     async_inflating,
                     &snapshot_reborrow.widget,
                     &self.context,
@@ -289,8 +289,7 @@ where
                 snapshot_reborrow.inner = ElementSnapshotInner::Mainline(mainline);
                 subtree_change
             }
-            ElementSnapshotInner::Mainline(mainline) => Self::execute_commit_async_mainline(
-                self,
+            ElementSnapshotInner::Mainline(mainline) => self.execute_commit_async_mainline(
                 mainline,
                 &mut snapshot_reborrow.widget,
                 render_object_changes,
@@ -302,6 +301,7 @@ where
     }
 
     fn execute_commit_async_async_inflating(
+        self: &Arc<Self>,
         async_inflating: &mut AsyncInflating<E>,
         widget: &E::ArcWidget,
         element_context: &ArcElementContextNode,
@@ -321,6 +321,13 @@ where
             "Commit walk should only see a async-inflating node if its lane is completed"
         );
         let output = std::mem::replace(&mut stash.output, AsyncOutput::Gone);
+
+        Self::commit_async_read(
+            self,
+            std::mem::take(&mut stash.subscription_diff),
+            work_context.lane_pos,
+            lane_scheduler,
+        );
 
         match output {
             AsyncOutput::Completed(results) => {
