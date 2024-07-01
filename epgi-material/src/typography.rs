@@ -2,6 +2,8 @@ use epgi_2d::{
     Color, FontFamily, FontWeight, TextBaseline, TextDecoration, TextLeadingDistribution, TextStyle,
 };
 
+use crate::{ColorScheme, TextTheme};
+
 const HELSINKI_FONT_FALLBACKS: &[FontFamily] = &[
     FontFamily::Named("Ubuntu'"),
     FontFamily::Named("Cantarell'"),
@@ -17,7 +19,7 @@ pub fn black_mountain_view_body_medium() -> TextStyle {
     TextStyle {
         background_color: None,
         color: BLACK_87,
-        debug_label: "Black Helsinki",
+        debug_label: Some("Black Helsinki".into()),
         decoration: TextDecoration::empty(),
         decoration_color: Color::BLACK, // Flutter's Typography constructor has an apply function
         decoration_thickness: 1.0,      // Flutter's TextStyle default
@@ -35,5 +37,27 @@ pub fn black_mountain_view_body_medium() -> TextStyle {
         overflow: Default::default(),
         text_baseline: TextBaseline::Alphabetic,
         word_spacing: Default::default(),
+    }
+}
+
+pub struct Typography {
+    pub black: TextTheme,
+    pub white: TextTheme,
+}
+
+impl Typography {
+    pub fn material_2021(color_shceme: Option<&ColorScheme>) -> Self {
+        if color_shceme.is_some() {
+            unimplemented!()
+        }
+        // let dark = color_shceme
+        Self {
+            black: TextTheme {
+                body_medium: black_mountain_view_body_medium(),
+            },
+            white: TextTheme {
+                body_medium: black_mountain_view_body_medium(),
+            },
+        }
     }
 }

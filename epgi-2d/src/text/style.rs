@@ -1,10 +1,12 @@
+use std::borrow::Cow;
+
 use crate::Color;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct TextStyle {
     pub background_color: Option<Color>,
     pub color: Color,
-    pub debug_label: &'static str,
+    pub debug_label: Option<Cow<'static, str>>,
     pub decoration: TextDecoration,
     pub decoration_color: Color,
     // pub decoration_style: TextDecorationStyle,
@@ -26,11 +28,11 @@ pub struct TextStyle {
     pub word_spacing: f32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct LocalTextStyle {
     pub background_color: Option<Option<Color>>,
     pub color: Option<Color>,
-    pub debug_label: &'static str,
+    pub debug_label: Option<Cow<'static, str>>,
     pub decoration: Option<TextDecoration>,
     pub decoration_color: Option<Color>,
     pub decoration_style: Option<TextDecorationStyle>,
@@ -45,11 +47,52 @@ pub struct LocalTextStyle {
     pub height: Option<f32>,
     pub leading_distribution: Option<TextLeadingDistribution>,
     pub letter_spacing: Option<f32>,
-    pub locale: Option<&'static str>,
+    pub locale: Option<Option<&'static str>>,
     pub overflow: Option<TextOverFlow>,
     // pub shadows: Option<Vec<>>,
     pub text_baseline: Option<TextBaseline>,
     pub word_spacing: Option<f32>,
+}
+
+impl TextStyle {
+    pub fn merge(&self, style: LocalTextStyle) -> Self {
+        let debug_label = match (self.debug_label.as_ref(), style.debug_label) {
+            (None, None) => None,
+            (None, b @ Some(_)) => b,
+            (a @ Some(_), None) => a.cloned(),
+            (Some(a), Some(b)) => Some(Cow::Owned(format!("{a} + {b}"))),
+        };
+        Self {
+            background_color: style.background_color.unwrap_or(self.background_color),
+            color: style.color.unwrap_or(self.color),
+            debug_label,
+            decoration: style.decoration.unwrap_or(self.decoration),
+            decoration_color: style.decoration_color.unwrap_or(self.decoration_color),
+            decoration_thickness: style
+                .decoration_thickness
+                .unwrap_or(self.decoration_thickness),
+            font_family: style.font_family.unwrap_or(self.font_family),
+            font_family_fallback: style
+                .font_family_fallback
+                .unwrap_or(self.font_family_fallback.clone()),
+            font_features: style.font_features.unwrap_or(self.font_features),
+            font_size: style.font_size.unwrap_or(self.font_size),
+            font_style: style.font_style.unwrap_or(self.font_style),
+            font_variations: style
+                .font_variations
+                .unwrap_or(self.font_variations.clone()),
+            font_weight: style.font_weight.unwrap_or(self.font_weight),
+            height: style.height.unwrap_or(self.height),
+            leading_distribution: style
+                .leading_distribution
+                .unwrap_or(self.leading_distribution),
+            letter_spacing: style.letter_spacing.unwrap_or(self.letter_spacing),
+            locale: style.locale.unwrap_or(self.locale),
+            overflow: style.overflow.unwrap_or(self.overflow),
+            text_baseline: style.text_baseline.unwrap_or(self.text_baseline),
+            word_spacing: style.word_spacing.unwrap_or(self.word_spacing),
+        }
+    }
 }
 
 bitflags::bitflags! {

@@ -132,7 +132,7 @@ impl Paragraph {
                         .push(&StyleProperty::LetterSpacing(letter_spacing), range.clone());
                 }
                 if let Some(locale) = style.locale {
-                    layout_builder.push(&StyleProperty::Locale(Some(locale)), range.clone());
+                    layout_builder.push(&StyleProperty::Locale(locale), range.clone());
                 }
                 if let Some(word_spacing) = style.word_spacing {
                     layout_builder.push(&StyleProperty::WordSpacing(word_spacing), range.clone());

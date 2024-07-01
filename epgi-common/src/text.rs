@@ -9,3 +9,6 @@ pub use multi_line::*;
 
 mod rich_text;
 pub use rich_text::*;
+
+mod text;
+pub use text::*;

@@ -5,6 +5,7 @@
 - Layout intrinsics
 - Pointer add/remove
 - Optimize query interface probe failure cost
+- Find a way to remove the cloning cost inside `Text` widget without disrupting its signature
 
 
 TODOs for other crates:

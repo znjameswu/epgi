@@ -51,6 +51,7 @@ impl ConsumerWidget<BoxProtocol> for MaterialApp {
         let child = self.child.clone();
         let child = BoxProvider::value_inner(animation_frame, child);
         let child = BoxProvider::value_inner(theme_data.progress_indicator_theme.clone(), child);
+        let child = BoxProvider::value_inner(theme_data.text_theme.body_medium.clone(), child);
         let child = BoxProvider::value_inner(theme_data, child);
         child
     }

@@ -15,9 +15,10 @@ use typed_builder::TypedBuilder;
 #[derive(Clone, Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<RichText>))]
 pub struct RichText {
-    /// Single item optimization
+    /// Single item optimization. If `text` is filled, then `text_spans` will be ignored
     #[builder(default, setter(strip_option))]
     pub text: Option<TextSpan>,
+    /// If `text` is filled, then `text_spans` will be ignored
     #[builder(default)]
     pub text_spans: Vec<TextSpan>,
     pub style: TextStyle,

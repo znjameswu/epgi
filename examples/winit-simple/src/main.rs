@@ -1,13 +1,11 @@
 use dpi::LogicalSize;
-use epgi_2d::{BoxConstraints, Color, TextSpan};
+use epgi_2d::{BoxConstraints, Color};
 use epgi_common::{
     BoxMultiLineAdapter, Center, ColorBox, ConstrainedBox, GestureDetector, MultiLine,
-    MultiLineBoxAdapter, PhantomBox, RichText,
+    MultiLineBoxAdapter, MultiLineText, PhantomBox,
 };
 use epgi_core::{SuspendableBuilder, Suspense};
-use epgi_material::{
-    black_mountain_view_body_medium, CircularProgressIndicator, MaterialApp, Scaffold,
-};
+use epgi_material::{CircularProgressIndicator, MaterialApp, Scaffold};
 use epgi_winit::{AppLauncher, Window};
 use futures::FutureExt;
 
@@ -60,14 +58,7 @@ fn main() {
                                             child = BoxMultiLineAdapter!(
                                                 child = MultiLine!(
                                                     children = vec![
-                                                        RichText!(
-                                                            text = TextSpan {
-                                                                text: "Hello world!".into(),
-                                                                style: None
-                                                            },
-                                                            style =
-                                                                black_mountain_view_body_medium(),
-                                                        ),
+                                                        MultiLineText!(text = "Hello world!"),
                                                         MultiLineBoxAdapter!(
                                                             child = ConstrainedBox!(
                                                                 constraints =
@@ -81,14 +72,7 @@ fn main() {
                                                                 )
                                                             )
                                                         ),
-                                                        RichText!(
-                                                            text = TextSpan {
-                                                                text: "Try click me".into(),
-                                                                style: None
-                                                            },
-                                                            style =
-                                                                black_mountain_view_body_medium(),
-                                                        ),
+                                                        MultiLineText!(text = "Try click me"),
                                                     ]
                                                 )
                                             )
