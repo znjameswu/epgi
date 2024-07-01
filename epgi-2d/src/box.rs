@@ -52,6 +52,15 @@ impl BoxConstraints {
         }
     }
 
+    pub fn new_tight_for(width: Option<f32>, height: Option<f32>) -> Self {
+        Self {
+            min_width: width.unwrap_or(0.0),
+            max_width: width.unwrap_or(f32::INFINITY),
+            min_height: height.unwrap_or(0.0),
+            max_height: height.unwrap_or(f32::INFINITY),
+        }
+    }
+
     pub fn new_max_width(width: f32) -> Self {
         Self {
             min_width: 0.0,
@@ -115,6 +124,17 @@ impl BoxConstraints {
             max_width: self.max_width,
             min_height: 0.0,
             max_height: self.max_height,
+        }
+    }
+
+    pub fn tighten(&self, width: Option<f32>, height: Option<f32>) -> Self {
+        let width = width.map(|width| width.clamp(self.min_width, self.max_width));
+        let height = height.map(|height| height.clamp(self.min_height, self.max_height));
+        Self {
+            min_width: width.unwrap_or(self.min_width),
+            max_width: width.unwrap_or(self.max_width),
+            min_height: height.unwrap_or(self.min_height),
+            max_height: height.unwrap_or(self.max_height),
         }
     }
 }

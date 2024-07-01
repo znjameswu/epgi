@@ -12,11 +12,14 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
+use crate::ARC_PHANTOM_BOX;
+
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<ConstrainedBox>))]
 #[derive(Debug)]
 pub struct ConstrainedBox {
     pub constraints: BoxConstraints,
+    #[builder(default=ARC_PHANTOM_BOX.clone())]
     pub child: ArcChildWidget<BoxProtocol>,
 }
 

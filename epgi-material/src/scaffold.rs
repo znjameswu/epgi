@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use epgi_2d::{ArcBoxWidget, BoxProtocol, Color};
-use epgi_common::ColorBox;
+use epgi_common::ColoredBox;
 use epgi_core::{
     foundation::{Arc, Asc, AscProvideExt, InlinableDwsizeVec, Provide, SmallVecExt, TypeKey},
     nodes::{ConsumerElement, ConsumerWidget},
@@ -48,7 +48,7 @@ impl ConsumerWidget<BoxProtocol> for Scaffold {
     ) -> ArcBoxWidget {
         let theme_data = read_providers!(provider_values, ThemeData);
 
-        ColorBox!(
+        ColoredBox!(
             color = self
                 .background_color
                 .unwrap_or(theme_data.scaffold_background_color),

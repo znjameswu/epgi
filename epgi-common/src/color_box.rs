@@ -14,14 +14,14 @@ use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 #[derive(Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<ColorBox>))]
+#[builder(build_method(into=Asc<ColoredBox>))]
 #[derive(Debug)]
-pub struct ColorBox {
+pub struct ColoredBox {
     pub color: Color,
     pub child: ArcChildWidget<BoxProtocol>,
 }
 
-impl Widget for ColorBox {
+impl Widget for ColoredBox {
     type ParentProtocol = BoxProtocol;
 
     type ChildProtocol = BoxProtocol;
@@ -41,7 +41,7 @@ impl ImplByTemplate for ColorBoxElement {
 }
 
 impl BoxSingleChildElement for ColorBoxElement {
-    type ArcWidget = Asc<ColorBox>;
+    type ArcWidget = Asc<ColoredBox>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,

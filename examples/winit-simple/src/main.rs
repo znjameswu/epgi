@@ -1,8 +1,8 @@
 use dpi::LogicalSize;
-use epgi_2d::{BoxConstraints, Color};
+use epgi_2d::Color;
 use epgi_common::{
-    BoxMultiLineAdapter, Center, ColorBox, ConstrainedBox, GestureDetector, MultiLine,
-    MultiLineBoxAdapter, MultiLineText, PhantomBox,
+    BoxMultiLineAdapter, Center, Container, GestureDetector, MultiLine, MultiLineBoxAdapter,
+    MultiLineText,
 };
 use epgi_core::{SuspendableBuilder, Suspense};
 use epgi_material::{CircularProgressIndicator, MaterialApp, Scaffold};
@@ -45,37 +45,24 @@ fn main() {
                                     job_builder,
                                 );
                             },
-                            child = ConstrainedBox!(
-                                constraints = BoxConstraints::new_tight(
-                                    if transited { 150.0 } else { 200.0 },
-                                    if pending { 100.0 } else { 200.0 },
-                                ),
-                                child = ColorBox!(
-                                    color = Color::rgb(0.0, 1.0, 0.0),
-                                    child = Center!(
-                                        child = ColorBox!(
-                                            color = Color::rgb(0.9, 0.9, 1.0),
-                                            child = BoxMultiLineAdapter!(
-                                                child = MultiLine!(
-                                                    children = vec![
-                                                        MultiLineText!(text = "Hello world!"),
-                                                        MultiLineBoxAdapter!(
-                                                            child = ConstrainedBox!(
-                                                                constraints =
-                                                                    BoxConstraints::new_tight(
-                                                                        20.0, 20.0
-                                                                    ),
-                                                                child = ColorBox!(
-                                                                    color =
-                                                                        Color::rgb(1.0, 0.0, 0.0),
-                                                                    child = PhantomBox!()
-                                                                )
-                                                            )
-                                                        ),
-                                                        MultiLineText!(text = "Try click me"),
-                                                    ]
-                                                )
-                                            )
+                            child = Container!(
+                                width = if transited { 150.0 } else { 200.0 },
+                                height = if pending { 100.0 } else { 200.0 },
+                                color = Color::GRAY,
+                                child = Center!(
+                                    child = BoxMultiLineAdapter!(
+                                        child = MultiLine!(
+                                            children = vec![
+                                                MultiLineText!(text = "Hello world!"),
+                                                MultiLineBoxAdapter!(
+                                                    child = Container!(
+                                                        width = 20.0,
+                                                        height = 20.0,
+                                                        color = Color::RED
+                                                    )
+                                                ),
+                                                MultiLineText!(text = "Try click me"),
+                                            ]
                                         )
                                     )
                                 )
