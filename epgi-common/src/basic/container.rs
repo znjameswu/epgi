@@ -7,14 +7,15 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use crate::{Align, Alignment, ColoredBox, ConstrainedBox, ARC_PHANTOM_BOX};
+use crate::{Align, Alignment, ColoredBox, ConstrainedBox, EdgeInsets, Padding, ARC_PHANTOM_BOX};
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Container>))]
 pub struct Container {
     #[builder(default, setter(strip_option, into))]
     pub alignment: Option<Alignment>,
-    // pub padding: Padding,
+    #[builder(default, setter(strip_option, into))]
+    pub padding: Option<EdgeInsets>,
     #[builder(default, setter(strip_option, into))]
     pub color: Option<Color>,
     // TODO: Decoration
@@ -24,7 +25,8 @@ pub struct Container {
     pub height: Option<f32>,
     #[builder(default, setter(strip_option, into))]
     pub constraints: Option<BoxConstraints>,
-    // pub margin: Padding,
+    #[builder(default, setter(strip_option, into))]
+    pub margin: Option<EdgeInsets>,
     // TODO: transform
     #[builder(default=ARC_PHANTOM_BOX.clone())]
     pub child: ArcBoxWidget,
@@ -48,6 +50,10 @@ impl ComponentWidget<BoxProtocol> for Container {
             child = Align!(alignment, child);
         }
 
+        if let Some(padding) = self.padding {
+            child = Padding!(padding, child)
+        }
+
         if let Some(color) = self.color {
             child = ColoredBox!(color, child);
         }
@@ -63,6 +69,10 @@ impl ComponentWidget<BoxProtocol> for Container {
         };
         if let Some(constraints) = effective_constraints {
             child = ConstrainedBox!(constraints, child)
+        }
+
+        if let Some(margin) = self.margin {
+            child = Padding!(padding = margin, child)
         }
         return child;
     }
