@@ -48,7 +48,7 @@ impl Widget for Row {
     type Element = RowElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
-        todo!()
+        self
     }
 }
 

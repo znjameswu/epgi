@@ -1,7 +1,7 @@
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
-    foundation::Arc,
+    foundation::{Arc, PtrEq},
     scheduler::JobBuilder,
     tree::{AweakElementContextNode, BuildContext, Effect, Hook, HookIndex, HookState, Update},
 };
@@ -54,6 +54,14 @@ pub struct DispatchReducer<T> {
     node: AweakElementContextNode,
     self_index: HookIndex,
     phantom: PhantomData<T>,
+}
+
+impl<T> PartialEq for DispatchReducer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        PtrEq(&self.node) == PtrEq(&other.node)
+            && self.self_index == other.self_index
+            && self.phantom == other.phantom
+    }
 }
 
 pub(super) struct ReducerHook<T: Reduce, F: FnOnce() -> T> {

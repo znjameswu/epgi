@@ -12,8 +12,8 @@ use crate::{
     tree::{ArcAnyWidget, ArcChildWidget, ArcWidget, BuildContext, ElementBase, Widget, WidgetExt},
 };
 
-pub trait ConsumerWidget<P: Protocol>:
-    Widget<Element = ConsumerElement<P>, ParentProtocol = P, ChildProtocol = P> + WidgetExt
+pub trait SuspendableConsumerWidget<P: Protocol>:
+    Widget<Element = SuspendableConsumerElement<P>, ParentProtocol = P, ChildProtocol = P> + WidgetExt
 {
     #[allow(unused_variables)]
     fn get_consumed_types(&self) -> Cow<[TypeKey]>;
@@ -22,11 +22,11 @@ pub trait ConsumerWidget<P: Protocol>:
         &self,
         ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> ArcChildWidget<P>;
+    ) -> Result<ArcChildWidget<P>, BuildSuspendedError>;
 }
 
-impl<P: Protocol> ArcWidget for Asc<dyn ConsumerWidget<P>> {
-    type Element = ConsumerElement<P>;
+impl<P: Protocol> ArcWidget for Asc<dyn SuspendableConsumerWidget<P>> {
+    type Element = SuspendableConsumerElement<P>;
 
     fn into_any_widget(self) -> ArcAnyWidget {
         self.as_arc_any_widget()
@@ -46,16 +46,16 @@ impl<P: Protocol> ArcWidget for Asc<dyn ConsumerWidget<P>> {
 }
 
 #[derive(Default, Clone)]
-pub struct ConsumerElement<P: Protocol>(PhantomData<P>);
+pub struct SuspendableConsumerElement<P: Protocol>(PhantomData<P>);
 
-impl<P: Protocol> ImplByTemplate for ConsumerElement<P> {
+impl<P: Protocol> ImplByTemplate for SuspendableConsumerElement<P> {
     type Template = SingleChildElementTemplate<false, false>;
 }
 
-impl<P: Protocol> SingleChildElement for ConsumerElement<P> {
+impl<P: Protocol> SingleChildElement for SuspendableConsumerElement<P> {
     type ParentProtocol = P;
     type ChildProtocol = P;
-    type ArcWidget = Asc<dyn ConsumerWidget<P>>;
+    type ArcWidget = Asc<dyn SuspendableConsumerWidget<P>>;
 
     fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
         widget.get_consumed_types()
@@ -67,7 +67,7 @@ impl<P: Protocol> SingleChildElement for ConsumerElement<P> {
         ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<ArcChildWidget<Self::ChildProtocol>, BuildSuspendedError> {
-        Ok(widget.build(ctx, provider_values))
+        widget.build(ctx, provider_values)
     }
 
     fn create_element(_widget: &Self::ArcWidget) -> Self {
@@ -76,10 +76,13 @@ impl<P: Protocol> SingleChildElement for ConsumerElement<P> {
 }
 
 #[derive(Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Consumer<T, F, P>>))]
-pub struct Consumer<
+#[builder(build_method(into=Asc<SuspendableConsumer<T, F, P>>))]
+pub struct SuspendableConsumer<
     T: Provide,
-    F: Fn(&mut BuildContext, Asc<T>) -> ArcChildWidget<P> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext, Asc<T>) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
     P: Protocol,
 > {
     pub builder: F,
@@ -89,38 +92,47 @@ pub struct Consumer<
     type_key: TypeKey,
 }
 
-impl<T, F, P> std::fmt::Debug for Consumer<T, F, P>
+impl<T, F, P> std::fmt::Debug for SuspendableConsumer<T, F, P>
 where
     T: Provide,
-    F: Fn(&mut BuildContext, Asc<T>) -> ArcChildWidget<P> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext, Asc<T>) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
     P: Protocol,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Consumer")
+        f.debug_struct("SuspendableConsumer")
             .field("Type", &TypeKey::of::<T>())
             .finish()
     }
 }
 
-impl<T, F, P> Widget for Consumer<T, F, P>
+impl<T, F, P> Widget for SuspendableConsumer<T, F, P>
 where
     T: Provide,
-    F: Fn(&mut BuildContext, Asc<T>) -> ArcChildWidget<P> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext, Asc<T>) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
     P: Protocol,
 {
     type ParentProtocol = P;
     type ChildProtocol = P;
-    type Element = ConsumerElement<P>;
+    type Element = SuspendableConsumerElement<P>;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
 
-impl<T, F, P> ConsumerWidget<P> for Consumer<T, F, P>
+impl<T, F, P> SuspendableConsumerWidget<P> for SuspendableConsumer<T, F, P>
 where
     T: Provide,
-    F: Fn(&mut BuildContext, Asc<T>) -> ArcChildWidget<P> + Send + Sync + 'static,
+    F: Fn(&mut BuildContext, Asc<T>) -> Result<ArcChildWidget<P>, BuildSuspendedError>
+        + Send
+        + Sync
+        + 'static,
     P: Protocol,
 {
     fn get_consumed_types(&self) -> Cow<[TypeKey]> {
@@ -131,11 +143,11 @@ where
         &self,
         ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> ArcChildWidget<P> {
+    ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
         assert_eq!(
             provider_values.len(),
             1,
-            "Consumer widget should only receive exactly one provider value"
+            "SuspendableConsumer widget should only receive exactly one provider value"
         );
         let value = provider_values
             .into_iter()
@@ -149,13 +161,13 @@ where
     }
 }
 
-macro_rules! impl_multi_consumer {
+macro_rules! impl_multi_suspendable_consumer {
     ($name: ident, $count: literal, $($t:ident),*) => {
         #[derive(Declarative, TypedBuilder)]
         #[builder(build_method(into=Asc<$name<$($t),*, F, P>>))]
         pub struct $name<
             $($t: Provide),*,
-            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> ArcChildWidget<P> + Send + Sync + 'static,
+            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
             P: Protocol,
         > {
             pub builder: F,
@@ -168,11 +180,11 @@ macro_rules! impl_multi_consumer {
         impl<$($t),*, F, P> std::fmt::Debug for $name<$($t),*, F, P>
         where
             $($t: Provide),*,
-            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> ArcChildWidget<P> + Send + Sync + 'static,
+            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
             P: Protocol,
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("Consumer")
+                f.debug_struct("SuspendableConsumer")
                     .field("Types", &self.type_keys)
                     .finish()
             }
@@ -181,12 +193,12 @@ macro_rules! impl_multi_consumer {
         impl<$($t),*, F, P> Widget for $name<$($t),*, F, P>
         where
             $($t: Provide),*,
-            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> ArcChildWidget<P> + Send + Sync + 'static,
+            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
             P: Protocol,
         {
             type ParentProtocol = P;
             type ChildProtocol = P;
-            type Element = ConsumerElement<P>;
+            type Element = SuspendableConsumerElement<P>;
 
             fn into_arc_widget(
                 self: std::sync::Arc<Self>,
@@ -195,10 +207,10 @@ macro_rules! impl_multi_consumer {
             }
         }
 
-        impl<$($t),*, F, P> ConsumerWidget<P> for $name<$($t),*, F, P>
+        impl<$($t),*, F, P> SuspendableConsumerWidget<P> for $name<$($t),*, F, P>
         where
             $($t: Provide),*,
-            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> ArcChildWidget<P> + Send + Sync + 'static,
+            F: Fn(&mut BuildContext, $(Asc<$t>),*) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
             P: Protocol,
         {
             fn get_consumed_types(&self) -> Cow<[TypeKey]> {
@@ -209,7 +221,7 @@ macro_rules! impl_multi_consumer {
                 &self,
                 ctx: &mut BuildContext,
                 provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-            ) -> ArcChildWidget<P> {
+            ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
                 assert_eq!(
                     provider_values.len(),
                     $count,
@@ -232,6 +244,6 @@ macro_rules! impl_multi_consumer {
     };
 }
 
-impl_multi_consumer!(Consumer2, 2, T1, T2);
-impl_multi_consumer!(Consumer3, 3, T1, T2, T3);
-impl_multi_consumer!(Consumer4, 4, T1, T2, T3, T4);
+impl_multi_suspendable_consumer!(SuspendableConsumer2, 2, T1, T2);
+impl_multi_suspendable_consumer!(SuspendableConsumer3, 3, T1, T2, T3);
+impl_multi_suspendable_consumer!(SuspendableConsumer4, 4, T1, T2, T3, T4);

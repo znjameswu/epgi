@@ -1,9 +1,6 @@
 use dpi::LogicalSize;
 use epgi_2d::Color;
-use epgi_common::{
-    BoxMultiLineAdapter, Center, Container, GestureDetector, MultiLine, MultiLineBoxAdapter,
-    MultiLineText,
-};
+use epgi_common::{Center, GestureDetector, Text};
 use epgi_core::{SuspendableBuilder, Suspense};
 use epgi_material::{CircularProgressIndicator, MaterialApp, Scaffold};
 use epgi_winit::{AppLauncher, Window};
@@ -11,7 +8,6 @@ use futures::FutureExt;
 
 fn main() {
     let fallback = CircularProgressIndicator!(color = Color::GREEN);
-
     let app = Scaffold!(
         body = Center!(
             child = Suspense!(
@@ -30,7 +26,6 @@ fn main() {
                             transited,
                         )?;
                         let (pending, start_transition) = ctx.use_transition();
-                        println!("transited {}, pending {}", transited, pending);
 
                         if pending {
                             return Ok(CircularProgressIndicator!());
@@ -45,28 +40,11 @@ fn main() {
                                     job_builder,
                                 );
                             },
-                            child = Container!(
-                                width = if transited { 150.0 } else { 200.0 },
-                                height = if pending { 100.0 } else { 200.0 },
-                                color = Color::GRAY,
-                                child = Center!(
-                                    child = BoxMultiLineAdapter!(
-                                        child = MultiLine!(
-                                            children = vec![
-                                                MultiLineText!(text = "Hello world!"),
-                                                MultiLineBoxAdapter!(
-                                                    child = Container!(
-                                                        width = 20.0,
-                                                        height = 20.0,
-                                                        color = Color::RED
-                                                    )
-                                                ),
-                                                MultiLineText!(text = "Try click me"),
-                                            ]
-                                        )
-                                    )
-                                )
-                            )
+                            child = if !transited {
+                                Text!(text = "Hello world!")
+                            } else {
+                                Text!(text = "Hello world, again!")
+                            }
                         ))
                     }
                 ),

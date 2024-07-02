@@ -9,7 +9,7 @@ members = [
     "epgi-material",
     "epgi-winit",
     # We have to manually expand each sub-item to exclude defunt glazier example https://github.com/rust-lang/cargo/issues/6745
-    "examples/winit-simple",
+    "examples/winit-simple", "examples/rocket-science",
 ]
 resolver = "2"
 

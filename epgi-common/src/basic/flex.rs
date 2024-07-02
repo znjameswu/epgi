@@ -270,7 +270,7 @@ impl Widget for Flex {
     type Element = FlexElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
-        todo!()
+        self
     }
 }
 

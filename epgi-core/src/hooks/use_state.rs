@@ -54,7 +54,7 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct SetState<T> {
     dispatch: DispatchReducer<UseStateReducer<T>>,
 }
