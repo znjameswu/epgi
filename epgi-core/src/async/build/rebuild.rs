@@ -96,7 +96,17 @@ impl<E: FullElement> ElementNode<E> {
                     |(child_work_context, handle, barrier), item| {
                         use ElementReconcileItem::*;
                         match item {
-                            Keep(node) => node,
+                            Keep(node) => {
+                                let node_clone = node.clone();
+                                async_threadpool.spawn(move || {
+                                    node_clone.visit_and_work_async(
+                                        child_work_context,
+                                        handle,
+                                        barrier,
+                                    );
+                                });
+                                node
+                            }
                             Update(pair) => {
                                 let node = pair.element();
                                 async_threadpool.spawn(move || {

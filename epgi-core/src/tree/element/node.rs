@@ -55,6 +55,7 @@ pub trait ChildElementNode<PP: Protocol>:
     AnyElementNode
     + crate::sync::ChildElementSyncReconcileExt<PP>
     + crate::sync::ChildElementAsyncCommitExt<PP>
+    + crate::r#async::ChildElementAsyncReconcileExt<PP>
     + Send
     + Sync
     + 'static
