@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use dpi::LogicalSize;
-use epgi_2d::{ArcBoxWidget, BoxProvider, Color};
-use epgi_common::{Center, Column, Container, FlexFit, Flexible, GestureDetector, Row, Text};
+use epgi_2d::{ArcBoxWidget, BoxProvider, Color, FontWeight, LocalTextStyle};
+use epgi_common::{
+    Alignment, Center, Column, Container, EdgeInsets, FlexFit, Flexible, GestureDetector, Row, Text,
+};
 use epgi_core::{
     foundation::Asc,
     hooks::SetState,
@@ -32,150 +34,145 @@ struct Hint {
     content: &'static str,
 }
 
-lazy_static! {
-    static ref HINTS_DATABASE: HashMap<usize, Hint> = [
-        (
-            0,
-            Hint {
-                speaker_name: "Alice",
-                content: "Pointy side up",
-            },
-        ),
-        (
-            1,
-            Hint {
-                speaker_name: "Bob",
-                content: "Flamey side down",
-            },
-        ),
-        (
-            2,
-            Hint {
-                speaker_name: "Carol",
-                content: "Get up",
-            },
-        ),
-        (
-            3,
-            Hint {
-                speaker_name: "David",
-                content: "Get down",
-            },
-        ),
-        (
-            4,
-            Hint {
-                speaker_name: "Eve",
-                content: "Do not explode (optional)",
-            },
-        ),
-        (
-            5,
-            Hint {
-                speaker_name: "Jebediah Kerman",
-                content: "*Kerbal squeaks*",
-            },
-        ),
-    ]
-    .into_iter()
-    .collect();
-}
-
 fn main() {
     let fallback = CircularProgressIndicator!(color = Color::GREEN);
 
-    let app_bar = Row!(
-        children = vec![
-            Flexible {
-                flex: 1,
-                fit: FlexFit::Tight,
-                child: Text!(text = "How to build a rocket")
-            },
-            Consumer2!(
-                builder = |ctx, state: Asc<MyAppState>, set_state: Asc<SetState<MyAppState>>| {
-                    let (pending, start_transition) = ctx.use_transition();
-                    Container!(
-                        height = 80.0,
-                        width = 100.0,
-                        child = if pending {
-                            CircularProgressIndicator!()
-                        } else {
-                            GestureDetector!(
-                                on_tap = move |job_builder| {
-                                    start_transition.start(
-                                        |job_builder| {
-                                            set_state.set(state.one_more_hint(), job_builder);
-                                        },
-                                        job_builder,
-                                    );
-                                },
-                                child = Text!(text = "Request one more hints")
-                            )
-                        }
+    let app_bar = Container!(
+        height = 100.0,
+        color = Color::rgba8(0x21, 0x96, 0xF3, 0xFF,),
+        child = Row!(
+            children = vec![
+                Flexible {
+                    flex: 1,
+                    fit: FlexFit::Tight,
+                    child: Container!(
+                        padding = EdgeInsets::new_all(10.0),
+                        alignment = Alignment::CENTER_LEFT,
+                        child = Text!(
+                            text = "How to build a rocket",
+                            style = LocalTextStyle {
+                                color: Some(Color::WHITE),
+                                font_size: Some(32.0),
+                                font_weight: Some(FontWeight::BOLD),
+                                ..Default::default()
+                            }
+                        )
                     )
                 },
-            )
-            .into()
-        ]
+                Consumer2!(
+                    builder = |ctx,
+                               state: Asc<MyAppState>,
+                               set_state: Asc<SetState<MyAppState>>| {
+                        let (pending, start_transition) = ctx.use_transition();
+                        Container!(
+                            height = 80.0,
+                            width = 100.0,
+                            alignment = Alignment::CENTER,
+                            child = if pending {
+                                Center!(child = CircularProgressIndicator!(color = Color::WHITE))
+                            } else {
+                                GestureDetector!(
+                                    on_tap = move |job_builder| {
+                                        start_transition.start(
+                                            |job_builder| {
+                                                set_state.set(state.one_more_hint(), job_builder);
+                                            },
+                                            job_builder,
+                                        );
+                                    },
+                                    child = Text!(
+                                        text = "Request one more hints",
+                                        style = LocalTextStyle {
+                                            color: Some(Color::WHITE),
+                                            ..Default::default()
+                                        }
+                                    )
+                                )
+                            }
+                        )
+                    },
+                )
+                .into()
+            ]
+        )
     );
 
     fn build_hint(id: usize) -> ArcBoxWidget {
-        Suspense!(
-            fallback = CircularProgressIndicator!(color = Color::GREEN),
-            child = Row!(
-                children = vec![
-                    SuspendableBuilder!(
-                        builder = move |ctx| {
-                            let speaker_name = ctx.use_future(
-                                |id| {
-                                    tokio::spawn(async move {
-                                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                                        HINTS_DATABASE.get(&id).map(|hint| hint.speaker_name)
-                                    })
-                                    .map(Result::unwrap)
-                                },
-                                id,
-                            )?;
-                            if let Some(speaker_name) = speaker_name {
-                                Ok(Text!(text = format!("{} says:", speaker_name)))
-                            } else {
-                                Ok(Text!(text = "Error: speaker not found"))
-                            }
-                        }
-                    )
-                    .into(),
-                    Flexible {
-                        flex: 1,
-                        fit: FlexFit::Tight,
-                        child: Center!(
-                            child = Suspense!(
-                                fallback = CircularProgressIndicator!(),
-                                child = SuspendableBuilder!(
-                                    builder = move |ctx| {
-                                        let hint_content = ctx.use_future(
-                                            |id| {
-                                                tokio::spawn(async move {
-                                                    tokio::time::sleep(
-                                                        std::time::Duration::from_secs(4),
-                                                    )
-                                                    .await;
-                                                    HINTS_DATABASE.get(&id).map(|hint| hint.content)
-                                                })
-                                                .map(Result::unwrap)
-                                            },
-                                            id,
-                                        )?;
-                                        if let Some(hint_content) = hint_content {
-                                            Ok(Text!(text = hint_content))
-                                        } else {
-                                            Ok(Text!(text = "Error: hint not found"))
-                                        }
+        Container!(
+            height = 60.0,
+            color = Color::LIGHT_GRAY,
+            margin = EdgeInsets::new_all(3.0),
+            child = Suspense!(
+                fallback = Center!(child = CircularProgressIndicator!()),
+                child = Row!(
+                    children = vec![
+                        Container!(
+                            width = 100.0,
+                            color = Color::WHITE,
+                            alignment = Alignment::CENTER_LEFT,
+                            padding = EdgeInsets::new_all(5.0),
+                            margin = EdgeInsets::new_all(3.0),
+                            child = SuspendableBuilder!(
+                                builder = move |ctx| {
+                                    let speaker_name = ctx.use_future(
+                                        |id| {
+                                            tokio::spawn(async move {
+                                                tokio::time::sleep(std::time::Duration::from_secs(
+                                                    2,
+                                                ))
+                                                .await;
+                                                HINTS_DATABASE
+                                                    .get(&id)
+                                                    .map(|hint| hint.speaker_name)
+                                            })
+                                            .map(Result::unwrap)
+                                        },
+                                        id,
+                                    )?;
+                                    if let Some(speaker_name) = speaker_name {
+                                        Ok(Text!(text = format!("{} says:", speaker_name)))
+                                    } else {
+                                        Ok(Text!(text = "Error: speaker not found"))
                                     }
-                                )
+                                }
                             )
                         )
-                    }
-                ]
+                        .into(),
+                        Flexible {
+                            flex: 1,
+                            fit: FlexFit::Tight,
+                            child: Center!(
+                                child = Suspense!(
+                                    fallback = Center!(child = CircularProgressIndicator!()),
+                                    child = SuspendableBuilder!(
+                                        builder = move |ctx| {
+                                            let hint_content = ctx.use_future(
+                                                |id| {
+                                                    tokio::spawn(async move {
+                                                        tokio::time::sleep(
+                                                            std::time::Duration::from_secs(4),
+                                                        )
+                                                        .await;
+                                                        HINTS_DATABASE
+                                                            .get(&id)
+                                                            .map(|hint| hint.content)
+                                                    })
+                                                    .map(Result::unwrap)
+                                                },
+                                                id,
+                                            )?;
+                                            if let Some(hint_content) = hint_content {
+                                                Ok(Text!(text = hint_content))
+                                            } else {
+                                                Ok(Text!(text = "Error: hint not found"))
+                                            }
+                                        }
+                                    )
+                                )
+                            )
+                        }
+                    ]
+                )
             )
         )
     }
@@ -195,12 +192,8 @@ fn main() {
                     },
                     state.requested_hints_count,
                 )?;
-                let child = Column!(
-                    children = ids
-                        .into_iter()
-                        .map(|id| Builder!(builder = move |ctx| { build_hint(id) }).into())
-                        .collect()
-                );
+                let child =
+                    Column!(children = ids.into_iter().map(|id| build_hint(id).into()).collect());
                 Ok(child)
             }
         )
@@ -270,4 +263,53 @@ fn main() {
         .window(window_attributes)
         .build()
         .run();
+}
+
+lazy_static! {
+    static ref HINTS_DATABASE: HashMap<usize, Hint> = [
+        (
+            0,
+            Hint {
+                speaker_name: "Alice",
+                content: "Pointy side up",
+            },
+        ),
+        (
+            1,
+            Hint {
+                speaker_name: "Bob",
+                content: "Flamey side down",
+            },
+        ),
+        (
+            2,
+            Hint {
+                speaker_name: "Carol",
+                content: "Get up",
+            },
+        ),
+        (
+            3,
+            Hint {
+                speaker_name: "David",
+                content: "Get down",
+            },
+        ),
+        (
+            4,
+            Hint {
+                speaker_name: "Eve",
+                content: "Do not explode (optional)",
+            },
+        ),
+        (
+            5,
+            Hint {
+                speaker_name: "Jebediah Kerman",
+                content: "*Kerbal squeaks*",
+            },
+        ),
+    ]
+    .into_iter()
+    .collect();
 }

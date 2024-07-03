@@ -30,7 +30,15 @@ pub struct Alignment {
 }
 
 impl Alignment {
+    pub const TOP_LEFT: Self = Self { x: -1.0, y: -1.0 };
+    pub const TOP_CENTER: Self = Self { x: 0.0, y: -1.0 };
+    pub const TOP_RIGHT: Self = Self { x: 1.0, y: -1.0 };
+    pub const CENTER_LEFT: Self = Self { x: -1.0, y: 0.0 };
     pub const CENTER: Self = Self { x: 0.0, y: 0.0 };
+    pub const CENTER_RIGHT: Self = Self { x: 1.0, y: 0.0 };
+    pub const BOTTOM_LEFT: Self = Self { x: -1.0, y: 1.0 };
+    pub const BOTTOM_CENTER: Self = Self { x: 0.0, y: 1.0 };
+    pub const BOTTOM_RIGHT: Self = Self { x: 1.0, y: 1.0 };
 
     pub fn along_offset(&self, offset: BoxOffset) -> BoxOffset {
         let center_x = offset.x / 2.0;

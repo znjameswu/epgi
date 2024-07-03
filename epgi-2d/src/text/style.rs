@@ -28,7 +28,7 @@ pub struct TextStyle {
     pub word_spacing: f32,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Default)]
 pub struct LocalTextStyle {
     pub background_color: Option<Option<Color>>,
     pub color: Option<Color>,

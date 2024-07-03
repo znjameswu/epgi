@@ -209,9 +209,9 @@ pub fn default_reconcile_vec<P: Protocol>(
         return result;
     };
 
-    let has_shuffled = front_item_count + back_item_count == old_children_count
+    let no_shuffle = front_item_count + back_item_count == old_children_count
         && old_children_count == new_widgets_count;
-    let shuffle_render_object = has_shuffled.then(|| Box::new(shuffle_render_object) as _);
+    let shuffle_render_object = (!no_shuffle).then(|| Box::new(shuffle_render_object) as _);
 
     (items.into(), shuffle_render_object)
 }
