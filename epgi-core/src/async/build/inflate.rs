@@ -172,7 +172,7 @@ impl<E: FullElement> ElementNode<E> {
         };
         let mut hooks = suspended_hooks.unwrap_or_default();
         let mut ctx = BuildContext {
-            lane_pos: LanePos::SYNC,
+            lane_pos: child_work_context.lane_pos,
             element_context: &self.context,
             hook_context: HookContext::new_async(&mut hooks, hook_mode),
         };
