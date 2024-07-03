@@ -92,6 +92,6 @@ impl<T: Provide, P: Protocol> SingleChildProvideElement for ProviderElement<T, P
     type Provided = T;
 
     fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided> {
-        (widget.init)()
+        (widget.init)() //BUG: This placeholder implementation is not correct!
     }
 }
