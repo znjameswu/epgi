@@ -144,10 +144,17 @@ impl<E: FullElement> ElementNode<E> {
                     shuffle,
                 ))
             }
-            Err((_children, err)) => AsyncOutput::Suspended {
-                suspended_results: Some(BuildSuspendResults::new(hooks, err.waker)),
-                barrier: Some(barrier),
-            },
+            Err((children, err)) => {
+                // This is a rebuild. As a result, in the current design, we will always wait until the suspended node is resolved.
+                // When we do commit, the node is guaranteed to be resolved. By then, we have already visited and finished building the new children. 
+                // Therefore, we do not need to visit the mainline children. 
+                // Note, this is different from the sync rebuild, which does need to visit the mainline children.
+                drop(children);
+                AsyncOutput::Suspended {
+                    suspended_results: Some(BuildSuspendResults::new(hooks, err.waker)),
+                    barrier: Some(barrier),
+                }
+            }
         };
 
         self.write_back_build_results::<false>(output, lane_pos, &handle);
