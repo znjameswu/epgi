@@ -44,14 +44,6 @@ impl ArcWake for SuspendWaker {
     }
 }
 
-impl SuspendWaker {}
-
-impl Drop for SuspendWaker {
-    fn drop(&mut self) {
-        println!("Drop waker")
-    }
-}
-
 impl SuspendWaker {
     // pub(crate) fn new_sync(node: AweakElementContextNode) -> std::sync::Arc<Self> {
     //     std::sync::Arc::new(Self {
