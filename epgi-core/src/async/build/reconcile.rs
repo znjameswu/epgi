@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use futures::stream::Aborted;
 
 use crate::{
-    foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Provide},
+    foundation::{Arc, Asc, ContainerOf, HktContainer, InlinableDwsizeVec, Provide},
     scheduler::{get_current_scheduler, LanePos},
     sync::CommitBarrier,
     tree::{
@@ -304,7 +304,7 @@ impl<E: FullElement> ElementNode<E> {
                         variant: AsyncReconcileVariant::Rebuild {
                             element: element.clone(),
                             hooks: hooks.read(|| None),
-                            children: children.map_ref_collect(Clone::clone),
+                            children: E::ChildContainer::clone_container(children),
                         },
                     },
                 };

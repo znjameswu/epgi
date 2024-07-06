@@ -60,6 +60,17 @@ pub trait HktContainer {
     fn try_create_empty<T: Send + Sync>() -> Self::Container<T> {
         panic!("The container is not always empty. Therefore, an empty container cannot be created out of thin air")
     }
+
+    /// Overwrite this method to use a potentially faster clone impl
+    ///
+    /// We could put a [`Clone`] bound on our GAT type instead of designing a method like this, but that would restrict our element type to also be [`Clone`].
+    /// GAT cannot express dependent type bound at the moment.
+    #[inline(always)]
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.map_ref_collect(Clone::clone)
+    }
 }
 
 pub trait Container:
@@ -139,6 +150,12 @@ pub struct VecContainer;
 
 impl HktContainer for VecContainer {
     type Container<T> = Vec<T> where T:Send + Sync;
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.clone()
+    }
 }
 
 impl<T> Container for Vec<T>
@@ -233,6 +250,12 @@ impl<const N: usize> HktContainer for ArrayContainer<N> {
         } else {
             panic!("The container is not always empty. Therefore, an empty container cannot be created out of thin air")
         }
+    }
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.clone()
     }
 }
 
@@ -597,6 +620,12 @@ pub struct OptionContainer;
 
 impl HktContainer for OptionContainer {
     type Container<T> = Option<T> where T: Send + Sync;
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.clone()
+    }
 }
 
 impl<T> Container for Option<T>
@@ -740,6 +769,16 @@ where
     B: HktContainer,
 {
     type Container<T> = EitherParallel<A::Container<T>, B::Container<T>> where T:Send + Sync;
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        let inner_clone = match &container.0 {
+            either::Either::Left(x) => either::Either::Left(A::clone_container(x)),
+            either::Either::Right(x) => either::Either::Right(B::clone_container(x)),
+        };
+        EitherParallel(inner_clone)
+    }
 }
 
 impl<A, B, T> Container for EitherParallel<A, B>

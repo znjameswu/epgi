@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Container, ContainerOf, Inlinable64Vec},
+    foundation::{Arc, Container, ContainerOf, HktContainer, Inlinable64Vec},
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
@@ -138,12 +138,12 @@ impl<E: FullElement> ElementNode<E> {
                     render_object,
                     ..
                 } => SetupReconcileResult::SkipAndVisitChildren::<E> {
-                    children: children.map_ref_collect(Clone::clone),
+                    children: E::ChildContainer::clone_container(children),
                     render_object: render_object.clone(),
                     self_rebuild_suspended: false,
                 },
                 RebuildSuspended { children, .. } => SetupReconcileResult::SkipAndVisitChildren {
-                    children: children.map_ref_collect(Clone::clone),
+                    children: E::ChildContainer::clone_container(children),
                     render_object: Default::default(),
                     self_rebuild_suspended: true,
                 },

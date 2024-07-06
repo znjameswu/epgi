@@ -54,7 +54,7 @@ where
                 layout_results.memo = memo;
                 self.mark.clear_self_needs_layout();
             }
-            inner.children.map_ref_collect(Clone::clone)
+            R::ChildContainer::clone_container(&inner.children)
         };
         if descendant_has_layout {
             children.par_for_each(&get_current_scheduler().sync_threadpool, |child| {

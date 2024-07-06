@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use futures::stream::Aborted;
 
 use crate::{
-    foundation::{Arc, Asc, Container, EMPTY_CONSUMED_TYPES},
+    foundation::{Arc, Asc, HktContainer, EMPTY_CONSUMED_TYPES},
     r#async::AsyncReconcile,
     scheduler::LanePos,
     sync::CommitBarrier,
@@ -187,7 +187,7 @@ impl<E: FullElement> ElementNode<E> {
                 } => AsyncReconcileVariant::Rebuild {
                     element: element.clone(),
                     hooks,
-                    children: children.map_ref_collect(Clone::clone),
+                    children: E::ChildContainer::clone_container(children),
                 },
                 InflateSuspended { .. } => AsyncReconcileVariant::Inflate {
                     suspended_hooks: hooks,

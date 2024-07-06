@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Container, ContainerOf},
+    foundation::{ContainerOf, HktContainer},
     tree::{AsyncInflating, HooksWithCleanups},
 };
 
@@ -135,7 +135,7 @@ impl<E: Element, H> MainlineState<E, H> {
             MainlineState::InflateSuspended { .. } => None,
             MainlineState::Ready { children, .. }
             | MainlineState::RebuildSuspended { children, .. } => {
-                Some(children.map_ref_collect(Clone::clone))
+                Some(E::ChildContainer::clone_container(children))
             }
         }
     }
