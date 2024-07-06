@@ -519,16 +519,28 @@ where
             }
             ElementSnapshotInner::Mainline(mainline) => {
                 mainline.state = Some(state);
+                // Because we occupy the node by taking the mainline state away just like sync commit
+                // Therefore we are also responsible to start any backqueued work like sync commit
+                let async_work_needing_start = self.setup_execute_backqueue(
+                    mainline,
+                    &snapshot_reborrow.widget,
+                    &snapshot_reborrow.element_lock_held,
+                );
+                if let Some(async_work_needing_start) = async_work_needing_start {
+                    let node = self.clone();
+                    node.execute_reconcile_node_async_detached(async_work_needing_start);
+                }
             }
         }
         change
     }
 
-    fn execute_commit_suspended_async<'batch>(&self, suspended_results: BuildSuspendResults) {
+    fn execute_commit_suspended_async<'batch>(self: &Arc<Self>, suspended_results: BuildSuspendResults) {
         suspended_results.waker.make_sync();
 
         let mut snapshot = self.snapshot.lock();
-        match &mut snapshot.inner {
+        let snapshot_reborrow = &mut *snapshot;
+        match &mut snapshot_reborrow.inner {
             ElementSnapshotInner::AsyncInflating(_async_inflating) => {
                 snapshot.inner = ElementSnapshotInner::Mainline(Mainline {
                     state: Some(MainlineState::InflateSuspended {
@@ -597,6 +609,17 @@ where
                     }
                 };
                 mainline.state = Some(new_state);
+                // Because we occupy the node by taking the mainline state away just like sync commit
+                // Therefore we are also responsible to start any backqueued work like sync commit
+                let async_work_needing_start = self.setup_execute_backqueue(
+                    mainline,
+                    &snapshot_reborrow.widget,
+                    &snapshot_reborrow.element_lock_held,
+                );
+                if let Some(async_work_needing_start) = async_work_needing_start {
+                    let node = self.clone();
+                    node.execute_reconcile_node_async_detached(async_work_needing_start);
+                }
             }
         };
     }
