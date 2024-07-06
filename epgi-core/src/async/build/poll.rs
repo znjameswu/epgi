@@ -14,6 +14,8 @@ use crate::{
     },
 };
 
+use super::AsyncReconcileVariant;
+
 pub trait AnyElementAsyncPollExt {
     fn poll_async(self: Arc<Self>, waker: ArcSuspendWaker, barrier: CommitBarrier);
 }
@@ -71,18 +73,23 @@ impl<E: FullElement> ElementNode<E> {
                 barrier,
                 old_widget,
                 provider_values,
-                states: Err(hooks),
+                variant:
+                    AsyncReconcileVariant::Inflate {
+                        suspended_hooks,
+                        allow_commit_suspend,
+                    },
             } = reconcile
             else {
                 panic!("Impossible to fail")
             };
             self.perform_inflate_node_async::<true>(
                 &old_widget,
-                Some(hooks),
+                Some(suspended_hooks),
                 provider_values,
                 child_work_context,
                 handle,
                 barrier,
+                allow_commit_suspend,
             )
         }
 
@@ -124,11 +131,12 @@ impl<E: FullElement> ElementNode<E> {
 
         let AsyncOutput::Suspended {
             suspended_results,
-            barrier: _,
+            barrier: stored_suspended_barrier,
         } = &mut stash.output
         else {
             panic!("Async-polled node should have a suspended output")
         };
+        let allow_commit_suspend = stored_suspended_barrier.is_none();
         let suspended_results = suspended_results
             .take()
             .expect("Async polling should not witness another polling taken the results");
@@ -170,18 +178,21 @@ impl<E: FullElement> ElementNode<E> {
             old_widget: old_widget.clone(),
             provider_values,
             barrier,
-            states: match state {
+            variant: match state {
                 Ready {
                     element, children, ..
                 }
                 | RebuildSuspended {
                     element, children, ..
-                } => Ok((
-                    element.clone(),
+                } => AsyncReconcileVariant::Rebuild {
+                    element: element.clone(),
                     hooks,
-                    children.map_ref_collect(Clone::clone),
-                )),
-                InflateSuspended { .. } => Err(hooks),
+                    children: children.map_ref_collect(Clone::clone),
+                },
+                InflateSuspended { .. } => AsyncReconcileVariant::Inflate {
+                    suspended_hooks: hooks,
+                    allow_commit_suspend,
+                },
             },
         })
     }
@@ -210,11 +221,12 @@ impl<E: FullElement> ElementNode<E> {
 
         let AsyncOutput::Suspended {
             suspended_results,
-            barrier: _,
+            barrier: stored_suspended_barrier,
         } = &mut stash.output
         else {
             panic!("Async-polled node should have a suspended output")
         };
+        let allow_commit_suspend = stored_suspended_barrier.is_none();
         let suspended_results = suspended_results
             .take()
             .expect("Async polling should not witness another polling taken the results");
@@ -243,7 +255,10 @@ impl<E: FullElement> ElementNode<E> {
             barrier,
             old_widget: widget.clone(),
             provider_values,
-            states: Err(hooks),
+            variant: AsyncReconcileVariant::Inflate {
+                suspended_hooks: hooks,
+                allow_commit_suspend,
+            },
         })
     }
 }

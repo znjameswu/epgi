@@ -1,9 +1,9 @@
 use crate::{
     foundation::{Arc, Asc, Container, ContainerOf, InlinableDwsizeVec, Protocol, Provide},
     scheduler::get_current_scheduler,
-    sync::CommitBarrier,
+    sync::{CommitBarrier, ImplCommitRenderObject},
     tree::{
-        ArcChildElementNode, AsyncOutput, BuildContext, BuildResults, BuildSuspendResults,
+        ArcChildElementNode, AsyncOutput, BuildContext, BuildResults, BuildSuspendResults, Element,
         ElementNode, ElementReconcileItem, ElementWidgetPair, FullElement, HookContext,
         HookContextMode, HooksWithEffects, WorkContext, WorkHandle,
     },
@@ -126,6 +126,7 @@ impl<E: FullElement> ElementNode<E> {
                                         child_work_context,
                                         child_handle,
                                         barrier,
+                                        <E as Element>::Impl::ALLOW_ASYNC_COMMIT_INFLATE_SUSPENDED_CHILD,
                                     )
                                 });
                                 // nodes_inflating.push(node.clone());
@@ -146,8 +147,8 @@ impl<E: FullElement> ElementNode<E> {
             }
             Err((children, err)) => {
                 // This is a rebuild. As a result, in the current design, we will always wait until the suspended node is resolved.
-                // When we do commit, the node is guaranteed to be resolved. By then, we have already visited and finished building the new children. 
-                // Therefore, we do not need to visit the mainline children. 
+                // When we do commit, the node is guaranteed to be resolved. By then, we have already visited and finished building the new children.
+                // Therefore, we do not need to visit the mainline children.
                 // Note, this is different from the sync rebuild, which does need to visit the mainline children.
                 drop(children);
                 AsyncOutput::Suspended {

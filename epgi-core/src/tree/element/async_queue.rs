@@ -87,6 +87,10 @@ where
         });
     }
 
+    pub(crate) fn backqueue_ref(&self) -> Option<&Vec<AsyncQueueBackqueueEntry<E::ArcWidget>>> {
+        self.inner.as_ref().map(|inner| &inner.backqueue)
+    }
+
     pub(crate) fn backqueue_mut(
         &mut self,
     ) -> Option<&mut Vec<AsyncQueueBackqueueEntry<E::ArcWidget>>> {

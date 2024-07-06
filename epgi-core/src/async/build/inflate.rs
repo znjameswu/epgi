@@ -4,11 +4,11 @@ use crate::{
     foundation::{
         Arc, Asc, Container, InlinableDwsizeVec, Protocol, Provide, EMPTY_CONSUMED_TYPES,
     },
-    scheduler::{get_current_scheduler, LanePos},
-    sync::CommitBarrier,
+    scheduler::get_current_scheduler,
+    sync::{CommitBarrier, ImplCommitRenderObject},
     tree::{
         ArcChildElementNode, ArcElementContextNode, AsyncInflating, AsyncOutput, AsyncStash,
-        BuildContext, BuildResults, BuildSuspendResults, ElementBase, ElementContextNode,
+        BuildContext, BuildResults, BuildSuspendResults, Element, ElementBase, ElementContextNode,
         ElementNode, ElementSnapshotInner, FullElement, HookContext, HookContextMode,
         HooksWithEffects, Widget, WorkContext, WorkHandle,
     },
@@ -53,6 +53,7 @@ pub trait AnyElementAsyncInflateExt {
         work_context: Asc<WorkContext>,
         handle: WorkHandle,
         barrier: CommitBarrier,
+        allow_commit_suspend: bool,
     );
 }
 
@@ -65,8 +66,9 @@ where
         work_context: Asc<WorkContext>,
         handle: WorkHandle,
         barrier: CommitBarrier,
+        allow_commit_suspend: bool,
     ) {
-        self.inflate_node_async_impl(work_context, handle, barrier)
+        self.inflate_node_async_impl(work_context, handle, barrier, allow_commit_suspend)
     }
 }
 
@@ -115,6 +117,7 @@ impl<E: FullElement> ElementNode<E> {
         work_context: Asc<WorkContext>,
         handle: WorkHandle,
         barrier: CommitBarrier,
+        allow_commit_suspend: bool,
     ) {
         let (provider_values, widget, child_work_context) = {
             let mut snapshot = self.snapshot.lock();
@@ -153,6 +156,7 @@ impl<E: FullElement> ElementNode<E> {
             child_work_context,
             handle,
             barrier,
+            allow_commit_suspend,
         );
     }
 
@@ -164,6 +168,7 @@ impl<E: FullElement> ElementNode<E> {
         child_work_context: Asc<WorkContext>,
         handle: WorkHandle,
         barrier: CommitBarrier,
+        allow_commit_suspend: bool,
     ) {
         let hook_mode = if suspended_hooks.is_none() {
             HookContextMode::Inflate
@@ -198,7 +203,13 @@ impl<E: FullElement> ElementNode<E> {
                         );
                         let node_clone = node.clone();
                         async_threadpool.spawn(move || {
-                            node_clone.inflate_async(child_work_context, child_handle, barrier)
+                            node_clone.inflate_async(
+                                child_work_context,
+                                child_handle,
+                                barrier,
+                                allow_commit_suspend
+                                    | <E as Element>::Impl::ALLOW_ASYNC_COMMIT_INFLATE_SUSPENDED_CHILD,
+                            )
                         });
                         node
                     },
@@ -207,7 +218,7 @@ impl<E: FullElement> ElementNode<E> {
             }
             Err(err) => AsyncOutput::Suspended {
                 suspended_results: Some(BuildSuspendResults::new(hooks, err.waker)),
-                barrier: Some(barrier),
+                barrier: (!allow_commit_suspend).then_some(barrier),
             },
         };
 

@@ -294,6 +294,8 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
             .as_ref()
             .map(|render_object| render_object.detach_render_object());
     }
+
+    const ALLOW_ASYNC_COMMIT_INFLATE_SUSPENDED_CHILD: bool = true;
 }
 
 fn inflate_fallback<P: Protocol>(

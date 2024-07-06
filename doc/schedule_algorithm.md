@@ -330,5 +330,5 @@ Secondary spawn process must be used while holding the global lock. Since it use
 
 
 # Problem
-https://react.dev/reference/react/Suspense
+https://react.dev/reference/react/Suspense#preventing-already-revealed-content-from-hiding
 > A transition doesn’t wait for all content to load. It only waits long enough to avoid hiding already revealed content. For example, the website Layout was already revealed, so it would be bad to hide it behind a loading spinner. However, the nested Suspense boundary around Albums is new, so the transition doesn’t wait for it.

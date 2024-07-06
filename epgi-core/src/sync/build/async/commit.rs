@@ -1,15 +1,16 @@
 use crate::{
-    foundation::{Arc, Container, ContainerOf, Protocol},
+    foundation::{Arc, Asc, Container, ContainerOf, Protocol},
     scheduler::{get_current_scheduler, LaneMask, LanePos},
     sync::{
         build::provider::AsyncWorkNeedsRestarting, ImplCommitRenderObject, LaneScheduler,
         RenderObjectCommitResult,
     },
     tree::{
-        purge_mailbox_updates_async, ArcChildElementNode, ArcElementContextNode, AsyncInflating,
-        AsyncOutput, AsyncQueueCurrentEntry, AsyncStash, AsyncWorkQueue, BuildResults, Element,
-        ElementNode, ElementSnapshotInner, FullElement, HookContextMode, HooksWithCleanups,
-        ImplElementNode, ImplProvide, Mainline, MainlineState, SubscriptionDiff,
+        purge_mailbox_updates_async, ArcChildElementNode, AsyncInflating, AsyncOutput,
+        AsyncWorkQueue, BuildResults, BuildSuspendResults, ChildRenderObjectsUpdateCallback,
+        Element, ElementContextNode, ElementNode, ElementSnapshotInner, FullElement,
+        HookContextMode, HooksWithCleanups, ImplElementNode, ImplProvide, Mainline, MainlineState,
+        SubscriptionDiff, WorkContext,
     },
 };
 
@@ -63,35 +64,43 @@ where
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        let setup_result = self.setup_visit_and_commit_async(finished_lanes);
+        let setup_result = self.setup_visit_and_commit_async(&self.context, finished_lanes);
         use SetupCommitAsyncResult::*;
         let result = match setup_result {
-            VisitChildrenAnd { children, next } => {
+            VisitChildren {
+                children,
+                render_object,
+                self_rebuild_suspended,
+            } => {
                 let render_object_changes = children
                     .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
                         child.visit_and_commit_async(finished_lanes, scope, lane_scheduler)
                     });
-                match next {
-                    NextAction::Return {
-                        render_object,
-                        self_rebuild_suspended,
-                    } => <E as Element>::Impl::visit_commit_render_object(
-                        &self,
-                        render_object,
-                        render_object_changes,
-                        lane_scheduler,
-                        scope,
-                        self_rebuild_suspended,
-                    ),
-                    NextAction::Commit => self.execute_commit_async(
-                        render_object_changes,
-                        finished_lanes,
-                        scope,
-                        lane_scheduler,
-                    ),
-                }
+                <E as Element>::Impl::visit_commit_render_object(
+                    &self,
+                    render_object,
+                    render_object_changes,
+                    lane_scheduler,
+                    scope,
+                    self_rebuild_suspended,
+                )
             }
-            CommitSuspended => unimplemented!("Async suspended commit is still not implemented."), // We left this unimplemented
+            Commit {
+                build_results,
+                subscription_diff,
+                write_provider,
+                work_context,
+                rebuild,
+            } => self.execute_commit_async(
+                build_results,
+                subscription_diff,
+                write_provider,
+                &work_context,
+                rebuild,
+                finished_lanes,
+                scope,
+                lane_scheduler,
+            ),
             SkipAndReturn => RenderObjectCommitResult::new_no_update(),
         };
         self.context.purge_lanes(finished_lanes);
@@ -107,28 +116,31 @@ where
 }
 
 enum SetupCommitAsyncResult<E: Element> {
-    VisitChildrenAnd {
+    VisitChildren {
         children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        next: NextAction<E>,
-    },
-    CommitSuspended,
-    SkipAndReturn,
-}
-
-enum NextAction<E: Element> {
-    Return {
         render_object: <<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject,
         // Optimization parameter carried over from sync commit (Because the infrasturcture is build around sync commit)
         self_rebuild_suspended: bool,
     },
-    Commit,
+    Commit {
+        build_results: Result<BuildResults<E>, BuildSuspendResults>,
+        subscription_diff: SubscriptionDiff,
+        write_provider: bool,
+        work_context: Asc<WorkContext>,
+        rebuild: Option<(MainlineState<E, HooksWithCleanups>, bool)>,
+    },
+    SkipAndReturn,
 }
 
 impl<E> ElementNode<E>
 where
     E: FullElement,
 {
-    fn setup_visit_and_commit_async(&self, finished_lanes: LaneMask) -> SetupCommitAsyncResult<E> {
+    fn setup_visit_and_commit_async<'a>(
+        self: &Arc<Self>,
+        element_context: &ElementContextNode,
+        finished_lanes: LaneMask,
+    ) -> SetupCommitAsyncResult<E> {
         use SetupCommitAsyncResult::*;
         let mut snapshot = self.snapshot.lock();
         // https://bevy-cheatbook.github.io/pitfalls/split-borrows.html
@@ -139,35 +151,40 @@ where
                 work_context,
                 stash,
             }) => {
+                // let lane_pos = work_context.lane_pos;
+                let subscription_diff = std::mem::take(&mut stash.subscription_diff);
+                let work_context = work_context.clone();
+                let write_provider = stash.spawned_consumers.is_some();
                 assert!(
                     finished_lanes.contains(work_context.lane_pos),
                     "Async commit should not visit into non-mainline nodes from other lanes"
                 );
-                match &mut stash.output {
-                    AsyncOutput::Completed(results) => {
+                match std::mem::replace(&mut stash.output, AsyncOutput::Gone) {
+                    AsyncOutput::Completed(build_results) => {
                         debug_assert!(
-                            results.rebuild_state.is_none(),
+                            build_results.rebuild_state.is_none(),
                             "Async inflate node should not have a rebuild results"
                         );
-                        return VisitChildrenAnd {
-                            children: results.children.map_ref_collect(Clone::clone),
-                            next: NextAction::Commit,
+                        return Commit {
+                            build_results: Ok(build_results),
+                            subscription_diff,
+                            work_context,
+                            write_provider,
+                            rebuild: None,
                         };
                     }
                     AsyncOutput::Suspended {
-                        suspended_results,
+                        mut suspended_results,
                         barrier: None,
                     } => {
-                        let result = suspended_results.take().expect("Async build should fill back the results before commit ever took place");
-                        result.waker.make_sync();
-                        snapshot_reborrow.inner = ElementSnapshotInner::Mainline(Mainline {
-                            state: Some(MainlineState::InflateSuspended {
-                                suspended_hooks: result.hooks.fire_effects(),
-                                waker: result.waker,
-                            }),
-                            async_queue: AsyncWorkQueue::new_empty(),
-                        });
-                        return CommitSuspended;
+                        let suspended_results = (&mut suspended_results).take().expect("Async build should fill back the results before commit ever took place");
+                        return Commit {
+                            build_results: Err(suspended_results),
+                            subscription_diff,
+                            work_context,
+                            write_provider,
+                            rebuild: None,
+                        };
                     }
                     AsyncOutput::Uninitiated { barrier: _barrier }
                     | AsyncOutput::Suspended {
@@ -178,297 +195,353 @@ where
                 };
             }
             ElementSnapshotInner::Mainline(mainline) => {
-                let (current, backqueue) = mainline.async_queue.current_and_backqueue_mut();
-
                 debug_assert!(
-                    !backqueue.is_some_and(|backqueue| backqueue
-                        .iter()
-                        .any(|entry| finished_lanes.contains(entry.work_context.lane_pos))),
+                    !mainline
+                        .async_queue
+                        .backqueue_ref()
+                        .is_some_and(|backqueue| backqueue
+                            .iter()
+                            .any(|entry| finished_lanes.contains(entry.work_context.lane_pos))),
                     "Finished lanes should not show up in backqueue during commit!"
                 );
-
                 // We do not occupy this node
-                // Because until we remove the current entry, no other async work will start executing
+                // Because until we release this node, no other async work will start executing
                 // Those trying to occupy this node will fail and request the scheduler (which we now hold) to reorder work.
                 // After we are finished with the commit, the scheduler will proceed to reorder work.
-                let state = mainline.state.as_ref().expect(
-                    "Async commit walk should not witness a node occupied by another sync walk",
-                );
+                let current = mainline.async_queue.remove_current_if(|current| {
+                    finished_lanes.contains(current.work_context.lane_pos)
+                });
 
-                // let Some(current) = current else {
-                //
-                // };
-                match current {
-                    Some(current) if finished_lanes.contains(current.work_context.lane_pos) => {
-                        match &current.stash.output {
-                            AsyncOutput::Completed(results) => {
-                                return VisitChildrenAnd {
-                                    children: results.children.map_ref_collect(Clone::clone),
-                                    next: NextAction::Commit,
-                                };
-                            }
-                            AsyncOutput::Suspended {
-                                suspended_results: Some(_),
-                                barrier: None,
-                            } => return CommitSuspended,
-                            AsyncOutput::Uninitiated { .. }
-                            | AsyncOutput::Suspended {
-                                barrier: Some(_), ..
-                            } => panic!("CommitBarrier should not be encountered during commit"),
-                            AsyncOutput::Gone
-                            | AsyncOutput::Suspended {
-                                suspended_results: None,
-                                ..
-                            } => {
-                                panic!("Async results are gone before commit")
-                            }
-                        };
+                if let Some(current) = current {
+                    let state = (&mut mainline.state).take().expect(
+                        "Async commit walk should not witness a node occupied by another sync walk",
+                    );
+                    let subscription_diff = current.stash.subscription_diff;
+                    let write_provider = current.stash.spawned_consumers.is_some();
+                    let mut is_new_widget = false;
+
+                    // We update the widget right now right here
+                    // Because the sync version also updated the widget right during the setup phase, before provider read and everything.
+                    // We imitate the effect order from the sync phase
+                    if let Some(widget) = current.widget {
+                        is_new_widget = true;
+                        snapshot_reborrow.widget = widget;
                     }
-                    _ => {
-                        // No work in this node, check descendant
-                        let no_descendant_lanes =
-                            !self.context.descendant_lanes().overlaps(finished_lanes);
-                        if no_descendant_lanes {
-                            return SkipAndReturn;
+
+                    let build_results = match current.stash.output {
+                        AsyncOutput::Completed(build_results) => Ok(build_results),
+                        AsyncOutput::Suspended {
+                            suspended_results: Some(suspended_results),
+                            barrier: None,
+                        } => Err(suspended_results),
+                        AsyncOutput::Uninitiated { .. }
+                        | AsyncOutput::Suspended {
+                            barrier: Some(_), ..
+                        } => panic!("CommitBarrier should not be encountered during commit"),
+                        AsyncOutput::Gone
+                        | AsyncOutput::Suspended {
+                            suspended_results: None,
+                            ..
+                        } => {
+                            panic!("Async results are gone before commit")
                         }
-                        // Skip and visit children
-                        use MainlineState::*;
-                        let (children, render_object, self_rebuild_suspended) = match state {
-                            Ready {
-                                children,
-                                render_object,
-                                ..
-                            } => (children, render_object.clone(), false),
-                            RebuildSuspended { children, .. } => {
-                                (children, Default::default(), true)
-                            }
-                            InflateSuspended { .. } => panic!(
-                                "Async commit walk should not walk into a \
-                                inflate suspended node that it has no work on. \
-                                Inflate suspended node has no children \
-                                and therefore impossible to have work in its descendants"
-                            ),
-                        };
-                        return VisitChildrenAnd {
-                            children: children.map_ref_collect(Clone::clone),
-                            next: NextAction::Return {
-                                render_object,
-                                self_rebuild_suspended,
-                            },
-                        };
+                    };
+                    return Commit {
+                        build_results,
+                        subscription_diff,
+                        write_provider,
+                        work_context: current.work_context.clone(),
+                        rebuild: Some((state, is_new_widget)),
+                    };
+                } else {
+                    let state = mainline.state.as_ref().expect(
+                        "Async commit walk should not witness a node occupied by another sync walk",
+                    );
+                    // No work in this node, check descendant
+                    let no_descendant_lanes =
+                        !element_context.descendant_lanes().overlaps(finished_lanes);
+                    if no_descendant_lanes {
+                        return SkipAndReturn;
                     }
+                    // Skip and visit children
+                    use MainlineState::*;
+                    let (children, render_object, self_rebuild_suspended) = match state {
+                        Ready {
+                            children,
+                            render_object,
+                            ..
+                        } => (children, render_object.clone(), false),
+                        RebuildSuspended { children, .. } => (children, Default::default(), true),
+                        InflateSuspended { .. } => panic!(
+                            "Async commit walk should not walk into a \
+                        inflate suspended node that it has no work on. \
+                        Inflate suspended node has no children \
+                        and therefore impossible to have work in its descendants"
+                        ),
+                    };
+                    return VisitChildren {
+                        children: children.map_ref_collect(Clone::clone),
+                        render_object,
+                        self_rebuild_suspended,
+                    };
                 }
             }
         }
     }
 
-    fn execute_commit_async<'batch>(
+    fn execute_commit_async<'a, 'batch>(
         self: &Arc<Self>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            RenderObjectCommitResult<E::ChildProtocol>,
-        >,
+        build_results: Result<BuildResults<E>, BuildSuspendResults>,
+        subscription_diff: SubscriptionDiff,
+        write_provider: bool,
+        work_context: &'a WorkContext,
+        rebuild: Option<(MainlineState<E, HooksWithCleanups>, bool)>,
         finished_lanes: LaneMask,
         scope: &rayon::Scope<'batch>,
         lane_scheduler: &'batch LaneScheduler,
     ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        let mut snapshot = self.snapshot.lock();
-        // https://bevy-cheatbook.github.io/pitfalls/split-borrows.html
-        let snapshot_reborrow = &mut *snapshot;
-
-        match &mut snapshot_reborrow.inner {
-            ElementSnapshotInner::AsyncInflating(async_inflating) => {
-                let (mainline, subtree_change) = self.execute_commit_async_async_inflating(
-                    async_inflating,
-                    &snapshot_reborrow.widget,
-                    &self.context,
-                    render_object_changes,
-                    finished_lanes,
-                    lane_scheduler,
-                );
-                snapshot_reborrow.inner = ElementSnapshotInner::Mainline(mainline);
-                subtree_change
+        let lane_pos = work_context.lane_pos;
+        // Fire common pre-visit effects
+        // These effects are fired top-down in sync build. Therefore we must fire them before visit into children
+        // Note: update widget is already done in the setup phase
+        self.commit_async_read(subscription_diff, lane_pos, lane_scheduler);
+        if <E as Element>::Impl::PROVIDE_ELEMENT {
+            if write_provider {
+                let provider =
+                    self.context.provider_object.as_ref().expect(
+                        "Provider element should have a provider in its element context node",
+                    );
+                provider.commit_async_write(lane_pos, work_context.batch.id, lane_scheduler);
             }
-            ElementSnapshotInner::Mainline(mainline) => self.execute_commit_async_mainline(
-                mainline,
-                &mut snapshot_reborrow.widget,
-                render_object_changes,
+        } else {
+            debug_assert!(!write_provider);
+        }
+
+        match build_results {
+            Ok(build_results) => self.execute_commit_succeed_async(
+                build_results,
+                &work_context,
+                rebuild,
                 finished_lanes,
                 scope,
                 lane_scheduler,
             ),
+            Err(suspended_results) => {
+                // Note that how commit suspended does need to visit any children
+                // Because for inflate suspended, there is no children to visit in the first place.
+                // For rebuild suspended, in our current design, rebuild is not allowed to commit as suspended in async batches.
+                // Instead, rebuild is always commit as completed. So, we do not need to consider the mainline children of rebuild suspended node.
+                //
+                // Note: Because we do not visit children, this path COULD have reused the element lock from the setup phase.
+                // We wasted this oppurtunity by release the lock earlier and retake the lock again.
+                // But the code style will be horrendous if we push for zero-cost abstraction
+                // Failed attempt:
+                // - Pass lock into setup and execute phase. Fail reason:
+                //      - Technically no fail.
+                //      - In that design we should also return work_context by reference, and that reference in the non-suspend branch severely interfered with lock's lifecycle in this branch (makes separation of concern a nightmare). Means it is still not the best solution.
+                //      - In that design we have to hold the lock while commit_async_read, which is strange (though could be sound) and more restrictive compared to the sync version. And semantics of the sync version is why this code evolved into this state in the first place.
+                self.execute_commit_suspended_async(suspended_results);
+                RenderObjectCommitResult::Suspend
+            }
         }
     }
 
-    fn execute_commit_async_async_inflating(
+    fn execute_commit_succeed_async<'batch>(
         self: &Arc<Self>,
-        async_inflating: &mut AsyncInflating<E>,
-        widget: &E::ArcWidget,
-        element_context: &ArcElementContextNode,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            RenderObjectCommitResult<E::ChildProtocol>,
-        >,
+        build_results: BuildResults<E>,
+        work_context: &WorkContext,
+        rebuild: Option<(MainlineState<E, HooksWithCleanups>, bool)>,
         finished_lanes: LaneMask,
-        lane_scheduler: &LaneScheduler,
-    ) -> (Mainline<E>, RenderObjectCommitResult<E::ParentProtocol>) {
-        let AsyncInflating {
-            work_context,
-            stash,
-        } = async_inflating;
-        debug_assert!(
-            finished_lanes.contains(work_context.lane_pos),
-            "Commit walk should only see a async-inflating node if its lane is completed"
-        );
-        let output = std::mem::replace(&mut stash.output, AsyncOutput::Gone);
+        scope: &rayon::Scope<'batch>,
+        lane_scheduler: &'batch LaneScheduler,
+    ) -> RenderObjectCommitResult<E::ParentProtocol> {
+        struct CommitPreVisitStash<E: Element> {
+            element: E,
+            hooks: HooksWithCleanups,
+            children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+            rebuild_stash: Option<CommitPreVisitRebuildStash<E>>,
+        }
 
-        Self::commit_async_read(
-            self,
-            std::mem::take(&mut stash.subscription_diff),
-            work_context.lane_pos,
-            lane_scheduler,
-        );
+        struct CommitPreVisitRebuildStash<E: Element> {
+            is_new_widget: bool,
+            render_object: Option<<E::Impl as ImplElementNode<E>>::OptionArcRenderObject>,
+            shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
+        }
+        let BuildResults {
+            hooks: new_hooks,
+            element,
+            children,
+            rebuild_state,
+        } = build_results;
 
-        match output {
-            AsyncOutput::Completed(results) => {
-                let BuildResults {
-                    hooks,
-                    element,
-                    mut children,
-                    rebuild_state,
-                } = results;
-
-                debug_assert!(
-                    rebuild_state.is_none(),
-                    "Inflate commit should not see rebuild results"
-                );
-
-                // Fire the hooks before commit into render object
-                let hooks = hooks.fire_effects();
-
-                let (render_object, subtree_change) =
-                    <E as Element>::Impl::inflate_success_commit_render_object(
-                        &element,
-                        widget,
-                        &mut children,
-                        render_object_changes,
-                        element_context,
-                        lane_scheduler,
-                    );
-
-                let mainline = Mainline {
-                    state: Some(MainlineState::Ready {
+        // Fire pre-visit effects
+        // These effects are fired top-down in sync build. Therefore we must fire them before visit into children
+        // Note: update widget is already done in the setup phase
+        let stash = if let Some((state, is_new_widget)) = rebuild {
+            purge_mailbox_updates_async(&self.context, work_context.job_ids());
+            use MainlineState::*;
+            match state {
+                Ready { .. } | RebuildSuspended { .. } => {
+                    let rebuild_state =
+                        rebuild_state.expect("Rebuild commit should see rebuild results");
+                    let (mut hooks, render_object) = match state {
+                        Ready {
+                            hooks,
+                            render_object,
+                            ..
+                        } => (hooks, Some(render_object)),
+                        RebuildSuspended {
+                            suspended_hooks,
+                            waker,
+                            ..
+                        } => {
+                            waker.abort();
+                            (suspended_hooks, None)
+                        }
+                        _ => unreachable!(),
+                    };
+                    hooks.merge_with(new_hooks, false, HookContextMode::Rebuild);
+                    for node_needing_unmount in rebuild_state.nodes_needing_unmount {
+                        scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
+                    }
+                    CommitPreVisitStash {
                         element,
                         hooks,
                         children,
-                        render_object,
-                    }),
-                    async_queue: AsyncWorkQueue::new_empty(),
-                };
-                return (mainline, subtree_change);
+                        rebuild_stash: Some(CommitPreVisitRebuildStash {
+                            render_object,
+                            shuffle: rebuild_state.shuffle,
+                            is_new_widget,
+                        }),
+                    }
+                }
+                InflateSuspended {
+                    mut suspended_hooks,
+                    waker,
+                } => {
+                    debug_assert!(
+                        rebuild_state.is_none(),
+                        "Inflate should see rebuild results"
+                    );
+                    waker.abort();
+                    suspended_hooks.merge_with(new_hooks, false, HookContextMode::PollInflate);
+                    CommitPreVisitStash {
+                        element,
+                        hooks: suspended_hooks,
+                        children,
+                        rebuild_stash: None,
+                    }
+                }
             }
-            AsyncOutput::Suspended {
-                suspended_results: Some(suspended_results),
-                barrier: None,
-            } => {
-                let mainline = Mainline {
+        } else {
+            let hooks = new_hooks.fire_effects();
+            CommitPreVisitStash {
+                element,
+                hooks,
+                children,
+                rebuild_stash: None,
+            }
+        };
+
+        // Visit children
+        let render_object_changes = stash
+            .children
+            .map_ref_collect(Clone::clone)
+            .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
+                child.visit_and_commit_async(finished_lanes, scope, lane_scheduler)
+            });
+
+        // Fire post-visit effects
+        // These effects are fired bottom-up in the sync build.
+        let mut snapshot = self.snapshot.lock();
+        let snapshot_reborrow = &mut *snapshot;
+
+        let CommitPreVisitStash {
+            element,
+            hooks,
+            mut children,
+            rebuild_stash,
+        } = stash;
+        let (state, change) = if let Some(rebuild_stash) = rebuild_stash {
+            let CommitPreVisitRebuildStash {
+                is_new_widget,
+                render_object,
+                shuffle,
+            } = rebuild_stash;
+            let (render_object, change) =
+                <E as Element>::Impl::rebuild_success_commit_render_object(
+                    &element,
+                    &snapshot_reborrow.widget,
+                    shuffle,
+                    &mut children,
+                    render_object,
+                    render_object_changes,
+                    &self.context,
+                    lane_scheduler,
+                    scope,
+                    is_new_widget,
+                );
+            (
+                MainlineState::Ready {
+                    element,
+                    hooks,
+                    children,
+                    render_object,
+                },
+                change,
+            )
+        } else {
+            let (render_object, change) =
+                <E as Element>::Impl::inflate_success_commit_render_object(
+                    &element,
+                    &snapshot_reborrow.widget,
+                    &mut children,
+                    render_object_changes,
+                    &self.context,
+                    lane_scheduler,
+                );
+            (
+                MainlineState::Ready {
+                    element,
+                    hooks,
+                    children,
+                    render_object,
+                },
+                change,
+            )
+        };
+        match &mut snapshot_reborrow.inner {
+            ElementSnapshotInner::AsyncInflating(_) => {
+                snapshot_reborrow.inner = ElementSnapshotInner::Mainline(Mainline {
+                    state: Some(state),
+                    async_queue: AsyncWorkQueue::new_empty(),
+                });
+            }
+            ElementSnapshotInner::Mainline(mainline) => {
+                mainline.state = Some(state);
+            }
+        }
+        change
+    }
+
+    fn execute_commit_suspended_async<'batch>(&self, suspended_results: BuildSuspendResults) {
+        suspended_results.waker.make_sync();
+
+        let mut snapshot = self.snapshot.lock();
+        match &mut snapshot.inner {
+            ElementSnapshotInner::AsyncInflating(_async_inflating) => {
+                snapshot.inner = ElementSnapshotInner::Mainline(Mainline {
                     state: Some(MainlineState::InflateSuspended {
                         suspended_hooks: suspended_results.hooks.fire_effects(),
                         waker: suspended_results.waker,
                     }),
                     async_queue: AsyncWorkQueue::new_empty(),
-                };
-                return (mainline, RenderObjectCommitResult::Suspend);
+                });
             }
-            AsyncOutput::Uninitiated { .. } | AsyncOutput::Gone | AsyncOutput::Suspended { .. } => {
-                panic!(
-                    "Previously the commit visit determined this node needs commit and is not suspended during inflating. \
-                    However, when it visit again it has been in a non-commitable state or suspended state, \
-                    indicating a possible state corruption"
+            ElementSnapshotInner::Mainline(mainline) => {
+                let state = (&mut mainline.state).take().expect(
+                    "Async commit walk should not witness a node occupied by another sync walk",
                 );
-            }
-        }
-    }
-
-    fn execute_commit_async_mainline<'batch>(
-        self: &Arc<Self>,
-        mainline: &mut Mainline<E>,
-        widget: &mut E::ArcWidget,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            RenderObjectCommitResult<E::ChildProtocol>,
-        >,
-        finished_lanes: LaneMask,
-        scope: &rayon::Scope<'batch>,
-        lane_scheduler: &'batch LaneScheduler,
-    ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        // We do not occupy this node
-        // Because until we release this node, no other async work will start executing
-        // Those trying to occupy this node will fail and request the scheduler (which we now hold) to reorder work.
-        // After we are finished with the commit, the scheduler will proceed to reorder work.
-        let current = mainline
-            .async_queue
-            .remove_current_if(|current| finished_lanes.contains(current.work_context.lane_pos))
-            .expect(
-                "This node should have a work that can be committed. \
-                    Previously the visit deteremined there is committable work inside,\
-                    But when we returned, we found no committable work,\
-                    indicating a state corruption",
-            );
-
-        let AsyncQueueCurrentEntry {
-            widget: new_widget,
-            work_context,
-            stash,
-        } = current;
-
-        let AsyncStash {
-            handle: _,
-            subscription_diff,
-            spawned_consumers,
-            output,
-        } = stash;
-
-        let state = (&mut mainline.state)
-            .take()
-            .expect("Async commit walk should not witness a node occupied by another sync walk");
-
-        let mut is_new_widget = false;
-        if let Some(new_widget) = new_widget {
-            *widget = new_widget;
-            is_new_widget = true;
-        }
-
-        Self::commit_async_read(
-            self,
-            subscription_diff,
-            work_context.lane_pos,
-            lane_scheduler,
-        );
-        if <E as Element>::Impl::PROVIDE_ELEMENT {
-            if let Some(_spawned_consumers) = spawned_consumers {
-                let provider =
-                    self.context.provider_object.as_ref().expect(
-                        "Provider element should have a provider in its element context node",
-                    );
-                provider.commit_async_write(
-                    work_context.lane_pos,
-                    work_context.batch.id,
-                    lane_scheduler,
-                );
-            }
-        } else {
-            debug_assert!(spawned_consumers.is_none());
-        }
-
-        purge_mailbox_updates_async(&self.context, work_context.job_ids());
-
-        match output {
-            AsyncOutput::Suspended {
-                suspended_results: Some(suspended_results),
-                barrier: None,
-            } => {
-                suspended_results.waker.make_sync();
                 use MainlineState::*;
                 let new_state = match state {
                     Ready {
@@ -519,146 +592,13 @@ where
                             element,
                             suspended_hooks,
                             children,
-                            waker,
+                            waker: suspended_results.waker,
                         }
                     }
                 };
                 mainline.state = Some(new_state);
-                return RenderObjectCommitResult::Suspend;
             }
-            AsyncOutput::Completed(mut results) => {
-                use MainlineState::*;
-                match state {
-                    Ready {
-                        hooks,
-                        render_object,
-                        ..
-                    } => {
-                        return Self::perform_commit_rebuild_success_async(
-                            results,
-                            render_object_changes,
-                            widget,
-                            hooks,
-                            Some(render_object),
-                            mainline,
-                            &self.context,
-                            scope,
-                            lane_scheduler,
-                            is_new_widget,
-                        );
-                    }
-                    RebuildSuspended {
-                        suspended_hooks,
-                        waker,
-                        ..
-                    } => {
-                        waker.abort();
-                        return Self::perform_commit_rebuild_success_async(
-                            results,
-                            render_object_changes,
-                            widget,
-                            suspended_hooks,
-                            None,
-                            mainline,
-                            &self.context,
-                            scope,
-                            lane_scheduler,
-                            is_new_widget,
-                        );
-                    }
-                    InflateSuspended {
-                        mut suspended_hooks,
-                        waker,
-                    } => {
-                        waker.abort();
-                        suspended_hooks.merge_with(
-                            results.hooks,
-                            false,
-                            HookContextMode::PollInflate,
-                        );
-
-                        let (render_object, change) =
-                            <E as Element>::Impl::inflate_success_commit_render_object(
-                                &results.element,
-                                widget,
-                                &mut results.children,
-                                render_object_changes,
-                                &self.context,
-                                lane_scheduler,
-                            );
-                        mainline.state = Some(MainlineState::Ready {
-                            element: results.element,
-                            hooks: suspended_hooks,
-                            children: results.children,
-                            render_object,
-                        });
-                        return change;
-                    }
-                };
-            }
-            AsyncOutput::Uninitiated { .. }
-            | AsyncOutput::Suspended {
-                barrier: Some(_), ..
-            } => panic!("CommitBarrier should not be encountered during commit"),
-            AsyncOutput::Gone
-            | AsyncOutput::Suspended {
-                suspended_results: None,
-                ..
-            } => {
-                panic!("Async results are gone before commit")
-            }
-        }
-    }
-
-    fn perform_commit_rebuild_success_async<'batch>(
-        mut results: BuildResults<E>,
-        render_object_changes: ContainerOf<
-            E::ChildContainer,
-            RenderObjectCommitResult<E::ChildProtocol>,
-        >,
-        widget: &E::ArcWidget,
-        mut hooks: HooksWithCleanups,
-        render_object: Option<<<E as Element>::Impl as ImplElementNode<E>>::OptionArcRenderObject>,
-        mainline: &mut Mainline<E>,
-        element_context: &ArcElementContextNode,
-        scope: &rayon::Scope<'batch>,
-        lane_scheduler: &'batch LaneScheduler,
-        is_new_widget: bool,
-    ) -> RenderObjectCommitResult<E::ParentProtocol> {
-        let rebuild_state = results
-            .rebuild_state
-            .expect("Rebuild commit should see rebuild results");
-        hooks.merge_with(results.hooks, false, HookContextMode::Rebuild);
-
-        // We mimic the order in sync rebuild: first apply hook update, then unmount nodes, then commit into render object
-        let mut unmounted_consumer_lanes = LaneMask::new();
-        for node_needing_unmount in rebuild_state.nodes_needing_unmount {
-            unmounted_consumer_lanes =
-                unmounted_consumer_lanes | node_needing_unmount.context_ref().consumer_lanes();
-            scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
-        }
-
-        let (render_object, change) = <E as Element>::Impl::rebuild_success_commit_render_object(
-            &results.element,
-            &widget,
-            rebuild_state.shuffle,
-            &mut results.children,
-            render_object,
-            render_object_changes,
-            element_context,
-            lane_scheduler,
-            scope,
-            is_new_widget,
-        );
-
-        mainline.state = Some(MainlineState::Ready {
-            element: results.element,
-            hooks,
-            children: results.children,
-            render_object,
-        });
-
-        return change;
+        };
     }
 
     fn commit_async_read(
