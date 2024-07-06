@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use rayon::{
     iter::IndexedParallelIterator,
     prelude::{IntoParallelIterator, ParallelIterator},
@@ -133,16 +135,18 @@ impl ThreadPoolExt for rayon::ThreadPool {
             0 => Vec::new(),
             1 => [f(iter.remove(0))].into(),
             len @ 2..=16 => {
-                let mut output = std::iter::repeat_with(|| None)
+                let mut output = std::iter::repeat_with(|| MaybeUninit::uninit())
                     .take(len)
                     .collect::<Vec<_>>(); // Brilliant answer from https://www.reddit.com/r/rust/comments/qjh00f/comment/hiqe32i
                 self.scope(|s| {
                     let f_ref = &f;
                     for (elem, out) in std::iter::zip(iter, output.iter_mut()) {
-                        s.spawn(move |_| *out = Some(f_ref(elem)));
+                        s.spawn(move |_| {
+                            out.write(f_ref(elem));
+                        });
                     }
                 });
-                return output.into_iter().collect::<Option<Vec<_>>>().unwrap();
+                unsafe { std::mem::transmute(output) }
             }
             _ => self.install(|| {
                 let mut res = Vec::new();
@@ -165,17 +169,30 @@ impl ThreadPoolExt for rayon::ThreadPool {
         iter: [T; N],
         f: F,
     ) -> [R; N] {
+        // const generics ensures redundant branches are shaken out of the compiled product
         match N {
             0 | 1 => iter.map(f),
-            2..=16 => {
-                let mut output = std::array::from_fn(|_| None);
+            2 => {
+                let [elem1, elem2] = unsafe { std::mem::transmute_copy(&iter) };
+                std::mem::forget(iter);
+                let f_ref = &f;
+                let res2: [R; 2] = self.join(move || f_ref(elem1), move || f_ref(elem2)).into();
+                let res: [R; N] = unsafe { std::mem::transmute_copy(&res2) };
+                std::mem::forget(res2);
+                res
+            }
+            3..=16 => {
+                let mut output: [MaybeUninit<R>; N] =
+                    std::array::from_fn(|_| MaybeUninit::uninit());
                 self.scope(|s| {
                     let f_ref = &f;
                     for (elem, out) in std::iter::zip(iter, output.iter_mut()) {
-                        s.spawn(move |_| *out = Some(f_ref(elem)));
+                        s.spawn(move |_| {
+                            out.write(f_ref(elem));
+                        });
                     }
                 });
-                output.map(Option::unwrap)
+                unsafe { std::mem::transmute_copy(&output) } // Original output is MaybeUnint, they will be automatically forgotten
             }
             _ => self.install(|| {
                 let mut res = Vec::new();
