@@ -144,7 +144,11 @@ impl ThreadPoolExt for rayon::ThreadPool {
                 });
                 return output.into_iter().collect::<Option<Vec<_>>>().unwrap();
             }
-            _ => self.install(|| iter.into_par_iter().map(f).collect()),
+            _ => self.install(|| {
+                let mut res = Vec::new();
+                iter.into_par_iter().map(f).collect_into_vec(&mut res);
+                res
+            }),
         }
     }
 
@@ -174,12 +178,9 @@ impl ThreadPoolExt for rayon::ThreadPool {
                 output.map(Option::unwrap)
             }
             _ => self.install(|| {
-                iter.into_par_iter()
-                    .map(f)
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .ok()
-                    .unwrap()
+                let mut res = Vec::new();
+                iter.into_par_iter().map(f).collect_into_vec(&mut res);
+                res.try_into().ok().unwrap()
             }),
         }
     }
