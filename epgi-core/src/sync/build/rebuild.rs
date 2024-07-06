@@ -151,7 +151,7 @@ impl<E: FullElement> ElementNode<E> {
                 );
 
                 // We need to visit the mainline children instead.
-                // There could be sync updates in the descendants. 
+                // There could be sync updates in the descendants.
                 // If we do not visit and clear them in the current sync visit, the next sync visit will meet
                 // a bunch of undocumented and expired sync updates. State corruption guaranteed.
                 // Note, this is different from the async rebuild, which does not need to visit the mainline children.

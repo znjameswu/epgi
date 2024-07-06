@@ -3,7 +3,9 @@ use crate::{
     tree::{AsyncInflating, HooksWithCleanups},
 };
 
-use super::{ArcChildElementNode, ArcSuspendWaker, AsyncWorkQueue, Element, ImplElementNode};
+use super::{
+    ArcChildElementNode, ArcSuspendWaker, AsyncWorkQueue, Element, ImplElementNode, SuspendWaker,
+};
 
 pub(crate) struct ElementSnapshot<E: Element> {
     pub(crate) widget: E::ArcWidget,
@@ -168,11 +170,11 @@ impl<E: Element, H> MainlineState<E, H> {
     //     }
     // }
 
-    // pub(crate) fn waker_ref(&self) -> Option<&SuspendWaker> {
-    //     match self {
-    //         MainlineState::Ready { .. } => None,
-    //         MainlineState::InflateSuspended { waker, .. }
-    //         | MainlineState::RebuildSuspended { waker, .. } => Some(waker),
-    //     }
-    // }
+    pub(crate) fn waker_ref(&self) -> Option<&SuspendWaker> {
+        match self {
+            MainlineState::Ready { .. } => None,
+            MainlineState::InflateSuspended { waker, .. }
+            | MainlineState::RebuildSuspended { waker, .. } => Some(waker),
+        }
+    }
 }

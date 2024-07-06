@@ -121,4 +121,14 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
 
     // Detach render object if any
     fn detach_render_object(render_object: &Self::OptionArcRenderObject);
+
+    /// In async batches, whether to wait or to commit immediately if the child suspends during inflating.
+    ///
+    /// This mainly determines how [`Suspense`] works together with `startTransition` or generally any async batch.
+    /// And it's highly recommended to only set this for a [`Suspense`]-like component because this is a highly improvised parameter tailored for [`Suspense`].
+    ///
+    /// In React's design, `startTransition` can decide to not wait for a content to resolve, if the suspend happens during the contenxt's initial inflating **and** the [`Suspense`] catching it does not have any remaining exisiting content (thus safe to show a fallback). See: https://react.dev/reference/react/Suspense#preventing-already-revealed-content-from-hiding
+    ///
+    /// If set to true, then in an async batch, any descendant suspended work won't generate a `CommitBarrier` and thus won't prevent the batch from being committed.
+    const ALLOW_ASYNC_COMMIT_INFLATE_SUSPENDED_CHILD: bool = false;
 }

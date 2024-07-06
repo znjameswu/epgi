@@ -63,14 +63,19 @@ pub(crate) struct AsyncReconcile<E: ElementBase> {
     pub(super) barrier: CommitBarrier,
     pub(super) old_widget: E::ArcWidget,
     pub(super) provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    pub(super) states: Result<
-        (
-            E,
-            HooksWithEffects,
-            ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
-        ),
-        HooksWithEffects,
-    >,
+    pub(super) variant: AsyncReconcileVariant<E>,
+}
+
+pub(super) enum AsyncReconcileVariant<E: ElementBase> {
+    Rebuild {
+        element: E,
+        hooks: HooksWithEffects,
+        children: ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
+    },
+    Inflate {
+        suspended_hooks: HooksWithEffects,
+        allow_commit_suspend: bool,
+    },
 }
 
 enum SetupAsyncReconcileResult<E: ElementBase> {
@@ -272,7 +277,11 @@ impl<E: FullElement> ElementNode<E> {
                         old_widget: old_widget.clone(),
                         provider_values,
                         barrier,
-                        states: Err(suspended_hooks.read(|| None)),
+                        variant: AsyncReconcileVariant::Inflate {
+                            suspended_hooks: suspended_hooks.read(|| None),
+                            allow_commit_suspend: false, // This method takes a `Mainline` and can only be executed on mainline nodes.
+                                                         // Thus, it cannot be a new inflate. In our current design, only new inflate or a poll inflate is allowed to commit while suspended.
+                        },
                     },
                     Ready {
                         element,
@@ -292,11 +301,11 @@ impl<E: FullElement> ElementNode<E> {
                         old_widget: old_widget.clone(),
                         provider_values,
                         barrier,
-                        states: Ok((
-                            element.clone(),
-                            hooks.read(|| None),
-                            children.map_ref_collect(Clone::clone),
-                        )),
+                        variant: AsyncReconcileVariant::Rebuild {
+                            element: element.clone(),
+                            hooks: hooks.read(|| None),
+                            children: children.map_ref_collect(Clone::clone),
+                        },
                     },
                 };
                 return Ok(reconcile);
@@ -324,15 +333,19 @@ impl<E: FullElement> ElementNode<E> {
             child_work_context,
             old_widget,
             provider_values,
-            states,
+            variant: states,
         } = reconcile;
 
         match states {
-            Ok((last_element, mut hooks, children)) => {
+            AsyncReconcileVariant::Rebuild {
+                element,
+                mut hooks,
+                children,
+            } => {
                 apply_hook_updates_async(&self.context, child_work_context.job_ids(), &mut hooks);
                 self.perform_rebuild_node_async(
                     widget.as_ref().unwrap_or(&old_widget),
-                    last_element,
+                    element,
                     hooks,
                     children,
                     provider_values,
@@ -341,7 +354,10 @@ impl<E: FullElement> ElementNode<E> {
                     barrier,
                 )
             }
-            Err(mut suspended_hooks) => {
+            AsyncReconcileVariant::Inflate {
+                mut suspended_hooks,
+                allow_commit_suspend,
+            } => {
                 apply_hook_updates_async(
                     &self.context,
                     child_work_context.job_ids(),
@@ -354,6 +370,7 @@ impl<E: FullElement> ElementNode<E> {
                     child_work_context,
                     handle,
                     barrier,
+                    allow_commit_suspend,
                 )
             }
         }

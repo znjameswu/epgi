@@ -41,7 +41,7 @@ impl HooksWithEffects {
                 .into_iter()
                 .map(|(hook_state, effect)| {
                     (
-                        hook_state.clone(),
+                        hook_state, // WARNING: NEVER clone here. Clone a state loses all subscribed wakers registered to the old future in the state
                         effect.and_then(|effect| effect.fire_box()),
                     )
                 })
