@@ -22,6 +22,14 @@ use typed_builder::TypedBuilder;
 use crate::{AnimationFrame, Lerp, Tween};
 
 pub trait BuildContextImplicitAnimationExt {
+    /// A state hook providing the state for [ImplicitlyAnimated] to draw.
+    ///
+    /// To avoid wasting CPU-cycles when the animation has reached their target,
+    /// we have to cancel the subscription to the animation frame while static, and add the subscription back while active.
+    /// whether to subscribe to the animation frame can only be decided *after* computing the animation progress
+    /// (which requires accessing local states).
+    /// Therefore, the states has to be stored by a hook in its parent, and the subscription is performed by a child widget.
+    /// Hence this hook.
     fn use_implicitly_animated_value<T: Lerp + State + PartialEq>(
         &mut self,
         value: &T,
@@ -42,12 +50,14 @@ impl BuildContextImplicitAnimationExt for BuildContext<'_> {
         let (source, set_source) = self.use_state_with(|| value.clone());
         let (current, set_current) = self.use_state_with(|| value.clone());
 
+        // First effect, watch the changes on incoming target.
         let set_source_clone = set_source.clone();
         let current_clone = current.clone();
         self.use_effect(
             move |value| {
                 let now = Instant::now();
                 get_current_scheduler().create_sync_job(|job_builder| {
+                    // We use the current value as the new start
                     set_target.set(value, job_builder);
                     set_source_clone.set(current_clone, job_builder);
                     set_start_time.set(now, job_builder);
@@ -56,6 +66,7 @@ impl BuildContextImplicitAnimationExt for BuildContext<'_> {
             value.clone(),
         );
 
+        // Second effect, watch the progress reported by the child. Decide which variant to use.
         self.use_effect_2(
             move |current, target| {
                 if current == target {
@@ -111,6 +122,15 @@ enum ImplicitlyAnimatedValueState<T> {
     },
 }
 
+/// Draws implicitly animated widget using the value provided by [BuildContext::use_implicitly_animated_value]
+///
+/// This widget is responsible for optionally subscribe to animation frame.
+///
+/// To avoid wasting CPU-cycles when the animation has reached their target,
+/// we have to cancel the subscription to the animation frame while static, and add the subscription back while active.
+/// whether to subscribe to the animation frame can only be decided *after* computing the animation progress
+/// (which requires accessing local states).
+/// Therefore, the states has to be stored by a hook in its parent, and the subscription is performed by a child widget.
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<ImplicitlyAnimated<T, F, P>>))]
 pub struct ImplicitlyAnimated<
@@ -205,6 +225,7 @@ where
             }
         };
 
+        // Child report their progress to the parent
         let set_current = self.value.set_current.clone();
         ctx.use_effect(
             move |(current, is_active)| {
