@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use dpi::LogicalSize;
 use epgi_2d::{ArcBoxWidget, BoxProvider, Color, FontWeight, LocalTextStyle};
 use epgi_common::{
-    Alignment, Center, Column, Container, EdgeInsets, FlexFit, Flexible, GestureDetector, Row, Text,
+    Alignment, AnimatedContainer, Center, Column, Container, EdgeInsets, FlexFit, Flexible,
+    GestureDetector, Row, Text,
 };
 use epgi_core::{
     foundation::Asc,
@@ -98,82 +99,107 @@ fn main() {
     );
 
     fn build_hint(id: usize) -> ArcBoxWidget {
-        Container!(
-            height = 60.0,
-            color = Color::LIGHT_GRAY,
-            margin = EdgeInsets::new_all(3.0),
-            child = Suspense!(
-                fallback = Center!(child = CircularProgressIndicator!()),
-                child = Row!(
-                    children = vec![
-                        Container!(
-                            width = 100.0,
-                            color = Color::WHITE,
-                            alignment = Alignment::CENTER_LEFT,
-                            padding = EdgeInsets::new_all(5.0),
-                            margin = EdgeInsets::new_all(3.0),
-                            child = SuspendableBuilder!(
-                                builder = move |ctx| {
-                                    let speaker_name = ctx.use_future(
-                                        |id| {
-                                            tokio::spawn(async move {
-                                                tokio::time::sleep(std::time::Duration::from_secs(
-                                                    2,
-                                                ))
-                                                .await;
-                                                HINTS_DATABASE
-                                                    .get(&id)
-                                                    .map(|hint| hint.speaker_name)
-                                            })
-                                            .map(Result::unwrap)
-                                        },
-                                        id,
-                                    )?;
-                                    if let Some(speaker_name) = speaker_name {
-                                        Ok(Text!(text = format!("{} says:", speaker_name)))
-                                    } else {
-                                        Ok(Text!(text = "Error: speaker not found"))
+        Builder!(
+            builder = move |ctx| {
+                let (selected, set_selected) = ctx.use_state(false);
+                let set_selected = set_selected.clone();
+                GestureDetector!(
+                    on_tap = move |job_builder| {
+                        set_selected.set(!selected, job_builder);
+                    },
+                    child = AnimatedContainer!(
+                        duration = Duration::from_secs_f32(0.5),
+                        height = if selected { 70.0 } else { 60.0 },
+                        color = if selected {
+                            Color::LIGHT_BLUE
+                        } else {
+                            Color::LIGHT_GRAY
+                        },
+                        margin = if selected {
+                            EdgeInsets::new_all(1.0)
+                        } else {
+                            EdgeInsets::new_all(3.0)
+                        },
+                        child = Suspense!(
+                            fallback = Center!(child = CircularProgressIndicator!()),
+                            child = Row!(
+                                children = vec![
+                                    Container!(
+                                        width = 100.0,
+                                        color = Color::WHITE,
+                                        alignment = Alignment::CENTER_LEFT,
+                                        padding = EdgeInsets::new_all(5.0),
+                                        margin = EdgeInsets::new_all(3.0),
+                                        child = SuspendableBuilder!(
+                                            builder = move |ctx| {
+                                                let speaker_name = ctx.use_future(
+                                                    |id| {
+                                                        tokio::spawn(async move {
+                                                            tokio::time::sleep(
+                                                                std::time::Duration::from_secs(2),
+                                                            )
+                                                            .await;
+                                                            HINTS_DATABASE
+                                                                .get(&id)
+                                                                .map(|hint| hint.speaker_name)
+                                                        })
+                                                        .map(Result::unwrap)
+                                                    },
+                                                    id,
+                                                )?;
+                                                if let Some(speaker_name) = speaker_name {
+                                                    Ok(Text!(
+                                                        text = format!("{} says:", speaker_name)
+                                                    ))
+                                                } else {
+                                                    Ok(Text!(text = "Error: speaker not found"))
+                                                }
+                                            }
+                                        )
+                                    )
+                                    .into(),
+                                    Flexible {
+                                        flex: 1,
+                                        fit: FlexFit::Tight,
+                                        child: Center!(
+                                            child = Suspense!(
+                                                fallback =
+                                                    Center!(child = CircularProgressIndicator!()),
+                                                child = SuspendableBuilder!(
+                                                    builder = move |ctx| {
+                                                        let hint_content = ctx.use_future(
+                                                                |id| {
+                                                                    tokio::spawn(async move {
+                                                                        tokio::time::sleep(
+                                                                            std::time::Duration::from_secs(4),
+                                                                        )
+                                                                        .await;
+                                                                        HINTS_DATABASE
+                                                                            .get(&id)
+                                                                            .map(|hint| hint.content)
+                                                                    })
+                                                                    .map(Result::unwrap)
+                                                                },
+                                                                id,
+                                                            )?;
+                                                        if let Some(hint_content) = hint_content {
+                                                            Ok(Text!(text = hint_content))
+                                                        } else {
+                                                            Ok(Text!(
+                                                                text = "Error: hint not found"
+                                                            ))
+                                                        }
+                                                    }
+                                                )
+                                            )
+                                        )
                                     }
-                                }
+                                ]
                             )
                         )
-                        .into(),
-                        Flexible {
-                            flex: 1,
-                            fit: FlexFit::Tight,
-                            child: Center!(
-                                child = Suspense!(
-                                    fallback = Center!(child = CircularProgressIndicator!()),
-                                    child = SuspendableBuilder!(
-                                        builder = move |ctx| {
-                                            let hint_content = ctx.use_future(
-                                                |id| {
-                                                    tokio::spawn(async move {
-                                                        tokio::time::sleep(
-                                                            std::time::Duration::from_secs(4),
-                                                        )
-                                                        .await;
-                                                        HINTS_DATABASE
-                                                            .get(&id)
-                                                            .map(|hint| hint.content)
-                                                    })
-                                                    .map(Result::unwrap)
-                                                },
-                                                id,
-                                            )?;
-                                            if let Some(hint_content) = hint_content {
-                                                Ok(Text!(text = hint_content))
-                                            } else {
-                                                Ok(Text!(text = "Error: hint not found"))
-                                            }
-                                        }
-                                    )
-                                )
-                            )
-                        }
-                    ]
+                    )
                 )
-            )
+            }
         )
     }
 

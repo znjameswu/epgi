@@ -48,7 +48,10 @@ pub fn derive_lerp(input: TokenStream) -> TokenStream {
             .named
             .iter()
             .map(|field| {
-                let ident = field.ident.as_ref().expect("All fields must be named in the struct");
+                let ident = field
+                    .ident
+                    .as_ref()
+                    .expect("All fields must be named in the struct");
                 quote! {
                     #ident: self.#ident.lerp(&other.#ident, t)
                 }

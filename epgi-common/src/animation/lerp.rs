@@ -1,9 +1,24 @@
-use epgi_2d::Color;
+use epgi_2d::{BoxConstraints, Color};
 
 pub use epgi_macro::*;
 
 pub trait Lerp {
     fn lerp(&self, other: &Self, t: f32) -> Self;
+}
+
+impl<T: Lerp + Clone> Lerp for Option<T> {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        match (self, other) {
+            (Some(this), Some(other)) => Some(this.lerp(other, t)),
+            _ => {
+                if t > 0.5 {
+                    other.clone()
+                } else {
+                    self.clone()
+                }
+            }
+        }
+    }
 }
 
 // impl<T> Lerp for T
@@ -97,6 +112,17 @@ impl Lerp for Color {
             g: (self.g as i16).lerp(&(other.g as i16), t).clamp(0, 255) as u8,
             b: (self.b as i16).lerp(&(other.b as i16), t).clamp(0, 255) as u8,
             a: (self.a as i16).lerp(&(other.a as i16), t).clamp(0, 255) as u8,
+        }
+    }
+}
+
+impl Lerp for BoxConstraints {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        BoxConstraints {
+            min_width: self.min_width.lerp(&other.min_width, t),
+            max_width: self.max_width.lerp(&other.max_width, t),
+            min_height: self.min_height.lerp(&other.min_height, t),
+            max_height: self.max_height.lerp(&other.max_height, t),
         }
     }
 }
