@@ -6,11 +6,9 @@ use std::{
 };
 
 use epgi_core::{
-    foundation::{
-        Arc, Asc, AscProvideExt, InlinableDwsizeVec, Protocol, Provide, SmallVecExt, TypeKey,
-    },
+    foundation::{Arc, Asc, InlinableDwsizeVec, Protocol, Provide, TypeKey},
     hooks::{SetState, State},
-    nodes::{ComponentElement, ComponentWidget, ConsumerElement, ConsumerWidget},
+    nodes::{ConsumerElement, ConsumerWidget},
     read_providers,
     scheduler::get_current_scheduler,
     tree::{ArcChildWidget, BuildContext, ElementBase, Widget},
@@ -21,63 +19,30 @@ use typed_builder::TypedBuilder;
 
 use crate::{AnimationFrame, Lerp, Tween};
 
-#[derive(Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<ImplicitlyAnimatedBuilder<T, F, P>>))]
-pub struct ImplicitlyAnimatedBuilder<
-    T: Lerp + State + PartialEq,
-    F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
-    P: Protocol,
-> {
-    value: T,
-    duration: Duration,
-    #[builder(default, setter(transform = |curve: impl Tween<Output = f32> + Send + Sync + 'static| Some(Asc::new(curve) as _)))]
-    curve: Option<Asc<dyn Tween<Output = f32> + Send + Sync>>,
-    builder: F,
+pub trait BuildContextImplicitAnimationExt {
+    fn use_implicitly_animated_value<T: Lerp + State + PartialEq>(
+        &mut self,
+        value: &T,
+        duration: Duration,
+        curve: Option<&Asc<dyn Tween<Output = f32> + Send + Sync>>,
+    ) -> ImplicitlyAnimatedValue<T>;
 }
 
-impl<T, F, P> Debug for ImplicitlyAnimatedBuilder<T, F, P>
-where
-    T: Lerp + State + PartialEq,
-    F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
-    P: Protocol,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ImplicitlyAnimatedBuilder")
-            .field("value", &self.value)
-            .finish()
-    }
-}
-
-impl<T, F, P> Widget for ImplicitlyAnimatedBuilder<T, F, P>
-where
-    T: Lerp + State + PartialEq,
-    F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
-    P: Protocol,
-{
-    type ParentProtocol = P;
-    type ChildProtocol = P;
-    type Element = ComponentElement<P>;
-
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
-        self
-    }
-}
-
-impl<T, F, P> ComponentWidget<P> for ImplicitlyAnimatedBuilder<T, F, P>
-where
-    T: Lerp + State + PartialEq,
-    F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
-    P: Protocol,
-{
-    fn build(&self, ctx: &mut BuildContext<'_>) -> ArcChildWidget<P> {
-        let (target, set_target) = ctx.use_state_with(|| self.value.clone());
-        let (start_time, set_start_time) = ctx.use_state_with(|| Instant::now());
-        let (source, set_source) = ctx.use_state_with(|| self.value.clone());
-        let (current, set_current) = ctx.use_state_with(|| self.value.clone());
+impl BuildContextImplicitAnimationExt for BuildContext<'_> {
+    fn use_implicitly_animated_value<T: Lerp + State + PartialEq>(
+        &mut self,
+        value: &T,
+        duration: Duration,
+        curve: Option<&Asc<dyn Tween<Output = f32> + Send + Sync>>,
+    ) -> ImplicitlyAnimatedValue<T> {
+        let (target, set_target) = self.use_state_with(|| value.clone());
+        let (start_time, set_start_time) = self.use_state_with(|| Instant::now());
+        let (source, set_source) = self.use_state_with(|| value.clone());
+        let (current, set_current) = self.use_state_with(|| value.clone());
 
         let set_source_clone = set_source.clone();
         let current_clone = current.clone();
-        ctx.use_effect(
+        self.use_effect(
             move |value| {
                 let now = Instant::now();
                 get_current_scheduler().create_sync_job(|job_builder| {
@@ -86,10 +51,10 @@ where
                     set_start_time.set(now, job_builder);
                 });
             },
-            self.value.clone(),
+            value.clone(),
         );
 
-        ctx.use_effect_2(
+        self.use_effect_2(
             move |current, target| {
                 if current == target {
                     get_current_scheduler().create_sync_job(|job_builder| {
@@ -101,38 +66,37 @@ where
             target.clone(),
         );
 
-        let value_state = if current == target {
-            ImplicitlyAnimatedBuilderValueState::Static { value: current }
+        let state = if current == target {
+            ImplicitlyAnimatedValueState::Static { value: current }
         } else {
-            ImplicitlyAnimatedBuilderValueState::Active {
+            ImplicitlyAnimatedValueState::Active {
                 source,
                 target,
                 start_time,
-                duration: self.duration,
-                curve: self.curve.clone(),
+                duration,
+                curve: curve.cloned(),
             }
         };
-
-        Asc::new(ImplicitlyAnimatedBuilderInner {
-            value_state,
-            set_current,
-            builder: self.builder.clone(),
-        })
+        ImplicitlyAnimatedValue { set_current, state }
     }
 }
 
-struct ImplicitlyAnimatedBuilderInner<
-    T: Lerp + State + PartialEq,
-    F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
-    P: Protocol,
-> {
-    value_state: ImplicitlyAnimatedBuilderValueState<T>,
+impl<T: Lerp + State + PartialEq> ImplicitlyAnimatedValue<T> {
+    pub fn build<P: Protocol>(
+        self,
+        builder: impl Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
+    ) -> ArcChildWidget<P> {
+        ImplicitlyAnimated!(value = self, builder)
+    }
+}
+
+pub struct ImplicitlyAnimatedValue<T> {
     set_current: SetState<T>,
-    builder: F,
+    state: ImplicitlyAnimatedValueState<T>,
 }
 
 #[derive(Clone)]
-enum ImplicitlyAnimatedBuilderValueState<T> {
+enum ImplicitlyAnimatedValueState<T> {
     Static {
         value: T,
     },
@@ -145,7 +109,18 @@ enum ImplicitlyAnimatedBuilderValueState<T> {
     },
 }
 
-impl<T, F, P> Debug for ImplicitlyAnimatedBuilderInner<T, F, P>
+#[derive(Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<ImplicitlyAnimated<T, F, P>>))]
+pub struct ImplicitlyAnimated<
+    T: Lerp + State + PartialEq,
+    F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
+    P: Protocol,
+> {
+    value: ImplicitlyAnimatedValue<T>,
+    builder: F,
+}
+
+impl<T, F, P> Debug for ImplicitlyAnimated<T, F, P>
 where
     T: Lerp + State + PartialEq,
     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
@@ -156,7 +131,7 @@ where
     }
 }
 
-impl<T, F, P> Widget for ImplicitlyAnimatedBuilderInner<T, F, P>
+impl<T, F, P> Widget for ImplicitlyAnimated<T, F, P>
 where
     T: Lerp + State + PartialEq,
     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
@@ -176,16 +151,16 @@ lazy_static! {
         [TypeKey::of::<AnimationFrame>(),];
 }
 
-impl<T, F, P> ConsumerWidget<P> for ImplicitlyAnimatedBuilderInner<T, F, P>
+impl<T, F, P> ConsumerWidget<P> for ImplicitlyAnimated<T, F, P>
 where
     T: Lerp + State + PartialEq,
     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
     P: Protocol,
 {
     fn get_consumed_types(&self) -> Cow<[TypeKey]> {
-        match &self.value_state {
-            ImplicitlyAnimatedBuilderValueState::Static { .. } => (&[]).into(),
-            ImplicitlyAnimatedBuilderValueState::Active { .. } => {
+        match &self.value.state {
+            ImplicitlyAnimatedValueState::Static { .. } => (&[]).into(),
+            ImplicitlyAnimatedValueState::Active { .. } => {
                 IMPLICITLY_ANIMATED_BUILDER_CONSUMED_TYPES_ACTIVE
                     .deref()
                     .into()
@@ -198,15 +173,15 @@ where
         ctx: &mut BuildContext,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> ArcChildWidget<P> {
-        let (value, is_active) = match self.value_state.clone() {
-            ImplicitlyAnimatedBuilderValueState::Static { value } => {
+        let (value, is_active) = match self.value.state.clone() {
+            ImplicitlyAnimatedValueState::Static { value } => {
                 debug_assert!(
                     provider_values.is_empty(),
                     "Inactive animated widget should not receive animation frame subscription"
                 );
                 (value, false)
             }
-            ImplicitlyAnimatedBuilderValueState::Active {
+            ImplicitlyAnimatedValueState::Active {
                 source,
                 target,
                 start_time,
@@ -228,7 +203,7 @@ where
             }
         };
 
-        let set_current = self.set_current.clone();
+        let set_current = self.value.set_current.clone();
         ctx.use_effect(
             move |(current, is_active)| {
                 if is_active {
@@ -243,3 +218,58 @@ where
         (self.builder)(ctx, value)
     }
 }
+
+// // The following suffers from name collision from TypedBuilder
+// #[derive(Declarative, TypedBuilder)]
+// #[builder(build_method(into=Asc<ImplicitlyAnimatedBuilder<T, F, P>>))]
+// pub struct ImplicitlyAnimatedBuilder<
+//     T: Lerp + State + PartialEq,
+//     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
+//     P: Protocol,
+// > {
+//     value: T,
+//     duration: Duration,
+//     #[builder(default, setter(transform = |curve: impl Tween<Output = f32> + Send + Sync + 'static| Some(Asc::new(curve) as _)))]
+//     curve: Option<Asc<dyn Tween<Output = f32> + Send + Sync>>,
+//     builder: F,
+// }
+
+// impl<T, F, P> Debug for ImplicitlyAnimatedBuilder<T, F, P>
+// where
+//     T: Lerp + State + PartialEq,
+//     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
+//     P: Protocol,
+// {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("ImplicitlyAnimatedBuilder")
+//             .field("value", &self.value)
+//             .finish()
+//     }
+// }
+
+// impl<T, F, P> Widget for ImplicitlyAnimatedBuilder<T, F, P>
+// where
+//     T: Lerp + State + PartialEq,
+//     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
+//     P: Protocol,
+// {
+//     type ParentProtocol = P;
+//     type ChildProtocol = P;
+//     type Element = ComponentElement<P>;
+
+//     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+//         self
+//     }
+// }
+
+// impl<T, F, P> ComponentWidget<P> for ImplicitlyAnimatedBuilder<T, F, P>
+// where
+//     T: Lerp + State + PartialEq,
+//     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Clone + Send + Sync + 'static,
+//     P: Protocol,
+// {
+//     fn build(&self, ctx: &mut BuildContext<'_>) -> ArcChildWidget<P> {
+//         let value = ctx.use_implicitly_animated_value(&self.value, duration, curve.as_ref());
+//         value.build(self.builder.clone())
+//     }
+// }
