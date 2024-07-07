@@ -1,4 +1,6 @@
-pub trait Tween {
+use std::fmt::Debug;
+
+pub trait Tween: Debug {
     type Output;
 
     fn interp(&self, t: f32) -> Self::Output;
@@ -19,6 +21,7 @@ pub trait Tween {
     }
 }
 
+#[derive(Debug)]
 pub struct ChainedTween<A, B> {
     a: A,
     b: B,
