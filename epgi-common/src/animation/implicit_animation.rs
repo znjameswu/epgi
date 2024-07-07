@@ -21,10 +21,6 @@ use typed_builder::TypedBuilder;
 
 use crate::{AnimationFrame, Lerp, Tween};
 
-pub trait BuildContextImplicitAnimationExt {
-    fn use_animated_state<T: Tween>(&mut self, init: impl FnOnce() -> T) -> ();
-}
-
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<ImplicitlyAnimatedBuilder<T, F, P>>))]
 pub struct ImplicitlyAnimatedBuilder<
@@ -59,9 +55,7 @@ where
     P: Protocol,
 {
     type ParentProtocol = P;
-
     type ChildProtocol = P;
-
     type Element = ComponentElement<P>;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
@@ -76,10 +70,10 @@ where
     P: Protocol,
 {
     fn build(&self, ctx: &mut BuildContext<'_>) -> ArcChildWidget<P> {
-        let (target, set_target) = ctx.use_state(self.value.clone());
+        let (target, set_target) = ctx.use_state_with(|| self.value.clone());
         let (start_time, set_start_time) = ctx.use_state_with(|| Instant::now());
-        let (source, set_source) = ctx.use_state(self.value.clone());
-        let (current, set_current) = ctx.use_state(self.value.clone());
+        let (source, set_source) = ctx.use_state_with(|| self.value.clone());
+        let (current, set_current) = ctx.use_state_with(|| self.value.clone());
 
         let set_source_clone = set_source.clone();
         let current_clone = current.clone();
