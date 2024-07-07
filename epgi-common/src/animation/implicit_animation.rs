@@ -6,7 +6,9 @@ use std::{
 };
 
 use epgi_core::{
-    foundation::{Arc, Asc, InlinableDwsizeVec, Protocol, Provide, TypeKey},
+    foundation::{
+        Arc, Asc, AscProvideExt, InlinableDwsizeVec, Protocol, Provide, SmallVecExt, TypeKey,
+    },
     hooks::{SetState, State},
     nodes::{ConsumerElement, ConsumerWidget},
     read_providers,
