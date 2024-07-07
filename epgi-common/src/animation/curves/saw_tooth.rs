@@ -1,6 +1,7 @@
 use crate::Tween;
 
 /// https://api.flutter.dev/flutter/animation/SawTooth-class.html
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct SawTooth {
     pub count: u32,
 }

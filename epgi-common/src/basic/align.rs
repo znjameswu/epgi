@@ -12,6 +12,8 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
+use crate::Lerp;
+
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Align>))]
 pub struct Align {
@@ -23,7 +25,7 @@ pub struct Align {
     pub child: ArcBoxWidget,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Lerp, PartialEq, Clone, Copy, Debug)]
 pub struct Alignment {
     pub x: f32,
     pub y: f32,

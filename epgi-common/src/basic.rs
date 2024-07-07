@@ -1,6 +1,9 @@
 mod align;
 pub use align::*;
 
+mod animated_container;
+pub use animated_container::*;
+
 mod center;
 pub use center::*;
 
