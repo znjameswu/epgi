@@ -20,6 +20,13 @@ Besides, the capabilities from the Rust language and its ecosystem enables us to
 - (Almost) **Unsafe-free**. The project witnessed a single-digit trivially-provable unsafe usages. We leave most of the optimizations in the hands of compilers for Safe Rust.
 
 # Project status
+## "Rocket science" demo
+The demo showcases Suspense and Transition API. As well as explicit animation and implicit animation.
+
+
+https://github.com/ZhennanWu/epgi/assets/38578020/f69d1be5-77cc-4927-8c14-3c827ed6d9e3
+
+
 Completed:
 - A minimal example is running
 - Sync parallel reconcilliation
