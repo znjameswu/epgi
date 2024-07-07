@@ -81,11 +81,14 @@ where
         let (source, set_source) = ctx.use_state(self.value.clone());
         let (current, set_current) = ctx.use_state(self.value.clone());
 
+        let set_source_clone = set_source.clone();
+        let current_clone = current.clone();
         ctx.use_effect(
             move |value| {
                 let now = Instant::now();
                 get_current_scheduler().create_sync_job(|job_builder| {
                     set_target.set(value, job_builder);
+                    set_source_clone.set(current_clone, job_builder);
                     set_start_time.set(now, job_builder);
                 });
             },
