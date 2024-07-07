@@ -12,7 +12,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{Axis, CrossAxisAlignment, Flexible, MainAxisAlignment, MainAxisSize, RenderFlex};
 
-use super::get_flex_conf;
+use super::get_flexible_configs;
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Column>))]
@@ -89,7 +89,7 @@ impl BoxMultiChildRenderElement for ColumnElement {
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flex_conf: get_flex_conf(&widget.children),
+            flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_vertical,
             flip_cross_axis: widget.flip_horizontal,
         }
@@ -103,7 +103,10 @@ impl BoxMultiChildRenderElement for ColumnElement {
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
             ),
-            set_if_changed(&mut render.flex_conf, get_flex_conf(&widget.children)),
+            set_if_changed(
+                &mut render.flexible_configs,
+                get_flexible_configs(&widget.children),
+            ),
             set_if_changed(&mut render.flip_main_axis, widget.flip_vertical),
             set_if_changed(&mut render.flip_cross_axis, widget.flip_horizontal),
         ]
