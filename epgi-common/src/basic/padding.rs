@@ -12,6 +12,8 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
+use crate::Lerp;
+
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Padding>))]
 pub struct Padding {
@@ -19,7 +21,7 @@ pub struct Padding {
     pub child: ArcBoxWidget,
 }
 
-#[derive(PartialEq, Default, Clone, Copy, Debug)]
+#[derive(Lerp, PartialEq, Default, Clone, Copy, Debug)]
 pub struct EdgeInsets {
     pub l: f32,
     pub r: f32,

@@ -1,7 +1,7 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, ItemStruct};
+use syn::{parse_macro_input, Index, ItemStruct};
 
 #[proc_macro_derive(Declarative)]
 pub fn derive_declarative(input: TokenStream) -> TokenStream {
@@ -35,6 +35,46 @@ pub fn derive_declarative(input: TokenStream) -> TokenStream {
         }
 
         pub use #_struct_name as #struct_name;
+    }
+    .into()
+}
+
+#[proc_macro_derive(Lerp)]
+pub fn derive_lerp(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let struct_name = input.ident;
+    let fields = match &input.fields {
+        syn::Fields::Named(fields) => fields
+            .named
+            .iter()
+            .map(|field| {
+                let ident = field.ident.as_ref().expect("All fields must be named in the struct");
+                quote! {
+                    #ident: self.#ident.lerp(&other.#ident, t)
+                }
+            })
+            .collect(),
+        syn::Fields::Unnamed(fields) => fields
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(i, _field)| {
+                let ident = Index::from(i);
+                quote! {
+                    #ident: self.#ident.lerp(&other.#ident, t)
+                }
+            })
+            .collect(),
+        syn::Fields::Unit => Vec::new(),
+    };
+    quote! {
+        impl Lerp for #struct_name {
+            fn lerp(&self, other: &Self, t: f32) -> Self {
+                Self {
+                    #(#fields),*
+                }
+            }
+        }
     }
     .into()
 }

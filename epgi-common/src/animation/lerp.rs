@@ -1,5 +1,7 @@
 use epgi_2d::Color;
 
+pub use epgi_macro::*;
+
 pub trait Lerp {
     fn lerp(&self, other: &Self, t: f32) -> Self;
 }
