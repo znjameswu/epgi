@@ -98,6 +98,15 @@ pub trait Container:
         f: impl Fn(<Self as Container>::Item) -> R + Send + Sync,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
 
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    );
+
     fn map_collect<R: Send + Sync>(
         self,
         f: impl FnMut(<Self as Container>::Item) -> R,
@@ -176,6 +185,14 @@ where
         f: impl Fn(T) -> R + Send + Sync,
     ) -> Vec<R> {
         pool.par_map_collect_vec(self, f)
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (Vec<R1>, Vec<R2>) {
+        pool.par_map_unzip_vec(self, f)
     }
 
     fn map_collect<R: Send + Sync>(self, f: impl FnMut(T) -> R) -> Vec<R> {
@@ -277,6 +294,14 @@ where
         f: impl Fn(T) -> R + Send + Sync,
     ) -> [R; N] {
         pool.par_map_collect_arr(self, f)
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> ([R1; N], [R2; N]) {
+        pool.par_map_unzip_arr(self, f)
     }
 
     fn map_collect<R: Send + Sync>(self, f: impl FnMut(T) -> R) -> [R; N] {
@@ -650,6 +675,18 @@ where
         Some(f(item))
     }
 
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        _pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (Option<R1>, Option<R2>) {
+        let Some(item) = self else {
+            return (None, None);
+        };
+        let (r1, r2) = f(item);
+        (Some(r1), Some(r2))
+    }
+
     fn map_collect<R: Send + Sync>(self, f: impl FnMut(T) -> R) -> Option<R> {
         self.map(f)
     }
@@ -808,6 +845,27 @@ where
         match self.0 {
             Left(x) => EitherParallel(Left(x.par_map_collect(pool, f))),
             Right(x) => EitherParallel(Right(x.par_map_collect(pool, f))),
+        }
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    ) {
+        use either::Either::*;
+        match self.0 {
+            Left(x) => {
+                let (res1, res2) = x.par_map_unzip(pool, f);
+                (EitherParallel(Left(res1)), EitherParallel(Left(res2)))
+            }
+            Right(x) => {
+                let (res1, res2) = x.par_map_unzip(pool, f);
+                (EitherParallel(Right(res1)), EitherParallel(Right(res2)))
+            }
         }
     }
 

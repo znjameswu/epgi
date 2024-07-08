@@ -107,19 +107,18 @@ impl<E: FullElement> ElementNode<E> {
                     scope.spawn(|scope| node_needing_unmount.unmount(scope, lane_scheduler))
                 }
 
-                let results =
-                    items.par_map_collect(&get_current_scheduler().sync_threadpool, |item| {
+                let (mut children, changes) =
+                    items.par_map_unzip(&get_current_scheduler().sync_threadpool, |item| {
                         use ElementReconcileItem::*;
-                        match item {
+                        let (child, commit_result) = match item {
                             Keep(node) => node.visit_and_work_sync(job_ids, scope, lane_scheduler),
                             Update(pair) => pair.rebuild_sync_box(job_ids, scope, lane_scheduler),
                             Inflate(widget) => {
                                 widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
                             }
-                        }
+                        };
+                        (child, commit_result.render_object)
                     });
-                let (mut children, changes) = results
-                    .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
                 let (render_object, change) =
                     <E as Element>::Impl::rebuild_success_commit_render_object(

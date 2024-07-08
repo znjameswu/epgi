@@ -75,6 +75,24 @@ pub trait ThreadPoolExt {
         identity: ID,
         reduce: OP,
     ) -> R;
+
+    fn par_map_unzip_vec<T: Send, R1: Send, R2: Send, F: Fn(T) -> (R1, R2) + Send + Sync>(
+        &self,
+        vec: Vec<T>,
+        f: F,
+    ) -> (Vec<R1>, Vec<R2>);
+
+    fn par_map_unzip_arr<
+        T: Send,
+        R1: Send,
+        R2: Send,
+        F: Fn(T) -> (R1, R2) + Send + Sync,
+        const N: usize,
+    >(
+        &self,
+        arr: [T; N],
+        f: F,
+    ) -> ([R1; N], [R2; N]);
 }
 
 /// We do not need rayon's FIFO feature, since:
@@ -128,19 +146,19 @@ impl ThreadPoolExt for rayon::ThreadPool {
 
     fn par_map_collect_vec<T: Send, R: Send, F: Fn(T) -> R + Send + Sync>(
         &self,
-        mut iter: Vec<T>,
+        mut vec: Vec<T>,
         f: F,
     ) -> Vec<R> {
-        match iter.len() {
+        match vec.len() {
             0 => Vec::new(),
-            1 => [f(iter.remove(0))].into(),
+            1 => [f(vec.remove(0))].into(),
             len @ 2..=16 => {
                 let mut output = std::iter::repeat_with(|| MaybeUninit::uninit())
                     .take(len)
                     .collect::<Vec<_>>(); // Brilliant answer from https://www.reddit.com/r/rust/comments/qjh00f/comment/hiqe32i
                 self.scope(|s| {
                     let f_ref = &f;
-                    for (elem, out) in std::iter::zip(iter, output.iter_mut()) {
+                    for (elem, out) in std::iter::zip(vec, output.iter_mut()) {
                         s.spawn(move |_| {
                             out.write(f_ref(elem));
                         });
@@ -150,7 +168,7 @@ impl ThreadPoolExt for rayon::ThreadPool {
             }
             _ => self.install(|| {
                 let mut res = Vec::new();
-                iter.into_par_iter().map(f).collect_into_vec(&mut res);
+                vec.into_par_iter().map(f).collect_into_vec(&mut res);
                 res
             }),
         }
@@ -166,15 +184,15 @@ impl ThreadPoolExt for rayon::ThreadPool {
 
     fn par_map_collect_arr<T: Send, R: Send, F: Fn(T) -> R + Send + Sync, const N: usize>(
         &self,
-        iter: [T; N],
+        arr: [T; N],
         f: F,
     ) -> [R; N] {
         // const generics ensures redundant branches are shaken out of the compiled product
         match N {
-            0 | 1 => iter.map(f),
+            0 | 1 => arr.map(f),
             2 => {
-                let [elem1, elem2] = unsafe { std::mem::transmute_copy(&iter) };
-                std::mem::forget(iter);
+                let [elem1, elem2] = unsafe { std::mem::transmute_copy(&arr) };
+                std::mem::forget(arr);
                 let f_ref = &f;
                 let res2: [R; 2] = self.join(move || f_ref(elem1), move || f_ref(elem2)).into();
                 let res: [R; N] = unsafe { std::mem::transmute_copy(&res2) };
@@ -186,7 +204,7 @@ impl ThreadPoolExt for rayon::ThreadPool {
                     std::array::from_fn(|_| MaybeUninit::uninit());
                 self.scope(|s| {
                     let f_ref = &f;
-                    for (elem, out) in std::iter::zip(iter, output.iter_mut()) {
+                    for (elem, out) in std::iter::zip(arr, output.iter_mut()) {
                         s.spawn(move |_| {
                             out.write(f_ref(elem));
                         });
@@ -196,7 +214,7 @@ impl ThreadPoolExt for rayon::ThreadPool {
             }
             _ => self.install(|| {
                 let mut res = Vec::new();
-                iter.into_par_iter().map(f).collect_into_vec(&mut res);
+                arr.into_par_iter().map(f).collect_into_vec(&mut res);
                 res.try_into().ok().unwrap()
             }),
         }
@@ -360,6 +378,122 @@ impl ThreadPoolExt for rayon::ThreadPool {
                     .into_par_iter()
                     .map(|(elem1, elem2, elem3)| f(elem1, elem2, elem3))
                     .reduce(identity, reduce)
+            }),
+        }
+    }
+
+    fn par_map_unzip_vec<T: Send, R1: Send, R2: Send, F: Fn(T) -> (R1, R2) + Send + Sync>(
+        &self,
+        mut vec: Vec<T>,
+        f: F,
+    ) -> (Vec<R1>, Vec<R2>) {
+        match vec.len() {
+            0 => (Vec::new(), Vec::new()),
+            1 => {
+                let (r1, r2) = f(vec.remove(0));
+                ([r1].into(), [r2].into())
+            }
+            len @ 2..=16 => {
+                let mut output1 = std::iter::repeat_with(|| MaybeUninit::uninit())
+                    .take(len)
+                    .collect::<Vec<_>>(); // Brilliant answer from https://www.reddit.com/r/rust/comments/qjh00f/comment/hiqe32i
+                let mut output2 = std::iter::repeat_with(|| MaybeUninit::uninit())
+                    .take(len)
+                    .collect::<Vec<_>>();
+                for (elem, (out1, out2)) in
+                    std::iter::zip(vec, std::iter::zip(output1.iter_mut(), output2.iter_mut()))
+                {
+                    let f_ref = &f;
+                    self.scope(|s| {
+                        s.spawn(move |_| {
+                            let (r1, r2) = f_ref(elem);
+                            out1.write(r1);
+                            out2.write(r2);
+                        });
+                    })
+                }
+                unsafe { (std::mem::transmute(output1), std::mem::transmute(output2)) }
+            }
+            _ => self.install(|| {
+                let mut res1 = Vec::new();
+                let mut res2 = Vec::new();
+                vec.into_par_iter()
+                    .map(f)
+                    .unzip_into_vecs(&mut res1, &mut res2);
+                (res1, res2)
+            }),
+        }
+    }
+
+    fn par_map_unzip_arr<
+        T: Send,
+        R1: Send,
+        R2: Send,
+        F: Fn(T) -> (R1, R2) + Send + Sync,
+        const N: usize,
+    >(
+        &self,
+        arr: [T; N],
+        f: F,
+    ) -> ([R1; N], [R2; N]) {
+        // const generics ensures redundant branches are shaken out of the compiled product
+        match N {
+            0 => {
+                let res: ([R1; 0], [R2; 0]) = ([], []);
+                unsafe { std::mem::transmute_copy(&res) }
+            }
+            1 => {
+                let [elem] = unsafe { std::mem::transmute_copy(&arr) };
+                std::mem::forget(arr);
+                let (r1, r2) = f(elem);
+                let res1 = ([r1], [r2]);
+                let res = unsafe { std::mem::transmute_copy(&res1) };
+                std::mem::forget(res1);
+                res
+            }
+            2 => {
+                let [elem1, elem2] = unsafe { std::mem::transmute_copy(&arr) };
+                std::mem::forget(arr);
+                let f_ref = &f;
+                let [(r1, r2), (r12, r22)]: [(R1, R2); 2] =
+                    self.join(move || f_ref(elem1), move || f_ref(elem2)).into();
+                let res2 = ([r1, r12], [r2, r22]);
+                let res = unsafe { std::mem::transmute_copy(&res2) };
+                std::mem::forget(res2);
+                res
+            }
+            3..=16 => {
+                let mut output1: [MaybeUninit<R1>; N] =
+                    std::array::from_fn(|_| MaybeUninit::uninit());
+                let mut output2: [MaybeUninit<R2>; N] =
+                    std::array::from_fn(|_| MaybeUninit::uninit());
+                self.scope(|s| {
+                    let f_ref = &f;
+                    for (elem, (out1, out2)) in
+                        std::iter::zip(arr, std::iter::zip(output1.iter_mut(), output2.iter_mut()))
+                    {
+                        s.spawn(move |_| {
+                            let (r1, r2) = f_ref(elem);
+                            out1.write(r1);
+                            out2.write(r2);
+                        });
+                    }
+                });
+                unsafe {
+                    (
+                        std::mem::transmute_copy(&output1),
+                        std::mem::transmute_copy(&output2),
+                    )
+                }
+                // Original output is MaybeUnint, they will be automatically forgotten
+            }
+            _ => self.install(|| {
+                let mut res1 = Vec::new();
+                let mut res2 = Vec::new();
+                arr.into_par_iter()
+                    .map(f)
+                    .unzip_into_vecs(&mut res1, &mut res2);
+                (res1.try_into().ok().unwrap(), res2.try_into().ok().unwrap())
             }),
         }
     }
