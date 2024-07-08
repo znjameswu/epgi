@@ -21,12 +21,31 @@ Besides, the capabilities from the Rust language and its ecosystem enables us to
 
 # Project status
 ## "Rocket science" demo
-The demo showcases Suspense and Transition API. As well as explicit animation and implicit animation.
+This demo showcases Suspense and Transition API. As well as explicit animation and implicit animation.
 
 
 https://github.com/ZhennanWu/epgi/assets/38578020/f69d1be5-77cc-4927-8c14-3c827ed6d9e3
 
 
+## "Bouncing box" demo
+This demo tests parallel performance characteristics when rendering 40k interactive & animated widgets, and compare against Flutter
+
+Test result\*:
+| N_thread | build+layout (1min avg) | build+layout (low) | paint** | raster | FPS (1min avg)*** | FPS (high) |
+|----------|-------------------------|--------------------|---------|--------|-------------------|------------|
+|        1 |                 15.6 ms |            14.2 ms |  7.7 ms | 0.7 ms |              29.8 |       39.2 |
+|        2 |                 12.0 ms |            10.5 ms |  6.9 ms | 0.6 ms |              36.1 |       49.8 |
+|        4 |                 11.7 ms |             9.1 ms |  6.6 ms | 0.7 ms |              37.6 |       53.3 |
+|        8 |                 15.1 ms |             9.2 ms |  6.8 ms | 0.7 ms |              32.3 |       51.4 |
+|       16 |                 17.4 ms |            10.9 ms |  7.0 ms | 0.7 ms |              29.7 |       49.7 |
+
+\*: Tested on 8-core Intel i7-12700K, Gentoo. Built in release mode.
+
+\*\*: Currently paint phase is not parallelized
+
+\*\*\*: Flutter desktop results: 6 FPS (same implementation, profile mode) / 16 FPS (Flutter optimized implementation, profile mode)
+
+## Objectives
 Completed:
 - A minimal example is running
 - Sync parallel reconcilliation
