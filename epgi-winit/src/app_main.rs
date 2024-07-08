@@ -1,6 +1,4 @@
-use epgi_2d::{
-    Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxProvider, BoxSize, RootView,
-};
+use epgi_2d::{Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, RootView};
 use epgi_common::{ConstrainedBox, FrameInfo, PointerEvent};
 use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
@@ -8,6 +6,7 @@ use epgi_core::{
     nodes::Builder,
     scheduler::{get_current_scheduler, setup_scheduler, FrameMetrics, Scheduler, SchedulerHandle},
     tree::{ArcChildWidget, LayoutResults},
+    Provider,
 };
 use std::{num::NonZeroUsize, sync::atomic::Ordering, time::Instant};
 use tracing::subscriber::SetGlobalDefaultError;
@@ -597,8 +596,8 @@ fn bind_frame_info(
             let frame_binding = frame_binding.clone();
             let child = child.clone();
             let (frame, set_frame) = ctx.use_state_with(|| FrameInfo::now(0));
-            ctx.use_effect_nodep(move || *frame_binding.lock() = Some(set_frame));
-            BoxProvider::value_inner(frame, child)
+            ctx.use_effect(move |_| *frame_binding.lock() = Some(set_frame), ());
+            Provider!(value = frame, child)
         },
     });
     (child, result)

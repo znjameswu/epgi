@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use dpi::LogicalSize;
-use epgi_2d::{ArcBoxWidget, BoxProvider, Color, FontWeight, LocalTextStyle};
+use epgi_2d::{ArcBoxWidget, Color, FontWeight, LocalTextStyle};
 use epgi_common::{
     Alignment, AnimatedContainer, Center, Column, Container, EdgeInsets, FlexFit, Flexible,
     GestureDetector, Row, Text,
@@ -10,7 +10,7 @@ use epgi_core::{
     foundation::Asc,
     hooks::SetState,
     nodes::{Consumer2, SuspendableConsumer},
-    Builder, SuspendableBuilder, Suspense,
+    Builder, Provider, SuspendableBuilder, Suspense,
 };
 use epgi_material::{CircularProgressIndicator, MaterialApp, Scaffold};
 use epgi_winit::{AppLauncher, Window};
@@ -234,11 +234,11 @@ fn main() {
                         let (state, set_state) = ctx.use_state(MyAppState {
                             requested_hints_count: 2,
                         });
-                        BoxProvider::value_inner(
-                            state,
-                            BoxProvider::value_inner(
-                                set_state,
-                                Column!(
+                        Provider!(
+                            value = state,
+                            child = Provider!(
+                                value = set_state,
+                                child = Column!(
                                     children = vec![
                                         app_bar.clone().into(),
                                         Flexible {
