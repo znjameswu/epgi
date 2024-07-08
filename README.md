@@ -30,16 +30,15 @@ https://github.com/ZhennanWu/epgi/assets/38578020/f69d1be5-77cc-4927-8c14-3c827e
 ## "Bouncing box" demo
 This demo tests parallel performance characteristics when rendering 40k interactive & animated widgets, and compare against Flutter
 
-Test result\*:
-| N_thread | build+layout (1min avg) | build+layout (low) | paint** | raster | FPS (1min avg)*** | FPS (high) |
-|----------|-------------------------|--------------------|---------|--------|-------------------|------------|
-|        1 |                 15.6 ms |            14.2 ms |  7.7 ms | 0.7 ms |              29.8 |       39.2 |
-|        2 |                 12.0 ms |            10.5 ms |  6.9 ms | 0.6 ms |              36.1 |       49.8 |
-|        4 |                 11.7 ms |             9.1 ms |  6.6 ms | 0.7 ms |              37.6 |       53.3 |
-|        8 |                 15.1 ms |             9.2 ms |  6.8 ms | 0.7 ms |              32.3 |       51.4 |
-|       16 |                 17.4 ms |            10.9 ms |  7.0 ms | 0.7 ms |              29.7 |       49.7 |
+| N_thread | build+layout (low) | paint** | raster | FPS (high) |
+|----------|--------------------|---------|--------|------------|
+|        1 |            14.2 ms |  7.7 ms | 0.7 ms |       39.2 |
+|        2 |            10.5 ms |  6.9 ms | 0.6 ms |       49.8 |
+|        4 |             9.1 ms |  6.6 ms | 0.7 ms |       53.3 |
+|        8 |             9.2 ms |  6.8 ms | 0.7 ms |       51.4 |
+|       16 |            10.9 ms |  7.0 ms | 0.7 ms |       49.7 |
 
-\*: Tested on 8-core Intel i7-12700K, Gentoo. Built in release mode.
+\*: Tested on 8-core Intel i7-12700K, Gentoo. Built in release mode. Long time average data is not displayed due to severe CPU thermal throttling causing bottleneck on energy efficiency. We slide-average the data by 60 frames and take the best performing point before thermal throttling kicks in.
 
 \*\*: Currently paint phase is not parallelized
 
