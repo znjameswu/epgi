@@ -235,6 +235,86 @@ struct RequestFrame {
 pub struct FrameResults {
     pub composited: Asc<dyn Any + Send + Sync>,
     pub id: u64,
+    pub metrics: FrameMetrics,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Debug)]
+pub struct FrameMetrics {
+    pub build_time: u64,
+    pub sync_build_time: u64,
+    pub layout_time: u64,
+    pub paint_time: u64,
+    pub composite_time: u64,
+}
+
+impl FrameMetrics {
+    pub fn frame_time(&self) -> u64 {
+        self.build_time + self.layout_time + self.paint_time + self.composite_time
+    }
+}
+
+#[derive(Default)]
+pub(super) struct FrameMetricsBuilder {
+    frame_start: Option<Instant>,
+    current_build_start: Option<Instant>,
+    sync_batch_start: Option<Instant>,
+    sync_batch_end: Option<Instant>,
+    layout_start: Option<Instant>,
+    paint_start: Option<Instant>,
+    composite_start: Option<Instant>,
+    frame_end: Option<Instant>,
+}
+
+impl FrameMetricsBuilder {
+    pub(super) fn new() -> Self {
+        Default::default()
+    }
+
+    pub(super) fn frame_start(&mut self) {
+        self.frame_start = Some(Instant::now())
+    }
+    pub(super) fn current_build_start(&mut self) {
+        self.current_build_start = Some(Instant::now())
+    }
+    pub(super) fn sync_batch_start(&mut self) {
+        self.sync_batch_start = Some(Instant::now())
+    }
+    pub(super) fn sync_batch_end(&mut self) {
+        self.sync_batch_end = Some(Instant::now())
+    }
+    pub(super) fn layout_start(&mut self) {
+        self.layout_start = Some(Instant::now())
+    }
+    pub(super) fn paint_start(&mut self) {
+        self.paint_start = Some(Instant::now())
+    }
+    pub(super) fn composite_start(&mut self) {
+        self.composite_start = Some(Instant::now())
+    }
+    pub(super) fn frame_end(&mut self) {
+        self.frame_end = Some(Instant::now())
+    }
+
+    pub(super) fn build(self) -> FrameMetrics {
+        let build_time =
+            (self.layout_start.unwrap() - self.frame_start.unwrap()).as_micros() as u64;
+        let sync_build_time =
+            (self.sync_batch_end.unwrap() - self.sync_batch_start.unwrap()).as_micros() as u64;
+        let layout_time =
+            (self.paint_start.unwrap() - self.paint_start.unwrap()).as_micros() as u64;
+        let paint_time =
+            (self.composite_start.unwrap() - self.paint_start.unwrap()).as_micros() as u64;
+        let composite_time =
+            (self.frame_end.unwrap() - self.composite_start.unwrap()).as_micros() as u64;
+        FrameMetrics {
+            build_time,
+            sync_build_time,
+            layout_time,
+            paint_time,
+            composite_time,
+        }
+    }
 }
 
 impl SchedulerTaskReceiver {
