@@ -1,5 +1,3 @@
-use std::mem::MaybeUninit;
-
 use rayon::{
     iter::IndexedParallelIterator,
     prelude::{IntoParallelIterator, ParallelIterator},
@@ -153,18 +151,23 @@ impl ThreadPoolExt for rayon::ThreadPool {
             0 => Vec::new(),
             1 => [f(vec.remove(0))].into(),
             len @ 2..=16 => {
-                let mut output = std::iter::repeat_with(|| MaybeUninit::uninit())
+                // We cannot use MaybeUninit here
+                // The spawned work could panic, and we have to clean up the other resources
+                // As opposed to the serial map_collect, rayon's work can complete and panic in arbitrary order,
+                // so we cannot construct a single state to guard against drop caused by unwind.
+                // This means each result output has to use their own guard, which means effectively an `Option` for all output slots.
+                let mut output = std::iter::repeat_with(|| None)
                     .take(len)
                     .collect::<Vec<_>>(); // Brilliant answer from https://www.reddit.com/r/rust/comments/qjh00f/comment/hiqe32i
                 self.scope(|s| {
                     let f_ref = &f;
                     for (elem, out) in std::iter::zip(vec, output.iter_mut()) {
                         s.spawn(move |_| {
-                            out.write(f_ref(elem));
+                            *out = Some(f_ref(elem));
                         });
                     }
                 });
-                unsafe { std::mem::transmute(output) }
+                output.into_iter().map(Option::unwrap).collect()
             }
             _ => self.install(|| {
                 let mut res = Vec::new();
@@ -200,17 +203,21 @@ impl ThreadPoolExt for rayon::ThreadPool {
                 res
             }
             3..=16 => {
-                let mut output: [MaybeUninit<R>; N] =
-                    std::array::from_fn(|_| MaybeUninit::uninit());
+                // We cannot use MaybeUninit here
+                // The spawned work could panic, and we have to clean up the other resources
+                // As opposed to the serial map_collect, rayon's work can complete and panic in arbitrary order,
+                // so we cannot construct a single state to guard against drop caused by unwind.
+                // This means each result output has to use their own guard, which means effectively an `Option` for all output slots.
+                let mut output: [_; N] = std::array::from_fn(|_| None);
                 self.scope(|s| {
                     let f_ref = &f;
                     for (elem, out) in std::iter::zip(arr, output.iter_mut()) {
                         s.spawn(move |_| {
-                            out.write(f_ref(elem));
+                            *out = Some(f_ref(elem));
                         });
                     }
                 });
-                unsafe { std::mem::transmute_copy(&output) } // Original output is MaybeUnint, they will be automatically forgotten
+                output.map(Option::unwrap)
             }
             _ => self.install(|| {
                 let mut res = Vec::new();
@@ -394,10 +401,10 @@ impl ThreadPoolExt for rayon::ThreadPool {
                 ([r1].into(), [r2].into())
             }
             len @ 2..=16 => {
-                let mut output1 = std::iter::repeat_with(|| MaybeUninit::uninit())
+                let mut output1 = std::iter::repeat_with(|| None)
                     .take(len)
                     .collect::<Vec<_>>(); // Brilliant answer from https://www.reddit.com/r/rust/comments/qjh00f/comment/hiqe32i
-                let mut output2 = std::iter::repeat_with(|| MaybeUninit::uninit())
+                let mut output2 = std::iter::repeat_with(|| None)
                     .take(len)
                     .collect::<Vec<_>>();
                 for (elem, (out1, out2)) in
@@ -407,12 +414,15 @@ impl ThreadPoolExt for rayon::ThreadPool {
                     self.scope(|s| {
                         s.spawn(move |_| {
                             let (r1, r2) = f_ref(elem);
-                            out1.write(r1);
-                            out2.write(r2);
+                            *out1 = Some(r1);
+                            *out2 = Some(r2);
                         });
                     })
                 }
-                unsafe { (std::mem::transmute(output1), std::mem::transmute(output2)) }
+                (
+                    output1.into_iter().map(Option::unwrap).collect(),
+                    output2.into_iter().map(Option::unwrap).collect(),
+                )
             }
             _ => self.install(|| {
                 let mut res1 = Vec::new();
@@ -463,10 +473,8 @@ impl ThreadPoolExt for rayon::ThreadPool {
                 res
             }
             3..=16 => {
-                let mut output1: [MaybeUninit<R1>; N] =
-                    std::array::from_fn(|_| MaybeUninit::uninit());
-                let mut output2: [MaybeUninit<R2>; N] =
-                    std::array::from_fn(|_| MaybeUninit::uninit());
+                let mut output1: [_; N] = std::array::from_fn(|_| None);
+                let mut output2: [_; N] = std::array::from_fn(|_| None);
                 self.scope(|s| {
                     let f_ref = &f;
                     for (elem, (out1, out2)) in
@@ -474,17 +482,12 @@ impl ThreadPoolExt for rayon::ThreadPool {
                     {
                         s.spawn(move |_| {
                             let (r1, r2) = f_ref(elem);
-                            out1.write(r1);
-                            out2.write(r2);
+                            *out1 = Some(r1);
+                            *out2 = Some(r2);
                         });
                     }
                 });
-                unsafe {
-                    (
-                        std::mem::transmute_copy(&output1),
-                        std::mem::transmute_copy(&output2),
-                    )
-                }
+                (output1.map(Option::unwrap), output2.map(Option::unwrap))
                 // Original output is MaybeUnint, they will be automatically forgotten
             }
             _ => self.install(|| {
