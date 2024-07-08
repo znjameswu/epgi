@@ -486,7 +486,7 @@ impl<'a> MainState<'a> {
                 paint_time_sum as f32 / frame_count as f32 / 1000.0,
                 paint_time_low as f32 /1000.0,
                 1000.0 / self.frame_stats.get_frame_time_ms_avg().unwrap_or(-1.0),
-                1000000.0 / frame_time_sum as f32 * frame_count as f32,
+                1000000.0 / frame_time_sum as f32 * (frame_count - 1) as f32,
                 1000.0 / frame_time_ms_low
                 // self.frame_stats.get_raster_time_ms_avg().unwrap_or(-1.0),
                 // self.frame_stats.get_ui_time_ms_avg().unwrap_or(-1.0),
