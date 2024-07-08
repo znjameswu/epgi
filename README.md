@@ -27,8 +27,12 @@ This demo showcases Suspense and Transition API. As well as explicit animation a
 https://github.com/ZhennanWu/epgi/assets/38578020/f69d1be5-77cc-4927-8c14-3c827ed6d9e3
 
 
-## "Bouncing box" demo
-This demo tests parallel performance characteristics when rendering 40k interactive & animated widgets, and compare against Flutter
+## "Bouncing blocks" demo
+This demo tests parallel performance characteristics when rendering 40k interactive & animated widgets, to compare against a Flutter mimic.
+
+
+https://github.com/ZhennanWu/epgi/assets/38578020/d08b227b-ba9b-4829-9e36-932ea48ef0db
+
 
 | N_thread | build+layout (low) | paint** | raster | FPS (high) |
 |----------|--------------------|---------|--------|------------|
