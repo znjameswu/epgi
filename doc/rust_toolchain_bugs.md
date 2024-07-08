@@ -40,6 +40,8 @@ Code-style hazard
         1. Well maybe we can pub use the macro level-by-level? I haven't tried before I succeeded in a crappy hack.
     3. The `pub use` workaround also produces a great deal of errors and obstacles
     4. However, a very twisted crap just works. I can't believe this crap. Head to see the `Declarative` derive macro implementation to check out.
+- Zero-cost abstraction on top of rayon
+    - https://github.com/rayon-rs/rayon/issues/1179
 
 
 

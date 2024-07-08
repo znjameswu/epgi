@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use epgi_2d::{
     Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, ArcBoxWidget, BlendMode,
     BoxConstraints, BoxMultiChildElement, BoxMultiChildElementTemplate, BoxMultiChildHitTest,
@@ -7,7 +9,9 @@ use epgi_2d::{
 use epgi_core::{
     foundation::{
         set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
+        ThreadPoolExt,
     },
+    scheduler::get_current_scheduler,
     template::ImplByTemplate,
     tree::{BuildContext, ElementBase, RenderAction, Widget},
 };
@@ -184,12 +188,12 @@ impl BoxMultiChildLayout for RenderStack {
         constraints: &BoxConstraints,
         children: &Vec<ArcBoxRenderObject>,
     ) -> (BoxSize, Self::LayoutMemo) {
+        use std::sync::atomic::Ordering::*;
         debug_assert_eq!(
             children.len(),
             self.positioned_configs.len(),
             "RenderStack should receive the same amount of children as its positioned config"
         );
-        let mut has_non_positioned_children = false;
         if children.is_empty() {
             let biggest = constraints.biggest();
             if biggest.is_finite() {
@@ -207,41 +211,63 @@ impl BoxMultiChildLayout for RenderStack {
             StackFit::Passthrough => constraints.clone(),
         };
 
-        let mut width = 0.0f32;
-        let mut height = 0.0f32;
-
         let mut child_sizes = std::iter::repeat(BoxSize::ZERO)
             .take(children.len())
             .collect::<Vec<_>>();
-        for ((child, positioned_config), child_size) in std::iter::zip(
-            std::iter::zip(children, &self.positioned_configs),
-            child_sizes.iter_mut(),
-        ) {
-            if !positioned_config.is_positioned() {
-                has_non_positioned_children = true;
-                *child_size = child.layout_use_size(&non_positioned_constraints);
-                width = width.max(child_size.width);
-                height = height.max(child_size.height);
+
+        fn layout_non_positioned_child(
+            child: &ArcBoxRenderObject,
+            positioned_config: &PositionedConfig,
+            child_size: &mut BoxSize,
+            non_positioned_constraints: &BoxConstraints,
+        ) -> Option<BoxSize> {
+            if positioned_config.is_positioned() {
+                return None;
             }
+            *child_size = child.layout_use_size(non_positioned_constraints);
+            Some(*child_size)
         }
 
-        let size = if has_non_positioned_children {
-            let size = BoxSize { width, height };
-            assert_eq!(size, constraints.constrain(size));
-            size
-        } else {
-            constraints.biggest()
-        };
+        let threadpool = &get_current_scheduler().sync_threadpool;
+        let biggest_non_positioned_size = threadpool.par_zip3_ref_ref_mut_map_reduce_vec(
+            children,
+            &self.positioned_configs,
+            &mut child_sizes,
+            |child, positioned_config, child_size| {
+                layout_non_positioned_child(
+                    child,
+                    positioned_config,
+                    child_size,
+                    &non_positioned_constraints,
+                )
+            },
+            || None,
+            |size1, size2| match (size1, size2) {
+                (None, None) => None,
+                (None, Some(_)) => size2,
+                (Some(_), None) => size1,
+                (Some(size1), Some(size2)) => Some(BoxSize {
+                    width: size1.width.max(size2.width),
+                    height: size1.height.max(size2.height),
+                }),
+            },
+        );
+
+        let size = biggest_non_positioned_size.unwrap_or_else(|| constraints.biggest());
+
+        assert_eq!(size, constraints.constrain(size));
         assert!(size.is_finite());
 
-        let mut has_visual_overflow = false;
-        let offsets = std::iter::zip(
-            std::iter::zip(children, &self.positioned_configs),
-            child_sizes.iter_mut(),
-        )
-        .map(|((child, positioned_config), child_size)| {
+        fn layout_all_child(
+            child: &ArcBoxRenderObject,
+            positioned_config: &PositionedConfig,
+            child_size: &mut BoxSize,
+            size: BoxSize,
+            alignment: Alignment,
+            has_visual_overflow: &AtomicBool,
+        ) -> BoxOffset {
             if !positioned_config.is_positioned() {
-                self.alignment.along_offset(BoxOffset {
+                alignment.along_offset(BoxOffset {
                     x: size.width - child_size.width,
                     y: size.height - child_size.height,
                 })
@@ -274,7 +300,7 @@ impl BoxMultiChildLayout for RenderStack {
                 } else if let Some(r) = r {
                     size.width - r - child_size.width
                 } else {
-                    self.alignment
+                    alignment
                         .along_offset(BoxOffset {
                             x: size.width - child_size.width,
                             y: size.height - child_size.height,
@@ -282,16 +308,12 @@ impl BoxMultiChildLayout for RenderStack {
                         .x
                 };
 
-                if x < 0.0 || x + child_size.width > size.width {
-                    has_visual_overflow = true;
-                }
-
                 let y = if let Some(t) = t {
                     *t
                 } else if let Some(b) = b {
                     size.height - b - child_size.height
                 } else {
-                    self.alignment
+                    alignment
                         .along_offset(BoxOffset {
                             x: size.width - child_size.width,
                             y: size.height - child_size.height,
@@ -299,16 +321,37 @@ impl BoxMultiChildLayout for RenderStack {
                         .y
                 };
 
-                if y < 0.0 || y + child_size.height > size.height {
-                    has_visual_overflow = true;
+                if x < 0.0
+                    || x + child_size.width > size.width
+                    || y < 0.0
+                    || y + child_size.height > size.height
+                {
+                    has_visual_overflow.store(true, Relaxed);
                 }
 
                 BoxOffset { x, y }
             }
-        })
-        .collect();
+        }
 
-        (size, (offsets, has_visual_overflow))
+        let has_visual_overflow = AtomicBool::new(false);
+
+        let offsets = threadpool.par_zip3_ref_ref_mut_map_collect_vec(
+            children,
+            &self.positioned_configs,
+            &mut child_sizes,
+            |child, positioned_config, child_size| {
+                layout_all_child(
+                    child,
+                    positioned_config,
+                    child_size,
+                    size,
+                    self.alignment,
+                    &has_visual_overflow,
+                )
+            },
+        );
+
+        (size, (offsets, has_visual_overflow.load(Relaxed)))
     }
 }
 
