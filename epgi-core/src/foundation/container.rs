@@ -60,6 +60,17 @@ pub trait HktContainer {
     fn try_create_empty<T: Send + Sync>() -> Self::Container<T> {
         panic!("The container is not always empty. Therefore, an empty container cannot be created out of thin air")
     }
+
+    /// Overwrite this method to use a potentially faster clone impl
+    ///
+    /// We could put a [`Clone`] bound on our GAT type instead of designing a method like this, but that would restrict our element type to also be [`Clone`].
+    /// GAT cannot express dependent type bound at the moment.
+    #[inline(always)]
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.map_ref_collect(Clone::clone)
+    }
 }
 
 pub trait Container:
@@ -86,6 +97,15 @@ pub trait Container:
         pool: &P,
         f: impl Fn(<Self as Container>::Item) -> R + Send + Sync,
     ) -> <Self::HktContainer as HktContainer>::Container<R>;
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    );
 
     fn map_collect<R: Send + Sync>(
         self,
@@ -139,6 +159,12 @@ pub struct VecContainer;
 
 impl HktContainer for VecContainer {
     type Container<T> = Vec<T> where T:Send + Sync;
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.clone()
+    }
 }
 
 impl<T> Container for Vec<T>
@@ -159,6 +185,14 @@ where
         f: impl Fn(T) -> R + Send + Sync,
     ) -> Vec<R> {
         pool.par_map_collect_vec(self, f)
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (Vec<R1>, Vec<R2>) {
+        pool.par_map_unzip_vec(self, f)
     }
 
     fn map_collect<R: Send + Sync>(self, f: impl FnMut(T) -> R) -> Vec<R> {
@@ -234,6 +268,12 @@ impl<const N: usize> HktContainer for ArrayContainer<N> {
             panic!("The container is not always empty. Therefore, an empty container cannot be created out of thin air")
         }
     }
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.clone()
+    }
 }
 
 impl<T, const N: usize> Container for [T; N]
@@ -254,6 +294,14 @@ where
         f: impl Fn(T) -> R + Send + Sync,
     ) -> [R; N] {
         pool.par_map_collect_arr(self, f)
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> ([R1; N], [R2; N]) {
+        pool.par_map_unzip_arr(self, f)
     }
 
     fn map_collect<R: Send + Sync>(self, f: impl FnMut(T) -> R) -> [R; N] {
@@ -597,6 +645,12 @@ pub struct OptionContainer;
 
 impl HktContainer for OptionContainer {
     type Container<T> = Option<T> where T: Send + Sync;
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        container.clone()
+    }
 }
 
 impl<T> Container for Option<T>
@@ -619,6 +673,18 @@ where
     ) -> Option<R> {
         let Some(item) = self else { return None };
         Some(f(item))
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        _pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (Option<R1>, Option<R2>) {
+        let Some(item) = self else {
+            return (None, None);
+        };
+        let (r1, r2) = f(item);
+        (Some(r1), Some(r2))
     }
 
     fn map_collect<R: Send + Sync>(self, f: impl FnMut(T) -> R) -> Option<R> {
@@ -740,6 +806,16 @@ where
     B: HktContainer,
 {
     type Container<T> = EitherParallel<A::Container<T>, B::Container<T>> where T:Send + Sync;
+
+    fn clone_container<T: Send + Sync + Clone>(
+        container: &Self::Container<T>,
+    ) -> Self::Container<T> {
+        let inner_clone = match &container.0 {
+            either::Either::Left(x) => either::Either::Left(A::clone_container(x)),
+            either::Either::Right(x) => either::Either::Right(B::clone_container(x)),
+        };
+        EitherParallel(inner_clone)
+    }
 }
 
 impl<A, B, T> Container for EitherParallel<A, B>
@@ -769,6 +845,27 @@ where
         match self.0 {
             Left(x) => EitherParallel(Left(x.par_map_collect(pool, f))),
             Right(x) => EitherParallel(Right(x.par_map_collect(pool, f))),
+        }
+    }
+
+    fn par_map_unzip<R1: Send + Sync, R2: Send + Sync, P: ThreadPoolExt>(
+        self,
+        pool: &P,
+        f: impl Fn(<Self as Container>::Item) -> (R1, R2) + Send + Sync,
+    ) -> (
+        <Self::HktContainer as HktContainer>::Container<R1>,
+        <Self::HktContainer as HktContainer>::Container<R2>,
+    ) {
+        use either::Either::*;
+        match self.0 {
+            Left(x) => {
+                let (res1, res2) = x.par_map_unzip(pool, f);
+                (EitherParallel(Left(res1)), EitherParallel(Left(res2)))
+            }
+            Right(x) => {
+                let (res1, res2) = x.par_map_unzip(pool, f);
+                (EitherParallel(Right(res1)), EitherParallel(Right(res2)))
+            }
         }
     }
 

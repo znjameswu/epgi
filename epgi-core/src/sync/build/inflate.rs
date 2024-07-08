@@ -107,14 +107,14 @@ impl<E: FullElement> ElementNode<E> {
                     "A build function should always invoke every hook whenever it is called"
                 );
 
-                let results = child_widgets.par_map_collect(
+                let (mut children, render_object_changes) = child_widgets.par_map_unzip(
                     &get_current_scheduler().sync_threadpool,
                     |child_widget| {
-                        child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler)
+                        let (child, commit_result) =
+                            child_widget.inflate_sync(Some(self.context.clone()), lane_scheduler);
+                        (child, commit_result.render_object)
                     },
                 );
-                let (mut children, render_object_changes) = results
-                    .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
                 debug_assert!(
                     !render_object_changes

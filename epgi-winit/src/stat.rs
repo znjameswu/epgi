@@ -103,7 +103,9 @@ impl FrameStats {
             self.raster_time_low = self
                 .raster_time_low
                 .min(self.window_raster_time_sum / SLIDING_WINDOW_SIZE as u64);
-            self.frame_time_ms_low = self.frame_time_ms_low.min(self.get_frame_time_ms_avg().unwrap());
+            self.frame_time_ms_low = self
+                .frame_time_ms_low
+                .min(self.get_frame_time_ms_avg().unwrap());
         }
 
         if self.samples.len() >= SAMPLE_SIZE {

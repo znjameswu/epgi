@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Container, ContainerOf, Inlinable64Vec},
+    foundation::{Arc, Container, ContainerOf, HktContainer, Inlinable64Vec},
     scheduler::{get_current_scheduler, JobId, LanePos},
     sync::{LaneScheduler, RenderObjectCommitResult},
     tree::{
@@ -29,12 +29,12 @@ impl<E: FullElement> ElementNode<E> {
                 render_object,
                 self_rebuild_suspended,
             } => {
-                let results = children
-                    .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
-                        child.visit_and_work_sync(job_ids, scope, lane_scheduler)
+                let render_object_changes =
+                    children.par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
+                        let (_child, commit_result) =
+                            child.visit_and_work_sync(job_ids, scope, lane_scheduler);
+                        commit_result.render_object
                     });
-                let (_children, render_object_changes) = results
-                    .unzip_collect(|(child, commit_result)| (child, commit_result.render_object));
 
                 let render_object_commit_result = <E as Element>::Impl::visit_commit_render_object(
                     &self,
@@ -138,12 +138,12 @@ impl<E: FullElement> ElementNode<E> {
                     render_object,
                     ..
                 } => SetupReconcileResult::SkipAndVisitChildren::<E> {
-                    children: children.map_ref_collect(Clone::clone),
+                    children: E::ChildContainer::clone_container(children),
                     render_object: render_object.clone(),
                     self_rebuild_suspended: false,
                 },
                 RebuildSuspended { children, .. } => SetupReconcileResult::SkipAndVisitChildren {
-                    children: children.map_ref_collect(Clone::clone),
+                    children: E::ChildContainer::clone_container(children),
                     render_object: Default::default(),
                     self_rebuild_suspended: true,
                 },

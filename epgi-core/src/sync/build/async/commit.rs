@@ -1,5 +1,5 @@
 use crate::{
-    foundation::{Arc, Asc, Container, ContainerOf, Protocol},
+    foundation::{Arc, Asc, Container, ContainerOf, HktContainer, Protocol},
     scheduler::{get_current_scheduler, LaneMask, LanePos},
     sync::{
         build::provider::AsyncWorkNeedsRestarting, ImplCommitRenderObject, LaneScheduler,
@@ -280,7 +280,7 @@ where
                         ),
                     };
                     return VisitChildren {
-                        children: children.map_ref_collect(Clone::clone),
+                        children: E::ChildContainer::clone_container(children),
                         render_object,
                         self_rebuild_suspended,
                     };
@@ -444,9 +444,7 @@ where
         };
 
         // Visit children
-        let render_object_changes = stash
-            .children
-            .map_ref_collect(Clone::clone)
+        let render_object_changes = E::ChildContainer::clone_container(&stash.children)
             .par_map_collect(&get_current_scheduler().sync_threadpool, |child| {
                 child.visit_and_commit_async(finished_lanes, scope, lane_scheduler)
             });
@@ -535,7 +533,10 @@ where
         change
     }
 
-    fn execute_commit_suspended_async<'batch>(self: &Arc<Self>, suspended_results: BuildSuspendResults) {
+    fn execute_commit_suspended_async<'batch>(
+        self: &Arc<Self>,
+        suspended_results: BuildSuspendResults,
+    ) {
         suspended_results.waker.make_sync();
 
         let mut snapshot = self.snapshot.lock();
