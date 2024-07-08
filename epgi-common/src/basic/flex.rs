@@ -224,6 +224,21 @@ pub struct Flexible {
     pub child: ArcBoxWidget,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub struct FlexibleConfig {
+    flex: u32,
+    fit: FlexFit,
+}
+
+impl Flexible {
+    fn get_flexible_config(&self) -> FlexibleConfig {
+        FlexibleConfig {
+            flex: self.flex,
+            fit: self.fit,
+        }
+    }
+}
+
 impl From<ArcBoxWidget> for Flexible {
     fn from(value: ArcBoxWidget) -> Self {
         Flexible {
@@ -302,11 +317,8 @@ impl BoxMultiChildElement for FlexElement {
     }
 }
 
-pub(super) fn get_flex_conf(children: &Vec<Flexible>) -> Vec<(u32, FlexFit)> {
-    children
-        .iter()
-        .map(|flexible| (flexible.flex, flexible.fit))
-        .collect()
+pub(super) fn get_flexible_configs(children: &Vec<Flexible>) -> Vec<FlexibleConfig> {
+    children.iter().map(Flexible::get_flexible_config).collect()
 }
 
 impl BoxMultiChildRenderElement for FlexElement {
@@ -318,7 +330,7 @@ impl BoxMultiChildRenderElement for FlexElement {
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flex_conf: get_flex_conf(&widget.children),
+            flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_main_axis,
             flip_cross_axis: widget.flip_cross_axis,
         }
@@ -333,7 +345,10 @@ impl BoxMultiChildRenderElement for FlexElement {
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
             ),
-            set_if_changed(&mut render.flex_conf, get_flex_conf(&widget.children)),
+            set_if_changed(
+                &mut render.flexible_configs,
+                get_flexible_configs(&widget.children),
+            ),
             set_if_changed(&mut render.flip_main_axis, widget.flip_main_axis),
             set_if_changed(&mut render.flip_cross_axis, widget.flip_cross_axis),
         ]
@@ -348,7 +363,7 @@ pub struct RenderFlex {
     pub main_axis_alignment: MainAxisAlignment,
     pub main_axis_size: MainAxisSize,
     pub cross_axis_alignment: CrossAxisAlignment,
-    pub flex_conf: Vec<(u32, FlexFit)>,
+    pub flexible_configs: Vec<FlexibleConfig>,
     pub flip_main_axis: bool,
     pub flip_cross_axis: bool,
 }
@@ -367,7 +382,7 @@ impl BoxMultiChildLayout for RenderFlex {
         constraints: &BoxConstraints,
         children: &Vec<ArcBoxRenderObject>,
     ) -> (BoxSize, Self::LayoutMemo) {
-        debug_assert_eq!(self.flex_conf.len(), children.len());
+        debug_assert_eq!(self.flexible_configs.len(), children.len());
         fn get_main_size(size: &BoxSize, direction: &Axis) -> f32 {
             match direction {
                 Axis::Horizontal => size.width,
@@ -393,8 +408,8 @@ impl BoxMultiChildLayout for RenderFlex {
 
         let stretched = self.cross_axis_alignment == CrossAxisAlignment::Stretch;
 
-        for ((child, (flex, _flex_fit)), size) in zip(
-            zip(children.iter(), self.flex_conf.iter()),
+        for ((child, FlexibleConfig { flex, fit: _ }), size) in zip(
+            zip(children.iter(), self.flexible_configs.iter()),
             child_sizes.iter_mut(),
         ) {
             if *flex > 0 {
@@ -424,8 +439,8 @@ impl BoxMultiChildLayout for RenderFlex {
 
         if total_flex > 0 {
             let space_per_flex = free_space / total_flex as f32;
-            for ((child, (flex, flex_fit)), size) in zip(
-                zip(children.iter(), self.flex_conf.iter()),
+            for ((child, FlexibleConfig { flex, fit }), size) in zip(
+                zip(children.iter(), self.flexible_configs.iter()),
                 child_sizes.iter_mut(),
             ) {
                 if *flex > 0 {
@@ -434,7 +449,7 @@ impl BoxMultiChildLayout for RenderFlex {
                     } else {
                         f32::INFINITY
                     };
-                    let min_child_extent = match flex_fit {
+                    let min_child_extent = match fit {
                         FlexFit::Tight => max_child_extent,
                         FlexFit::Loose => 0.0,
                     };

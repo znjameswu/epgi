@@ -1,0 +1,183 @@
+/// Instructions: 
+/// - Create a new flutter project by running `flutter create bouncing_blocks`
+/// - Copy the content here to `lib/main.dart`
+/// - Run profile
+
+import 'dart:math';
+import 'dart:ui';
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+
+const cacheChild = true;
+
+const numBlocks = 40000;
+const width = 1200.0;
+const height = 800.0;
+final v_ref = min(width, height) / 5;
+const rmax = 10;
+const rmin = 5;
+const durationSeconds = 60;
+
+class BlockData {
+  final Color color;
+  final double x;
+  final double y;
+  final double vx;
+  final double vy;
+  final double r;
+
+  const BlockData(
+    this.color,
+    this.x,
+    this.y,
+    this.vx,
+    this.vy,
+    this.r,
+  );
+}
+
+final blockData = List.generate(numBlocks, (i) {
+  final color = Colors.blue.withOpacity(Random().nextDouble() / 2 + 0.5);
+  final x = Random().nextDouble() * width;
+  final y = Random().nextDouble() * height;
+  final v = Random().nextDouble() * v_ref;
+  final theta = Random().nextDouble() * 2 * pi;
+  final vx = v * cos(theta);
+  final vy = v * sin(theta);
+  final r = lerpDouble(rmin, rmax, Random().nextDouble())!;
+  return BlockData(color, x, y, vx, vy, r);
+});
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+        duration: const Duration(seconds: durationSeconds), vsync: this)
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // // This is 3 times as slow
+    // return SizedBox(
+    //   width: width,
+    //   height: height,
+    //   child: Directionality(
+    //     textDirection: TextDirection.ltr,
+    //     child: AnimatedBuilder(
+    //       animation: _controller,
+    //       builder: (context, _) => Stack(
+    //         children: blockData.map((blockDatum) {
+    //           final time = _controller.value * durationSeconds;
+    //           final effectiveWidth = width - blockDatum.r;
+    //           final effectiveHeight = height - blockDatum.r;
+    //           var l = (blockDatum.x + time * blockDatum.vx) %
+    //               (2 * effectiveWidth);
+    //           var t = (blockDatum.y + time * blockDatum.vy) %
+    //               (2 * effectiveHeight);
+    //           if (l > effectiveWidth) {
+    //             l = 2 * effectiveWidth - l;
+    //           }
+    //           if (t > effectiveHeight) {
+    //             t = 2 * effectiveHeight - t;
+    //           }
+    //           return Positioned(
+    //             left: l,
+    //             top: t,
+    //             child: Block(color: blockDatum.color, r: blockDatum.r),
+    //           );
+    //         }).toList(),
+    //       ),
+    //     ),
+    //   ),
+    // );
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Stack(
+          children: blockData
+              .map((blockDatum) => AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    final time = _controller.value * durationSeconds;
+                    final effectiveWidth = width - blockDatum.r;
+                    final effectiveHeight = height - blockDatum.r;
+                    var l = (blockDatum.x + time * blockDatum.vx) %
+                        (2 * effectiveWidth);
+                    var t = (blockDatum.y + time * blockDatum.vy) %
+                        (2 * effectiveHeight);
+                    if (l > effectiveWidth) {
+                      l = 2 * effectiveWidth - l;
+                    }
+                    if (t > effectiveHeight) {
+                      t = 2 * effectiveHeight - t;
+                    }
+                    return Positioned(
+                      left: l,
+                      top: t,
+                      child: child!,
+                    );
+                  },
+                  child: Block(color: blockDatum.color, r: blockDatum.r)))
+              .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class Block extends StatefulWidget {
+  final Color color;
+  final double r;
+  const Block({super.key, required this.color, required this.r});
+
+  @override
+  State<Block> createState() => _BlockState();
+}
+
+class _BlockState extends State<Block> {
+  var clicked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.r,
+      height: widget.r,
+      child: GestureDetector(
+        onTap: () => setState(() {
+          clicked = true;
+        }),
+        child: ColoredBox(
+          color: clicked
+              ? Colors.orange.withOpacity(widget.color.opacity)
+              : widget.color,
+        ),
+      ),
+    );
+  }
+}

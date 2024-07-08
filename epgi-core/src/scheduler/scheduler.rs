@@ -5,6 +5,7 @@ use hashbrown::HashSet;
 
 use crate::{
     foundation::{Asc, Protocol, PtrEq, SyncMpscSender, SyncRwLock},
+    scheduler::FrameMetricsBuilder,
     sync::{CommitBarrier, LaneScheduler, RenderObjectCommitResult},
     tree::{
         ArcAnyElementNode, ArcAnyLayerRenderObject, ArcSuspendWaker, AweakAnyElementNode,
@@ -169,8 +170,11 @@ where
                     frame_id,
                     requesters,
                 } => {
+                    let mut frame_metrics_builder = FrameMetricsBuilder::new();
+                    frame_metrics_builder.frame_start();
                     let mut build_states = self.build_states.write();
                     build_states.commit_completed_async_batches(&mut self.job_batcher);
+                    frame_metrics_builder.current_build_start();
                     let (new_jobs, point_rebuilds) = handle.process_new_frame();
                     let updates = self.job_batcher.update_with_new_jobs(new_jobs);
                     build_states.apply_batcher_result(
@@ -182,17 +186,21 @@ where
                             .collect(),
                     );
                     self.extension.on_frame_begin(&build_states);
+                    frame_metrics_builder.sync_batch_start();
                     let commited_sync_batch = build_states.dispatch_sync_batch();
+                    frame_metrics_builder.sync_batch_end();
                     build_states.dispatch_async_batches();
                     if let Some(commited_sync_batch) = commited_sync_batch {
                         self.job_batcher.remove_commited_batch(&commited_sync_batch);
                     }
                     build_states.commit_completed_async_batches(&mut self.job_batcher);
+                    frame_metrics_builder.layout_start();
                     build_states.perform_layout();
                     self.extension.on_layout_complete(&build_states);
                     // We don't have RwLock downgrade in std, this is to simulate it by re-reading while blocking the event loop.
                     // TODO: Parking_lot owned downgradable guard
                     drop(build_states);
+                    frame_metrics_builder.paint_start();
                     let read_guard = self.build_states.read();
                     let build_states = self.build_states.clone();
                     let layer_needing_repaint =
@@ -203,11 +211,15 @@ where
                         let build_states = build_states.read();
                         paint_started_event.notify(usize::MAX);
                         build_states.perform_paint(layer_needing_repaint);
+                        frame_metrics_builder.composite_start();
                         let result = build_states.perform_composite();
+                        frame_metrics_builder.frame_end();
+                        let frame_metrics = frame_metrics_builder.build();
                         for requester in requesters {
                             let _ = requester.try_send(FrameResults {
                                 composited: result.clone(),
                                 id: frame_id,
+                                metrics: frame_metrics.clone(),
                             }); // TODO: log failure
                         }
 

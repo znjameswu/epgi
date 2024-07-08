@@ -137,6 +137,26 @@ impl BoxConstraints {
             max_height: height.unwrap_or(self.max_height),
         }
     }
+
+    pub fn tighten_width(&self, width: f32) -> Self {
+        let width = width.clamp(self.min_width, self.max_width);
+        Self {
+            min_width: width,
+            max_width: width,
+            min_height: self.min_height,
+            max_height: self.max_height,
+        }
+    }
+
+    pub fn tighten_height(&self, height: f32) -> Self {
+        let height = height.clamp(self.min_height, self.max_height);
+        Self {
+            min_width: self.min_width,
+            max_width: self.max_width,
+            min_height: height,
+            max_height: height,
+        }
+    }
 }
 
 impl Default for BoxConstraints {
@@ -166,6 +186,10 @@ impl BoxSize {
         width: f32::INFINITY,
         height: f32::INFINITY,
     };
+
+    pub fn is_finite(&self) -> bool {
+        self.width.is_finite() && self.height.is_finite()
+    }
 }
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]

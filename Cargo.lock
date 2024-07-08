@@ -690,6 +690,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "bouncing-blocks"
+version = "0.1.0"
+dependencies = [
+ "dpi",
+ "epgi-2d",
+ "epgi-common",
+ "epgi-core",
+ "epgi-material",
+ "epgi-winit",
+ "futures",
+ "lazy_static",
+ "rand",
+ "rayon",
+ "tokio",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

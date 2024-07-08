@@ -7,4 +7,7 @@ use scheduler_extension::*;
 mod pointer_event_converter;
 use pointer_event_converter::*;
 
+mod stat;
+use stat::*;
+
 mod utils;

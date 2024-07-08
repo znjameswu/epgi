@@ -6,10 +6,10 @@ use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
     hooks::SetState,
     nodes::Builder,
-    scheduler::{get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle},
+    scheduler::{get_current_scheduler, setup_scheduler, FrameMetrics, Scheduler, SchedulerHandle},
     tree::{ArcChildWidget, LayoutResults},
 };
-use std::{num::NonZeroUsize, sync::atomic::Ordering};
+use std::{num::NonZeroUsize, sync::atomic::Ordering, time::Instant};
 use tracing::subscriber::SetGlobalDefaultError;
 use typed_builder::TypedBuilder;
 use vello::{
@@ -27,7 +27,9 @@ use winit::{
 
 pub use winit::window::{Window, WindowAttributes};
 
-use crate::{EpgiGlazierSchedulerExtension, WinitPointerEventConverter};
+use crate::{
+    EpgiGlazierSchedulerExtension, FrameStatSample, FrameStats, WinitPointerEventConverter,
+};
 
 pub enum WindowState<'a> {
     Uninitialized(WindowAttributes),
@@ -56,6 +58,9 @@ struct MainState<'a> {
     frame_binding: Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
     constraints_binding: Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
     pointer_event_converter: WinitPointerEventConverter,
+
+    frame_stats: FrameStats,
+    print_stats: bool,
 }
 
 #[derive(TypedBuilder)]
@@ -68,6 +73,9 @@ pub struct AppLauncher {
     #[cfg(feature = "tokio")]
     #[builder(default, setter(strip_option))]
     tokio_handle: Option<tokio::runtime::Handle>,
+
+    #[builder(default)]
+    print_stats: bool,
 
     window: WindowAttributes,
     #[builder(default = EventLoop::new().unwrap(), setter(skip))]
@@ -90,6 +98,9 @@ impl AppLauncher {
             frame_binding: Default::default(),
             constraints_binding: Default::default(),
             pointer_event_converter: WinitPointerEventConverter::new(tx),
+
+            frame_stats: FrameStats::new(),
+            print_stats: self.print_stats,
         };
 
         #[cfg(feature = "tokio")]
@@ -231,7 +242,7 @@ impl ApplicationHandler for MainState<'_> {
                     window.clone(),
                     size.width,
                     size.height,
-                    PresentMode::AutoVsync,
+                    PresentMode::AutoNoVsync,
                 ))
                 .unwrap();
                 let scale_factor = window.scale_factor();
@@ -369,6 +380,9 @@ impl<'a> MainState<'a> {
         }
 
         let frame_results = scheduler.request_new_frame().recv().unwrap();
+
+        let raster_start_time = Instant::now();
+
         let encoding = frame_results
             .composited
             .as_ref()
@@ -421,8 +435,63 @@ impl<'a> MainState<'a> {
             .get_or_insert_with(|| Renderer::new(device, renderer_options).unwrap())
             .render_to_surface(device, queue, &self.scene, &surface_texture, &render_params)
             .expect("failed to render to surface");
+
+        let raster_time = Instant::now().duration_since(raster_start_time).as_micros() as u64;
         surface_texture.present();
         device.poll(wgpu::Maintain::Wait);
+
+        self.frame_stats.add_sample(FrameStatSample {
+            timestamp: Instant::now(),
+            ui_metrics: frame_results.metrics.clone(),
+            raster_time,
+        });
+        if self.print_stats {
+            let metrics = frame_results.metrics;
+            #[allow(unused_variables)]
+            let FrameMetrics {
+                build_time,
+                sync_build_time,
+                layout_time,
+                paint_time,
+                composite_time,
+                ..
+            } = metrics;
+            #[allow(unused_variables)]
+            let FrameStats {
+                frame_count,
+                build_time_sum,
+                layout_time_sum,
+                paint_time_sum,
+                raster_time_sum,
+                frame_time_sum,
+                build_time_low,
+                layout_time_low,
+                paint_time_low,
+                raster_time_low,
+                frame_time_ms_low,
+                ..
+            } = self.frame_stats;
+            println!(
+                "Frame {:5} built with: UI{:>5.1} ms, raster{:>5.1} ms, build{:>5.1}/{:>5.1}/{:>5.1} ms, build+layout{:>5.1}/{:>5.1}/{:>5.1} ms, paint{:>5.1}/{:>5.1}/{:>5.1} ms. Avg FPS:{:>5.1}/{:>5.1}/{:>5.1}",
+                frame_count,
+                metrics.frame_time() as f32 / 1000.0,
+                raster_time as f32 / 1000.0,
+                build_time as f32 / 1000.0,
+                build_time_sum as f32 / frame_count as f32 / 1000.0,
+                build_time_low as f32 /1000.0,
+                (build_time + layout_time) as f32 / 1000.0,
+                (build_time_sum + layout_time_sum) as f32 / frame_count as f32 / 1000.0,
+                (build_time_low + layout_time_low) as f32 / 1000.0,
+                paint_time as f32 / 1000.0,
+                paint_time_sum as f32 / frame_count as f32 / 1000.0,
+                paint_time_low as f32 /1000.0,
+                1000.0 / self.frame_stats.get_frame_time_ms_avg().unwrap_or(-1.0),
+                1000000.0 / frame_time_sum as f32 * frame_count as f32,
+                1000.0 / frame_time_ms_low
+                // self.frame_stats.get_raster_time_ms_avg().unwrap_or(-1.0),
+                // self.frame_stats.get_ui_time_ms_avg().unwrap_or(-1.0),
+            )
+        }
     }
 
     fn handle_signals(&mut self, _event_loop: &ActiveEventLoop) {
