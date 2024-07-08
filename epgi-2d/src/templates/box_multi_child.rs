@@ -164,7 +164,7 @@ where
 
 pub trait BoxMultiChildProvideElement: BoxMultiChildElement {
     type Provided: Provide;
-    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
+    fn get_provided_value(widget: &Self::ArcWidget) -> &Arc<Self::Provided>;
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateProvideElement<E>
@@ -175,7 +175,7 @@ where
 {
     type Provided = E::Provided;
 
-    fn get_provided_value(widget: &<E as ElementBase>::ArcWidget) -> Arc<Self::Provided> {
+    fn get_provided_value(widget: &<E as ElementBase>::ArcWidget) -> &Arc<Self::Provided> {
         E::get_provided_value(widget)
     }
 }

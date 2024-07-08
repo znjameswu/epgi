@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{any::type_name, fmt::Debug};
 
 use crate::{scheduler::JobBuilder, tree::BuildContext};
 
@@ -57,6 +57,14 @@ where
 #[derive(PartialEq, Clone)]
 pub struct SetState<T> {
     dispatch: DispatchReducer<UseStateReducer<T>>,
+}
+
+impl<T> Debug for SetState<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SetState")
+            .field("Type", &type_name::<T>())
+            .finish()
+    }
 }
 
 impl<T> SetState<T>
