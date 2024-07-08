@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData};
+use std::{any::type_name, fmt::Debug, marker::PhantomData};
 
 use crate::{
     foundation::{Arc, PtrEq},
@@ -54,6 +54,14 @@ pub struct DispatchReducer<T> {
     node: AweakElementContextNode,
     self_index: HookIndex,
     phantom: PhantomData<T>,
+}
+
+impl<T> Debug for DispatchReducer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DispatchReducer")
+            .field("Type", &type_name::<T>())
+            .finish()
+    }
 }
 
 impl<T> PartialEq for DispatchReducer<T> {

@@ -63,7 +63,10 @@ where
     fn option_get_provided_key_value_pair(
         widget: &E::ArcWidget,
     ) -> Option<(Arc<dyn Provide>, TypeKey)> {
-        Some((E::get_provided_value(widget), TypeKey::of::<E::Provided>()))
+        Some((
+            E::get_provided_value(widget).clone(),
+            TypeKey::of::<E::Provided>(),
+        ))
     }
 
     fn diff_provided_value(
@@ -76,7 +79,7 @@ where
             && !old_provided_value.eq_sized(new_provided_value.as_ref());
 
         Some((
-            new_provided_value,
+            new_provided_value.clone(),
             TypeKey::of::<E::Provided>(),
             is_new_value,
         ))

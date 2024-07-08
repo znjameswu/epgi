@@ -1,10 +1,10 @@
-use epgi_2d::{ArcBoxWidget, BoxProtocol, BoxProvider};
+use epgi_2d::{ArcBoxWidget, BoxProtocol};
 use epgi_common::{AnimationFrame, FrameInfo};
 use epgi_core::{
-    foundation::{Arc, Asc, AscProvideExt, InlinableDwsizeVec, Provide, SmallVecExt, TypeKey},
-    nodes::{ConsumerElement, ConsumerWidget},
-    read_providers,
+    foundation::{Arc, Asc, TypeKey},
+    nodes::{ComponentElement, ComponentWidget},
     tree::{BuildContext, Widget},
+    Consumer, Provider,
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -20,9 +20,9 @@ pub struct MaterialApp {
 impl Widget for MaterialApp {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = BoxProtocol;
-    type Element = ConsumerElement<BoxProtocol>;
+    type Element = ComponentElement<BoxProtocol>;
 
-    fn into_arc_widget(self: Arc<Self>) -> Arc<dyn ConsumerWidget<BoxProtocol>> {
+    fn into_arc_widget(self: Arc<Self>) -> Arc<dyn ComponentWidget<BoxProtocol>> {
         self
     }
 }
@@ -33,26 +33,21 @@ lazy_static::lazy_static!(
     ];
 );
 
-impl ConsumerWidget<BoxProtocol> for MaterialApp {
-    fn get_consumed_types(&self) -> std::borrow::Cow<[TypeKey]> {
-        MATERIAL_CONSUMED_TYPES.as_ref().into()
-    }
-
-    fn build(
-        &self,
-        _ctx: &mut BuildContext,
-        provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> ArcBoxWidget {
-        let frame_info = read_providers!(provider_values, FrameInfo);
-        let animation_frame = AnimationFrame {
-            time: frame_info.instant,
-        };
+impl ComponentWidget<BoxProtocol> for MaterialApp {
+    fn build(&self, _ctx: &mut BuildContext) -> ArcBoxWidget {
         let theme_data = ThemeData::light();
         let child = self.child.clone();
-        let child = BoxProvider::value_inner(animation_frame, child);
-        let child = BoxProvider::value_inner(theme_data.progress_indicator_theme.clone(), child);
-        let child = BoxProvider::value_inner(theme_data.text_theme.body_medium.clone(), child);
-        let child = BoxProvider::value_inner(theme_data, child);
+        let child = Consumer!(
+            builder = move |_ctx, frame_info: Asc<FrameInfo>| Provider!(
+                value = AnimationFrame {
+                    time: frame_info.instant,
+                },
+                child = child.clone()
+            )
+        );
+        let child = Provider!(value = theme_data.progress_indicator_theme.clone(), child);
+        let child = Provider!(value = theme_data.text_theme.body_medium.clone(), child);
+        let child = Provider!(value = theme_data, child);
         child
     }
 }

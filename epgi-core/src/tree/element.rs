@@ -185,7 +185,7 @@ pub trait RenderElement: ElementBase {
 
 pub trait ProvideElement: ElementBase {
     type Provided: Provide;
-    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided>;
+    fn get_provided_value(widget: &Self::ArcWidget) -> &Arc<Self::Provided>;
 }
 
 #[inline(always)]

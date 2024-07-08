@@ -33,20 +33,18 @@ This demo tests parallel performance characteristics when rendering 40k interact
 
 https://github.com/ZhennanWu/epgi/assets/38578020/d08b227b-ba9b-4829-9e36-932ea48ef0db
 
+| N_thread        | build+layout(low, ms) | paint(low, ms) | raster(ms) | FPS(high) |
+|-----------------|-----------------------|----------------|------------|-----------|
+|               1 |                  31.9 |            9.0 |        1.5 |      20.3 |
+|               2 |                  19.8 |            9.2 |        1.4 |      28.5 |
+|               4 |                  12.4 |            8.9 |        1.5 |      37.6 |
+|               8 |                   8.4 |            9.1 |        1.5 |      45.1 |
+|              16 |                   7.0 |            9.5 |        1.4 |      47.4 |
+| Flutter Desktop |   NA due to impl diff |            ~16 |        ~28 |        16 |
 
-| N_thread | build+layout (low) | paint** | raster | FPS (high) |
-|----------|--------------------|---------|--------|------------|
-|        1 |            14.2 ms |  7.7 ms | 0.7 ms |       39.2 |
-|        2 |            10.5 ms |  6.9 ms | 0.6 ms |       49.8 |
-|        4 |             9.1 ms |  6.6 ms | 0.7 ms |       53.3 |
-|        8 |             9.2 ms |  6.8 ms | 0.7 ms |       51.4 |
-|       16 |            10.9 ms |  7.0 ms | 0.7 ms |       49.7 |
+\*: Tested on 8-core Intel i7-12700K, Win 11. Built in release mode. Flutter desktop imitate app is built on profile mode.
 
-\*: Tested on 8-core Intel i7-12700K, Gentoo. Built in release mode. Long time average data is not displayed due to severe CPU thermal throttling causing bottleneck on energy efficiency. We slide-average the data by 60 frames and take the best performing point before thermal throttling kicks in.
-
-\*\*: Currently paint phase is not parallelized
-
-\*\*\*: Flutter desktop results: 6 FPS (same implementation, profile mode) / 16 FPS (Flutter optimized implementation, profile mode)
+\*\*: Currently, paint phase is not parallelized
 
 ## Objectives
 Completed:

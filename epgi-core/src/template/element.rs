@@ -173,7 +173,7 @@ where
 
 pub trait TemplateProvideElement<E: ElementBase> {
     type Provided: Provide;
-    fn get_provided_value(widget: &E::ArcWidget) -> Arc<Self::Provided>;
+    fn get_provided_value(widget: &E::ArcWidget) -> &Arc<Self::Provided>;
 }
 
 impl<E> ProvideElement for E
@@ -184,7 +184,7 @@ where
 {
     type Provided = <E::Template as TemplateProvideElement<E>>::Provided;
 
-    fn get_provided_value(widget: &Self::ArcWidget) -> Arc<Self::Provided> {
+    fn get_provided_value(widget: &Self::ArcWidget) -> &Arc<Self::Provided> {
         E::Template::get_provided_value(widget)
     }
 }
