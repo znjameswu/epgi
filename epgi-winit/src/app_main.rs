@@ -6,7 +6,7 @@ use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
     hooks::SetState,
     nodes::Builder,
-    scheduler::{get_current_scheduler, setup_scheduler, Scheduler, SchedulerHandle},
+    scheduler::{get_current_scheduler, setup_scheduler, FrameMetrics, Scheduler, SchedulerHandle},
     tree::{ArcChildWidget, LayoutResults},
 };
 use std::{num::NonZeroUsize, sync::atomic::Ordering, time::Instant};
@@ -446,14 +446,48 @@ impl<'a> MainState<'a> {
             raster_time,
         });
         if self.print_stats {
+            let metrics = frame_results.metrics;
+            #[allow(unused_variables)]
+            let FrameMetrics {
+                build_time,
+                sync_build_time,
+                layout_time,
+                paint_time,
+                composite_time,
+                ..
+            } = metrics;
+            #[allow(unused_variables)]
+            let FrameStats {
+                frame_count,
+                build_time_sum,
+                layout_time_sum,
+                paint_time_sum,
+                raster_time_sum,
+                frame_time_sum,
+                build_time_low,
+                layout_time_low,
+                paint_time_low,
+                raster_time_low,
+                frame_time_ms_low,
+                ..
+            } = self.frame_stats;
             println!(
-                "Frame {:5} built with: UI {:>5.1} ms, raster {:>5.1} ms, build {:>5.1} ms, paint {:>5.1} ms. Avg FPS: {:>5.1}",
-                self.frame_stats.frame_count,
-                frame_results.metrics.frame_time() as f32 / 1000.0,
+                "Frame {:5} built with: UI{:>5.1} ms, raster{:>5.1} ms, build{:>5.1}/{:>5.1}/{:>5.1} ms, build+layout{:>5.1}/{:>5.1}/{:>5.1} ms, paint{:>5.1}/{:>5.1}/{:>5.1} ms. Avg FPS:{:>5.1}/{:>5.1}/{:>5.1}",
+                frame_count,
+                metrics.frame_time() as f32 / 1000.0,
                 raster_time as f32 / 1000.0,
-                frame_results.metrics.build_time as f32 / 1000.0,
-                frame_results.metrics.paint_time as f32 / 1000.0,
-                1000.0 / self.frame_stats.get_frame_time_ms_avg().unwrap_or(-1.0)
+                build_time as f32 / 1000.0,
+                build_time_sum as f32 / frame_count as f32 / 1000.0,
+                build_time_low as f32 /1000.0,
+                (build_time + layout_time) as f32 / 1000.0,
+                (build_time_sum + layout_time_sum) as f32 / frame_count as f32 / 1000.0,
+                (build_time_low + layout_time_low) as f32 / 1000.0,
+                paint_time as f32 / 1000.0,
+                paint_time_sum as f32 / frame_count as f32 / 1000.0,
+                paint_time_low as f32 /1000.0,
+                1000.0 / self.frame_stats.get_frame_time_ms_avg().unwrap_or(-1.0),
+                1000000.0 / frame_time_sum as f32 * frame_count as f32,
+                1000.0 / frame_time_ms_low
                 // self.frame_stats.get_raster_time_ms_avg().unwrap_or(-1.0),
                 // self.frame_stats.get_ui_time_ms_avg().unwrap_or(-1.0),
             )

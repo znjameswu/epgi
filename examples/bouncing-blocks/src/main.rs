@@ -12,9 +12,9 @@ use lazy_static::lazy_static;
 use rand::Rng;
 use std::{f32::consts::PI, time::Duration};
 
-const CACHE_CHILD: bool = true;
+// const CACHE_CHILD: bool = false;
 
-const N_THREADS: usize = 16;
+const N_THREADS: usize = 8;
 
 const NUM_BLOCKS: usize = 40000;
 const WIDTH: f32 = 1200.0;
@@ -79,10 +79,10 @@ fn main() {
                         .map(|block_datum| {
                             let effective_width = WIDTH - block_datum.r;
                             let effective_height = HEIGHT - block_datum.r;
-                            let mut l =
-                                (block_datum.x + time * block_datum.vx) % (2.0 * effective_width);
-                            let mut t =
-                                (block_datum.y + time * block_datum.vy) % (2.0 * effective_height);
+                            let mut l = (block_datum.x + time * block_datum.vx)
+                                .rem_euclid(2.0 * effective_width);
+                            let mut t = (block_datum.y + time * block_datum.vy)
+                                .rem_euclid(2.0 * effective_height);
 
                             if l > effective_width {
                                 l = 2.0 * effective_width - l;
@@ -137,6 +137,92 @@ fn main() {
         )
     );
 
+    // let app = ConstrainedBox!(
+    //     constraints = BoxConstraints::new_tight(WIDTH, HEIGHT),
+    //     child = Stack!(
+    //         children = BLOCK_DATA
+    //             .iter()
+    //             .map(|block_datum| {
+    //                 Positioned!(
+    //                     l = 0.0,
+    //                     t = 0.0,
+    //                     r = 0.0,
+    //                     b = 0.0,
+    //                     child = Consumer!(
+    //                         builder = |ctx, animation_frame: Asc<AnimationFrame>| {
+    //                             let (x, _animation_controller) = ctx
+    //                                 .use_animation_controller_repeating_with(
+    //                                     false,
+    //                                     AnimationControllerConf!(
+    //                                         duration = Duration::from_secs(DURATION_SECONDS)
+    //                                     ),
+    //                                     Some(&animation_frame),
+    //                                 );
+    //                             let time = x * DURATION_SECONDS as f32;
+    //                             let effective_width = WIDTH - block_datum.r;
+    //                             let effective_height = HEIGHT - block_datum.r;
+    //                             let mut l = (block_datum.x + time * block_datum.vx)
+    //                                 .rem_euclid(2.0 * effective_width);
+    //                             let mut t = (block_datum.y + time * block_datum.vy)
+    //                                 .rem_euclid(2.0 * effective_height);
+
+    //                             if l > effective_width {
+    //                                 l = 2.0 * effective_width - l;
+    //                             }
+
+    //                             if t > effective_height {
+    //                                 t = 2.0 * effective_height - t;
+    //                             }
+    //                             let child = ctx.use_memo(
+    //                                 |_| {
+    //                                     Builder!(
+    //                                         builder = |ctx| {
+    //                                             let (clicked, set_clicked) = ctx.use_state(false);
+    //                                             ConstrainedBox!(
+    //                                                 constraints = BoxConstraints::new_tight(
+    //                                                     block_datum.r,
+    //                                                     block_datum.r
+    //                                                 ),
+    //                                                 child = GestureDetector!(
+    //                                                     on_tap = move |job_builder| {
+    //                                                         set_clicked.set(!clicked, job_builder);
+    //                                                     },
+    //                                                     child = ColoredBox!(
+    //                                                         color = if clicked {
+    //                                                             Color::rgba8(
+    //                                                                 0xFF,
+    //                                                                 0x98,
+    //                                                                 0x00,
+    //                                                                 block_datum.color.a,
+    //                                                             )
+    //                                                         } else {
+    //                                                             block_datum.color
+    //                                                         },
+    //                                                         child = ARC_PHANTOM_BOX.clone(),
+    //                                                     )
+    //                                                 )
+    //                                             )
+    //                                         }
+    //                                     )
+    //                                 },
+    //                                 (),
+    //                             );
+    //                             Padding!(
+    //                                 padding = EdgeInsets::new()
+    //                                     .l(l)
+    //                                     .t(t)
+    //                                     .r(WIDTH - l - block_datum.r)
+    //                                     .b(HEIGHT - t - block_datum.r),
+    //                                 child
+    //                             )
+    //                         }
+    //                     )
+    //                 )
+    //             })
+    //             .collect()
+    //     )
+    // );
+
     let app = MaterialApp!(child = app);
 
     let window_size = LogicalSize::new(WIDTH, HEIGHT);
@@ -168,6 +254,7 @@ fn main() {
                 .thread_name(|index| format!("epgi async pool {}", index)),
         )
         .window(window_attributes)
+        .print_stats(true)
         .build()
         .run();
 }
