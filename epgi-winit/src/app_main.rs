@@ -303,9 +303,10 @@ impl ApplicationHandler for MainState<'_> {
                 self.render();
             }
             Resized(winit::dpi::PhysicalSize { width, height }) => {
+                let scale = window.scale_factor();
                 self.update_size(BoxSize {
-                    width: width as _,
-                    height: height as _,
+                    width: (width as f64 / scale) as _,
+                    height: (height as f64 / scale) as _,
                 });
             }
             ModifiersChanged(modifiers) => {}
