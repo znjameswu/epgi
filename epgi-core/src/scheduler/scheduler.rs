@@ -173,6 +173,7 @@ where
                     let mut frame_metrics_builder = FrameMetricsBuilder::new();
                     frame_metrics_builder.frame_start();
                     let mut build_states = self.build_states.write();
+                    self.extension.on_frame_begin(&build_states);
                     build_states.commit_completed_async_batches(&mut self.job_batcher);
                     frame_metrics_builder.current_build_start();
                     let (new_jobs, point_rebuilds) = handle.process_new_frame();
@@ -185,7 +186,6 @@ where
                             .map(|waker| PtrEq(waker.element_context.clone()))
                             .collect(),
                     );
-                    self.extension.on_frame_begin(&build_states);
                     frame_metrics_builder.sync_batch_start();
                     let commited_sync_batch = build_states.dispatch_sync_batch();
                     frame_metrics_builder.sync_batch_end();
