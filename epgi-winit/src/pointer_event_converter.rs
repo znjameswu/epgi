@@ -53,7 +53,7 @@ impl WinitPointerEventConverter {
     }
 
     #[inline]
-    pub(crate) fn convert(&mut self, event: &winit::event::WindowEvent) {
+    pub(crate) fn convert(&mut self, event: &winit::event::WindowEvent, scale: f32) {
         use winit::event::WindowEvent::*;
         let time_stamp = Instant::now();
         match event {
@@ -70,10 +70,10 @@ impl WinitPointerEventConverter {
                 let WinitPointerDeviceState::Cursor(state) = state else {
                     panic!("Potential winit bug detected: cursor event delivered under a non-cursor device id.")
                 };
-                let physical_position = position.to_epgi();
+                let position = position.to_epgi() / scale;
                 let common = PointerEventCommonData {
                     time_stamp,
-                    physical_position,
+                    position,
                     pointer_kind: PointerDeviceKind::Mouse,
                     synthesized: false,
                 };
@@ -84,11 +84,11 @@ impl WinitPointerEventConverter {
                             .send(PointerEvent::new_added(common.clone()))
                             .unwrap();
                         *state = Added {
-                            last_position: physical_position,
+                            last_position: position,
                         };
                     }
                     Added { last_position } => {
-                        *last_position = physical_position;
+                        *last_position = position;
                         self.tx
                             .send(PointerEvent::new_hover(
                                 common,
@@ -101,7 +101,7 @@ impl WinitPointerEventConverter {
                         pressed_buttons,
                         last_position,
                     } => {
-                        *last_position = physical_position;
+                        *last_position = position;
                         self.tx
                             .send(PointerEvent::new_move(
                                 common,
@@ -132,7 +132,7 @@ impl WinitPointerEventConverter {
                         );
                         let common = PointerEventCommonData {
                             time_stamp,
-                            physical_position: last_position.clone(),
+                            position: last_position.clone(),
                             pointer_kind: PointerDeviceKind::Mouse,
                             synthesized: false,
                         };
@@ -165,7 +165,7 @@ impl WinitPointerEventConverter {
                     Added { last_position } | Interacting { last_position, .. } => {
                         let common = PointerEventCommonData {
                             time_stamp,
-                            physical_position: last_position.clone(),
+                            position: last_position.clone(),
                             pointer_kind: PointerDeviceKind::Mouse,
                             synthesized: false,
                         };
@@ -213,7 +213,7 @@ impl WinitPointerEventConverter {
                 };
                 let common = PointerEventCommonData {
                     time_stamp,
-                    physical_position: last_position.clone(),
+                    position: last_position.clone(),
                     pointer_kind: PointerDeviceKind::Mouse,
                     synthesized: false,
                 };
@@ -312,7 +312,7 @@ impl WinitPointerEventConverter {
             } => {
                 log::error!("Pointer signal event is not implemented")
             }
-            Touch(touch) => convert_winit_touch(self, touch, time_stamp),
+            Touch(touch) => convert_winit_touch(self, touch, scale, time_stamp),
             _ => {}
         }
     }
@@ -321,6 +321,7 @@ impl WinitPointerEventConverter {
 fn convert_winit_touch(
     converter: &mut WinitPointerEventConverter,
     touch: &winit::event::Touch,
+    scale: f32,
     time_stamp: Instant,
 ) {
     let winit::event::Touch {
@@ -332,10 +333,10 @@ fn convert_winit_touch(
         ..
     } = *touch;
 
-    let physical_location = location.to_epgi();
+    let position = location.to_epgi() / scale;
     let common = PointerEventCommonData {
         time_stamp,
-        physical_position: physical_location.clone(),
+        position: position / scale,
         pointer_kind: PointerDeviceKind::Touch,
         synthesized: false,
     };
@@ -390,7 +391,7 @@ fn convert_winit_touch(
                     .send(PointerEvent::new_added(common.clone()))
                     .unwrap();
             } else if let Added { last_position } = state {
-                if *last_position != physical_location {
+                if *last_position != position {
                     converter
                         .tx
                         .send(PointerEvent::new_hover(
@@ -413,11 +414,11 @@ fn convert_winit_touch(
                 *state = Interacting {
                     interaction_id,
                     pressed_buttons: PointerButtons::TOUCH_CONTACT,
-                    last_position: physical_location,
+                    last_position: position,
                 };
             } else {
                 *state = Added {
-                    last_position: physical_location,
+                    last_position: position,
                 };
             }
         }
@@ -432,14 +433,14 @@ fn convert_winit_touch(
                     .send(PointerEvent::new_cancel(
                         PointerEventCommonData {
                             time_stamp,
-                            physical_position: last_position.clone(),
+                            position: last_position.clone(),
                             pointer_kind: PointerDeviceKind::Touch,
                             synthesized: false,
                         },
                         *interaction_id,
                     ))
                     .unwrap();
-                if *last_position != physical_location {
+                if *last_position != position {
                     converter
                         .tx
                         .send(PointerEvent::new_hover(
@@ -458,7 +459,7 @@ fn convert_winit_touch(
                     ))
                     .unwrap();
                 *interaction_id = new_interaction_id;
-                *last_position = physical_location;
+                *last_position = position;
             }
             Moved => {
                 converter
@@ -469,10 +470,10 @@ fn convert_winit_touch(
                         PointerContactData::new_touch(PointerHoverData::new_mouse(), profile),
                     ))
                     .unwrap();
-                *last_position = physical_location;
+                *last_position = position;
             }
             Ended | Cancelled => {
-                if *last_position != physical_location {
+                if *last_position != position {
                     converter
                         .tx
                         .send(PointerEvent::new_move(
@@ -492,7 +493,7 @@ fn convert_winit_touch(
                     })
                     .unwrap();
                 *state = Added {
-                    last_position: physical_location,
+                    last_position: position,
                 };
             }
         },

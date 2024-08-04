@@ -169,9 +169,11 @@ fn main() {
                                             builder = |ctx, time: Asc<AnimationTime>| {
                                                 let effective_width = WIDTH - block_datum.r;
                                                 let effective_height = HEIGHT - block_datum.r;
-                                                let mut l = (block_datum.x + time.value * block_datum.vx)
+                                                let mut l = (block_datum.x
+                                                    + time.value * block_datum.vx)
                                                     .rem_euclid(2.0 * effective_width);
-                                                let mut t = (block_datum.y + time.value * block_datum.vy)
+                                                let mut t = (block_datum.y
+                                                    + time.value * block_datum.vy)
                                                     .rem_euclid(2.0 * effective_height);
 
                                                 if l > effective_width {

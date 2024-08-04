@@ -16,7 +16,7 @@ pub type ArcBoxElementNode = ArcChildElementNode<BoxProtocol>;
 pub type ArcBoxRenderObject = ArcChildRenderObject<BoxProtocol>;
 pub type BoxProvider<T> = Provider<T, BoxProtocol>;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(derive_more::Mul, derive_more::Div, PartialEq, Clone, Copy, Debug)]
 pub struct BoxConstraints {
     pub min_width: f32,
     pub max_width: f32,
@@ -170,7 +170,7 @@ impl Default for BoxConstraints {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(derive_more::Mul, derive_more::Div, PartialEq, Clone, Copy, Debug)]
 pub struct BoxSize {
     pub width: f32,
     pub height: f32,
@@ -192,7 +192,7 @@ impl BoxSize {
     }
 }
 
-#[derive(Default, PartialEq, Clone, Copy, Debug)]
+#[derive(derive_more::Mul, derive_more::Div, PartialEq, Default, Clone, Copy, Debug)]
 pub struct BoxOffset {
     pub x: f32,
     pub y: f32,

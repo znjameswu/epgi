@@ -47,7 +47,7 @@ pub enum PointerInteractionVariantData {
 #[derive(Clone, Debug)]
 pub struct PointerEventCommonData {
     pub time_stamp: Instant,
-    pub physical_position: Point2d,
+    pub position: Point2d,
     pub pointer_kind: PointerDeviceKind,
     pub synthesized: bool,
 }

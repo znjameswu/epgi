@@ -66,10 +66,7 @@ impl PointerGestureManager {
             event: &PointerEvent,
         ) {
             entries.iter().for_each(|(transform, handler)| {
-                handler.handle_pointer_event(
-                    transform.transform(&event.common.physical_position),
-                    &event,
-                )
+                handler.handle_pointer_event(transform.transform(&event.common.position), &event)
             });
         }
         match &event.variant {
@@ -85,7 +82,7 @@ impl PointerGestureManager {
                 ..
             } => {
                 let mut results = HitTestContext::new(
-                    event.common.physical_position,
+                    event.common.position,
                     TypeId::of::<dyn PointerEventHandler>(),
                 );
                 root.hit_test_with(&mut results);

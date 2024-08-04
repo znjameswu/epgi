@@ -304,10 +304,12 @@ impl ApplicationHandler for MainState<'_> {
             }
             Resized(winit::dpi::PhysicalSize { width, height }) => {
                 let scale = window.scale_factor();
-                self.update_size(BoxSize {
-                    width: (width as f64 / scale) as _,
-                    height: (height as f64 / scale) as _,
-                });
+                self.update_size(
+                    BoxSize {
+                        width: width as _,
+                        height: height as _,
+                    } / (scale as f32),
+                );
             }
             ModifiersChanged(modifiers) => {}
             CursorMoved { .. }
@@ -321,7 +323,8 @@ impl ApplicationHandler for MainState<'_> {
             | TouchpadPressure { .. }
             | AxisMotion { .. }
             | Touch { .. } => {
-                self.pointer_event_converter.convert(&event);
+                self.pointer_event_converter
+                    .convert(&event, window.scale_factor() as _);
                 window.request_redraw();
             }
             _ => (),

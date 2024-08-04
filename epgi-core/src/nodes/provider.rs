@@ -12,13 +12,13 @@ use crate::{
 };
 
 /// Provides an immutable value to the subtree for subscription.
-/// 
+///
 /// [`Provider`] does NOT track internal mutability in its state. The only way to notify subtree of a value change
 /// is to provide a new [`Provider`] with a different [`Provider::value`] during `build` function.
 /// State changes should only be handled by [`BuildContext::use_state`] and similar hooks,
 /// and [`Provider`] only serves to propagate that change to the subtree.
-/// 
-/// [`Provider`] corresponds to `Provider.value` in Flutter's `provider` package. 
+///
+/// [`Provider`] corresponds to `Provider.value` in Flutter's `provider` package.
 /// On the contrary, the default Flutter `Provider` has no corresponding construct in EPGI.
 /// The rationale is that by tracking internal mutabilities, our functionalities would overlap with [`BuildContext::use_state`],
 /// and the user is forced to write thread-safe internal object.

@@ -214,8 +214,7 @@ impl GestureArena {
             |_| true,
             |_| true,
             |transform, recognizer| {
-                recognizer
-                    .handle_event(&transform.transform(&event.common.physical_position), event)
+                recognizer.handle_event(&transform.transform(&event.common.position), event)
             },
             associated_updates,
         );
@@ -234,8 +233,8 @@ impl GestureArena {
             |_| true,
             |_| true,
             |transform, recognizer| {
-                let response = recognizer
-                    .handle_event(&transform.transform(&event.common.physical_position), event);
+                let response =
+                    recognizer.handle_event(&transform.transform(&event.common.position), event);
                 if response.primary_result.is_inconclusive() {
                     has_inconclusive = true;
                 }
