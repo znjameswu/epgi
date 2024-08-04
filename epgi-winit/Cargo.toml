@@ -20,7 +20,7 @@ wgpu = { workspace = true }
 winit = { workspace = true }
 futures = "0.3.27"
 rayon = { workspace = true }
-tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "time"], optional = true }
+tokio = { version = "1.37", features = ["rt", "rt-multi-thread", "time"], optional = true }
 time = { version = "0.3.36", features = ["macros", "formatting"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "time"] }

@@ -52,18 +52,14 @@ path = "./epgi-macro"
 
 [workspace.dependencies]
 hashbrown = { version = "0.14", features = ["rayon"] }
-vello = "0.2.0"
-vello_encoding = "0.2.0"
+vello = "0.2.1"
+vello_encoding = "0.2.1"
 peniko = "0.1.0"
 masonry = "0.2.0"
 parley = "0.1.0"
-glazier = { git = "https://github.com/linebender/glazier", rev = "8d2a4b2cafd5e6be49bfb4ac8d0bd26fe02f036e", default-features = false, features = [
-    "accesskit",
-    "x11",
-] }
-winit = "0.30"
+winit = "0.30.4"
 dpi = "0.1.1"
-wgpu = "0.20.0"
+wgpu = "0.20.1"
 rayon = "1.9"
 log = "0.4.21"
 tracing = "0.1.40"

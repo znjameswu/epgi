@@ -9,7 +9,6 @@ version = "0.1.0"
 bitflags = "2.4"
 epgi-2d = { workspace = true }
 epgi-core = { workspace = true }
-glazier = { workspace = true }
 hashbrown = { workspace = true }
 lazy_static = "1.4"
 smallvec = { version = "1.10", features = [
