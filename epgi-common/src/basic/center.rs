@@ -1,22 +1,29 @@
-use epgi_2d::ArcBoxWidget;
-use epgi_core::foundation::Asc;
+use epgi_2d::BoxProtocol;
+use epgi_core::{
+    foundation::{Asc, Protocol},
+    tree::ArcChildWidget,
+};
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 use super::{Align, Alignment};
 
+pub type CenteredBox = Center<BoxProtocol>;
+
+pub type CenteredBoxBuilder = CenterBuilder<BoxProtocol>;
+
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Align>))]
-pub struct Center {
+#[builder(build_method(into=Asc<Align<P>>))]
+pub struct Center<P: Protocol> {
     #[builder(default)]
     pub width_factor: Option<f32>,
     #[builder(default)]
     pub height_factor: Option<f32>,
-    pub child: ArcBoxWidget,
+    pub child: ArcChildWidget<P>,
 }
 
-impl Into<Asc<Align>> for Center {
-    fn into(self) -> Asc<Align> {
+impl<P: Protocol> Into<Asc<Align<P>>> for Center<P> {
+    fn into(self) -> Asc<Align<P>> {
         Align!(
             alignment = Alignment::CENTER,
             width_factor = self.width_factor,
