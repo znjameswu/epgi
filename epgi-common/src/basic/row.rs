@@ -39,7 +39,7 @@ pub struct Row {
     pub flip_horizontal: bool,
     #[builder(default = false)]
     pub flip_vertical: bool,
-    pub children: Vec<Flexible>,
+    pub children: Vec<Flexible<BoxProtocol>>,
 }
 
 impl Widget for Row {

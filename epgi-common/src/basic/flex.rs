@@ -8,10 +8,11 @@ use epgi_2d::{
 };
 use epgi_core::{
     foundation::{
-        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
+        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
+        Provide,
     },
     template::ImplByTemplate,
-    tree::{BuildContext, ChildWidget, ElementBase, RenderAction, Widget},
+    tree::{ArcChildWidget, BuildContext, ChildWidget, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -188,8 +189,8 @@ pub enum MainAxisSize {
 }
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Flex>))]
-pub struct Flex {
+#[builder(build_method(into=Asc<Flex<P>>))]
+pub struct Flex<P: Protocol> {
     /// The direction to use as the main axis.
     pub direction: Axis,
     /// How the children should be placed along the main axis.
@@ -214,14 +215,14 @@ pub struct Flex {
     pub flip_main_axis: bool,
     #[builder(default = false)]
     pub flip_cross_axis: bool,
-    pub children: Vec<Flexible>,
+    pub children: Vec<Flexible<P>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Flexible {
+pub struct Flexible<P: Protocol> {
     pub flex: u32,
     pub fit: FlexFit,
-    pub child: ArcBoxWidget,
+    pub child: ArcChildWidget<P>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -230,7 +231,7 @@ pub struct FlexibleConfig {
     fit: FlexFit,
 }
 
-impl Flexible {
+impl<P: Protocol> Flexible<P> {
     fn get_flexible_config(&self) -> FlexibleConfig {
         FlexibleConfig {
             flex: self.flex,
@@ -239,8 +240,8 @@ impl Flexible {
     }
 }
 
-impl From<ArcBoxWidget> for Flexible {
-    fn from(value: ArcBoxWidget) -> Self {
+impl<P: Protocol> From<ArcChildWidget<P>> for Flexible<P> {
+    fn from(value: ArcChildWidget<P>) -> Self {
         Flexible {
             flex: 0,
             fit: FlexFit::Tight,
@@ -249,7 +250,7 @@ impl From<ArcBoxWidget> for Flexible {
     }
 }
 
-impl<W: ChildWidget<BoxProtocol>> From<Asc<W>> for Flexible {
+impl<W: ChildWidget<P>, P: Protocol> From<Asc<W>> for Flexible<P> {
     fn from(value: Asc<W>) -> Self {
         Flexible {
             flex: 0,
@@ -279,7 +280,7 @@ pub enum FlexFit {
     Loose,
 }
 
-impl Widget for Flex {
+impl Widget for Flex<BoxProtocol> {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = BoxProtocol;
     type Element = FlexElement;
@@ -297,7 +298,7 @@ impl ImplByTemplate for FlexElement {
 }
 
 impl BoxMultiChildElement for FlexElement {
-    type ArcWidget = Asc<Flex>;
+    type ArcWidget = Asc<Flex<BoxProtocol>>;
 
     fn get_child_widgets(
         _element: Option<&mut Self>,
@@ -317,7 +318,7 @@ impl BoxMultiChildElement for FlexElement {
     }
 }
 
-pub(super) fn get_flexible_configs(children: &Vec<Flexible>) -> Vec<FlexibleConfig> {
+pub(super) fn get_flexible_configs(children: &Vec<Flexible<impl Protocol>>) -> Vec<FlexibleConfig> {
     children.iter().map(Flexible::get_flexible_config).collect()
 }
 
