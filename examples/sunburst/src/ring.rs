@@ -11,10 +11,10 @@ pub struct RingProtocol;
 
 #[derive(derive_more::Mul, derive_more::Div, PartialEq, Clone, Copy, Debug)]
 pub struct RingConstraints {
-    pub min_radial: f32,
-    pub max_radial: f32,
-    pub min_angular: f32,
-    pub max_angular: f32,
+    pub min_dr: f32,
+    pub max_dr: f32,
+    pub min_dtheta: f32,
+    pub max_dtheta: f32,
 }
 
 #[derive(PartialEq, Default, Clone, Copy, Debug)]

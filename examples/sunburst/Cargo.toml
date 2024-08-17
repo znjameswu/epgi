@@ -11,10 +11,12 @@ epgi-winit = { workspace = true, features = ["tokio"] }
 epgi-core = { workspace = true }
 epgi-common = { workspace = true }
 epgi-2d = { workspace = true }
+epgi-macro = {workspace = true}
 epgi-material = { workspace = true }
 derive_more = "0.99"
 dpi = { workspace = true }
 tokio = { version = "1.37.0", features = ["full"] }
+typed-builder = { workspace = true }
 rayon = { workspace = true }
 futures = "0.3.30"
 lazy_static = "1.5"

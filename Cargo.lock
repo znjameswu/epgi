@@ -3218,12 +3218,14 @@ dependencies = [
  "epgi-2d",
  "epgi-common",
  "epgi-core",
+ "epgi-macro",
  "epgi-material",
  "epgi-winit",
  "futures",
  "lazy_static",
  "rayon",
  "tokio",
+ "typed-builder",
 ]
 
 [[package]]

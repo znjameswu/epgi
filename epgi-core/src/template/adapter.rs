@@ -72,6 +72,7 @@ pub trait AdapterRender: Send + Sync + Sized + 'static {
         return hit_self;
     }
 
+    /// This method must be overridden if the two protocols across the adapter do not share the same origin point.
     #[allow(unused_variables)]
     fn hit_test_child(
         &self,
