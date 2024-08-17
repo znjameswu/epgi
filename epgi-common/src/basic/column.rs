@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use epgi_2d::{
     ArcBoxWidget, BoxMultiChildElement, BoxMultiChildElementTemplate, BoxMultiChildRenderElement,
     BoxProtocol,
@@ -81,17 +83,18 @@ impl BoxMultiChildElement for ColumnElement {
 }
 
 impl BoxMultiChildRenderElement for ColumnElement {
-    type Render = RenderFlex;
+    type Render = RenderFlex<BoxProtocol>;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {
-            direction: Axis::Veritcal,
+            direction: Axis::Vertical,
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
             flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_vertical,
             flip_cross_axis: widget.flip_horizontal,
+            phantom: PhantomData,
         }
     }
 
