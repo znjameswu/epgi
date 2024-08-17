@@ -1,0 +1,20 @@
+[package]
+name = "sunburst"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+epgi-winit = { workspace = true, features = ["tokio"] }
+epgi-core = { workspace = true }
+epgi-common = { workspace = true }
+epgi-2d = { workspace = true }
+epgi-material = { workspace = true }
+derive_more = "0.99"
+dpi = { workspace = true }
+tokio = { version = "1.37.0", features = ["full"] }
+rayon = { workspace = true }
+futures = "0.3.30"
+lazy_static = "1.5"

@@ -3210,6 +3210,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 
 [[package]]
+name = "sunburst"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "dpi",
+ "epgi-2d",
+ "epgi-common",
+ "epgi-core",
+ "epgi-material",
+ "epgi-winit",
+ "futures",
+ "lazy_static",
+ "rayon",
+ "tokio",
+]
+
+[[package]]
 name = "svg_fmt"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
