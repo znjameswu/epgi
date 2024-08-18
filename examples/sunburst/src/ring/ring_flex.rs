@@ -1,4 +1,7 @@
-use std::iter::zip;
+use std::{
+    f32::{consts::TAU, INFINITY},
+    iter::zip,
+};
 
 use epgi_2d::{
     Affine2dCanvas, Affine2dMultiChildHitTest, Affine2dMultiChildLayout, Affine2dMultiChildPaint,
@@ -26,8 +29,8 @@ use super::{ArcRingRenderObject, RingConstraints, RingOffset, RingProtocol, Ring
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum RingAxis {
-    Radial,
     Angular,
+    Radial,
 }
 
 #[derive(Debug, Declarative, TypedBuilder)]
@@ -160,94 +163,70 @@ impl Affine2dMultiChildRender for RenderRingFlex {
     type LayoutMemo = (Vec<RingOffset>, f32);
 }
 
-impl FlexLayout for RenderRingFlex {
-    type Protocol = RingProtocol;
+impl FlexLayout<RingProtocol> for RenderRingFlex {
     type CrossSize = f32;
 
     fn get_main_size(&self, size: &RingSize) -> f32 {
         match self.direction {
-            RingAxis::Radial => size.dtheta,
-            RingAxis::Angular => size.dr,
+            RingAxis::Angular => size.dtheta,
+            RingAxis::Radial => size.dr,
         }
     }
     fn get_cross_size(&self, size: &RingSize) -> f32 {
         match self.direction {
-            RingAxis::Radial => size.dr,
-            RingAxis::Angular => size.dtheta,
+            RingAxis::Angular => size.dr,
+            RingAxis::Radial => size.dtheta,
         }
     }
 
     fn get_max_main_size(&self, parent_constraints: &RingConstraints) -> f32 {
         self.get_main_size(&parent_constraints.biggest())
     }
-    fn get_max_cross_size(&self, parent_constraints: &RingConstraints) -> f32 {
-        self.get_cross_size(&parent_constraints.biggest())
-    }
 
-    fn flexible_configs(&self) -> &Vec<FlexibleConfig> {
-        &self.flexible_configs
-    }
-    fn main_axis_size(&self) -> MainAxisSize {
-        self.main_axis_size
-    }
-    fn stretch_cross_axis(&self) -> bool {
-        self.cross_axis_alignment == CrossAxisAlignment::Stretch
-    }
-    fn main_axis_alignment(&self) -> &MainAxisAlignment {
-        &self.main_axis_alignment
-    }
-    fn flip_main_axis(&self) -> bool {
-        self.flip_main_axis
-    }
-
-    fn placeholder_size() -> <Self::Protocol as Protocol>::Size {
+    fn placeholder_size() -> RingSize {
         RingSize::ZERO
     }
-    fn zero_cross_size(&self) -> Self::CrossSize {
+    fn initial_cross_size(&self) -> Self::CrossSize {
         0.0
     }
-
-    fn reduce_cross_size(&self, cross_size: &mut f32, child_size: &RingSize) {
-        *cross_size = cross_size.max(self.get_cross_size(child_size));
+    fn reduce_cross_size(&self, cross_size: &mut f32, child_cross_size: f32) {
+        *cross_size = cross_size.max(child_cross_size);
     }
 
-    fn non_flexible_child_constraints(
+    fn child_constraints(
         &self,
-        parent_constraints: &RingConstraints,
-        stretched: bool,
-    ) -> RingConstraints {
-        match (stretched, self.direction) {
-            (true, RingAxis::Radial) => RingConstraints::new_tight_dr(parent_constraints.max_dr),
-            (true, RingAxis::Angular) => {
-                RingConstraints::new_tight_dtheta(parent_constraints.max_dtheta)
-            }
-            (false, RingAxis::Radial) => RingConstraints::new_max_dr(parent_constraints.max_dr),
-            (false, RingAxis::Angular) => {
-                RingConstraints::new_max_dtheta(parent_constraints.max_dtheta)
-            }
-        }
-    }
-
-    fn flexible_child_constraints(
-        &self,
-        min_child_extent: f32,
-        max_child_extent: f32,
-        min_cross_size: f32,
+        main_size_range: Option<(f32, f32)>,
         parent_constraints: &RingConstraints,
     ) -> RingConstraints {
         match self.direction {
-            RingAxis::Radial => RingConstraints {
-                min_dtheta: min_child_extent,
-                max_dtheta: max_child_extent,
-                min_dr: min_cross_size,
-                max_dr: parent_constraints.max_dr,
-            },
-            RingAxis::Angular => RingConstraints {
-                min_dtheta: min_cross_size,
-                max_dtheta: parent_constraints.max_dtheta,
-                min_dr: min_child_extent,
-                max_dr: max_child_extent,
-            },
+            RingAxis::Angular => {
+                let (min_dtheta, max_dtheta) = main_size_range.unwrap_or((0.0, TAU));
+                let min_dr = if self.cross_axis_alignment != CrossAxisAlignment::Stretch {
+                    0.0
+                } else {
+                    parent_constraints.max_dr
+                };
+                RingConstraints {
+                    min_dr,
+                    max_dr: parent_constraints.max_dr,
+                    min_dtheta,
+                    max_dtheta,
+                }
+            }
+            RingAxis::Radial => {
+                let (min_dr, max_dr) = main_size_range.unwrap_or((0.0, INFINITY));
+                let min_dtheta = if self.cross_axis_alignment != CrossAxisAlignment::Stretch {
+                    0.0
+                } else {
+                    parent_constraints.max_dtheta
+                };
+                RingConstraints {
+                    min_dr,
+                    max_dr,
+                    min_dtheta,
+                    max_dtheta: parent_constraints.max_dtheta,
+                }
+            }
         }
     }
 
@@ -258,17 +237,17 @@ impl FlexLayout for RenderRingFlex {
         parent_constraints: &RingConstraints,
     ) -> (RingSize, f32, f32) {
         match self.direction {
-            RingAxis::Radial => {
+            RingAxis::Angular => {
                 let size = parent_constraints.constrain(RingSize {
-                    dtheta: main_size,
                     dr: cross_size,
+                    dtheta: main_size,
                 });
                 (size, size.dtheta, size.dr)
             }
-            RingAxis::Angular => {
+            RingAxis::Radial => {
                 let size = parent_constraints.constrain(RingSize {
-                    dtheta: cross_size,
                     dr: main_size,
+                    dtheta: cross_size,
                 });
                 (size, size.dr, size.dtheta)
             }
@@ -295,13 +274,13 @@ impl FlexLayout for RenderRingFlex {
             CrossAxisAlignment::Stretch => 0.0,
         };
         let child_offset = match self.direction {
-            RingAxis::Radial => RingOffset {
-                r: main_offset,
-                theta: child_cross_position,
-            },
             RingAxis::Angular => RingOffset {
                 r: child_cross_position,
                 theta: main_offset,
+            },
+            RingAxis::Radial => RingOffset {
+                r: main_offset,
+                theta: child_cross_position,
             },
         };
         child_offset
@@ -314,7 +293,15 @@ impl Affine2dMultiChildLayout for RenderRingFlex {
         constraints: &RingConstraints,
         children: &Vec<ArcRingRenderObject>,
     ) -> (RingSize, Self::LayoutMemo) {
-        default_flex_perform_layout(self, constraints, children)
+        default_flex_perform_layout(
+            self,
+            &self.flexible_configs,
+            self.main_axis_size,
+            self.main_axis_alignment,
+            self.flip_main_axis,
+            constraints,
+            children,
+        )
     }
 }
 
