@@ -358,8 +358,8 @@ impl BoxMultiChildLayout for RenderStack {
 impl BoxMultiChildPaint for RenderStack {
     fn perform_paint(
         &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
+        &size: &BoxSize,
+        &offset: &BoxOffset,
         memo: &Self::LayoutMemo,
         children: &Vec<ArcBoxRenderObject>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
@@ -367,13 +367,13 @@ impl BoxMultiChildPaint for RenderStack {
         let (child_offsets, has_visual_overflow) = memo;
         debug_assert_eq!(children.len(), child_offsets.len());
         if !has_visual_overflow {
-            for (child_offset, child) in std::iter::zip(child_offsets, children) {
+            for (&child_offset, child) in std::iter::zip(child_offsets, children) {
                 paint_ctx.paint(child, &(offset + child_offset));
             }
         } else {
             // TODO: clip behavior
-            paint_ctx.clip_rect(*offset & *size, BlendMode::default(), 1.0, |paint_ctx| {
-                for (child_offset, child) in std::iter::zip(child_offsets, children) {
+            paint_ctx.clip_rect(offset & size, BlendMode::default(), 1.0, |paint_ctx| {
+                for (&child_offset, child) in std::iter::zip(child_offsets, children) {
                     paint_ctx.paint(child, &(offset + child_offset));
                 }
             });

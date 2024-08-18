@@ -240,7 +240,7 @@ pub struct FlexibleConfig {
 }
 
 impl<P: Protocol> Flexible<P> {
-    fn get_flexible_config(&self) -> FlexibleConfig {
+    pub fn get_flexible_config(&self) -> FlexibleConfig {
         FlexibleConfig {
             flex: self.flex,
             fit: self.fit,
@@ -688,30 +688,6 @@ impl FlexLayout for RenderFlex<BoxProtocol> {
         };
         child_offset
     }
-
-    // fn perform_paint(
-    //     &self,
-    //     size: &BoxSize,
-    //     offset: &BoxOffset,
-    //     child_offsets: &Vec<BoxOffset>,
-    //     overflow: f32,
-    //     children: &Vec<ArcBoxRenderObject>,
-    //     paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
-    // ) {
-    //     debug_assert_eq!(children.len(), child_offsets.len());
-    //     if overflow < PRECISION_ERROR_TOLERANCE {
-    //         for (child_offset, child) in zip(child_offsets, children) {
-    //             paint_ctx.paint(child, &(offset + child_offset));
-    //         }
-    //     } else {
-    //         paint_ctx.clip_rect(*offset & *size, BlendMode::default(), 1.0, |paint_ctx| {
-    //             for (child_offset, child) in zip(child_offsets, children) {
-    //                 paint_ctx.paint(child, &(offset + child_offset));
-    //             }
-    //         });
-    //         // todo!(paint overflow indicator)
-    //     };
-    // }
 }
 
 pub trait FlexLayout: Send + Sync + 'static {
@@ -791,7 +767,8 @@ impl<P: Protocol> ImplByTemplate for RenderFlex<P> {
 }
 
 impl<P: Protocol> MultiChildRender for RenderFlex<P> {
-    type Protocol = P;
+    type ParentProtocol = P;
+    type ChildProtocol = P;
     type LayoutMemo = (Vec<P::Offset>, f32);
 }
 
@@ -1109,8 +1086,8 @@ pub fn default_flex_perform_layout<R: FlexLayout>(
 impl MultiChildPaint for RenderFlex<BoxProtocol> {
     fn perform_paint(
         &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
+        &size: &BoxSize,
+        &offset: &BoxOffset,
         memo: &Self::LayoutMemo,
         children: &Vec<ArcBoxRenderObject>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
@@ -1118,12 +1095,12 @@ impl MultiChildPaint for RenderFlex<BoxProtocol> {
         let (child_offsets, overflow) = memo;
         debug_assert_eq!(children.len(), child_offsets.len());
         if *overflow < PRECISION_ERROR_TOLERANCE {
-            for (child_offset, child) in zip(child_offsets, children) {
+            for (&child_offset, child) in zip(child_offsets, children) {
                 paint_ctx.paint(child, &(offset + child_offset));
             }
         } else {
-            paint_ctx.clip_rect(*offset & *size, BlendMode::default(), 1.0, |paint_ctx| {
-                for (child_offset, child) in zip(child_offsets, children) {
+            paint_ctx.clip_rect(offset & size, BlendMode::default(), 1.0, |paint_ctx| {
+                for (&child_offset, child) in zip(child_offsets, children) {
                     paint_ctx.paint(child, &(offset + child_offset));
                 }
             });

@@ -193,7 +193,8 @@ pub struct MultiChildRenderTemplate<
 >;
 
 pub trait MultiChildRender: Send + Sync + Sized + 'static {
-    type Protocol: Protocol;
+    type ParentProtocol: Protocol;
+    type ChildProtocol: Protocol<Canvas = <Self::ParentProtocol as Protocol>::Canvas>;
     type LayoutMemo: Send + Sync;
 
     fn detach(&mut self) {}
@@ -212,8 +213,8 @@ where
     R: ImplByTemplate<Template = Self>,
     R: MultiChildRender,
 {
-    type ParentProtocol = R::Protocol;
-    type ChildProtocol = R::Protocol;
+    type ParentProtocol = R::ParentProtocol;
+    type ChildProtocol = R::ChildProtocol;
     type ChildContainer = VecContainer;
 
     type LayoutMemo = R::LayoutMemo;
@@ -253,9 +254,9 @@ where
 pub trait MultiChildLayout: MultiChildRender {
     fn perform_layout(
         &mut self,
-        constraints: &<Self::Protocol as Protocol>::Constraints,
-        children: &Vec<ArcChildRenderObject<Self::Protocol>>,
-    ) -> (<Self::Protocol as Protocol>::Size, Self::LayoutMemo);
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+    ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 }
 
 impl<
@@ -272,9 +273,9 @@ where
 {
     fn perform_layout(
         render: &mut R,
-        constraints: &<R::Protocol as Protocol>::Constraints,
-        children: &Vec<ArcChildRenderObject<R::Protocol>>,
-    ) -> (<R::Protocol as Protocol>::Size, R::LayoutMemo) {
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
+    ) -> (<R::ParentProtocol as Protocol>::Size, R::LayoutMemo) {
         R::perform_layout(render, constraints, children)
     }
 }
@@ -282,14 +283,14 @@ where
 pub trait MultiChildLayoutByParent: MultiChildRender {
     fn compute_size_by_parent(
         &self,
-        constraints: &<Self::Protocol as Protocol>::Constraints,
-    ) -> <Self::Protocol as Protocol>::Size;
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+    ) -> <Self::ParentProtocol as Protocol>::Size;
 
     fn perform_layout(
         &mut self,
-        constraints: &<Self::Protocol as Protocol>::Constraints,
-        size: &<Self::Protocol as Protocol>::Size,
-        children: &Vec<ArcChildRenderObject<Self::Protocol>>,
+        constraints: &<Self::ParentProtocol as Protocol>::Constraints,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
     ) -> Self::LayoutMemo;
 }
 
@@ -307,16 +308,16 @@ where
 {
     fn compute_size_by_parent(
         render: &R,
-        constraints: &<R::Protocol as Protocol>::Constraints,
-    ) -> <R::Protocol as Protocol>::Size {
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+    ) -> <R::ParentProtocol as Protocol>::Size {
         R::compute_size_by_parent(render, constraints)
     }
 
     fn perform_layout(
         render: &mut R,
-        constraints: &<R::Protocol as Protocol>::Constraints,
-        size: &<R::Protocol as Protocol>::Size,
-        children: &Vec<ArcChildRenderObject<R::Protocol>>,
+        constraints: &<R::ParentProtocol as Protocol>::Constraints,
+        size: &<R::ParentProtocol as Protocol>::Size,
+        children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
     ) -> R::LayoutMemo {
         R::perform_layout(render, constraints, size, children)
     }
@@ -325,11 +326,11 @@ where
 pub trait MultiChildPaint: MultiChildRender {
     fn perform_paint(
         &self,
-        size: &<Self::Protocol as Protocol>::Size,
-        offset: &<Self::Protocol as Protocol>::Offset,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-        children: &Vec<ArcChildRenderObject<Self::Protocol>>,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::Protocol as Protocol>::Canvas>,
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
     );
 }
 
@@ -347,11 +348,11 @@ where
 {
     fn perform_paint(
         render: &R,
-        size: &<R::Protocol as Protocol>::Size,
-        offset: &<R::Protocol as Protocol>::Offset,
+        size: &<R::ParentProtocol as Protocol>::Size,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
-        children: &Vec<ArcChildRenderObject<R::Protocol>>,
-        paint_ctx: &mut impl PaintContext<Canvas = <R::Protocol as Protocol>::Canvas>,
+        children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
+        paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::perform_paint(render, size, offset, memo, children, paint_ctx)
     }
@@ -359,19 +360,20 @@ where
 
 pub trait MultiChildLayerPaint: MultiChildRender
 where
-    Self::Protocol: LayerProtocol,
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
 {
     fn paint_layer(
         &self,
-        children: &Vec<ArcChildRenderObject<Self::Protocol>>,
-    ) -> PaintResults<<Self::Protocol as Protocol>::Canvas> {
-        <Self::Protocol as Protocol>::Canvas::paint_render_objects(children.clone())
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+    ) -> PaintResults<<Self::ParentProtocol as Protocol>::Canvas> {
+        <Self::ParentProtocol as Protocol>::Canvas::paint_render_objects(children.clone())
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::Protocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::Protocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::Protocol as Protocol>::Canvas> {
+        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        child_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
         unimplemented!()
     }
 
@@ -391,19 +393,20 @@ impl<
 where
     R: ImplByTemplate<Template = Self>,
     R: MultiChildLayerPaint,
-    R::Protocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
 {
     fn paint_layer(
         render: &R,
-        children: &Vec<ArcChildRenderObject<R::Protocol>>,
-    ) -> PaintResults<<R::Protocol as Protocol>::Canvas> {
+        children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
+    ) -> PaintResults<<R::ParentProtocol as Protocol>::Canvas> {
         R::paint_layer(render, children)
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<<R::Protocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<R::Protocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<R::Protocol as Protocol>::Canvas> {
+        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
+        child_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
+    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas> {
         R::transform_config(self_config, child_config)
     }
 
@@ -415,9 +418,11 @@ where
 pub trait MultiChildComposite: MultiChildRender {
     fn composite_to(
         &self,
-        encoding: &mut <<Self::Protocol as Protocol>::Canvas as Canvas>::Encoding,
-        child_iterator: &mut ChildLayerProducingIterator<<Self::Protocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<Self::Protocol as Protocol>::Canvas>,
+        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+        child_iterator: &mut ChildLayerProducingIterator<
+            <Self::ParentProtocol as Protocol>::Canvas,
+        >,
+        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     );
 }
 
@@ -435,9 +440,9 @@ where
 {
     fn composite_to(
         render: &R,
-        encoding: &mut <<R::Protocol as Protocol>::Canvas as Canvas>::Encoding,
-        child_iterator: &mut ChildLayerProducingIterator<<R::Protocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<R::Protocol as Protocol>::Canvas>,
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
+        child_iterator: &mut ChildLayerProducingIterator<<R::ParentProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::composite_to(render, encoding, child_iterator, composition_config)
     }
@@ -448,14 +453,16 @@ pub trait MultiChildCachedComposite: MultiChildRender {
 
     fn composite_into_memo(
         &self,
-        child_iterator: &mut ChildLayerProducingIterator<<Self::Protocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<
+            <Self::ParentProtocol as Protocol>::Canvas,
+        >,
     ) -> Self::CompositionMemo;
 
     fn composite_from_cache_to(
         &self,
-        encoding: &mut <<Self::Protocol as Protocol>::Canvas as Canvas>::Encoding,
+        encoding: &mut <<Self::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         memo: &Self::CompositionMemo,
-        composition_config: &LayerCompositionConfig<<Self::Protocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
     );
 }
 
@@ -475,16 +482,16 @@ where
 
     fn composite_into_memo(
         render: &R,
-        child_iterator: &mut ChildLayerProducingIterator<<R::Protocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> R::CompositionMemo {
         R::composite_into_memo(render, child_iterator)
     }
 
     fn composite_from_cache_to(
         render: &R,
-        encoding: &mut <<R::Protocol as Protocol>::Canvas as Canvas>::Encoding,
+        encoding: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::Encoding,
         memo: &R::CompositionMemo,
-        composition_config: &LayerCompositionConfig<<R::Protocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
     ) {
         R::composite_from_cache_to(render, encoding, memo, composition_config)
     }
@@ -492,7 +499,8 @@ where
 
 pub trait MultiChildOrphanLayer: MultiChildLayerPaint
 where
-    Self::Protocol: LayerProtocol,
+    Self::ParentProtocol: LayerProtocol,
+    Self::ChildProtocol: LayerProtocol,
 {
     fn adopter_key(&self) -> &Asc<dyn Key>;
 }
@@ -508,7 +516,8 @@ impl<
 where
     R: ImplByTemplate<Template = Self>,
     R: MultiChildOrphanLayer,
-    R::Protocol: LayerProtocol,
+    R::ParentProtocol: LayerProtocol,
+    R::ChildProtocol: LayerProtocol,
 {
     fn adopter_key(render: &R) -> &Asc<dyn Key> {
         R::adopter_key(render)
@@ -526,15 +535,16 @@ pub trait MultiChildHitTest: MultiChildRender {
     /// you can assume the other methods mentioned above are `unreachable!()`.
     fn hit_test(
         &self,
-        ctx: &mut HitTestContext<<Self::Protocol as Protocol>::Canvas>,
-        size: &<Self::Protocol as Protocol>::Size,
-        offset: &<Self::Protocol as Protocol>::Offset,
+        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-        children: &Vec<ArcChildRenderObject<Self::Protocol>>,
-        adopted_children: &[RecordedChildLayer<<Self::Protocol as Protocol>::Canvas>],
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+        adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
-        let hit_in_bound = Self::Protocol::position_in_shape(ctx.curr_position(), offset, size);
+        let hit_in_bound =
+            Self::ParentProtocol::position_in_shape(ctx.curr_position(), offset, size);
         if !hit_in_bound {
             return NotHit;
         }
@@ -553,12 +563,12 @@ pub trait MultiChildHitTest: MultiChildRender {
     #[allow(unused_variables)]
     fn hit_test_children(
         &self,
-        ctx: &mut HitTestContext<<Self::Protocol as Protocol>::Canvas>,
-        size: &<Self::Protocol as Protocol>::Size,
-        offset: &<Self::Protocol as Protocol>::Offset,
+        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
-        children: &Vec<ArcChildRenderObject<Self::Protocol>>,
-        adopted_children: &[RecordedChildLayer<<Self::Protocol as Protocol>::Canvas>],
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+        adopted_children: &[RecordedChildLayer<<Self::ChildProtocol as Protocol>::Canvas>],
     ) -> bool {
         for child in children.iter().rev() {
             if ctx.hit_test(child.clone()) {
@@ -573,9 +583,9 @@ pub trait MultiChildHitTest: MultiChildRender {
     #[allow(unused_variables)]
     fn hit_test_self(
         &self,
-        position: &<<Self::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
-        size: &<Self::Protocol as Protocol>::Size,
-        offset: &<Self::Protocol as Protocol>::Offset,
+        position: &<<Self::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        size: &<Self::ParentProtocol as Protocol>::Size,
+        offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
     ) -> HitTestResult {
         HitTestResult::NotHit
@@ -603,12 +613,12 @@ where
 {
     fn hit_test(
         render: &R,
-        ctx: &mut HitTestContext<<R::Protocol as Protocol>::Canvas>,
-        size: &<R::Protocol as Protocol>::Size,
-        offset: &<R::Protocol as Protocol>::Offset,
+        ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+        size: &<R::ParentProtocol as Protocol>::Size,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
-        children: &Vec<ArcChildRenderObject<R::Protocol>>,
-        adopted_children: &[RecordedChildLayer<<R::Protocol as Protocol>::Canvas>],
+        children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
+        adopted_children: &[RecordedChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> HitTestResult {
         R::hit_test(render, ctx, size, offset, memo, children, adopted_children)
     }
@@ -616,12 +626,12 @@ where
     /// Returns: If a child has claimed the hit
     fn hit_test_children(
         _render: &R,
-        _ctx: &mut HitTestContext<<R::Protocol as Protocol>::Canvas>,
-        _size: &<R::Protocol as Protocol>::Size,
-        _offset: &<R::Protocol as Protocol>::Offset,
+        _ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+        _size: &<R::ParentProtocol as Protocol>::Size,
+        _offset: &<R::ParentProtocol as Protocol>::Offset,
         _memo: &R::LayoutMemo,
-        _children: &Vec<ArcChildRenderObject<R::Protocol>>,
-        _adopted_children: &[RecordedChildLayer<<R::Protocol as Protocol>::Canvas>],
+        _children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
+        _adopted_children: &[RecordedChildLayer<<R::ChildProtocol as Protocol>::Canvas>],
     ) -> bool {
         unreachable!(
             "TemplatePaint has already provided a hit_test implementation, \
@@ -631,9 +641,9 @@ where
 
     fn hit_test_self(
         _render: &R,
-        _position: &<<R::Protocol as Protocol>::Canvas as Canvas>::HitPosition,
-        _size: &<R::Protocol as Protocol>::Size,
-        _offset: &<R::Protocol as Protocol>::Offset,
+        _position: &<<R::ParentProtocol as Protocol>::Canvas as Canvas>::HitPosition,
+        _size: &<R::ParentProtocol as Protocol>::Size,
+        _offset: &<R::ParentProtocol as Protocol>::Offset,
         _memo: &R::LayoutMemo,
     ) -> HitTestResult {
         unreachable!(

@@ -131,8 +131,8 @@ impl ShiftedBoxRender for RenderPositionedBox {
     fn get_child_offset(
         &self,
         _size: &BoxSize,
-        offset: &BoxOffset,
-        child_extra_offset: &Self::LayoutMemo,
+        &offset: &BoxOffset,
+        &child_extra_offset: &Self::LayoutMemo,
     ) -> BoxOffset {
         offset + child_extra_offset
     }
