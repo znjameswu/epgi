@@ -109,8 +109,8 @@ impl AdapterRender for RenderBoxRingAdapter {
     fn perform_paint(
         &self,
         _size: &BoxSize,
-        offset: &BoxOffset,
-        origin_offset: &BoxOffset,
+        &offset: &BoxOffset,
+        &origin_offset: &BoxOffset,
         child: &ArcChildRenderObject<RingProtocol>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
@@ -127,8 +127,8 @@ impl AdapterRender for RenderBoxRingAdapter {
         &self,
         ctx: &mut HitTestContext<Affine2dCanvas>,
         _size: &BoxSize,
-        offset: &BoxOffset,
-        origin_offset: &Self::LayoutMemo,
+        &offset: &BoxOffset,
+        &origin_offset: &Self::LayoutMemo,
         child: &ArcChildRenderObject<RingProtocol>,
     ) -> bool {
         ctx.hit_test_with_paint_transform(
