@@ -534,7 +534,7 @@ pub trait BoxMultiChildHitTest: BoxMultiChildRender {
         children: &Vec<ArcBoxRenderObject>,
         adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
-        for child in children.iter() {
+        for child in children.iter().rev() {
             if ctx.hit_test(child.clone()) {
                 return true;
             }

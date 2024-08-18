@@ -16,7 +16,10 @@ use crate::{
 };
 
 use super::{
-    ImplByTemplate, TemplateCachedComposite, TemplateComposite, TemplateElement, TemplateElementBase, TemplateHitTest, TemplateLayerPaint, TemplateLayout, TemplateLayoutByParent, TemplateOrphanLayer, TemplatePaint, TemplateProvideElement, TemplateRender, TemplateRenderBase, TemplateRenderElement
+    ImplByTemplate, TemplateCachedComposite, TemplateComposite, TemplateElement,
+    TemplateElementBase, TemplateHitTest, TemplateLayerPaint, TemplateLayout,
+    TemplateLayoutByParent, TemplateOrphanLayer, TemplatePaint, TemplateProvideElement,
+    TemplateRender, TemplateRenderBase, TemplateRenderElement,
 };
 
 pub struct MultiChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
@@ -557,7 +560,7 @@ pub trait MultiChildHitTest: MultiChildRender {
         children: &Vec<ArcChildRenderObject<Self::Protocol>>,
         adopted_children: &[RecordedChildLayer<<Self::Protocol as Protocol>::Canvas>],
     ) -> bool {
-        for child in children.iter() {
+        for child in children.iter().rev() {
             if ctx.hit_test(child.clone()) {
                 return true;
             }
