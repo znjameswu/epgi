@@ -17,9 +17,7 @@ use epgi_core::{
         set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
         Provide,
     },
-    template::{
-        ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildRenderElement,
-    },
+    template::{ImplByTemplate, MultiChildElement, MultiChildElementTemplate},
     tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
@@ -88,13 +86,14 @@ impl Widget for RingFlex {
 pub struct RingFlexElement {}
 
 impl ImplByTemplate for RingFlexElement {
-    type Template = MultiChildElementTemplate<true, false>;
+    type Template = MultiChildElementTemplate<false>;
 }
 
 impl MultiChildElement for RingFlexElement {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
     type ArcWidget = Asc<RingFlex>;
+    type Render = RenderFlex<RingProtocol>;
 
     fn get_child_widgets(
         _element: Option<&mut Self>,
@@ -112,10 +111,6 @@ impl MultiChildElement for RingFlexElement {
     fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self {}
     }
-}
-
-impl MultiChildRenderElement for RingFlexElement {
-    type Render = RenderFlex<RingProtocol>;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {

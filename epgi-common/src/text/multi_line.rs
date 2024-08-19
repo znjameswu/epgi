@@ -5,9 +5,7 @@ use epgi_2d::{
 };
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
-    template::{
-        ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildRenderElement,
-    },
+    template::{ImplByTemplate, MultiChildElement, MultiChildElementTemplate},
     tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
@@ -33,13 +31,14 @@ impl Widget for MultiLine {
 pub struct MultiLineElement {}
 
 impl ImplByTemplate for MultiLineElement {
-    type Template = MultiChildElementTemplate<true, false>;
+    type Template = MultiChildElementTemplate<false>;
 }
 
 impl MultiChildElement for MultiLineElement {
     type ParentProtocol = MultiLineProtocol;
     type ChildProtocol = MultiLineProtocol;
     type ArcWidget = Asc<MultiLine>;
+    type Render = RenderMultiLine;
 
     fn get_child_widgets(
         _element: Option<&mut Self>,
@@ -53,10 +52,6 @@ impl MultiChildElement for MultiLineElement {
     fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self {}
     }
-}
-
-impl MultiChildRenderElement for MultiLineElement {
-    type Render = RenderMultiLine;
 
     fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
         RenderMultiLine {}

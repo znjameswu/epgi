@@ -3,9 +3,7 @@ use std::marker::PhantomData;
 use epgi_common::{Axis, RenderFlex};
 use epgi_core::{
     foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
-    template::{
-        ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildRenderElement,
-    },
+    template::{ImplByTemplate, MultiChildElement, MultiChildElementTemplate},
     tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
@@ -58,13 +56,14 @@ impl Widget for RingTrack {
 pub struct RingTrackElement {}
 
 impl ImplByTemplate for RingTrackElement {
-    type Template = MultiChildElementTemplate<true, false>;
+    type Template = MultiChildElementTemplate<false>;
 }
 
 impl MultiChildElement for RingTrackElement {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
     type ArcWidget = Asc<RingTrack>;
+    type Render = RenderFlex<RingProtocol>;
 
     fn get_child_widgets(
         _element: Option<&mut Self>,
@@ -82,10 +81,6 @@ impl MultiChildElement for RingTrackElement {
     fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self {}
     }
-}
-
-impl MultiChildRenderElement for RingTrackElement {
-    type Render = RenderFlex<RingProtocol>;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {

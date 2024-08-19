@@ -11,8 +11,7 @@ use epgi_core::{
     },
     template::{
         ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildHitTest,
-        MultiChildLayout, MultiChildPaint, MultiChildRender, MultiChildRenderElement,
-        MultiChildRenderTemplate,
+        MultiChildLayout, MultiChildPaint, MultiChildRender, MultiChildRenderTemplate,
     },
     tree::{
         ArcChildRenderObject, ArcChildWidget, BuildContext, ChildWidget, ElementBase, FullRender,
@@ -304,7 +303,7 @@ pub struct FlexElement<P: Protocol> {
 }
 
 impl<P: Protocol> ImplByTemplate for FlexElement<P> {
-    type Template = MultiChildElementTemplate<true, false>;
+    type Template = MultiChildElementTemplate<false>;
 }
 
 impl<P: Protocol> MultiChildElement for FlexElement<P>
@@ -314,6 +313,7 @@ where
     type ParentProtocol = P;
     type ChildProtocol = P;
     type ArcWidget = Asc<Flex<P>>;
+    type Render = RenderFlex<P>;
     fn get_child_widgets(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
@@ -332,17 +332,6 @@ where
             phantom: PhantomData,
         }
     }
-}
-
-pub(super) fn get_flexible_configs(children: &Vec<Flexible<impl Protocol>>) -> Vec<FlexibleConfig> {
-    children.iter().map(Flexible::get_flexible_config).collect()
-}
-
-impl<P: Protocol> MultiChildRenderElement for FlexElement<P>
-where
-    RenderFlex<P>: FullRender<ParentProtocol = P, ChildProtocol = P, ChildContainer = VecContainer>,
-{
-    type Render = RenderFlex<P>;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {
@@ -377,6 +366,10 @@ where
         .any(|&changed| changed)
         .then_some(RenderAction::Relayout)
     }
+}
+
+pub(super) fn get_flexible_configs(children: &Vec<Flexible<impl Protocol>>) -> Vec<FlexibleConfig> {
+    children.iter().map(Flexible::get_flexible_config).collect()
 }
 
 pub struct RenderFlex<P: Protocol> {
