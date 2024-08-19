@@ -7,7 +7,8 @@ pub use peniko::{
 };
 
 use crate::{
-    Affine2d, BoxOffset, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Paragraph, Point2d, QuadBez, RRect, Rect, RingSector, SingleLineOffset
+    Affine2d, BoxOffset, Circle, CircularArc, CubicBez, Ellipse, EllipticalArc, Line, Paragraph,
+    Point2d, QuadBez, RRect, Rect, RingSector, SingleLineOffset,
 };
 
 pub enum Affine2dPaintCommand<'a> {
@@ -92,11 +93,7 @@ pub struct Path {
 }
 
 pub trait Affine2dPaintContextExt {
-    fn with_paint_offset(
-        &mut self,
-        offset: &BoxOffset,
-        op: impl FnOnce(&mut Self),
-    );
+    fn with_paint_offset(&mut self, offset: &BoxOffset, op: impl FnOnce(&mut Self));
     fn clip_rect(&mut self, rect: Rect, blend: BlendMode, alpha: f32, op: impl FnOnce(&mut Self));
     fn clip_rrect(
         &mut self,
@@ -186,11 +183,7 @@ where
     T: PaintContext,
     for<'a> T::Canvas: Canvas<Transform = Affine2d, PaintCommand<'a> = Affine2dPaintCommand<'a>>,
 {
-    fn with_paint_offset(
-        &mut self,
-        offset: &BoxOffset,
-        op: impl FnOnce(&mut Self),
-    ) {
+    fn with_paint_offset(&mut self, offset: &BoxOffset, op: impl FnOnce(&mut Self)) {
         self.with_transform(Affine2d::from_translation(offset), op)
     }
     #[inline(always)]

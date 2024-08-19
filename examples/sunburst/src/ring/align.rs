@@ -49,14 +49,26 @@ impl RingAlignment {
         radial: 0.0,
         angular: -1.0,
     };
-    pub const CENTER: Self = Self { radial: 0.0, angular: 0.0 };
-    pub const CENTER_END: Self = Self { radial: 0.0, angular: 1.0 };
+    pub const CENTER: Self = Self {
+        radial: 0.0,
+        angular: 0.0,
+    };
+    pub const CENTER_END: Self = Self {
+        radial: 0.0,
+        angular: 1.0,
+    };
     pub const OUTER_START: Self = Self {
         radial: 1.0,
         angular: -1.0,
     };
-    pub const OUTER_CENTER: Self = Self { radial: 1.0, angular: 0.0 };
-    pub const OUTER_END: Self = Self { radial: 1.0, angular: 1.0 };
+    pub const OUTER_CENTER: Self = Self {
+        radial: 1.0,
+        angular: 0.0,
+    };
+    pub const OUTER_END: Self = Self {
+        radial: 1.0,
+        angular: 1.0,
+    };
 
     pub fn along_offset(&self, offset: RingOffset) -> RingOffset {
         let center_r = offset.r / 2.0;

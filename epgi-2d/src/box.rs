@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use epgi_core::{
     foundation::{Intrinsics, LayerProtocol, Protocol},
     tree::{ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, LayerCompositionConfig},
@@ -192,7 +190,9 @@ impl BoxSize {
     }
 }
 
-#[derive(derive_more::Add, derive_more::Mul, derive_more::Div, PartialEq, Default, Clone, Copy, Debug)]
+#[derive(
+    derive_more::Add, derive_more::Mul, derive_more::Div, PartialEq, Default, Clone, Copy, Debug,
+)]
 pub struct BoxOffset {
     pub x: f32,
     pub y: f32,

@@ -1,8 +1,8 @@
 use std::{f32::INFINITY, iter::zip, marker::PhantomData};
 
 use epgi_2d::{
-    Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, BlendMode, BoxConstraints,
-    BoxOffset, BoxProtocol, BoxSize, PRECISION_ERROR_TOLERANCE,
+    Affine2dPaintContextExt, BlendMode, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
+    PRECISION_ERROR_TOLERANCE,
 };
 use epgi_core::{
     foundation::{

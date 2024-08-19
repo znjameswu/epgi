@@ -6,9 +6,11 @@ use crate::{
         ImplByTemplate, TemplateHitTest, TemplateLayout, TemplatePaint, TemplateRender,
         TemplateRenderBase,
     },
-    tree::{ArcChildRenderObject, HitTestContext, HitTestResult, RecordedChildLayer, Render, RenderImpl, RenderObject},
+    tree::{
+        ArcChildRenderObject, HitTestContext, HitTestResult, RecordedChildLayer, Render,
+        RenderImpl, RenderObject,
+    },
 };
-
 
 pub struct ShiftedRenderTemplate;
 
