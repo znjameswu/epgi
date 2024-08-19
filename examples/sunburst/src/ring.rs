@@ -1,14 +1,14 @@
 mod adapter;
 pub use adapter::*;
 
-mod ring_flex;
-pub use ring_flex::*;
+mod flex;
+pub use flex::*;
 
-mod ring_slice;
-pub use ring_slice::*;
+mod slice;
+pub use slice::*;
 
-mod ring_track;
-pub use ring_track::*;
+mod track;
+pub use track::*;
 
 use std::f32::consts::{PI, TAU};
 
