@@ -1,14 +1,14 @@
 use std::{
     f32::{consts::TAU, INFINITY},
     iter::zip,
+    marker::PhantomData,
 };
 
 use epgi_2d::{
-    Affine2dCanvas, Affine2dMultiChildHitTest, Affine2dMultiChildLayout, Affine2dMultiChildPaint,
-    Affine2dMultiChildRender, Affine2dMultiChildRenderTemplate, Affine2dPaintContextExt, BlendMode,
-    Circle, Point2d, RingSector, PRECISION_ERROR_TOLERANCE,
+    Affine2dCanvas, Affine2dPaintContextExt, BlendMode, Circle, Point2d, RingSector,
+    PRECISION_ERROR_TOLERANCE,
 };
-use epgi_common::{default_flex_perform_layout, FlexLayout};
+use epgi_common::{Axis, FlexRender, RenderFlex};
 pub use epgi_common::{
     CrossAxisAlignment, Flexible, FlexibleConfig, MainAxisAlignment, MainAxisSize,
 };
@@ -20,12 +20,14 @@ use epgi_core::{
     template::{
         ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildRenderElement,
     },
-    tree::{ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use super::{ArcRingRenderObject, RingConstraints, RingOffset, RingProtocol, RingSize};
+use super::{
+    ArcRingRenderObject, ArcRingWidget, RingConstraints, RingOffset, RingProtocol, RingSize,
+};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum RingAxis {
@@ -33,7 +35,17 @@ pub enum RingAxis {
     Radial,
 }
 
+impl From<RingAxis> for Axis {
+    fn from(value: RingAxis) -> Self {
+        match value {
+            RingAxis::Angular => Axis::Horizontal,
+            RingAxis::Radial => Axis::Vertical,
+        }
+    }
+}
+
 #[derive(Debug, Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<RingFlex>))]
 pub struct RingFlex {
     /// The direction to use as the main axis.
     pub direction: RingAxis,
@@ -89,7 +101,7 @@ impl MultiChildElement for RingFlexElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<Vec<ArcChildWidget<RingProtocol>>, BuildSuspendedError> {
+    ) -> Result<Vec<ArcRingWidget>, BuildSuspendedError> {
         Ok(widget
             .children
             .iter()
@@ -103,23 +115,24 @@ impl MultiChildElement for RingFlexElement {
 }
 
 impl MultiChildRenderElement for RingFlexElement {
-    type Render = RenderRingFlex;
+    type Render = RenderFlex<RingProtocol>;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
-        RenderRingFlex {
-            direction: widget.direction.clone(),
+        RenderFlex {
+            direction: widget.direction.into(),
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
             flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_horizontal,
             flip_cross_axis: widget.flip_vertical,
+            phantom: PhantomData,
         }
     }
 
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
         [
-            set_if_changed(&mut render.direction, widget.direction.clone()),
+            set_if_changed(&mut render.direction, widget.direction.into()),
             set_if_changed(&mut render.main_axis_alignment, widget.main_axis_alignment),
             set_if_changed(&mut render.main_axis_size, widget.main_axis_size),
             set_if_changed(
@@ -153,29 +166,19 @@ pub struct RenderRingFlex {
     pub flip_cross_axis: bool,
 }
 
-impl ImplByTemplate for RenderRingFlex {
-    type Template = Affine2dMultiChildRenderTemplate<false, false, false, false>;
-}
-
-impl Affine2dMultiChildRender for RenderRingFlex {
-    type ParentProtocol = RingProtocol;
-    type ChildProtocol = RingProtocol;
-    type LayoutMemo = (Vec<RingOffset>, f32);
-}
-
-impl FlexLayout<RingProtocol> for RenderRingFlex {
+impl FlexRender<RingProtocol> for RenderFlex<RingProtocol> {
     type CrossSize = f32;
 
     fn get_main_size(&self, size: &RingSize) -> f32 {
         match self.direction {
-            RingAxis::Angular => size.dtheta,
-            RingAxis::Radial => size.dr,
+            Axis::Horizontal => size.dtheta,
+            Axis::Vertical => size.dr,
         }
     }
     fn get_cross_size(&self, size: &RingSize) -> f32 {
         match self.direction {
-            RingAxis::Angular => size.dr,
-            RingAxis::Radial => size.dtheta,
+            Axis::Horizontal => size.dr,
+            Axis::Vertical => size.dtheta,
         }
     }
 
@@ -199,7 +202,7 @@ impl FlexLayout<RingProtocol> for RenderRingFlex {
         parent_constraints: &RingConstraints,
     ) -> RingConstraints {
         match self.direction {
-            RingAxis::Angular => {
+            Axis::Horizontal => {
                 let (min_dtheta, max_dtheta) = main_size_range.unwrap_or((0.0, TAU));
                 let min_dr = if self.cross_axis_alignment != CrossAxisAlignment::Stretch {
                     0.0
@@ -213,7 +216,7 @@ impl FlexLayout<RingProtocol> for RenderRingFlex {
                     max_dtheta,
                 }
             }
-            RingAxis::Radial => {
+            Axis::Vertical => {
                 let (min_dr, max_dr) = main_size_range.unwrap_or((0.0, INFINITY));
                 let min_dtheta = if self.cross_axis_alignment != CrossAxisAlignment::Stretch {
                     0.0
@@ -237,14 +240,14 @@ impl FlexLayout<RingProtocol> for RenderRingFlex {
         parent_constraints: &RingConstraints,
     ) -> (RingSize, f32, f32) {
         match self.direction {
-            RingAxis::Angular => {
+            Axis::Horizontal => {
                 let size = parent_constraints.constrain(RingSize {
                     dr: cross_size,
                     dtheta: main_size,
                 });
                 (size, size.dtheta, size.dr)
             }
-            RingAxis::Radial => {
+            Axis::Vertical => {
                 let size = parent_constraints.constrain(RingSize {
                     dr: main_size,
                     dtheta: cross_size,
@@ -274,49 +277,29 @@ impl FlexLayout<RingProtocol> for RenderRingFlex {
             CrossAxisAlignment::Stretch => 0.0,
         };
         let child_offset = match self.direction {
-            RingAxis::Angular => RingOffset {
+            Axis::Horizontal => RingOffset {
                 r: child_cross_position,
                 theta: main_offset,
             },
-            RingAxis::Radial => RingOffset {
+            Axis::Vertical => RingOffset {
                 r: main_offset,
                 theta: child_cross_position,
             },
         };
         child_offset
     }
-}
 
-impl Affine2dMultiChildLayout for RenderRingFlex {
-    fn perform_layout(
-        &mut self,
-        constraints: &RingConstraints,
-        children: &Vec<ArcRingRenderObject>,
-    ) -> (RingSize, Self::LayoutMemo) {
-        default_flex_perform_layout(
-            self,
-            &self.flexible_configs,
-            self.main_axis_size,
-            self.main_axis_alignment,
-            self.flip_main_axis,
-            constraints,
-            children,
-        )
-    }
-}
-
-impl Affine2dMultiChildPaint for RenderRingFlex {
     fn perform_paint(
         &self,
         size: &RingSize,
         &offset: &RingOffset,
-        memo: &Self::LayoutMemo,
+        child_offsets: &Vec<RingOffset>,
+        overflow: f32,
         children: &Vec<ArcRingRenderObject>,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
-        let (child_offsets, overflow) = memo;
         debug_assert_eq!(children.len(), child_offsets.len());
-        if *overflow < PRECISION_ERROR_TOLERANCE {
+        if overflow < PRECISION_ERROR_TOLERANCE {
             for (&child_offset, child) in zip(child_offsets, children) {
                 paint_ctx.paint(child, &(offset + child_offset));
             }
@@ -339,5 +322,3 @@ impl Affine2dMultiChildPaint for RenderRingFlex {
         };
     }
 }
-
-impl Affine2dMultiChildHitTest for RenderRingFlex {}

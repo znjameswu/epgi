@@ -390,7 +390,7 @@ pub struct RenderFlex<P: Protocol> {
     pub phantom: PhantomData<P>,
 }
 
-impl FlexLayout<BoxProtocol> for RenderFlex<BoxProtocol> {
+impl FlexRender<BoxProtocol> for RenderFlex<BoxProtocol> {
     type CrossSize = f32;
 
     fn get_main_size(&self, size: &BoxSize) -> f32 {
@@ -505,9 +505,32 @@ impl FlexLayout<BoxProtocol> for RenderFlex<BoxProtocol> {
         };
         child_offset
     }
+
+    fn perform_paint(
+        &self,
+        &size: &<BoxProtocol as Protocol>::Size,
+        &offset: &<BoxProtocol as Protocol>::Offset,
+        child_offsets: &Vec<<BoxProtocol as Protocol>::Offset>,
+        overflow: f32,
+        children: &Vec<ArcChildRenderObject<BoxProtocol>>,
+        paint_ctx: &mut impl PaintContext<Canvas = <BoxProtocol as Protocol>::Canvas>,
+    ) {
+        if overflow < PRECISION_ERROR_TOLERANCE {
+            for (&child_offset, child) in zip(child_offsets, children) {
+                paint_ctx.paint(child, &(offset + child_offset));
+            }
+        } else {
+            paint_ctx.clip_rect(offset & size, BlendMode::default(), 1.0, |paint_ctx| {
+                for (&child_offset, child) in zip(child_offsets, children) {
+                    paint_ctx.paint(child, &(offset + child_offset));
+                }
+            });
+            // todo!(paint overflow indicator)
+        };
+    }
 }
 
-pub trait FlexLayout<P: Protocol>: Send + Sync + 'static {
+pub trait FlexRender<P: Protocol>: Send + Sync + 'static {
     type CrossSize: Clone + Send + Sync + 'static;
 
     fn get_main_size(&self, size: &P::Size) -> f32;
@@ -541,15 +564,15 @@ pub trait FlexLayout<P: Protocol>: Send + Sync + 'static {
         parent_constraints: &P::Constraints,
     ) -> P::Offset;
 
-    // fn perform_paint(
-    //     &self,
-    //     size: &<Self::Protocol as Protocol>::Size,
-    //     offset: &<Self::Protocol as Protocol>::Offset,
-    //     child_offsets: &Vec<<Self::Protocol as Protocol>::Offset>,
-    //     overflow: f32,
-    //     children: &Vec<ArcChildRenderObject<Self::Protocol>>,
-    //     paint_ctx: &mut impl PaintContext<Canvas = <Self::Protocol as Protocol>::Canvas>,
-    // );
+    fn perform_paint(
+        &self,
+        size: &P::Size,
+        offset: &P::Offset,
+        child_offsets: &Vec<P::Offset>,
+        overflow: f32,
+        children: &Vec<ArcChildRenderObject<P>>,
+        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
+    );
 }
 
 impl<P: Protocol> ImplByTemplate for RenderFlex<P> {
@@ -564,7 +587,7 @@ impl<P: Protocol> MultiChildRender for RenderFlex<P> {
 
 impl<P: Protocol> MultiChildLayout for RenderFlex<P>
 where
-    RenderFlex<P>: FlexLayout<P>,
+    RenderFlex<P>: FlexRender<P>,
 {
     fn perform_layout(
         &mut self,
@@ -584,7 +607,7 @@ where
     }
 }
 
-pub fn default_flex_perform_layout<P: Protocol, R: FlexLayout<P>>(
+pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     render: &R,
     flexible_configs: &Vec<FlexibleConfig>,
     main_axis_size: MainAxisSize,
@@ -720,29 +743,28 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexLayout<P>>(
     (actual_size, (child_offsets, overflow))
 }
 
-impl MultiChildPaint for RenderFlex<BoxProtocol> {
+impl<P: Protocol> MultiChildPaint for RenderFlex<P>
+where
+    RenderFlex<P>: FlexRender<P>,
+{
     fn perform_paint(
         &self,
-        &size: &BoxSize,
-        &offset: &BoxOffset,
+        size: &P::Size,
+        offset: &P::Offset,
         memo: &Self::LayoutMemo,
-        children: &Vec<ArcBoxRenderObject>,
-        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+        children: &Vec<ArcChildRenderObject<P>>,
+        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
     ) {
         let (child_offsets, overflow) = memo;
-        debug_assert_eq!(children.len(), child_offsets.len());
-        if *overflow < PRECISION_ERROR_TOLERANCE {
-            for (&child_offset, child) in zip(child_offsets, children) {
-                paint_ctx.paint(child, &(offset + child_offset));
-            }
-        } else {
-            paint_ctx.clip_rect(offset & size, BlendMode::default(), 1.0, |paint_ctx| {
-                for (&child_offset, child) in zip(child_offsets, children) {
-                    paint_ctx.paint(child, &(offset + child_offset));
-                }
-            });
-            // todo!(paint overflow indicator)
-        };
+        FlexRender::perform_paint(
+            self,
+            size,
+            offset,
+            child_offsets,
+            *overflow,
+            children,
+            paint_ctx,
+        )
     }
 }
 
