@@ -7,7 +7,7 @@ use epgi_core::{
     foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     max,
     template::ImplByTemplate,
-    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{ArcChildWidget, BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -57,7 +57,7 @@ impl Widget for Align {
     type ChildProtocol = BoxProtocol;
     type Element = AlignElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }
@@ -77,7 +77,7 @@ impl BoxSingleChildElement for AlignElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<epgi_2d::BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

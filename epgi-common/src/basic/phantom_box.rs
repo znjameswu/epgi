@@ -4,7 +4,7 @@ use epgi_2d::{Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize};
 use epgi_core::{
     foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{ImplByTemplate, LeafElement, LeafElementTemplate, LeafRender, LeafRenderTemplate},
-    tree::{BuildContext, ElementBase, Widget},
+    tree::{BuildContext, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -20,12 +20,10 @@ pub struct PhantomBox {}
 
 impl Widget for PhantomBox {
     type ParentProtocol = BoxProtocol;
-
     type ChildProtocol = BoxProtocol;
-
     type Element = PhantomBoxElement;
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }
@@ -39,9 +37,7 @@ impl ImplByTemplate for PhantomBoxElement {
 
 impl LeafElement for PhantomBoxElement {
     type Protocol = BoxProtocol;
-
     type ArcWidget = Asc<PhantomBox>;
-
     type Render = RenderPhantomBox;
 
     fn create_element(
