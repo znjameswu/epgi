@@ -1,12 +1,10 @@
 use epgi_2d::{
-    ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol, BoxSingleChildElement,
-    BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize, ShiftedBoxRender,
-    ShiftedBoxRenderTemplate,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
+    BoxSingleChildElement, BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize,
+    ShiftedBoxRender, ShiftedBoxRenderTemplate,
 };
 use epgi_core::{
-    foundation::{
-        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide,
-    },
+    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     max,
     template::ImplByTemplate,
     tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
@@ -16,19 +14,15 @@ use typed_builder::TypedBuilder;
 
 use crate::Lerp;
 
-pub type AlignedBox = Align<BoxProtocol>;
-
-pub type AlignedBoxBuilder = AlignBuilder<BoxProtocol>;
-
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Align<P>>))]
-pub struct Align<P: Protocol> {
+#[builder(build_method(into=Asc<Align>))]
+pub struct Align {
     pub alignment: Alignment,
     #[builder(default)]
     pub width_factor: Option<f32>,
     #[builder(default)]
     pub height_factor: Option<f32>,
-    pub child: ArcChildWidget<P>,
+    pub child: ArcBoxWidget,
 }
 
 #[derive(Lerp, PartialEq, Clone, Copy, Debug)]
@@ -58,10 +52,10 @@ impl Alignment {
     }
 }
 
-impl Widget for AlignedBox {
+impl Widget for Align {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = BoxProtocol;
-    type Element = AlignedBoxElement;
+    type Element = AlignElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
@@ -69,14 +63,14 @@ impl Widget for AlignedBox {
 }
 
 #[derive(Clone)]
-pub struct AlignedBoxElement {}
+pub struct AlignElement {}
 
-impl ImplByTemplate for AlignedBoxElement {
+impl ImplByTemplate for AlignElement {
     type Template = BoxSingleChildElementTemplate<true, false>;
 }
 
-impl BoxSingleChildElement for AlignedBoxElement {
-    type ArcWidget = Asc<Align<BoxProtocol>>;
+impl BoxSingleChildElement for AlignElement {
+    type ArcWidget = Asc<Align>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
@@ -92,7 +86,7 @@ impl BoxSingleChildElement for AlignedBoxElement {
     }
 }
 
-impl BoxSingleChildRenderElement for AlignedBoxElement {
+impl BoxSingleChildRenderElement for AlignElement {
     type Render = RenderPositionedBox;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
@@ -132,7 +126,7 @@ impl ShiftedBoxRender for RenderPositionedBox {
         &self,
         _size: &BoxSize,
         &offset: &BoxOffset,
-        &child_extra_offset: &Self::LayoutMemo,
+        &child_extra_offset: &BoxOffset,
     ) -> BoxOffset {
         offset + child_extra_offset
     }

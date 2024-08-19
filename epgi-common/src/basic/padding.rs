@@ -1,10 +1,10 @@
 use epgi_2d::{
-    ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
     BoxSingleChildElement, BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize,
     ShiftedBoxRender, ShiftedBoxRenderTemplate,
 };
 use epgi_core::{
-    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide},
+    foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     max,
     template::ImplByTemplate,
     tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
@@ -14,15 +14,11 @@ use typed_builder::TypedBuilder;
 
 use crate::Lerp;
 
-pub type PaddedBox = Padding<BoxProtocol>;
-
-pub type PaddedBoxBuilder = PaddingBuilder<BoxProtocol>;
-
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Padding<P>>))]
-pub struct Padding<P: Protocol> {
+#[builder(build_method(into=Asc<Padding>))]
+pub struct Padding {
     pub padding: EdgeInsets,
-    pub child: ArcChildWidget<P>,
+    pub child: ArcBoxWidget,
 }
 
 #[derive(Lerp, PartialEq, Default, Clone, Copy, Debug)]
@@ -132,10 +128,10 @@ impl BoxGeometryEdgeInsetsExt for BoxSize {
     }
 }
 
-impl Widget for PaddedBox {
+impl Widget for Padding {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = BoxProtocol;
-    type Element = BoxPaddingElement;
+    type Element = PaddingElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
@@ -143,14 +139,14 @@ impl Widget for PaddedBox {
 }
 
 #[derive(Clone)]
-pub struct BoxPaddingElement {}
+pub struct PaddingElement {}
 
-impl ImplByTemplate for BoxPaddingElement {
+impl ImplByTemplate for PaddingElement {
     type Template = BoxSingleChildElementTemplate<true, false>;
 }
 
-impl BoxSingleChildElement for BoxPaddingElement {
-    type ArcWidget = Asc<PaddedBox>;
+impl BoxSingleChildElement for PaddingElement {
+    type ArcWidget = Asc<Padding>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
@@ -166,11 +162,11 @@ impl BoxSingleChildElement for BoxPaddingElement {
     }
 }
 
-impl BoxSingleChildRenderElement for BoxPaddingElement {
-    type Render = RenderBoxPadding;
+impl BoxSingleChildRenderElement for PaddingElement {
+    type Render = RenderPadding;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
-        RenderBoxPadding {
+        RenderPadding {
             padding: widget.padding,
         }
     }
@@ -180,15 +176,15 @@ impl BoxSingleChildRenderElement for BoxPaddingElement {
     }
 }
 
-pub struct RenderBoxPadding {
+pub struct RenderPadding {
     pub padding: EdgeInsets,
 }
 
-impl ImplByTemplate for RenderBoxPadding {
+impl ImplByTemplate for RenderPadding {
     type Template = ShiftedBoxRenderTemplate;
 }
 
-impl ShiftedBoxRender for RenderBoxPadding {
+impl ShiftedBoxRender for RenderPadding {
     type LayoutMemo = ();
 
     fn get_child_offset(&self, _size: &BoxSize, offset: &BoxOffset, _memo: &()) -> BoxOffset {
