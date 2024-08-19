@@ -1,8 +1,23 @@
 mod adapter;
 pub use adapter::*;
 
+mod align;
+pub use align::*;
+
+mod center;
+pub use center::*;
+
+mod colored_ring;
+pub use colored_ring::*;
+
 mod flex;
 pub use flex::*;
+
+mod padding;
+pub use padding::*;
+
+mod phantom_ring;
+pub use phantom_ring::*;
 
 mod slice;
 pub use slice::*;
