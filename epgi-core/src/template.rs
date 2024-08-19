@@ -16,6 +16,9 @@ pub use proxy::*;
 mod render;
 pub use render::*;
 
+mod shifted;
+pub use shifted::*;
+
 mod single_child;
 pub use single_child::*;
 
