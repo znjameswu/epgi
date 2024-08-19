@@ -15,7 +15,7 @@ use crate::{
 };
 
 lazy_static::lazy_static! {
-    static ref ARC_FAST_OUT_SLOW_IN: Asc<dyn Tween<Output = f32> + Send + Sync> = Asc::new(FAST_OUT_SLOW_IN);
+    pub static ref ARC_FAST_OUT_SLOW_IN: Asc<dyn Tween<Output = f32> + Send + Sync> = Asc::new(FAST_OUT_SLOW_IN);
 }
 
 #[derive(Debug, Declarative, TypedBuilder)]

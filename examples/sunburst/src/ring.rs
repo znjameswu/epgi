@@ -10,6 +10,9 @@ pub use center::*;
 mod colored_ring;
 pub use colored_ring::*;
 
+mod constrained_ring;
+pub use constrained_ring::*;
+
 mod flex;
 pub use flex::*;
 

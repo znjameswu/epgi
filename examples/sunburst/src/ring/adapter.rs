@@ -15,6 +15,7 @@ use typed_builder::TypedBuilder;
 use super::{RingConstraints, RingOffset, RingProtocol};
 
 #[derive(Debug, Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<BoxRingAdapter>))]
 pub struct BoxRingAdapter {
     pub child: ArcChildWidget<RingProtocol>,
 }
