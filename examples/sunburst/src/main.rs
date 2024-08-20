@@ -12,65 +12,68 @@ use epgi_winit::{AppLauncher, Window};
 pub use ring::*;
 
 fn main() {
-    let sunburst = Builder!(
-        builder = move |ctx| {
-            let (target, set_target) = ctx.use_state((0.0, 0.0));
-            let value = ctx.use_implicitly_animated_value(
-                &target,
-                Duration::from_secs_f32(2.0),
-                Some(&ARC_FAST_OUT_SLOW_IN),
-            );
-            ctx.use_effect(
-                move |_| {
-                    get_current_scheduler().create_sync_job(|job_builder| {
-                        set_target.set((100.0, TAU), job_builder);
-                    })
-                },
-                (),
-            );
-            ImplicitlyAnimated!(
-                value,
-                builder = |_ctx, (inner, span)| {
-                    BoxRingAdapter!(
-                        child = PaddedRing!(
-                            padding = RingEdgeInsets::new().inner(inner),
-                            child = ConstrainedRing!(
-                                constraints = RingConstraints::new_tight(30.0, span),
-                                child = RingTrack!(
-                                    cross_axis_alignment = CrossAxisAlignment::Stretch,
-                                    children = vec![
-                                        Flexible {
-                                            flex: 2,
-                                            fit: FlexFit::Tight,
-                                            child: ColoredRing!(
-                                                color = Color::RED,
-                                                child = ARC_PHANTOM_RING.clone(),
-                                            )
-                                        },
-                                        Flexible {
-                                            flex: 2,
-                                            fit: FlexFit::Tight,
-                                            child: ColoredRing!(
-                                                color = Color::GREEN,
-                                                child = ARC_PHANTOM_RING.clone(),
-                                            )
-                                        },
-                                        Flexible {
-                                            flex: 1,
-                                            fit: FlexFit::Tight,
-                                            child: ColoredRing!(
-                                                color = Color::BLUE,
-                                                child = ARC_PHANTOM_RING.clone(),
-                                            )
-                                        }
-                                    ]
+    let sunburst = BoxRingAdapter!(
+        child = RingAlign!(
+            alignment = RingAlignment::CENTER_END,
+            child = Builder!(
+                builder = move |ctx| {
+                    let (target, set_target) = ctx.use_state((0.0, 0.0));
+                    let value = ctx.use_implicitly_animated_value(
+                        &target,
+                        Duration::from_secs_f32(2.0),
+                        Some(&ARC_FAST_OUT_SLOW_IN),
+                    );
+                    ctx.use_effect(
+                        move |_| {
+                            get_current_scheduler().create_sync_job(|job_builder| {
+                                set_target.set((100.0, TAU), job_builder);
+                            })
+                        },
+                        (),
+                    );
+                    ImplicitlyAnimated!(
+                        value,
+                        builder = |_ctx, (inner, span)| {
+                            PaddedRing!(
+                                padding = RingEdgeInsets::new().inner(inner),
+                                child = ConstrainedRing!(
+                                    constraints = RingConstraints::new_tight(30.0, span),
+                                    child = RingTrack!(
+                                        cross_axis_alignment = CrossAxisAlignment::Stretch,
+                                        children = vec![
+                                            Flexible {
+                                                flex: 2,
+                                                fit: FlexFit::Tight,
+                                                child: ColoredRing!(
+                                                    color = Color::RED,
+                                                    child = ARC_PHANTOM_RING.clone(),
+                                                )
+                                            },
+                                            Flexible {
+                                                flex: 2,
+                                                fit: FlexFit::Tight,
+                                                child: ColoredRing!(
+                                                    color = Color::GREEN,
+                                                    child = ARC_PHANTOM_RING.clone(),
+                                                )
+                                            },
+                                            Flexible {
+                                                flex: 1,
+                                                fit: FlexFit::Tight,
+                                                child: ColoredRing!(
+                                                    color = Color::BLUE,
+                                                    child = ARC_PHANTOM_RING.clone(),
+                                                )
+                                            }
+                                        ]
+                                    )
                                 )
                             )
-                        )
+                        }
                     )
                 }
             )
-        }
+        )
     );
     // let sunburst = BoxRingAdapter!(
     //     child = PaddedRing!(
