@@ -1,5 +1,7 @@
 use crate::{
-    foundation::{Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol},
+    foundation::{
+        Arc, Canvas, HktContainer, LayerProtocol, PaintContext, Protocol, SurrogateProtocol,
+    },
     tree::{
         ArcChildRenderObject, ImplMaybeLayer, ImplRender, LayerCache, LayerPaint, OrphanLayer,
         Paint, Render, RenderImpl, RenderObject,
@@ -90,16 +92,18 @@ where
     }
 }
 
-impl<R> ChildRenderObjectPaintExtImpl<R::ParentProtocol> for RenderObject<R>
+impl<R, P> ChildRenderObjectPaintExtImpl<P> for RenderObject<R>
 where
     R: Render,
     R::Impl: ImplPaint<R>,
+    P: SurrogateProtocol<R::ParentProtocol>,
 {
     fn paint_impl(
         self: Arc<Self>,
-        offset: <R::ParentProtocol as Protocol>::Offset,
+        offset: P::Offset,
         paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
     ) {
+        let offset = P::convert_offset(offset);
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
         let token = self.mark.assert_not_needing_layout();

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Mul};
+use std::{borrow::Borrow, fmt::Debug, ops::Mul};
 
 use crate::tree::{
     ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
@@ -179,4 +179,34 @@ pub trait Transform<C: Canvas>:
     fn identity() -> Self;
     fn mul(&self, other: &Self) -> Self;
     fn inv(&self) -> Option<Self>;
+}
+
+/// A protocol that can be translated into P, so that widget with P as its `ParentProtocol`
+/// can also behave like [ChildWidget] with this protocol
+pub trait SurrogateProtocol<P: Protocol>: Protocol<Canvas = P::Canvas> {
+    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<<P as Protocol>::Constraints>;
+    fn convert_offset(value: Self::Offset) -> P::Offset;
+    fn recover_size(value: P::Size) -> Self::Size;
+    fn convert_intrinsics(value: Self::Intrinsics) -> Result<P::Intrinsics, Self::Intrinsics>;
+    fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics;
+}
+
+impl<P: Protocol> SurrogateProtocol<P> for P {
+    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<<P as Protocol>::Constraints> {
+        value
+    }
+    fn convert_offset(value: Self::Offset) -> <P as Protocol>::Offset {
+        value
+    }
+    fn recover_size(value: <P as Protocol>::Size) -> Self::Size {
+        value
+    }
+    fn convert_intrinsics(
+        value: Self::Intrinsics,
+    ) -> Result<<P as Protocol>::Intrinsics, Self::Intrinsics> {
+        Ok(value)
+    }
+    fn recover_intrinsics(value: <P as Protocol>::Intrinsics) -> Self::Intrinsics {
+        value
+    }
 }

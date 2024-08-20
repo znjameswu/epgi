@@ -1,5 +1,7 @@
+use std::borrow::Borrow;
+
 use crate::{
-    foundation::{Container, HktContainer, Protocol},
+    foundation::{Container, HktContainer, Protocol, SurrogateProtocol},
     scheduler::get_current_scheduler,
     tree::{
         ArcChildRenderObject, Layout, LayoutByParent, LayoutResults, Render, RenderBase,
@@ -71,15 +73,16 @@ pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
     fn layout(&self, constraints: &PP::Constraints);
 }
 
-impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObject<R>
+impl<R, P> ChildRenderObjectLayoutExt<P> for RenderObject<R>
 where
     R: Render,
     R::Impl: ImplLayout<R>,
+    P: SurrogateProtocol<R::ParentProtocol>,
 {
-    fn layout_use_size(
-        &self,
-        constraints: &<R::ParentProtocol as Protocol>::Constraints,
-    ) -> <R::ParentProtocol as Protocol>::Size {
+    fn layout_use_size(&self, constraints: &P::Constraints) -> P::Size {
+        let converted_constraints = P::convert_constraints(constraints);
+        let constraints: &<R::ParentProtocol as Protocol>::Constraints =
+            converted_constraints.borrow();
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
@@ -87,7 +90,7 @@ where
             if let Some(cache) = inner_reborrow.cache.layout_cache_ref(token) {
                 if constraints == &cache.layout_results.constraints {
                     let size = cache.layout_results.size.clone();
-                    return size;
+                    return P::recover_size(size);
                 }
             }
         }
@@ -102,10 +105,13 @@ where
 
         self.mark.clear_self_needs_layout();
         self.mark.set_parent_use_size();
-        size
+        P::recover_size(size)
     }
 
-    fn layout(&self, constraints: &<R::ParentProtocol as Protocol>::Constraints) {
+    fn layout(&self, constraints: &P::Constraints) {
+        let converted_constraints = P::convert_constraints(constraints);
+        let constraints: &<R::ParentProtocol as Protocol>::Constraints =
+            converted_constraints.borrow();
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
