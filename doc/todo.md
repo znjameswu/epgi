@@ -8,5 +8,6 @@
 - `use_state_ref` plagued with ownership lifetime issues when multiple hooks are used.
 - implicit animation hook should use a better signature to allow external triggering.
 - widget naming convention
+- MSRV 1.75 for RPITIT in Element consumer type
 
 TODOs for other crates:

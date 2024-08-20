@@ -3,8 +3,8 @@ use std::sync::atomic::AtomicBool;
 use epgi_2d::{
     Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, ArcBoxWidget, BlendMode,
     BoxConstraints, BoxMultiChildElement, BoxMultiChildElementTemplate, BoxMultiChildHitTest,
-    BoxMultiChildLayout, BoxMultiChildPaint, BoxMultiChildRender, BoxMultiChildRenderElement,
-    BoxMultiChildRenderTemplate, BoxOffset, BoxProtocol, BoxSize,
+    BoxMultiChildLayout, BoxMultiChildPaint, BoxMultiChildRender, BoxMultiChildRenderTemplate,
+    BoxOffset, BoxProtocol, BoxSize,
 };
 use epgi_core::{
     foundation::{
@@ -117,11 +117,12 @@ impl Widget for Stack {
 pub struct StackElement {}
 
 impl ImplByTemplate for StackElement {
-    type Template = BoxMultiChildElementTemplate<true, false>;
+    type Template = BoxMultiChildElementTemplate<false>;
 }
 
 impl BoxMultiChildElement for StackElement {
     type ArcWidget = Asc<Stack>;
+    type Render = RenderStack;
 
     fn get_child_widgets(
         _element: Option<&mut Self>,
@@ -139,10 +140,6 @@ impl BoxMultiChildElement for StackElement {
     fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self {}
     }
-}
-
-impl BoxMultiChildRenderElement for StackElement {
-    type Render = RenderStack;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderStack {

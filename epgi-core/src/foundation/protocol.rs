@@ -183,10 +183,17 @@ pub trait Transform<C: Canvas>:
 
 /// A protocol that can be translated into P, so that widget with P as its `ParentProtocol`
 /// can also behave like [ChildWidget] with this protocol
+/// 
+/// [ChildWidget]: crate::tree::ChildWidget
 pub trait SurrogateProtocol<P: Protocol>: Protocol<Canvas = P::Canvas> {
     fn convert_constraints(value: &Self::Constraints) -> impl Borrow<<P as Protocol>::Constraints>;
     fn convert_offset(value: Self::Offset) -> P::Offset;
     fn recover_size(value: P::Size) -> Self::Size;
+    /// Convert incoming surrogate intrinsics
+    /// 
+    /// If the incoming intrinsics tag has no target counterpart to convert into, 
+    /// then this method must immediately return the intrinsics entry with its result filled.
+    /// Usually the filled results should be a default value for that intrinsics tag.
     fn convert_intrinsics(value: Self::Intrinsics) -> Result<P::Intrinsics, Self::Intrinsics>;
     fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics;
 }
