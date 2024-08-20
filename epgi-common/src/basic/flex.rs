@@ -1,17 +1,22 @@
-use std::iter::zip;
+use std::{f32::INFINITY, iter::zip, marker::PhantomData};
 
 use epgi_2d::{
-    Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, ArcBoxWidget, BlendMode,
-    BoxConstraints, BoxMultiChildElement, BoxMultiChildElementTemplate, BoxMultiChildHitTest,
-    BoxMultiChildLayout, BoxMultiChildPaint, BoxMultiChildRender, BoxMultiChildRenderElement,
-    BoxMultiChildRenderTemplate, BoxOffset, BoxProtocol, BoxSize, PRECISION_ERROR_TOLERANCE,
+    Affine2dPaintContextExt, BlendMode, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
+    PRECISION_ERROR_TOLERANCE,
 };
 use epgi_core::{
     foundation::{
-        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
+        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
+        Provide, VecContainer,
     },
-    template::ImplByTemplate,
-    tree::{BuildContext, ChildWidget, ElementBase, RenderAction, Widget},
+    template::{
+        ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildHitTest,
+        MultiChildLayout, MultiChildPaint, MultiChildRender, MultiChildRenderTemplate,
+    },
+    tree::{
+        ArcChildRenderObject, ArcChildWidget, BuildContext, ChildWidget, ElementBase, FullRender,
+        RenderAction, Widget,
+    },
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -19,7 +24,7 @@ use typed_builder::TypedBuilder;
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
     Horizontal,
-    Veritcal,
+    Vertical,
 }
 
 /// How the children should be placed along the main axis in a flex layout.
@@ -188,8 +193,8 @@ pub enum MainAxisSize {
 }
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Flex>))]
-pub struct Flex {
+#[builder(build_method(into=Asc<Flex<P>>))]
+pub struct Flex<P: Protocol> {
     /// The direction to use as the main axis.
     pub direction: Axis,
     /// How the children should be placed along the main axis.
@@ -214,14 +219,14 @@ pub struct Flex {
     pub flip_main_axis: bool,
     #[builder(default = false)]
     pub flip_cross_axis: bool,
-    pub children: Vec<Flexible>,
+    pub children: Vec<Flexible<P>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Flexible {
+pub struct Flexible<P: Protocol> {
     pub flex: u32,
     pub fit: FlexFit,
-    pub child: ArcBoxWidget,
+    pub child: ArcChildWidget<P>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -230,8 +235,8 @@ pub struct FlexibleConfig {
     fit: FlexFit,
 }
 
-impl Flexible {
-    fn get_flexible_config(&self) -> FlexibleConfig {
+impl<P: Protocol> Flexible<P> {
+    pub fn get_flexible_config(&self) -> FlexibleConfig {
         FlexibleConfig {
             flex: self.flex,
             fit: self.fit,
@@ -239,8 +244,8 @@ impl Flexible {
     }
 }
 
-impl From<ArcBoxWidget> for Flexible {
-    fn from(value: ArcBoxWidget) -> Self {
+impl<P: Protocol> From<ArcChildWidget<P>> for Flexible<P> {
+    fn from(value: ArcChildWidget<P>) -> Self {
         Flexible {
             flex: 0,
             fit: FlexFit::Tight,
@@ -249,7 +254,7 @@ impl From<ArcBoxWidget> for Flexible {
     }
 }
 
-impl<W: ChildWidget<BoxProtocol>> From<Asc<W>> for Flexible {
+impl<W: ChildWidget<P>, P: Protocol> From<Asc<W>> for Flexible<P> {
     fn from(value: Asc<W>) -> Self {
         Flexible {
             flex: 0,
@@ -279,10 +284,13 @@ pub enum FlexFit {
     Loose,
 }
 
-impl Widget for Flex {
-    type ParentProtocol = BoxProtocol;
-    type ChildProtocol = BoxProtocol;
-    type Element = FlexElement;
+impl<P: Protocol> Widget for Flex<P>
+where
+    RenderFlex<P>: FullRender<ParentProtocol = P, ChildProtocol = P, ChildContainer = VecContainer>,
+{
+    type ParentProtocol = P;
+    type ChildProtocol = P;
+    type Element = FlexElement<P>;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
@@ -290,21 +298,28 @@ impl Widget for Flex {
 }
 
 #[derive(Clone)]
-pub struct FlexElement {}
-
-impl ImplByTemplate for FlexElement {
-    type Template = BoxMultiChildElementTemplate<true, false>;
+pub struct FlexElement<P: Protocol> {
+    phantom: PhantomData<P>,
 }
 
-impl BoxMultiChildElement for FlexElement {
-    type ArcWidget = Asc<Flex>;
+impl<P: Protocol> ImplByTemplate for FlexElement<P> {
+    type Template = MultiChildElementTemplate<false>;
+}
 
+impl<P: Protocol> MultiChildElement for FlexElement<P>
+where
+    RenderFlex<P>: FullRender<ParentProtocol = P, ChildProtocol = P, ChildContainer = VecContainer>,
+{
+    type ParentProtocol = P;
+    type ChildProtocol = P;
+    type ArcWidget = Asc<Flex<P>>;
+    type Render = RenderFlex<P>;
     fn get_child_widgets(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<Vec<ArcBoxWidget>, BuildSuspendedError> {
+    ) -> Result<Vec<ArcChildWidget<P>>, BuildSuspendedError> {
         Ok(widget
             .children
             .iter()
@@ -313,32 +328,27 @@ impl BoxMultiChildElement for FlexElement {
     }
 
     fn create_element(_widget: &Self::ArcWidget) -> Self {
-        Self {}
+        Self {
+            phantom: PhantomData,
+        }
     }
-}
-
-pub(super) fn get_flexible_configs(children: &Vec<Flexible>) -> Vec<FlexibleConfig> {
-    children.iter().map(Flexible::get_flexible_config).collect()
-}
-
-impl BoxMultiChildRenderElement for FlexElement {
-    type Render = RenderFlex;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {
-            direction: widget.direction,
+            direction: widget.direction.clone(),
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
             flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_main_axis,
             flip_cross_axis: widget.flip_cross_axis,
+            phantom: PhantomData,
         }
     }
 
     fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
         [
-            set_if_changed(&mut render.direction, widget.direction),
+            set_if_changed(&mut render.direction, widget.direction.clone()),
             set_if_changed(&mut render.main_axis_alignment, widget.main_axis_alignment),
             set_if_changed(&mut render.main_axis_size, widget.main_axis_size),
             set_if_changed(
@@ -358,7 +368,11 @@ impl BoxMultiChildRenderElement for FlexElement {
     }
 }
 
-pub struct RenderFlex {
+pub(super) fn get_flexible_configs(children: &Vec<Flexible<impl Protocol>>) -> Vec<FlexibleConfig> {
+    children.iter().map(Flexible::get_flexible_config).collect()
+}
+
+pub struct RenderFlex<P: Protocol> {
     pub direction: Axis,
     pub main_axis_alignment: MainAxisAlignment,
     pub main_axis_size: MainAxisSize,
@@ -366,244 +380,141 @@ pub struct RenderFlex {
     pub flexible_configs: Vec<FlexibleConfig>,
     pub flip_main_axis: bool,
     pub flip_cross_axis: bool,
+    pub phantom: PhantomData<P>,
 }
 
-impl ImplByTemplate for RenderFlex {
-    type Template = BoxMultiChildRenderTemplate<false, false, false, false>;
-}
+impl FlexRender<BoxProtocol> for RenderFlex<BoxProtocol> {
+    type CrossSize = f32;
 
-impl BoxMultiChildRender for RenderFlex {
-    type LayoutMemo = (Vec<BoxOffset>, f32);
-}
-
-impl BoxMultiChildLayout for RenderFlex {
-    fn perform_layout(
-        &mut self,
-        constraints: &BoxConstraints,
-        children: &Vec<ArcBoxRenderObject>,
-    ) -> (BoxSize, Self::LayoutMemo) {
-        debug_assert_eq!(self.flexible_configs.len(), children.len());
-        fn get_main_size(size: &BoxSize, direction: &Axis) -> f32 {
-            match direction {
-                Axis::Horizontal => size.width,
-                Axis::Veritcal => size.height,
-            }
+    fn get_main_size(&self, size: &BoxSize) -> f32 {
+        match self.direction {
+            Axis::Horizontal => size.width,
+            Axis::Vertical => size.height,
         }
-        fn get_cross_size(size: &BoxSize, direction: &Axis) -> f32 {
-            match direction {
-                Axis::Horizontal => size.height,
-                Axis::Veritcal => size.width,
-            }
+    }
+    fn get_cross_size(&self, size: &BoxSize) -> f32 {
+        match self.direction {
+            Axis::Horizontal => size.height,
+            Axis::Vertical => size.width,
         }
-        // RenderFlex::_computeSized
-        let mut child_sizes = std::iter::repeat(BoxSize::ZERO)
-            .take(children.len())
-            .collect::<Vec<_>>();
-        let mut total_flex = 0;
-        let max_main_size = get_main_size(&constraints.biggest(), &self.direction);
-        let can_flex = max_main_size.is_finite();
+    }
 
-        let mut cross_size = 0.0f32;
-        let mut allocated_size = 0.0;
+    fn get_max_main_size(&self, parent_constraints: &BoxConstraints) -> f32 {
+        self.get_main_size(&parent_constraints.biggest())
+    }
 
-        let stretched = self.cross_axis_alignment == CrossAxisAlignment::Stretch;
+    fn placeholder_size() -> BoxSize {
+        BoxSize::ZERO
+    }
+    fn initial_cross_size(&self) -> Self::CrossSize {
+        0.0
+    }
+    fn reduce_cross_size(&self, cross_size: &mut f32, child_cross_size: f32) {
+        *cross_size = cross_size.max(child_cross_size);
+    }
 
-        for ((child, FlexibleConfig { flex, fit: _ }), size) in zip(
-            zip(children.iter(), self.flexible_configs.iter()),
-            child_sizes.iter_mut(),
-        ) {
-            if *flex > 0 {
-                total_flex += flex;
-            } else {
-                let inner_constraints = match (stretched, self.direction) {
-                    (true, Axis::Horizontal) => {
-                        BoxConstraints::new_tight_height(constraints.max_height)
-                    }
-                    (true, Axis::Veritcal) => {
-                        BoxConstraints::new_tight_width(constraints.max_width)
-                    }
-                    (false, Axis::Horizontal) => {
-                        BoxConstraints::new_max_height(constraints.max_height)
-                    }
-                    (false, Axis::Veritcal) => BoxConstraints::new_max_width(constraints.max_width),
-                };
-                let child_size = child.layout_use_size(&inner_constraints);
-                allocated_size += get_main_size(&child_size, &self.direction);
-                cross_size = cross_size.max(get_cross_size(&child_size, &self.direction));
-                *size = child_size;
-            }
+    fn child_constraints(
+        &self,
+        main_size_range: Option<(f32, f32)>,
+        parent_constraints: &BoxConstraints,
+    ) -> BoxConstraints {
+        let (max_main_size, min_main_size) = main_size_range.unwrap_or((0.0, INFINITY));
+        match self.direction {
+            Axis::Horizontal => BoxConstraints {
+                min_width: min_main_size,
+                max_width: max_main_size,
+                min_height: if self.cross_axis_alignment != CrossAxisAlignment::Stretch {
+                    0.0
+                } else {
+                    parent_constraints.max_height
+                },
+                max_height: parent_constraints.max_height,
+            },
+            Axis::Vertical => BoxConstraints {
+                min_width: if self.cross_axis_alignment != CrossAxisAlignment::Stretch {
+                    0.0
+                } else {
+                    parent_constraints.max_width
+                },
+                max_width: parent_constraints.max_width,
+                min_height: min_main_size,
+                max_height: max_main_size,
+            },
         }
+    }
 
-        let free_space = (if can_flex { max_main_size } else { 0.0 } - allocated_size).max(0.0);
-        let mut allocated_flex_space = 0.0;
-
-        if total_flex > 0 {
-            let space_per_flex = free_space / total_flex as f32;
-            for ((child, FlexibleConfig { flex, fit }), size) in zip(
-                zip(children.iter(), self.flexible_configs.iter()),
-                child_sizes.iter_mut(),
-            ) {
-                if *flex > 0 {
-                    let max_child_extent = if can_flex {
-                        space_per_flex * *flex as f32 // TODO: last child accomodation
-                    } else {
-                        f32::INFINITY
-                    };
-                    let min_child_extent = match fit {
-                        FlexFit::Tight => max_child_extent,
-                        FlexFit::Loose => 0.0,
-                    };
-                    assert!(min_child_extent.is_finite());
-                    let min_cross_size = if stretched {
-                        get_cross_size(&constraints.biggest(), &self.direction)
-                    } else {
-                        0.0
-                    };
-                    let inner_constraints = match self.direction {
-                        Axis::Horizontal => BoxConstraints {
-                            min_width: min_child_extent,
-                            max_width: max_child_extent,
-                            min_height: min_cross_size,
-                            max_height: constraints.max_height,
-                        },
-                        Axis::Veritcal => BoxConstraints {
-                            min_width: min_cross_size,
-                            max_width: constraints.max_width,
-                            min_height: min_child_extent,
-                            max_height: max_child_extent,
-                        },
-                    };
-                    let child_size = child.layout_use_size(&inner_constraints);
-                    let child_main_size = get_main_size(&child_size, &self.direction);
-                    // TODO assert
-                    allocated_size += child_main_size;
-                    allocated_flex_space += max_child_extent;
-                    cross_size = cross_size.max(get_cross_size(&child_size, &self.direction));
-                    *size = child_size;
-                }
-            }
-        }
-
-        let ideal_size = match self.main_axis_size {
-            MainAxisSize::Min if can_flex => max_main_size,
-            _ => allocated_size,
-        };
-
-        // RenderFlex::performLayout
-
-        let (actual_size, actual_main_size, cross_size) = match self.direction {
+    fn constrain_size(
+        &self,
+        main_size: f32,
+        cross_size: f32,
+        parent_constraints: &BoxConstraints,
+    ) -> (BoxSize, f32, f32) {
+        match self.direction {
             Axis::Horizontal => {
-                let size = constraints.constrain(BoxSize {
-                    width: ideal_size,
+                let size = parent_constraints.constrain(BoxSize {
+                    width: main_size,
                     height: cross_size,
                 });
                 (size, size.width, size.height)
             }
-            Axis::Veritcal => {
-                let size = constraints.constrain(BoxSize {
+            Axis::Vertical => {
+                let size = parent_constraints.constrain(BoxSize {
                     width: cross_size,
-                    height: ideal_size,
+                    height: main_size,
                 });
                 (size, size.height, size.width)
             }
-        };
-
-        let actual_main_size_delta = actual_main_size - allocated_size;
-        let overflow = 0.0f32.max(-actual_main_size_delta);
-        let remaining_space = 0.0f32.max(actual_main_size_delta);
-        let child_count = children.len();
-        let between_space = match self.main_axis_alignment {
-            MainAxisAlignment::Start | MainAxisAlignment::End | MainAxisAlignment::Center => 0.0,
-            MainAxisAlignment::SpaceBetween if child_count > 1 => {
-                remaining_space / (child_count - 1) as f32
-            }
-            MainAxisAlignment::SpaceAround if child_count > 0 => {
-                remaining_space / child_count as f32
-            }
-            MainAxisAlignment::SpaceEvenly if child_count > 0 => {
-                remaining_space / (child_count + 1) as f32
-            }
-            _ => 0.0,
-        };
-        let leading_space = match self.main_axis_alignment {
-            MainAxisAlignment::Start => 0.0,
-            MainAxisAlignment::End => remaining_space,
-            MainAxisAlignment::Center => remaining_space / 2.0,
-            MainAxisAlignment::SpaceBetween => 0.0,
-            MainAxisAlignment::SpaceAround => between_space / 2.0,
-            MainAxisAlignment::SpaceEvenly => between_space,
-        };
-
-        let mut child_main_position = if self.flip_main_axis {
-            actual_main_size - leading_space
-        } else {
-            leading_space
-        };
-
-        let child_offsets = child_sizes
-            .into_iter()
-            .map(|child_size| {
-                let child_cross_position = match self.cross_axis_alignment {
-                    CrossAxisAlignment::Start | CrossAxisAlignment::End => {
-                        if !self.flip_cross_axis
-                            == (self.cross_axis_alignment == CrossAxisAlignment::Start)
-                        {
-                            0.0
-                        } else {
-                            cross_size - get_cross_size(&child_size, &self.direction)
-                        }
-                    }
-                    CrossAxisAlignment::Center => {
-                        (cross_size - get_cross_size(&child_size, &self.direction)) / 2.0
-                    }
-                    CrossAxisAlignment::Stretch => 0.0,
-                };
-
-                if self.flip_main_axis {
-                    child_main_position -= get_main_size(&child_size, &self.direction);
-                }
-                let child_offset = match self.direction {
-                    Axis::Horizontal => BoxOffset {
-                        x: child_main_position,
-                        y: child_cross_position,
-                    },
-                    Axis::Veritcal => BoxOffset {
-                        x: child_cross_position,
-                        y: child_main_position,
-                    },
-                };
-                if self.flip_main_axis {
-                    child_main_position -= between_space;
-                } else {
-                    child_main_position +=
-                        get_main_size(&child_size, &self.direction) + between_space;
-                }
-                child_offset
-            })
-            .collect();
-
-        (actual_size, (child_offsets, overflow))
+        }
     }
-}
 
-impl BoxMultiChildPaint for RenderFlex {
+    fn position_child(
+        &self,
+        main_offset: f32,
+        cross_size: f32,
+        child_size: &BoxSize,
+        _parent_constraints: &BoxConstraints,
+    ) -> BoxOffset {
+        let child_cross_position = match self.cross_axis_alignment {
+            CrossAxisAlignment::Start | CrossAxisAlignment::End => {
+                if !self.flip_cross_axis == (self.cross_axis_alignment == CrossAxisAlignment::Start)
+                {
+                    0.0
+                } else {
+                    cross_size - self.get_cross_size(&child_size)
+                }
+            }
+            CrossAxisAlignment::Center => (cross_size - self.get_cross_size(&child_size)) / 2.0,
+            CrossAxisAlignment::Stretch => 0.0,
+        };
+        let child_offset = match self.direction {
+            Axis::Horizontal => BoxOffset {
+                x: main_offset,
+                y: child_cross_position,
+            },
+            Axis::Vertical => BoxOffset {
+                x: child_cross_position,
+                y: main_offset,
+            },
+        };
+        child_offset
+    }
+
     fn perform_paint(
         &self,
-        size: &BoxSize,
-        offset: &BoxOffset,
-        memo: &Self::LayoutMemo,
-        children: &Vec<ArcBoxRenderObject>,
-        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
+        &size: &<BoxProtocol as Protocol>::Size,
+        &offset: &<BoxProtocol as Protocol>::Offset,
+        child_offsets: &Vec<<BoxProtocol as Protocol>::Offset>,
+        overflow: f32,
+        children: &Vec<ArcChildRenderObject<BoxProtocol>>,
+        paint_ctx: &mut impl PaintContext<Canvas = <BoxProtocol as Protocol>::Canvas>,
     ) {
-        let (child_offsets, overflow) = memo;
-        debug_assert_eq!(children.len(), child_offsets.len());
-        if *overflow < PRECISION_ERROR_TOLERANCE {
-            for (child_offset, child) in zip(child_offsets, children) {
+        if overflow < PRECISION_ERROR_TOLERANCE {
+            for (&child_offset, child) in zip(child_offsets, children) {
                 paint_ctx.paint(child, &(offset + child_offset));
             }
         } else {
-            paint_ctx.clip_rect(*offset & *size, BlendMode::default(), 1.0, |paint_ctx| {
-                for (child_offset, child) in zip(child_offsets, children) {
+            paint_ctx.clip_rect(offset & size, BlendMode::default(), 1.0, |paint_ctx| {
+                for (&child_offset, child) in zip(child_offsets, children) {
                     paint_ctx.paint(child, &(offset + child_offset));
                 }
             });
@@ -612,4 +523,248 @@ impl BoxMultiChildPaint for RenderFlex {
     }
 }
 
-impl BoxMultiChildHitTest for RenderFlex {}
+pub trait FlexRender<P: Protocol>: Send + Sync + 'static {
+    type CrossSize: Clone + Send + Sync + 'static;
+
+    fn get_main_size(&self, size: &P::Size) -> f32;
+    fn get_cross_size(&self, size: &P::Size) -> Self::CrossSize;
+
+    fn get_max_main_size(&self, parent_constraints: &P::Constraints) -> f32;
+
+    fn placeholder_size() -> P::Size;
+    fn initial_cross_size(&self) -> Self::CrossSize;
+    fn reduce_cross_size(&self, cross_size: &mut Self::CrossSize, child_size: Self::CrossSize);
+
+    fn child_constraints(
+        &self,
+        main_size_range: Option<(f32, f32)>,
+        parent_constraints: &P::Constraints,
+    ) -> P::Constraints;
+
+    /// Returns: constrained size, constrained main size, constrained cross size
+    fn constrain_size(
+        &self,
+        main_size: f32,
+        cross_size: Self::CrossSize,
+        parent_constraints: &P::Constraints,
+    ) -> (P::Size, f32, Self::CrossSize);
+
+    fn position_child(
+        &self,
+        main_offset: f32,
+        cross_size: Self::CrossSize,
+        child_size: &P::Size,
+        parent_constraints: &P::Constraints,
+    ) -> P::Offset;
+
+    fn perform_paint(
+        &self,
+        size: &P::Size,
+        offset: &P::Offset,
+        child_offsets: &Vec<P::Offset>,
+        overflow: f32,
+        children: &Vec<ArcChildRenderObject<P>>,
+        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
+    );
+}
+
+impl<P: Protocol> ImplByTemplate for RenderFlex<P> {
+    type Template = MultiChildRenderTemplate<false, false, false, false>;
+}
+
+impl<P: Protocol> MultiChildRender for RenderFlex<P> {
+    type ParentProtocol = P;
+    type ChildProtocol = P;
+    type LayoutMemo = (Vec<P::Offset>, f32);
+}
+
+impl<P: Protocol> MultiChildLayout for RenderFlex<P>
+where
+    RenderFlex<P>: FlexRender<P>,
+{
+    fn perform_layout(
+        &mut self,
+        constraints: &P::Constraints,
+        children: &Vec<ArcChildRenderObject<P>>,
+    ) -> (P::Size, Self::LayoutMemo) {
+        default_flex_perform_layout(
+            self,
+            &self.flexible_configs,
+            self.main_axis_size,
+            self.main_axis_alignment,
+            self.flip_main_axis,
+            constraints,
+            children,
+        )
+        // debug_assert_eq!(self.flexible_configs.len(), children.len());
+    }
+}
+
+pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
+    render: &R,
+    flexible_configs: &Vec<FlexibleConfig>,
+    main_axis_size: MainAxisSize,
+    main_axis_alignment: MainAxisAlignment,
+    flip_main_axis: bool,
+    constraints: &P::Constraints,
+    children: &Vec<ArcChildRenderObject<P>>,
+) -> (P::Size, (Vec<P::Offset>, f32)) {
+    debug_assert_eq!(flexible_configs.len(), children.len());
+
+    // RenderFlex::_computeSized
+    let mut child_sizes = std::iter::repeat(R::placeholder_size())
+        .take(children.len())
+        .collect::<Vec<_>>();
+    let mut total_flex = 0;
+    let max_main_size = render.get_max_main_size(constraints);
+    let can_flex = max_main_size.is_finite();
+
+    let mut cross_size = render.initial_cross_size();
+    let mut allocated_size = 0.0;
+
+    for ((child, FlexibleConfig { flex, fit: _ }), size) in zip(
+        zip(children.iter(), flexible_configs.iter()),
+        child_sizes.iter_mut(),
+    ) {
+        if *flex > 0 {
+            total_flex += flex;
+        } else {
+            let inner_constraints = render.child_constraints(None, constraints);
+            let child_size = child.layout_use_size(&inner_constraints);
+            allocated_size += render.get_main_size(&child_size);
+            render.reduce_cross_size(&mut cross_size, render.get_cross_size(&child_size));
+            *size = child_size;
+        }
+    }
+
+    let free_space = (if can_flex { max_main_size } else { 0.0 } - allocated_size).max(0.0);
+    let mut allocated_flex_space = 0.0;
+
+    if total_flex > 0 {
+        let space_per_flex = free_space / total_flex as f32;
+        for ((child, FlexibleConfig { flex, fit }), size) in zip(
+            zip(children.iter(), flexible_configs.iter()),
+            child_sizes.iter_mut(),
+        ) {
+            if *flex > 0 {
+                let max_child_extent = if can_flex {
+                    space_per_flex * *flex as f32 // TODO: last child accomodation
+                } else {
+                    f32::INFINITY
+                };
+                let min_child_extent = match fit {
+                    FlexFit::Tight => max_child_extent,
+                    FlexFit::Loose => 0.0,
+                };
+                assert!(min_child_extent.is_finite());
+                let inner_constraints = render
+                    .child_constraints(Some((min_child_extent, max_child_extent)), constraints);
+
+                let child_size = child.layout_use_size(&inner_constraints);
+                let child_main_size = render.get_main_size(&child_size);
+                // TODO assert
+                allocated_size += child_main_size;
+                allocated_flex_space += max_child_extent;
+                render.reduce_cross_size(&mut cross_size, render.get_cross_size(&child_size));
+                *size = child_size;
+            }
+        }
+    }
+
+    let ideal_size = match main_axis_size {
+        MainAxisSize::Min if can_flex => max_main_size,
+        _ => allocated_size,
+    };
+
+    // RenderFlex::performLayout
+    let (actual_size, actual_main_size, cross_size) =
+        render.constrain_size(ideal_size, cross_size, constraints);
+
+    let actual_main_size_delta = actual_main_size - allocated_size;
+    let overflow = 0.0f32.max(-actual_main_size_delta);
+    let remaining_space = 0.0f32.max(actual_main_size_delta);
+    let child_count = children.len();
+    let between_space = match main_axis_alignment {
+        MainAxisAlignment::Start | MainAxisAlignment::End | MainAxisAlignment::Center => 0.0,
+        MainAxisAlignment::SpaceBetween if child_count > 1 => {
+            remaining_space / (child_count - 1) as f32
+        }
+        MainAxisAlignment::SpaceAround if child_count > 0 => remaining_space / child_count as f32,
+        MainAxisAlignment::SpaceEvenly if child_count > 0 => {
+            remaining_space / (child_count + 1) as f32
+        }
+        _ => 0.0,
+    };
+    let leading_space = match main_axis_alignment {
+        MainAxisAlignment::Start => 0.0,
+        MainAxisAlignment::End => remaining_space,
+        MainAxisAlignment::Center => remaining_space / 2.0,
+        MainAxisAlignment::SpaceBetween => 0.0,
+        MainAxisAlignment::SpaceAround => between_space / 2.0,
+        MainAxisAlignment::SpaceEvenly => between_space,
+    };
+
+    let mut child_main_position = if flip_main_axis {
+        actual_main_size - leading_space
+    } else {
+        leading_space
+    };
+
+    let child_offsets = child_sizes
+        .into_iter()
+        .map(|child_size| {
+            if flip_main_axis {
+                child_main_position -= render.get_main_size(&child_size);
+            }
+
+            let child_offset = render.position_child(
+                child_main_position,
+                cross_size.clone(),
+                &child_size,
+                constraints,
+            );
+
+            if flip_main_axis {
+                child_main_position -= between_space;
+            } else {
+                child_main_position += render.get_main_size(&child_size) + between_space;
+            }
+            child_offset
+        })
+        .collect();
+
+    (actual_size, (child_offsets, overflow))
+}
+
+impl<P: Protocol> MultiChildPaint for RenderFlex<P>
+where
+    RenderFlex<P>: FlexRender<P>,
+{
+    fn perform_paint(
+        &self,
+        size: &P::Size,
+        offset: &P::Offset,
+        memo: &Self::LayoutMemo,
+        children: &Vec<ArcChildRenderObject<P>>,
+        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
+    ) {
+        let (child_offsets, overflow) = memo;
+        FlexRender::perform_paint(
+            self,
+            size,
+            offset,
+            child_offsets,
+            *overflow,
+            children,
+            paint_ctx,
+        )
+    }
+}
+
+impl<P: Protocol> MultiChildHitTest for RenderFlex<P> {}
+
+// pub fn default_layout_flex<P: FlexProtocol>(
+//     constraints: &P::Constraints,
+//     children: &Vec<ArcChildRenderObject<P>>,
+// ) -> (P::Size, Vec<P::Offset>) {
+// }

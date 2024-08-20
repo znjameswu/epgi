@@ -774,3 +774,9 @@ Difficulties has been encountered during hit-test due to the lack of cached prot
 
 Decision: let paint leave a offset cache.
 
+# ParentData design (eg. for Flex)
+Flutter's ParentData is stored on RenderObject and is non-penetrative. (Which is different from intrinsic computations which are penetrative) ("Penetrative" meaning that a tree node will delegate the answer to its child unless itself has an explicit answer). However, when viewed from widget tree, it is still somewhat penetrative. Therefore, replacing ParentData with a direct widget wrapper is not appropriate.
+
+For example, in Flutter, Flexible can be separated from Flex as long as there is only ComponentWidget in betweeen.
+
+Another point to consider is ParentData type is improvisive and not tied to any LayoutProtocol, which is different from intrinsics.

@@ -183,7 +183,7 @@ pub trait Affine2dMultiChildPaint: Affine2dMultiChildRender {
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
-        paint_ctx: &mut impl PaintContext<Canvas = <Self::ParentProtocol as Protocol>::Canvas>,
+        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     );
 }
 
@@ -210,7 +210,7 @@ where
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
         children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
-        paint_ctx: &mut impl PaintContext<Canvas = <R::ParentProtocol as Protocol>::Canvas>,
+        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         R::perform_paint(render, size, offset, memo, children, paint_ctx)
     }
@@ -224,14 +224,14 @@ where
     fn paint_layer(
         &self,
         children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
-    ) -> PaintResults<<Self::ParentProtocol as Protocol>::Canvas> {
-        <Self::ParentProtocol as Protocol>::Canvas::paint_render_objects(children.clone())
+    ) -> PaintResults<Affine2dCanvas> {
+        Affine2dCanvas::paint_render_objects(children.clone())
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas> {
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
         unimplemented!()
     }
 
@@ -262,14 +262,14 @@ where
     fn paint_layer(
         render: &R,
         children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
-    ) -> PaintResults<<R::ChildProtocol as Protocol>::Canvas> {
+    ) -> PaintResults<Affine2dCanvas> {
         R::paint_layer(render, children)
     }
 
     fn transform_config(
-        self_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
-        child_config: &LayerCompositionConfig<<R::ChildProtocol as Protocol>::Canvas>,
-    ) -> LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas> {
+        self_config: &LayerCompositionConfig<Affine2dCanvas>,
+        child_config: &LayerCompositionConfig<Affine2dCanvas>,
+    ) -> LayerCompositionConfig<Affine2dCanvas> {
         R::transform_config(self_config, child_config)
     }
 
@@ -282,10 +282,8 @@ pub trait Affine2dMultiChildComposite: Affine2dMultiChildRender {
     fn composite_to(
         &self,
         encoding: &mut Affine2dEncoding,
-        child_iterator: &mut ChildLayerProducingIterator<
-            <Self::ParentProtocol as Protocol>::Canvas,
-        >,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     );
 }
 
@@ -309,8 +307,8 @@ where
     fn composite_to(
         render: &R,
         encoding: &mut Affine2dEncoding,
-        child_iterator: &mut ChildLayerProducingIterator<<R::ParentProtocol as Protocol>::Canvas>,
-        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
         R::composite_to(render, encoding, child_iterator, composition_config)
     }
@@ -321,16 +319,14 @@ pub trait Affine2dMultiChildCachedComposite: Affine2dMultiChildRender {
 
     fn composite_into_memo(
         &self,
-        child_iterator: &mut ChildLayerProducingIterator<
-            <Self::ParentProtocol as Protocol>::Canvas,
-        >,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> Self::CompositionMemo;
 
     fn composite_from_cache_to(
         &self,
         encoding: &mut Affine2dEncoding,
         memo: &Self::CompositionMemo,
-        composition_config: &LayerCompositionConfig<<Self::ParentProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     );
 }
 
@@ -355,7 +351,7 @@ where
 
     fn composite_into_memo(
         render: &R,
-        child_iterator: &mut ChildLayerProducingIterator<<R::ParentProtocol as Protocol>::Canvas>,
+        child_iterator: &mut ChildLayerProducingIterator<Affine2dCanvas>,
     ) -> R::CompositionMemo {
         R::composite_into_memo(render, child_iterator)
     }
@@ -364,7 +360,7 @@ where
         render: &R,
         encoding: &mut Affine2dEncoding,
         memo: &R::CompositionMemo,
-        composition_config: &LayerCompositionConfig<<R::ParentProtocol as Protocol>::Canvas>,
+        composition_config: &LayerCompositionConfig<Affine2dCanvas>,
     ) {
         R::composite_from_cache_to(render, encoding, memo, composition_config)
     }
@@ -413,12 +409,12 @@ pub trait Affine2dMultiChildHitTest: Affine2dMultiChildRender {
     /// you can assume the other methods mentioned above are `unreachable!()`.
     fn hit_test(
         &self,
-        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
-        adopted_children: &[RecordedChildLayer<<Self::ParentProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> HitTestResult {
         use HitTestResult::*;
         let hit_in_bound =
@@ -441,14 +437,14 @@ pub trait Affine2dMultiChildHitTest: Affine2dMultiChildRender {
     #[allow(unused_variables)]
     fn hit_test_children(
         &self,
-        ctx: &mut HitTestContext<<Self::ParentProtocol as Protocol>::Canvas>,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &<Self::ParentProtocol as Protocol>::Size,
         offset: &<Self::ParentProtocol as Protocol>::Offset,
         memo: &Self::LayoutMemo,
         children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
-        adopted_children: &[RecordedChildLayer<<Self::ParentProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
-        for child in children.iter() {
+        for child in children.iter().rev() {
             if ctx.hit_test(child.clone()) {
                 return true;
             }
@@ -496,12 +492,12 @@ where
 {
     fn hit_test(
         render: &R,
-        ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+        ctx: &mut HitTestContext<Affine2dCanvas>,
         size: &<R::ParentProtocol as Protocol>::Size,
         offset: &<R::ParentProtocol as Protocol>::Offset,
         memo: &R::LayoutMemo,
         children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
-        adopted_children: &[RecordedChildLayer<<R::ParentProtocol as Protocol>::Canvas>],
+        adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> HitTestResult {
         R::hit_test(render, ctx, size, offset, memo, children, adopted_children)
     }
@@ -509,12 +505,12 @@ where
     /// Returns: If a child has claimed the hit
     fn hit_test_children(
         _render: &R,
-        _ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
+        _ctx: &mut HitTestContext<Affine2dCanvas>,
         _size: &<R::ParentProtocol as Protocol>::Size,
         _offset: &<R::ParentProtocol as Protocol>::Offset,
         _memo: &R::LayoutMemo,
         _children: &Vec<ArcChildRenderObject<R::ChildProtocol>>,
-        _adopted_children: &[RecordedChildLayer<<R::ParentProtocol as Protocol>::Canvas>],
+        _adopted_children: &[RecordedChildLayer<Affine2dCanvas>],
     ) -> bool {
         unreachable!(
             "TemplatePaint has already provided a hit_test implementation, \
