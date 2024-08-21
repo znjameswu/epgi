@@ -1,4 +1,8 @@
-use std::{borrow::Borrow, fmt::Debug, ops::Mul};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    fmt::Debug,
+    ops::{Deref, Mul},
+};
 
 use crate::tree::{
     ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
@@ -36,7 +40,7 @@ pub trait LayerProtocol: Protocol {
     ) -> LayerCompositionConfig<Self::Canvas>;
 }
 
-pub trait Intrinsics: Debug + Send + Sync {
+pub trait Intrinsics: Clone + Debug + Send + Sync {
     fn eq_tag(&self, other: &Self) -> bool;
     fn eq_param(&self, other: &Self) -> bool;
 }
@@ -51,33 +55,42 @@ impl Intrinsics for () {
     }
 }
 
-struct TagEq<T: Intrinsics>(T);
+// pub(crate) struct TagEq<T: Intrinsics>(T);
 
-impl<T> PartialEq<Self> for TagEq<T>
+// impl<T> PartialEq<Self> for TagEq<T>
+// where
+//     T: Intrinsics,
+// {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.0.eq_tag(&other.0)
+//     }
+// }
+
+// impl<T> Eq for TagEq<T>
+// where
+//     T: Intrinsics,
+// {
+//     fn assert_receiver_is_total_eq(&self) {}
+// }
+
+#[derive(Clone, Debug)]
+pub struct ParamEq<T>(pub T);
+
+impl<T, I> PartialEq<Self> for ParamEq<T>
 where
-    T: Intrinsics,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq_tag(&other.0)
-    }
-}
-
-impl<T> Eq for TagEq<T>
-where
-    T: Intrinsics,
-{
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
-struct ParamEq<T: Intrinsics>(T);
-
-impl<T> PartialEq<Self> for ParamEq<T>
-where
-    T: Intrinsics,
+    I: Intrinsics,
+    T: Deref<Target = I>,
 {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq_param(&other.0)
     }
+}
+
+impl<T, I> Eq for ParamEq<T>
+where
+    I: Intrinsics,
+    T: Deref<Target = I>,
+{
 }
 
 pub trait Canvas: Clone + Sized + 'static {
@@ -183,37 +196,39 @@ pub trait Transform<C: Canvas>:
 
 /// A protocol that can be translated into P, so that widget with P as its `ParentProtocol`
 /// can also behave like [ChildWidget] with this protocol
-/// 
+///
 /// [ChildWidget]: crate::tree::ChildWidget
 pub trait SurrogateProtocol<P: Protocol>: Protocol<Canvas = P::Canvas> {
-    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<<P as Protocol>::Constraints>;
+    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<P::Constraints>;
     fn convert_offset(value: Self::Offset) -> P::Offset;
     fn recover_size(value: P::Size) -> Self::Size;
     /// Convert incoming surrogate intrinsics
-    /// 
-    /// If the incoming intrinsics tag has no target counterpart to convert into, 
-    /// then this method must immediately return the intrinsics entry with its result filled.
+    ///
+    /// If the incoming intrinsics tag has no target counterpart to convert into,
+    /// then this method must immediately return with intrinsics entry result filled with result.
     /// Usually the filled results should be a default value for that intrinsics tag.
-    fn convert_intrinsics(value: Self::Intrinsics) -> Result<P::Intrinsics, Self::Intrinsics>;
+    fn convert_intrinsics(
+        value: &mut Self::Intrinsics,
+    ) -> Result<impl BorrowMut<P::Intrinsics>, ()>;
     fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics;
 }
 
 impl<P: Protocol> SurrogateProtocol<P> for P {
-    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<<P as Protocol>::Constraints> {
+    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<P::Constraints> {
         value
     }
-    fn convert_offset(value: Self::Offset) -> <P as Protocol>::Offset {
+    fn convert_offset(value: Self::Offset) -> P::Offset {
         value
     }
-    fn recover_size(value: <P as Protocol>::Size) -> Self::Size {
+    fn recover_size(value: P::Size) -> Self::Size {
         value
     }
     fn convert_intrinsics(
-        value: Self::Intrinsics,
-    ) -> Result<<P as Protocol>::Intrinsics, Self::Intrinsics> {
+        value: &mut Self::Intrinsics,
+    ) -> Result<impl BorrowMut<P::Intrinsics>, ()> {
         Ok(value)
     }
-    fn recover_intrinsics(value: <P as Protocol>::Intrinsics) -> Self::Intrinsics {
+    fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics {
         value
     }
 }

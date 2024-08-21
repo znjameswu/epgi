@@ -24,6 +24,12 @@ pub trait TemplateRenderBase<R> {
 
     fn detach(render: &mut R);
     const NOOP_DETACH: bool;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    );
 }
 
 impl<R> RenderBase for R
@@ -42,6 +48,14 @@ where
         R::Template::detach(self)
     }
     const NOOP_DETACH: bool = R::Template::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    ) {
+        R::Template::compute_intrinsics(self, children, intrinsics)
+    }
 }
 
 pub trait TemplateRender<R: RenderBase> {

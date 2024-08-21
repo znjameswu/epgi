@@ -41,6 +41,12 @@ pub trait RenderBase: Send + Sync + Sized + 'static {
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &ContainerOf<Self::ChildContainer, ArcChildRenderObject<Self::ChildProtocol>>,
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    );
 }
 
 pub trait Render: RenderBase + HitTest {

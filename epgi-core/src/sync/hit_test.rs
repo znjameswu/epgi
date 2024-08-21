@@ -41,10 +41,10 @@ impl<R: FullRender> RenderObject<R> {
         ctx: &mut HitTestContext<<R::ParentProtocol as Protocol>::Canvas>,
     ) -> bool {
         let inner = self.inner.lock();
-        let no_relayout_token = self.mark.assert_not_needing_layout(); // TODO: Do we really need to check this
+        let cache_fresh = self.mark.assert_not_needing_layout().into(); // TODO: Do we really need to check this
         let layout_cache = inner
             .cache
-            .layout_cache_ref(no_relayout_token)
+            .layout_cache_ref(cache_fresh)
             .expect("Hit test should not occur before layout");
         // let composition_cache = layout_cache.
         let offset = layout_cache

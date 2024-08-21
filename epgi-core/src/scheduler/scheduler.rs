@@ -134,16 +134,20 @@ where
         let root_render_object = root_render_object
             .downcast_arc_any_layer_render_object()
             .expect("Root render object should have a layer");
-        let _ = root_render_object
-            .as_any()
-            .downcast_ref::<RenderObject<R>>()
-            .expect("Impossible to fail")
-            .inner
-            .lock()
-            .cache
-            .insert_layout_results(initial_layout)
-            .paint_offset
-            .insert(initial_offset);
+        {
+            let cache = &mut root_render_object
+                .as_any()
+                .downcast_ref::<RenderObject<R>>()
+                .expect("Impossible to fail")
+                .inner
+                .lock()
+                .cache;
+            let cache_fresh = cache.clear();
+            cache
+                .insert_layout_results(initial_layout, cache_fresh)
+                .paint_offset
+                .insert(initial_offset);
+        }
 
         scheduler_handle
             .push_layer_render_objects_needing_paint(Arc::downgrade(&root_render_object));

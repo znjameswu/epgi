@@ -26,13 +26,13 @@ where
         let Err(_token) = self.mark.is_detached() else {
             return;
         };
-        let no_relayout_token = self.mark.assert_not_needing_layout();
+        let cache_fresh = self.mark.assert_not_needing_layout().into();
         let mut inner = self.inner.lock();
 
         let paint_results = inner.render.paint_layer(&inner.children);
         let layout_cache = inner
             .cache
-            .layout_cache_mut(no_relayout_token)
+            .layout_cache_mut(cache_fresh)
             .expect("Repaint can only be performed after layout has finished");
         layout_cache.layer_cache = Some(LayerCache::new(paint_results, None));
     }
@@ -106,8 +106,8 @@ where
         let offset = P::convert_offset(offset);
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let token = self.mark.assert_not_needing_layout();
-        let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
+        let cache_fresh = self.mark.assert_not_needing_layout().into();
+        let Some(cache) = inner_reborrow.cache.layout_cache_mut(cache_fresh) else {
             panic!("Paint should only be called after layout has finished")
         };
         R::Impl::paint_into_context(

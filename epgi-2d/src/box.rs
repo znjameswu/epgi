@@ -211,7 +211,7 @@ impl From<[f32; 2]> for BoxOffset {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum BoxIntrinsics {
     MinWidth { height: f32, res: Option<f32> },
     MaxWidth { height: f32, res: Option<f32> },
