@@ -1,5 +1,5 @@
 use epgi_2d::{
-    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol,
     BoxSingleChildElement, BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize,
     ShiftedBoxRender, ShiftedBoxRenderTemplate,
 };
@@ -162,4 +162,20 @@ impl ShiftedBoxRender for RenderPositionedBox {
         });
         (size, child_extra_offset)
     }
+
+    fn compute_intrinsics(&mut self, child: &ArcBoxRenderObject, intrinsics: &mut BoxIntrinsics) {
+        child.get_intrinsics(intrinsics);
+        match intrinsics {
+            BoxIntrinsics::MinWidth { res, .. } | BoxIntrinsics::MaxWidth { res, .. } => {
+                res.as_mut()
+                    .map(|res| *res *= self.width_factor.unwrap_or(0.0));
+            }
+            BoxIntrinsics::MinHeight { res, .. } | BoxIntrinsics::MaxHeight { res, .. } => {
+                res.as_mut()
+                    .map(|res| *res *= self.height_factor.unwrap_or(0.0));
+            }
+        }
+    }
+
+    const NOOP_DETACH: bool = true;
 }

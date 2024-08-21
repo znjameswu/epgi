@@ -1,6 +1,7 @@
 use epgi_2d::{
-    Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, MultiLineConstraints, MultiLineOffset,
-    MultiLineProtocol, MultiLineSize, SingleLineSize,
+    Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol,
+    MultiLineConstraints, MultiLineIntrinsics, MultiLineOffset, MultiLineProtocol, MultiLineSize,
+    SingleLineSize,
 };
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
@@ -8,7 +9,7 @@ use epgi_core::{
         AdapterRender, AdapterRenderTemplate, ImplByTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -84,7 +85,7 @@ impl AdapterRender for RenderMultiLineBoxAdapter {
     fn perform_layout(
         &mut self,
         constraints: &MultiLineConstraints,
-        child: &ArcChildRenderObject<BoxProtocol>,
+        child: &ArcBoxRenderObject,
     ) -> (MultiLineSize, ()) {
         let size = child.layout_use_size(&BoxConstraints {
             min_width: 0.0,
@@ -110,7 +111,7 @@ impl AdapterRender for RenderMultiLineBoxAdapter {
         size: &MultiLineSize,
         offset: &MultiLineOffset,
         _memo: &(),
-        child: &ArcChildRenderObject<BoxProtocol>,
+        child: &ArcBoxRenderObject,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         let [first_offset] = offset.offsets.as_slice() else {
@@ -126,6 +127,14 @@ impl AdapterRender for RenderMultiLineBoxAdapter {
                 y: first_offset.baseline - first_size.above,
             },
         );
+    }
+
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcBoxRenderObject,
+        intrinsics: &mut MultiLineIntrinsics,
+    ) {
+        unimplemented!()
     }
 
     const NOOP_DETACH: bool = true;

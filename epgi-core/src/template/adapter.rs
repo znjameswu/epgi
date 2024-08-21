@@ -29,6 +29,12 @@ pub trait AdapterRender: Send + Sync + Sized + 'static {
         child: &ArcChildRenderObject<Self::ChildProtocol>,
     ) -> (<Self::ParentProtocol as Protocol>::Size, Self::LayoutMemo);
 
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    );
+
     #[allow(unused_variables)]
     fn perform_paint(
         &self,
@@ -123,6 +129,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        [child]: &[ArcChildRenderObject<Self::ChildProtocol>; 1],
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    ) {
+        R::compute_intrinsics(render, child, intrinsics)
+    }
 }
 
 impl<R> TemplateRender<R> for AdapterRenderTemplate

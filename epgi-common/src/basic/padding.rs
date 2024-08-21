@@ -1,5 +1,5 @@
 use epgi_2d::{
-    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol,
     BoxSingleChildElement, BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize,
     ShiftedBoxRender, ShiftedBoxRenderTemplate,
 };
@@ -187,6 +187,8 @@ impl ImplByTemplate for RenderPadding {
 impl ShiftedBoxRender for RenderPadding {
     type LayoutMemo = ();
 
+    const NOOP_DETACH: bool = true;
+
     fn get_child_offset(&self, _size: &BoxSize, offset: &BoxOffset, _memo: &()) -> BoxOffset {
         *offset
             + BoxOffset {
@@ -203,5 +205,19 @@ impl ShiftedBoxRender for RenderPadding {
         let child_size = child.layout_use_size(&constraints.deflate(self.padding));
         let size = constraints.constrain(child_size.inflate(self.padding));
         (size, ())
+    }
+
+    fn compute_intrinsics(&mut self, child: &ArcBoxRenderObject, intrinsics: &mut BoxIntrinsics) {
+        child.get_intrinsics(intrinsics);
+        match intrinsics {
+            BoxIntrinsics::MinWidth { res, .. } | BoxIntrinsics::MaxWidth { res, .. } => {
+                res.as_mut()
+                    .map(|res| *res += self.padding.l + self.padding.r);
+            }
+            BoxIntrinsics::MinHeight { res, .. } | BoxIntrinsics::MaxHeight { res, .. } => {
+                res.as_mut()
+                    .map(|res| *res *= self.padding.t + self.padding.b);
+            }
+        }
     }
 }

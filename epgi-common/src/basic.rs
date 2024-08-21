@@ -25,6 +25,9 @@ pub use custom_paint::*;
 mod flex;
 pub use flex::*;
 
+mod flexible;
+pub use flexible::*;
+
 mod padding;
 pub use padding::*;
 

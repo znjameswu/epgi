@@ -10,7 +10,8 @@ use epgi_core::{
 };
 
 use crate::{
-    Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
+    Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol,
+    BoxSize, Point2d,
 };
 
 pub struct ShiftedBoxRenderTemplate;
@@ -30,6 +31,8 @@ pub trait ShiftedBoxRender: Send + Sync + Sized + 'static {
         constraints: &BoxConstraints,
         child: &ArcBoxRenderObject,
     ) -> (BoxSize, Self::LayoutMemo);
+
+    fn compute_intrinsics(&mut self, child: &ArcBoxRenderObject, intrinsics: &mut BoxIntrinsics);
 
     #[allow(unused_variables)]
     fn perform_paint(
@@ -124,6 +127,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        [child]: &[ArcBoxRenderObject; 1],
+        intrinsics: &mut BoxIntrinsics,
+    ) {
+        R::compute_intrinsics(render, child, intrinsics)
+    }
 }
 
 impl<R> TemplateRender<R> for ShiftedBoxRenderTemplate

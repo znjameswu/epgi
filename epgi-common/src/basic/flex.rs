@@ -1,4 +1,9 @@
-use std::{borrow::Borrow, f32::INFINITY, iter::zip, marker::PhantomData};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    f32::INFINITY,
+    iter::zip,
+    marker::PhantomData,
+};
 
 use epgi_2d::{
     Affine2dPaintContextExt, BlendMode, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
@@ -9,13 +14,16 @@ use epgi_core::{
         set_if_changed, Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Intrinsics,
         PaintContext, Protocol, Provide, SurrogateProtocol, VecContainer,
     },
+    max,
     template::{
-        ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildHitTest,
-        MultiChildLayout, MultiChildPaint, MultiChildRender, MultiChildRenderTemplate,
+        AdapterRender, AdapterRenderTemplate, ImplByTemplate, MultiChildElement,
+        MultiChildElementTemplate, MultiChildHitTest, MultiChildLayout, MultiChildPaint,
+        MultiChildRender, MultiChildRenderTemplate, SingleChildElement, SingleChildElementTemplate,
+        SingleChildRenderElement,
     },
     tree::{
-        ArcChildRenderObject, ArcChildWidget, BuildContext, ChildWidget, ElementBase, FullRender,
-        RenderAction, Widget,
+        ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
+        ElementBase, FullRender, RenderAction, Widget,
     },
 };
 use epgi_macro::Declarative;
@@ -323,6 +331,14 @@ impl<P: Protocol> MultiChildRender for RenderFlex<P> {
     type ParentProtocol = P;
     type ChildProtocol = FlexProtocol<P>;
     type LayoutMemo = (Vec<P::Offset>, f32);
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &Vec<ArcChildRenderObject<FlexProtocol<P>>>,
+        intrinsics: &mut P::Intrinsics,
+    ) {
+        unimplemented!()
+    }
 }
 
 impl<P: Protocol> MultiChildLayout for RenderFlex<P>
@@ -366,7 +382,8 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     let mut allocated_size = 0.0;
 
     for (child, size) in zip(children.iter(), child_sizes.iter_mut()) {
-        if *flex > 0 {
+        let FlexibleConfig { flex, fit: _ } = child.get_flexible_config();
+        if flex > 0 {
             total_flex += flex;
         } else {
             let inner_constraints = render.child_constraints(None, constraints);
@@ -383,9 +400,10 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     if total_flex > 0 {
         let space_per_flex = free_space / total_flex as f32;
         for (child, size) in zip(children.iter(), child_sizes.iter_mut()) {
-            if *flex > 0 {
+            let FlexibleConfig { flex, fit } = child.get_flexible_config();
+            if flex > 0 {
                 let max_child_extent = if can_flex {
-                    space_per_flex * *flex as f32 // TODO: last child accomodation
+                    space_per_flex * flex as f32 // TODO: last child accomodation
                 } else {
                     f32::INFINITY
                 };
@@ -725,9 +743,9 @@ pub struct FlexProtocol<P: Protocol> {
     phantom: PhantomData<P>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FlexIntrinsics<T> {
-    Flex { res: Option<FlexibleConfig> },
+    Flex { res: FlexibleConfig },
     Intrinsics(T),
 }
 
@@ -748,6 +766,23 @@ impl<T: Intrinsics> Intrinsics for FlexIntrinsics<T> {
             (Intrinsics(x1), Intrinsics(x2)) => x1.eq_param(x2),
             _ => false,
         }
+    }
+}
+
+pub trait FlexRenderObjectIntrinsicsExt {
+    fn get_flexible_config(&self) -> FlexibleConfig;
+}
+
+impl<P: Protocol> FlexRenderObjectIntrinsicsExt for dyn ChildRenderObject<FlexProtocol<P>> {
+    fn get_flexible_config(&self) -> FlexibleConfig {
+        let mut intrinsics = FlexIntrinsics::Flex {
+            res: FlexibleConfig::default(),
+        };
+        self.get_intrinsics(&mut intrinsics);
+        let FlexIntrinsics::Flex { res } = intrinsics else {
+            panic!("Child returns a wrong intrinsics type.")
+        };
+        res
     }
 }
 
@@ -780,14 +815,17 @@ impl<P: Protocol> SurrogateProtocol<P> for FlexProtocol<P> {
         value
     }
 
-    fn convert_intrinsics(value: Self::Intrinsics) -> Result<P::Intrinsics, Self::Intrinsics> {
+    fn convert_intrinsics(
+        value: &mut Self::Intrinsics,
+    ) -> Result<impl BorrowMut<P::Intrinsics>, ()> {
         match value {
-            FlexIntrinsics::Flex { .. } => Err(FlexIntrinsics::Flex {
-                res: Some(FlexibleConfig {
+            FlexIntrinsics::Flex { res } => {
+                *res = FlexibleConfig {
                     flex: 0,
                     fit: FlexFit::Tight,
-                }),
-            }),
+                };
+                return Err(());
+            }
             FlexIntrinsics::Intrinsics(x) => Ok(x),
         }
     }
@@ -797,44 +835,120 @@ impl<P: Protocol> SurrogateProtocol<P> for FlexProtocol<P> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Declarative, TypedBuilder)]
+#[builder(build_method(into=Asc<Flexible<P>>))]
 pub struct Flexible<P: Protocol> {
+    #[builder(default = 1)]
     pub flex: u32,
+    #[builder(default=FlexFit::Loose)]
     pub fit: FlexFit,
     pub child: ArcChildWidget<P>,
 }
 
-impl<P: Protocol> Flexible<P> {
-    pub fn get_flexible_config(&self) -> FlexibleConfig {
-        FlexibleConfig {
-            flex: self.flex,
-            fit: self.fit,
+impl<P: Protocol> Widget for Flexible<P> {
+    type ParentProtocol = FlexProtocol<P>;
+    type ChildProtocol = P;
+    type Element = FlexibleElement<P>;
+
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
+        self
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FlexibleElement<P: Protocol> {
+    phantom: PhantomData<P>,
+}
+
+impl<P: Protocol> ImplByTemplate for FlexibleElement<P> {
+    type Template = SingleChildElementTemplate<true, false>;
+}
+
+impl<P: Protocol> SingleChildElement for FlexibleElement<P> {
+    type ParentProtocol = FlexProtocol<P>;
+    type ChildProtocol = P;
+    type ArcWidget = Asc<Flexible<P>>;
+
+    fn get_child_widget(
+        _element: Option<&mut Self>,
+        widget: &Self::ArcWidget,
+        _ctx: &mut BuildContext<'_>,
+        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
+    ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
+        Ok(widget.child.clone())
+    }
+
+    fn create_element(_widget: &Self::ArcWidget) -> Self {
+        Self {
+            phantom: PhantomData,
         }
     }
 }
 
-impl<P: Protocol> From<ArcChildWidget<P>> for Flexible<P> {
-    fn from(value: ArcChildWidget<P>) -> Self {
-        Flexible {
-            flex: 0,
-            fit: FlexFit::Tight,
-            child: value,
+impl<P: Protocol> SingleChildRenderElement for FlexibleElement<P> {
+    type Render = RenderFlexible<P>;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
+        RenderFlexible {
+            config: FlexibleConfig {
+                flex: widget.flex,
+                fit: widget.fit,
+            },
+            phantom: PhantomData,
         }
+    }
+
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
+        max!(
+            set_if_changed(&mut render.config.flex, widget.flex).then_some(RenderAction::Relayout),
+            set_if_changed(&mut render.config.fit, widget.fit).then_some(RenderAction::Relayout),
+        )
     }
 }
 
-impl<W: ChildWidget<P>, P: Protocol> From<Asc<W>> for Flexible<P> {
-    fn from(value: Asc<W>) -> Self {
-        Flexible {
-            flex: 0,
-            fit: FlexFit::Tight,
-            child: value,
-        }
-    }
+pub struct RenderFlexible<P: Protocol> {
+    config: FlexibleConfig,
+    phantom: PhantomData<P>,
 }
 
-// pub fn default_layout_flex<P: FlexProtocol>(
-//     constraints: &P::Constraints,
-//     children: &Vec<ArcChildRenderObject<P>>,
-// ) -> (P::Size, Vec<P::Offset>) {
-// }
+impl<P: Protocol> ImplByTemplate for RenderFlexible<P> {
+    type Template = AdapterRenderTemplate;
+}
+
+impl<P: Protocol> AdapterRender for RenderFlexible<P> {
+    type ParentProtocol = FlexProtocol<P>;
+    type ChildProtocol = P;
+    type LayoutMemo = ();
+
+    fn perform_layout(
+        &mut self,
+        constraints: &P::Constraints,
+        child: &ArcChildRenderObject<P>,
+    ) -> (P::Size, ()) {
+        (child.layout_use_size(constraints), ())
+    }
+
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcChildRenderObject<P>,
+        intrinsics: &mut FlexIntrinsics<P::Intrinsics>,
+    ) {
+        match intrinsics {
+            FlexIntrinsics::Flex { res } => {
+                *res = self.config.clone();
+            }
+            FlexIntrinsics::Intrinsics(intrinsics) => child.get_intrinsics(intrinsics),
+        }
+    }
+
+    fn perform_paint(
+        &self,
+        _size: &P::Size,
+        offset: &P::Offset,
+        _memo: &(),
+        child: &ArcChildRenderObject<P>,
+        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
+    ) {
+        paint_ctx.paint(child, offset)
+    }
+}

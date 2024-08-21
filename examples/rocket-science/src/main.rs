@@ -43,10 +43,10 @@ fn main() {
         color = Color::rgba8(0x21, 0x96, 0xF3, 0xFF,),
         child = Row!(
             children = vec![
-                Flexible {
-                    flex: 1,
-                    fit: FlexFit::Tight,
-                    child: Container!(
+                Flexible!(
+                    flex = 1,
+                    fit = FlexFit::Tight,
+                    child = Container!(
                         padding = EdgeInsets::new_all(10.0),
                         alignment = Alignment::CENTER_LEFT,
                         child = Text!(
@@ -59,7 +59,7 @@ fn main() {
                             }
                         )
                     )
-                },
+                ),
                 Consumer2!(
                     builder = |ctx,
                                state: Asc<MyAppState>,
@@ -93,7 +93,6 @@ fn main() {
                         )
                     },
                 )
-                .into()
             ]
         )
     );
@@ -156,12 +155,11 @@ fn main() {
                                                 }
                                             }
                                         )
-                                    )
-                                    .into(),
-                                    Flexible {
-                                        flex: 1,
-                                        fit: FlexFit::Tight,
-                                        child: Center!(
+                                    ),
+                                    Flexible!(
+                                        flex = 1,
+                                        fit = FlexFit::Tight,
+                                        child = Center!(
                                             child = Suspense!(
                                                 fallback =
                                                     Center!(child = CircularProgressIndicator!()),
@@ -193,7 +191,7 @@ fn main() {
                                                 )
                                             )
                                         )
-                                    }
+                                    )
                                 ]
                             )
                         )
@@ -218,8 +216,7 @@ fn main() {
                     },
                     state.requested_hints_count,
                 )?;
-                let child =
-                    Column!(children = ids.into_iter().map(|id| build_hint(id).into()).collect());
+                let child = Column!(children = ids.into_iter().map(|id| build_hint(id)).collect());
                 Ok(child)
             }
         )
@@ -240,12 +237,12 @@ fn main() {
                                 value = set_state,
                                 child = Column!(
                                     children = vec![
-                                        app_bar.clone().into(),
-                                        Flexible {
-                                            flex: 1,
-                                            fit: FlexFit::Tight,
-                                            child: body.clone()
-                                        }
+                                        app_bar.clone(),
+                                        Flexible!(
+                                            flex = 1,
+                                            fit = FlexFit::Tight,
+                                            child = body.clone()
+                                        )
                                     ]
                                 ),
                             ),

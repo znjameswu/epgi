@@ -24,8 +24,8 @@ use epgi_core::{
 };
 
 use crate::{
-    Affine2dCanvas, Affine2dEncoding, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol,
-    BoxSize, Point2d,
+    Affine2dCanvas, Affine2dEncoding, ArcBoxRenderObject, BoxConstraints, BoxIntrinsics, BoxOffset,
+    BoxProtocol, BoxSize, Point2d,
 };
 
 pub struct BoxSingleChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
@@ -195,6 +195,8 @@ pub trait BoxSingleChildRender: Send + Sync + Sized + 'static {
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
+
+    fn compute_intrinsics(&mut self, child: &ArcBoxRenderObject, intrinsics: &mut BoxIntrinsics);
 }
 
 impl<
@@ -220,6 +222,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        [child]: &[ArcBoxRenderObject; 1],
+        intrinsics: &mut BoxIntrinsics,
+    ) {
+        R::compute_intrinsics(render, child, intrinsics)
+    }
 }
 
 impl<

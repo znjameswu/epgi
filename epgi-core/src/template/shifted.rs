@@ -25,6 +25,12 @@ pub trait ShiftedRender: Send + Sync + Sized + 'static {
         memo: &Self::LayoutMemo,
     ) -> <Self::Protocol as Protocol>::Offset;
 
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcChildRenderObject<Self::Protocol>,
+        intrinsics: &mut <Self::Protocol as Protocol>::Intrinsics,
+    );
+
     fn perform_layout(
         &mut self,
         constraints: &<Self::Protocol as Protocol>::Constraints,
@@ -124,6 +130,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        [child]: &[ArcChildRenderObject<R::Protocol>; 1],
+        intrinsics: &mut <R::Protocol as Protocol>::Intrinsics,
+    ) {
+        R::compute_intrinsics(render, child, intrinsics)
+    }
 }
 
 impl<R> TemplateRender<R> for ShiftedRenderTemplate

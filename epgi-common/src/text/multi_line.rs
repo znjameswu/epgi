@@ -1,7 +1,7 @@
 use epgi_2d::{
     Affine2dCanvas, Affine2dMultiChildHitTest, Affine2dMultiChildLayout, Affine2dMultiChildPaint,
     Affine2dMultiChildRender, Affine2dMultiChildRenderTemplate, MultiLineConstraints,
-    MultiLineOffset, MultiLineProtocol, MultiLineSize, SingleLineSize,
+    MultiLineIntrinsics, MultiLineOffset, MultiLineProtocol, MultiLineSize, SingleLineSize,
 };
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
@@ -75,6 +75,14 @@ impl Affine2dMultiChildRender for RenderMultiLine {
     type ParentProtocol = MultiLineProtocol;
     type ChildProtocol = MultiLineProtocol;
     type LayoutMemo = _RenderMultiLineLayoutMemo;
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &Vec<ArcChildRenderObject<MultiLineProtocol>>,
+        intrinsics: &mut MultiLineIntrinsics,
+    ) {
+        unimplemented!()
+    }
 }
 
 pub struct _RenderMultiLineLayoutMemo {

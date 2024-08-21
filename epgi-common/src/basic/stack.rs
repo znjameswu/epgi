@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicBool;
 
 use epgi_2d::{
     Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, ArcBoxWidget, BlendMode,
-    BoxConstraints, BoxMultiChildElement, BoxMultiChildElementTemplate, BoxMultiChildHitTest,
-    BoxMultiChildLayout, BoxMultiChildPaint, BoxMultiChildRender, BoxMultiChildRenderTemplate,
-    BoxOffset, BoxProtocol, BoxSize,
+    BoxConstraints, BoxIntrinsics, BoxMultiChildElement, BoxMultiChildElementTemplate,
+    BoxMultiChildHitTest, BoxMultiChildLayout, BoxMultiChildPaint, BoxMultiChildRender,
+    BoxMultiChildRenderTemplate, BoxOffset, BoxProtocol, BoxSize,
 };
 use epgi_core::{
     foundation::{
@@ -177,6 +177,14 @@ impl ImplByTemplate for RenderStack {
 
 impl BoxMultiChildRender for RenderStack {
     type LayoutMemo = (Vec<BoxOffset>, bool);
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &Vec<ArcBoxRenderObject>,
+        intrinsics: &mut BoxIntrinsics,
+    ) {
+        unimplemented!()
+    }
 }
 
 impl BoxMultiChildLayout for RenderStack {

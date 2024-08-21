@@ -146,4 +146,6 @@ impl<P: Protocol> ImplByTemplate for RenderSuspense<P> {
 
 impl<P: Protocol> ProxyRender for RenderSuspense<P> {
     type Protocol = P;
+
+    const NOOP_DETACH: bool = true;
 }

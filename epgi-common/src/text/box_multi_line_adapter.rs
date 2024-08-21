@@ -1,6 +1,7 @@
 use epgi_2d::{
-    Affine2d, Affine2dCanvas, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
-    MultiLineConstraints, MultiLineOffset, MultiLineProtocol, SingleLineOffset,
+    Affine2d, Affine2dCanvas, BoxConstraints, BoxIntrinsics, BoxOffset,
+    BoxProtocol, BoxSize, MultiLineConstraints, MultiLineOffset,
+    MultiLineProtocol, SingleLineOffset,
 };
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
@@ -127,6 +128,14 @@ impl AdapterRender for RenderBoxMultiLineAdapter {
         paint_ctx.with_transform(Affine2d::from_translation(offset), |paint_ctx| {
             paint_ctx.paint(child, memo)
         });
+    }
+
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcChildRenderObject<MultiLineProtocol>,
+        intrinsics: &mut BoxIntrinsics,
+    ) {
+        unimplemented!()
     }
 
     const NOOP_DETACH: bool = true;

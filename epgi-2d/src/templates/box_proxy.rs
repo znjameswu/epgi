@@ -10,7 +10,8 @@ use epgi_core::{
 };
 
 use crate::{
-    Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
+    Affine2dCanvas, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxIntrinsics, BoxOffset,
+    BoxProtocol, BoxSize, Point2d,
 };
 
 pub struct BoxProxyRenderTemplate;
@@ -22,6 +23,10 @@ pub trait BoxProxyRender: Send + Sync + Sized + 'static {
         child: &ArcBoxRenderObject,
     ) -> BoxSize {
         child.layout_use_size(constraints)
+    }
+
+    fn compute_intrinsics(&mut self, child: &ArcBoxRenderObject, intrinsics: &mut BoxIntrinsics) {
+        child.get_intrinsics(intrinsics)
     }
 
     #[allow(unused_variables)]
@@ -113,6 +118,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        [child]: &[ArcBoxRenderObject; 1],
+        intrinsics: &mut BoxIntrinsics,
+    ) {
+        R::compute_intrinsics(render, child, intrinsics)
+    }
 }
 
 impl<R> TemplateRender<R> for BoxProxyRenderTemplate
