@@ -2,9 +2,8 @@ use std::any::Any;
 
 use crate::{
     foundation::{
-        default_query_interface_arc, default_query_interface_box, default_query_interface_ref, Arc,
-        AsAny, Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol,
-        Protocol, SyncMutex,
+        default_query_interface_arc, default_query_interface_ref, Arc, AsAny, Aweak, Canvas,
+        CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol, Protocol, SyncMutex,
     },
     sync::ImplComposite,
     tree::{ElementContextNode, LayerCache, LayerMark},
@@ -138,19 +137,9 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send 
     fn detach_render_object(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 
-    fn mark_render_action(
-        self: &Arc<Self>,
-        propagated_render_action: Option<RenderAction>,
-        descendant_has_action: Option<RenderAction>,
-    ) -> Option<RenderAction>
-    where
-        Self: Sized;
-
-    fn try_as_aweak_any_layer_render_object(
-        render_object: &Arc<Self>,
-    ) -> Option<AweakAnyLayerRenderObject>
-    where
-        Self: Sized;
+    fn get_parent_data_any(&self) -> Option<&dyn Any> {
+        None
+    }
 
     fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any>;
 }
@@ -186,7 +175,13 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         }
     }
 
-    fn mark_render_action(
+    fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any> {
+        Box::new(self as ArcChildRenderObject<R::ParentProtocol>)
+    }
+}
+
+impl<R: FullRender> RenderObject<R> {
+    pub(crate) fn mark_render_action(
         self: &Arc<Self>,
         mut propagated_render_action: Option<RenderAction>,
         descendant_has_action: Option<RenderAction>,
@@ -207,7 +202,7 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         )
     }
 
-    fn try_as_aweak_any_layer_render_object(
+    pub(crate) fn try_as_aweak_any_layer_render_object(
         render_object: &Arc<Self>,
     ) -> Option<AweakAnyLayerRenderObject>
     where
@@ -220,10 +215,6 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         } else {
             None
         }
-    }
-
-    fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any> {
-        Box::new(self as ArcChildRenderObject<R::ParentProtocol>)
     }
 }
 
@@ -247,8 +238,8 @@ pub trait ChildRenderObjectWithCanvas<C: Canvas>:
 {
 }
 
-impl<R: FullRender> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas>
-    for RenderObject<R>
+impl<C: Canvas, T> ChildRenderObjectWithCanvas<C> for T where
+    T: CastInterfaceByRawPtr + crate::sync::ChildRenderObjectHitTestExt<C> + Send + Sync + 'static
 {
 }
 
@@ -257,9 +248,9 @@ impl<C: Canvas> dyn ChildRenderObjectWithCanvas<C> {
         default_query_interface_ref(self)
     }
 
-    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
-        default_query_interface_box(self)
-    }
+    // pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+    //     default_query_interface_box(self)
+    // }
 
     pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
         default_query_interface_arc(self)

@@ -185,7 +185,7 @@ impl AnyRawPointer {
 pub trait CastInterfaceByRawPtr {
     fn cast_interface_raw(&self, trait_type_id: TypeId) -> Option<AnyRawPointer>;
 
-    fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer>;
+    // fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer>;
 }
 
 impl dyn CastInterfaceByRawPtr {
@@ -193,9 +193,9 @@ impl dyn CastInterfaceByRawPtr {
         default_query_interface_ref(self)
     }
 
-    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
-        default_query_interface_box(self)
-    }
+    // pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+    //     default_query_interface_box(self)
+    // }
 
     pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
         default_query_interface_arc(self)
@@ -255,25 +255,25 @@ pub fn default_query_interface_ref<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized 
     })
 }
 
-pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
-    source: Box<S>,
-) -> Result<Box<T>, Box<S>> {
-    let leaked = Box::into_raw(source);
-    let casted = unsafe { leaked.as_mut() }
-        .expect("Impossible to fail")
-        .cast_interface_raw_mut(TypeId::of::<T>());
-    // .cast_interface_raw(TypeId::of::<*mut T>());
-    match casted {
-        Some(ptr) => {
-            let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
-                "Interface query table function should return a raw fat pointer \
-                with the same type as it has claimed",
-            );
-            unsafe { Ok(Box::from_raw(downcasted as *mut T)) }
-        }
-        None => unsafe { Err(Box::from_raw(leaked)) },
-    }
-}
+// pub fn default_query_interface_box<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
+//     source: Box<S>,
+// ) -> Result<Box<T>, Box<S>> {
+//     let leaked = Box::into_raw(source);
+//     let casted = unsafe { leaked.as_mut() }
+//         .expect("Impossible to fail")
+//         .cast_interface_raw_mut(TypeId::of::<T>());
+//     // .cast_interface_raw(TypeId::of::<*mut T>());
+//     match casted {
+//         Some(ptr) => {
+//             let downcasted = ptr.downcast_raw_mut::<T>().ok().expect(
+//                 "Interface query table function should return a raw fat pointer \
+//                 with the same type as it has claimed",
+//             );
+//             unsafe { Ok(Box::from_raw(downcasted as *mut T)) }
+//         }
+//         None => unsafe { Err(Box::from_raw(leaked)) },
+//     }
+// }
 
 pub fn default_query_interface_arc<S: CastInterfaceByRawPtr + ?Sized, T: ?Sized + 'static>(
     source: Arc<S>,
@@ -312,9 +312,9 @@ mod tests {
             default_cast_interface_by_table_raw(self, trait_type_id, INTERFACE_TABLE.as_slice())
         }
 
-        fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
-            default_cast_interface_by_table_raw_mut(self, trait_type_id, INTERFACE_TABLE.as_slice())
-        }
+        // fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
+        //     default_cast_interface_by_table_raw_mut(self, trait_type_id, INTERFACE_TABLE.as_slice())
+        // }
     }
 
     impl TestTrait for TestStruct {
@@ -333,13 +333,13 @@ mod tests {
         assert_eq!(x_down.value(), I)
     }
 
-    #[test]
-    fn query_interface_box() {
-        const I: i32 = 42;
-        let x: TestStruct = TestStruct(I);
-        let x_box: Box<TestStruct> = Box::new(x);
-        let x_up = x_box as Box<dyn CastInterfaceByRawPtr>;
-        let x_down = x_up.query_interface_box::<dyn TestTrait>().ok().unwrap();
-        assert_eq!(x_down.value(), I)
-    }
+    // #[test]
+    // fn query_interface_box() {
+    //     const I: i32 = 42;
+    //     let x: TestStruct = TestStruct(I);
+    //     let x_box: Box<TestStruct> = Box::new(x);
+    //     let x_up = x_box as Box<dyn CastInterfaceByRawPtr>;
+    //     let x_down = x_up.query_interface_box::<dyn TestTrait>().ok().unwrap();
+    //     assert_eq!(x_down.value(), I)
+    // }
 }

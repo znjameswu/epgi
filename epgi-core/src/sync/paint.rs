@@ -60,37 +60,29 @@ pub trait ChildRenderObjectPaintExt<PP: Protocol> {
     );
 }
 
-trait ChildRenderObjectPaintExtImpl<PP: Protocol> {
-    fn paint_impl(
-        self: Arc<Self>,
-        offset: PP::Offset,
-        paint_ctx: &mut impl PaintContext<Canvas = PP::Canvas>,
-    );
-}
-
-impl<PP, T> ChildRenderObjectPaintExt<PP> for T
+impl<R> ChildRenderObjectPaintExt<R::ParentProtocol> for RenderObject<R>
 where
-    T: ChildRenderObjectPaintExtImpl<PP>,
-    PP: Protocol,
+    R: Render,
+    R::Impl: ImplPaint<R>,
 {
     fn paint(
         self: Arc<Self>,
-        offset: &<PP as Protocol>::Offset,
-        paint_ctx: &mut <<PP as Protocol>::Canvas as Canvas>::PaintContext<'_>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
     ) {
         self.paint_impl(offset.clone(), paint_ctx)
     }
 
     fn paint_scan(
         self: Arc<Self>,
-        offset: &<PP as Protocol>::Offset,
-        paint_ctx: &mut <<PP as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
     ) {
         self.paint_impl(offset.clone(), paint_ctx)
     }
 }
 
-impl<R> ChildRenderObjectPaintExtImpl<R::ParentProtocol> for RenderObject<R>
+impl<R> RenderObject<R>
 where
     R: Render,
     R::Impl: ImplPaint<R>,

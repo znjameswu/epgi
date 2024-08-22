@@ -214,9 +214,9 @@ impl<R: Render> CastInterfaceByRawPtr for RenderObject<R> {
         default_cast_interface_by_table_raw(self, trait_type_id, R::all_hit_test_interfaces())
     }
 
-    fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
-        default_cast_interface_by_table_raw_mut(self, trait_type_id, R::all_hit_test_interfaces())
-    }
+    // fn cast_interface_raw_mut(&mut self, trait_type_id: TypeId) -> Option<AnyRawPointer> {
+    //     default_cast_interface_by_table_raw_mut(self, trait_type_id, R::all_hit_test_interfaces())
+    // }
 }
 
 #[macro_export]
