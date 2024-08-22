@@ -775,8 +775,30 @@ Difficulties has been encountered during hit-test due to the lack of cached prot
 Decision: let paint leave a offset cache.
 
 # ParentData design (eg. for Flex)
-Flutter's ParentData is stored on RenderObject and is non-penetrative. (Which is different from intrinsic computations which are penetrative) ("Penetrative" meaning that a tree node will delegate the answer to its child unless itself has an explicit answer). However, when viewed from widget tree, it is still somewhat penetrative. Therefore, replacing ParentData with a direct widget wrapper is not appropriate.
+Flutter's ParentData is stored on RenderObject and is non-penetrative. (Which is different from intrinsic computations which are penetrative) ("Penetrative" meaning that a tree node will delegate the answer to its child unless itself has an explicit answer). However, when viewed from widget tree, it is still somewhat penetrative. Therefore, replacing ParentData with a direct widget wrapper is not appropriate. For example, in Flutter, Flexible can be separated from Flex as long as there is only ComponentWidget in betweeen.
 
-For example, in Flutter, Flexible can be separated from Flex as long as there is only ComponentWidget in betweeen.
+However, Flutter's Flexible is not a RenderObject widget. It works by applying parent data to the nearest render object descendant.
 
 Another point to consider is ParentData type is improvisive and not tied to any LayoutProtocol, which is different from intrinsics.
+
+We have three choices:
+1. Implement a parent data system.
+    1. We will have to use dynamic downcast
+2. Let intrinsics system allow type-based query
+    1. We either mandate all intrinsics implementers to accept type-based query, which is very intrusive, or we add a type-based query alongside user-procided intrinsics, which will just be a worse version of parent data system.
+3. Bake parent data into protocol system
+    1. Previous `SurrogateProtocol` attempt to create parent-data variant for each protocol and each parent data. The outcome is promising at first but disastrous in the end. Because the new protocols will eventually pollute into the `ChildElementNode` implementations, and causes extra monomorphizations of element logic for each of those protocol.
+4. Do not impl parent data system. Just demand Flexible wrapper for every Flex child.
+    1. Then flexible config state has to be store on Flex widget itself.
+    2. Any changes on any one of the flexible config will trigger a rebuild on Flex widget, despite a relayout is sufficient. There is just no way around this behavior.
+
+How to implement a parent data system:
+1. Parent data widget as a render object widget.
+    1. Farily straightforward
+2. Parent data widget as a non-render proxy widget. Then we must find a way to bind the parent data with the nearest render object
+    1. Setting parent data onto the RenderObject during commit phase just like Flutter.
+        1. Two parent data widget fighting over the same render object is possible. But due to the sequential and ordered nature of commit phase, this should not be too much of a problem.
+    2. Wrap the subtree render object with the parent data when up-propagating the render object during commit phase.
+        1. The wrapped type is different from the non-wrapped ArcChildRenderObject
+            1. We can't modify the return type to the wrapped type. The API breakage would simply be deal-breaking.
+            2. The only way is to impl ChildRenderObject trait for the wrapped type. Then we have another Arc indirection.
