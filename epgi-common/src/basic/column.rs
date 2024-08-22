@@ -11,8 +11,6 @@ use typed_builder::TypedBuilder;
 
 use crate::{Axis, CrossAxisAlignment, MainAxisAlignment, MainAxisSize, RenderFlex};
 
-use super::FlexProtocol;
-
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Column>))]
 pub struct Column {
@@ -38,12 +36,12 @@ pub struct Column {
     pub flip_horizontal: bool,
     #[builder(default = false)]
     pub flip_vertical: bool,
-    pub children: Vec<ArcChildWidget<FlexProtocol<BoxProtocol>>>,
+    pub children: Vec<ArcChildWidget<BoxProtocol>>,
 }
 
 impl Widget for Column {
     type ParentProtocol = BoxProtocol;
-    type ChildProtocol = FlexProtocol<BoxProtocol>;
+    type ChildProtocol = BoxProtocol;
     type Element = ColumnElement;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
@@ -60,7 +58,7 @@ impl ImplByTemplate for ColumnElement {
 
 impl MultiChildElement for ColumnElement {
     type ParentProtocol = BoxProtocol;
-    type ChildProtocol = FlexProtocol<BoxProtocol>;
+    type ChildProtocol = BoxProtocol;
     type ArcWidget = Asc<Column>;
     type Render = RenderFlex<BoxProtocol>;
 
@@ -69,7 +67,7 @@ impl MultiChildElement for ColumnElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<Vec<ArcChildWidget<FlexProtocol<BoxProtocol>>>, BuildSuspendedError> {
+    ) -> Result<Vec<ArcChildWidget<BoxProtocol>>, BuildSuspendedError> {
         Ok(widget.children.clone())
     }
 

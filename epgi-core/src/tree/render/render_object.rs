@@ -4,7 +4,7 @@ use crate::{
     foundation::{
         default_query_interface_arc, default_query_interface_box, default_query_interface_ref, Arc,
         AsAny, Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol,
-        Protocol, SurrogateProtocol, SyncMutex,
+        Protocol, SyncMutex,
     },
     sync::ImplComposite,
     tree::{ElementContextNode, LayerCache, LayerMark},
@@ -126,9 +126,7 @@ pub trait ChildRenderObject<PP: Protocol>:
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject;
 }
 
-impl<R: FullRender, P: SurrogateProtocol<R::ParentProtocol>> ChildRenderObject<P>
-    for RenderObject<R>
-{
+impl<R: FullRender> ChildRenderObject<R::ParentProtocol> for RenderObject<R> {
     fn as_arc_any_render_object(self: Arc<Self>) -> ArcAnyRenderObject {
         self
     }

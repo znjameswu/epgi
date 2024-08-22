@@ -1,5 +1,4 @@
 use std::{
-    borrow::{Borrow, BorrowMut},
     fmt::Debug,
     ops::{Deref, Mul},
 };
@@ -192,43 +191,4 @@ pub trait Transform<C: Canvas>:
     fn identity() -> Self;
     fn mul(&self, other: &Self) -> Self;
     fn inv(&self) -> Option<Self>;
-}
-
-/// A protocol that can be translated into P, so that widget with P as its `ParentProtocol`
-/// can also behave like [ChildWidget] with this protocol
-///
-/// [ChildWidget]: crate::tree::ChildWidget
-pub trait SurrogateProtocol<P: Protocol>: Protocol<Canvas = P::Canvas> {
-    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<P::Constraints>;
-    fn convert_offset(value: Self::Offset) -> P::Offset;
-    fn recover_size(value: P::Size) -> Self::Size;
-    /// Convert incoming surrogate intrinsics
-    ///
-    /// If the incoming intrinsics tag has no target counterpart to convert into,
-    /// then this method must immediately return with intrinsics entry result filled with result.
-    /// Usually the filled results should be a default value for that intrinsics tag.
-    fn convert_intrinsics(
-        value: &mut Self::Intrinsics,
-    ) -> Result<impl BorrowMut<P::Intrinsics>, ()>;
-    fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics;
-}
-
-impl<P: Protocol> SurrogateProtocol<P> for P {
-    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<P::Constraints> {
-        value
-    }
-    fn convert_offset(value: Self::Offset) -> P::Offset {
-        value
-    }
-    fn recover_size(value: P::Size) -> Self::Size {
-        value
-    }
-    fn convert_intrinsics(
-        value: &mut Self::Intrinsics,
-    ) -> Result<impl BorrowMut<P::Intrinsics>, ()> {
-        Ok(value)
-    }
-    fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics {
-        value
-    }
 }

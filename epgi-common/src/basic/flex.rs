@@ -1,9 +1,4 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    f32::INFINITY,
-    iter::zip,
-    marker::PhantomData,
-};
+use std::{f32::INFINITY, iter::zip, marker::PhantomData};
 
 use epgi_2d::{
     Affine2dPaintContextExt, BlendMode, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
@@ -11,8 +6,8 @@ use epgi_2d::{
 };
 use epgi_core::{
     foundation::{
-        set_if_changed, Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Intrinsics,
-        PaintContext, Protocol, Provide, SurrogateProtocol, VecContainer,
+        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
+        Provide, VecContainer,
     },
     max,
     template::{
@@ -22,8 +17,8 @@ use epgi_core::{
         SingleChildRenderElement,
     },
     tree::{
-        ArcChildRenderObject, ArcChildWidget, BuildContext, ChildRenderObject,
-        ElementBase, FullRender, RenderAction, Widget,
+        ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, FullRender, RenderAction,
+        Widget,
     },
 };
 use epgi_macro::Declarative;
@@ -227,19 +222,15 @@ pub struct Flex<P: Protocol> {
     pub flip_main_axis: bool,
     #[builder(default = false)]
     pub flip_cross_axis: bool,
-    pub children: Vec<ArcChildWidget<FlexProtocol<P>>>,
+    pub children: Vec<ArcChildWidget<P>>,
 }
 
 impl<P: Protocol> Widget for Flex<P>
 where
-    RenderFlex<P>: FullRender<
-        ParentProtocol = P,
-        ChildProtocol = FlexProtocol<P>,
-        ChildContainer = VecContainer,
-    >,
+    RenderFlex<P>: FullRender<ParentProtocol = P, ChildProtocol = P, ChildContainer = VecContainer>,
 {
     type ParentProtocol = P;
-    type ChildProtocol = FlexProtocol<P>;
+    type ChildProtocol = P;
     type Element = FlexElement<P>;
 
     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
@@ -258,14 +249,10 @@ impl<P: Protocol> ImplByTemplate for FlexElement<P> {
 
 impl<P: Protocol> MultiChildElement for FlexElement<P>
 where
-    RenderFlex<P>: FullRender<
-        ParentProtocol = P,
-        ChildProtocol = FlexProtocol<P>,
-        ChildContainer = VecContainer,
-    >,
+    RenderFlex<P>: FullRender<ParentProtocol = P, ChildProtocol = P, ChildContainer = VecContainer>,
 {
     type ParentProtocol = P;
-    type ChildProtocol = FlexProtocol<P>;
+    type ChildProtocol = P;
     type ArcWidget = Asc<Flex<P>>;
     type Render = RenderFlex<P>;
     fn get_child_widgets(
@@ -273,7 +260,7 @@ where
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<Vec<ArcChildWidget<FlexProtocol<P>>>, BuildSuspendedError> {
+    ) -> Result<Vec<ArcChildWidget<P>>, BuildSuspendedError> {
         Ok(widget.children.clone())
     }
 
@@ -329,12 +316,12 @@ impl<P: Protocol> ImplByTemplate for RenderFlex<P> {
 
 impl<P: Protocol> MultiChildRender for RenderFlex<P> {
     type ParentProtocol = P;
-    type ChildProtocol = FlexProtocol<P>;
+    type ChildProtocol = P;
     type LayoutMemo = (Vec<P::Offset>, f32);
 
     fn compute_intrinsics(
         &mut self,
-        children: &Vec<ArcChildRenderObject<FlexProtocol<P>>>,
+        children: &Vec<ArcChildRenderObject<P>>,
         intrinsics: &mut P::Intrinsics,
     ) {
         unimplemented!()
@@ -348,7 +335,7 @@ where
     fn perform_layout(
         &mut self,
         constraints: &P::Constraints,
-        children: &Vec<ArcChildRenderObject<FlexProtocol<P>>>,
+        children: &Vec<ArcChildRenderObject<P>>,
     ) -> (P::Size, Self::LayoutMemo) {
         default_flex_perform_layout(
             self,
@@ -368,7 +355,7 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     main_axis_alignment: MainAxisAlignment,
     flip_main_axis: bool,
     constraints: &P::Constraints,
-    children: &Vec<ArcChildRenderObject<FlexProtocol<P>>>,
+    children: &Vec<ArcChildRenderObject<P>>,
 ) -> (P::Size, (Vec<P::Offset>, f32)) {
     // RenderFlex::_computeSized
     let mut child_sizes = std::iter::repeat(R::placeholder_size())
@@ -531,7 +518,7 @@ pub trait FlexRender<P: Protocol>: Send + Sync + 'static {
         offset: &P::Offset,
         child_offsets: &Vec<P::Offset>,
         overflow: f32,
-        children: &Vec<ArcChildRenderObject<FlexProtocol<P>>>,
+        children: &Vec<ArcChildRenderObject<P>>,
         paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
     );
 }
@@ -658,7 +645,7 @@ impl FlexRender<BoxProtocol> for RenderFlex<BoxProtocol> {
         &offset: &<BoxProtocol as Protocol>::Offset,
         child_offsets: &Vec<<BoxProtocol as Protocol>::Offset>,
         overflow: f32,
-        children: &Vec<ArcChildRenderObject<FlexProtocol<BoxProtocol>>>,
+        children: &Vec<ArcChildRenderObject<BoxProtocol>>,
         paint_ctx: &mut impl PaintContext<Canvas = <BoxProtocol as Protocol>::Canvas>,
     ) {
         if overflow < PRECISION_ERROR_TOLERANCE {
@@ -685,7 +672,7 @@ where
         size: &P::Size,
         offset: &P::Offset,
         memo: &Self::LayoutMemo,
-        children: &Vec<ArcChildRenderObject<FlexProtocol<P>>>,
+        children: &Vec<ArcChildRenderObject<P>>,
         paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
     ) {
         let (child_offsets, overflow) = memo;
@@ -738,103 +725,6 @@ impl Default for FlexibleConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct FlexProtocol<P: Protocol> {
-    phantom: PhantomData<P>,
-}
-
-#[derive(Debug, Clone)]
-pub enum FlexIntrinsics<T> {
-    Flex { res: FlexibleConfig },
-    Intrinsics(T),
-}
-
-impl<T: Intrinsics> Intrinsics for FlexIntrinsics<T> {
-    fn eq_tag(&self, other: &Self) -> bool {
-        use FlexIntrinsics::*;
-        match (self, other) {
-            (Flex { .. }, Flex { .. }) => true,
-            (Intrinsics(x1), Intrinsics(x2)) => x1.eq_tag(x2),
-            _ => false,
-        }
-    }
-
-    fn eq_param(&self, other: &Self) -> bool {
-        use FlexIntrinsics::*;
-        match (self, other) {
-            (Flex { .. }, Flex { .. }) => true,
-            (Intrinsics(x1), Intrinsics(x2)) => x1.eq_param(x2),
-            _ => false,
-        }
-    }
-}
-
-pub trait FlexRenderObjectIntrinsicsExt {
-    fn get_flexible_config(&self) -> FlexibleConfig;
-}
-
-impl<P: Protocol> FlexRenderObjectIntrinsicsExt for dyn ChildRenderObject<FlexProtocol<P>> {
-    fn get_flexible_config(&self) -> FlexibleConfig {
-        let mut intrinsics = FlexIntrinsics::Flex {
-            res: FlexibleConfig::default(),
-        };
-        self.get_intrinsics(&mut intrinsics);
-        let FlexIntrinsics::Flex { res } = intrinsics else {
-            panic!("Child returns a wrong intrinsics type.")
-        };
-        res
-    }
-}
-
-impl<P: Protocol> Protocol for FlexProtocol<P> {
-    type Constraints = P::Constraints;
-    type Offset = P::Offset;
-    type Size = P::Size;
-    type Intrinsics = FlexIntrinsics<P::Intrinsics>;
-    type Canvas = P::Canvas;
-
-    fn position_in_shape(
-        position: &<P::Canvas as Canvas>::HitPosition,
-        offset: &P::Offset,
-        size: &P::Size,
-    ) -> bool {
-        P::position_in_shape(position, offset, size)
-    }
-}
-
-impl<P: Protocol> SurrogateProtocol<P> for FlexProtocol<P> {
-    fn convert_constraints(value: &Self::Constraints) -> impl Borrow<P::Constraints> {
-        value
-    }
-
-    fn convert_offset(value: Self::Offset) -> P::Offset {
-        value
-    }
-
-    fn recover_size(value: P::Size) -> Self::Size {
-        value
-    }
-
-    fn convert_intrinsics(
-        value: &mut Self::Intrinsics,
-    ) -> Result<impl BorrowMut<P::Intrinsics>, ()> {
-        match value {
-            FlexIntrinsics::Flex { res } => {
-                *res = FlexibleConfig {
-                    flex: 0,
-                    fit: FlexFit::Tight,
-                };
-                return Err(());
-            }
-            FlexIntrinsics::Intrinsics(x) => Ok(x),
-        }
-    }
-
-    fn recover_intrinsics(value: P::Intrinsics) -> Self::Intrinsics {
-        FlexIntrinsics::Intrinsics(value)
-    }
-}
-
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Flexible<P>>))]
 pub struct Flexible<P: Protocol> {
@@ -846,7 +736,7 @@ pub struct Flexible<P: Protocol> {
 }
 
 impl<P: Protocol> Widget for Flexible<P> {
-    type ParentProtocol = FlexProtocol<P>;
+    type ParentProtocol = P;
     type ChildProtocol = P;
     type Element = FlexibleElement<P>;
 
@@ -865,7 +755,7 @@ impl<P: Protocol> ImplByTemplate for FlexibleElement<P> {
 }
 
 impl<P: Protocol> SingleChildElement for FlexibleElement<P> {
-    type ParentProtocol = FlexProtocol<P>;
+    type ParentProtocol = P;
     type ChildProtocol = P;
     type ArcWidget = Asc<Flexible<P>>;
 
@@ -916,7 +806,7 @@ impl<P: Protocol> ImplByTemplate for RenderFlexible<P> {
 }
 
 impl<P: Protocol> AdapterRender for RenderFlexible<P> {
-    type ParentProtocol = FlexProtocol<P>;
+    type ParentProtocol = P;
     type ChildProtocol = P;
     type LayoutMemo = ();
 
@@ -931,14 +821,9 @@ impl<P: Protocol> AdapterRender for RenderFlexible<P> {
     fn compute_intrinsics(
         &mut self,
         child: &ArcChildRenderObject<P>,
-        intrinsics: &mut FlexIntrinsics<P::Intrinsics>,
+        intrinsics: &mut P::Intrinsics,
     ) {
-        match intrinsics {
-            FlexIntrinsics::Flex { res } => {
-                *res = self.config.clone();
-            }
-            FlexIntrinsics::Intrinsics(intrinsics) => child.get_intrinsics(intrinsics),
-        }
+        child.get_intrinsics(intrinsics)
     }
 
     fn perform_paint(
