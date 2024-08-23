@@ -801,4 +801,9 @@ How to implement a parent data system:
     2. Wrap the subtree render object with the parent data when up-propagating the render object during commit phase.
         1. The wrapped type is different from the non-wrapped ArcChildRenderObject
             1. We can't modify the return type to the wrapped type. The API breakage would simply be deal-breaking.
-            2. The only way is to impl ChildRenderObject trait for the wrapped type. Then we have another Arc indirection.
+            2. The only way is to impl ChildRenderObject trait for the wrapped type and mock every method. Then we have another Arc indirection. (And then the abstraction overhead is at least the same as setting a `Box<dyn Any>` on render object)
+        2. The commit process is not as straight-forward, since the commit will need to access the child render object to generate a new wrapper every time when the parent data changes, even when the subtree has no change and thus does not return a new child render object. ~~Plus, accessing child render object is necessary because we also need to mark relayout atomic flag on that child render object. (Mark the atomic flag is necessary! Only intercepting up-propagating RenderActions is not enough. (Really?))~~ (Child render object is agnostic about the parent data. Therefore under any circumstances parent data changes do NOT need to mark child render object. Therefore, the wrapper approach is better than setter method in this regard)
+            ~~1. The new access pattern is strictly equivalent to setting the parent data on the child render object, if not worse. Since, otherwise, we can set parent data and mark relayout in one go.~~
+        3. Every time parent data changes, a new wrapper needs to be generated and propagated up, causing parent receives a new render object summary, prompting the parent to relayout everytime, even if the parent data change may have not intended to relayout its parent. (FATAL!!!)
+
+Decision: Setting parent data onto the render object.

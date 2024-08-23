@@ -137,10 +137,6 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send 
     fn detach_render_object(&self);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 
-    fn get_parent_data_any(&self) -> Option<&dyn Any> {
-        None
-    }
-
     fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any>;
 }
 
