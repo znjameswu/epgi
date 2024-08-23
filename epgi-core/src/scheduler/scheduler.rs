@@ -143,10 +143,8 @@ where
                 .lock()
                 .cache;
             let cache_fresh = cache.clear();
-            cache
-                .insert_layout_results(initial_layout, cache_fresh)
-                .paint_offset
-                .insert(initial_offset);
+            let layout_results = cache.insert_layout_results(initial_layout, cache_fresh);
+            layout_results.paint_offset = Some(initial_offset);
         }
 
         scheduler_handle

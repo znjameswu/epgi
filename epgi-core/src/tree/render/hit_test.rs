@@ -1,8 +1,8 @@
 use std::any::TypeId;
 
 use crate::foundation::{
-    default_cast_interface_by_table_raw, default_cast_interface_by_table_raw_mut, AnyRawPointer,
-    Canvas, CastInterfaceByRawPtr, ContainerOf, Protocol, Transform, TransformHitPosition,
+    default_cast_interface_by_table_raw, AnyRawPointer, Canvas, CastInterfaceByRawPtr, ContainerOf,
+    Protocol, Transform, TransformHitPosition,
 };
 
 use super::{
