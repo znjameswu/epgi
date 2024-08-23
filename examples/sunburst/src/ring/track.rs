@@ -9,10 +9,7 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use super::{
-    get_flexible_configs, ArcRingWidget, CrossAxisAlignment, Flexible, MainAxisAlignment,
-    MainAxisSize, RingProtocol,
-};
+use super::{ArcRingWidget, CrossAxisAlignment, MainAxisAlignment, MainAxisSize, RingProtocol};
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<RingTrack>))]
@@ -39,7 +36,7 @@ pub struct RingTrack {
     pub flip_angular: bool,
     #[builder(default = false)]
     pub flip_radial: bool,
-    pub children: Vec<Flexible<RingProtocol>>,
+    pub children: Vec<ArcRingWidget>,
 }
 
 impl Widget for RingTrack {
@@ -71,11 +68,7 @@ impl MultiChildElement for RingTrackElement {
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Vec<ArcRingWidget>, BuildSuspendedError> {
-        Ok(widget
-            .children
-            .iter()
-            .map(|flexible| flexible.child.clone())
-            .collect())
+        Ok(widget.children.clone())
     }
 
     fn create_element(_widget: &Self::ArcWidget) -> Self {
@@ -88,7 +81,6 @@ impl MultiChildElement for RingTrackElement {
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_angular,
             flip_cross_axis: widget.flip_radial,
             phantom: PhantomData,
@@ -103,10 +95,6 @@ impl MultiChildElement for RingTrackElement {
             set_if_changed(
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
-            ),
-            set_if_changed(
-                &mut render.flexible_configs,
-                get_flexible_configs(&widget.children),
             ),
             set_if_changed(&mut render.flip_main_axis, widget.flip_angular),
             set_if_changed(&mut render.flip_cross_axis, widget.flip_radial),

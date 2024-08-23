@@ -9,7 +9,7 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use super::{RingConstraints, RingOffset, RingProtocol, RingSize};
+use super::{RingConstraints, RingIntrinsics, RingOffset, RingProtocol, RingSize};
 
 lazy_static::lazy_static! {
     pub static ref ARC_PHANTOM_RING: Asc<PhantomRing> = Asc::new(PhantomRing {});
@@ -76,5 +76,9 @@ impl LeafRender for RenderPhantomRing {
         _offset: &RingOffset,
         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
+    }
+
+    fn compute_intrinsics(_render: &mut Self, _intrinsics: &mut RingIntrinsics) {
+        // No-op
     }
 }

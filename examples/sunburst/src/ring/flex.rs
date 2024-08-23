@@ -14,8 +14,7 @@ pub use epgi_common::{
 };
 use epgi_core::{
     foundation::{
-        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
-        Provide,
+        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
     },
     template::{ImplByTemplate, MultiChildElement, MultiChildElementTemplate},
     tree::{BuildContext, RenderAction, Widget},
@@ -69,7 +68,7 @@ pub struct RingFlex {
     pub flip_horizontal: bool,
     #[builder(default = false)]
     pub flip_vertical: bool,
-    pub children: Vec<Flexible<RingProtocol>>,
+    pub children: Vec<ArcRingWidget>,
 }
 
 impl Widget for RingFlex {
@@ -101,11 +100,7 @@ impl MultiChildElement for RingFlexElement {
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Vec<ArcRingWidget>, BuildSuspendedError> {
-        Ok(widget
-            .children
-            .iter()
-            .map(|flexible| flexible.child.clone())
-            .collect())
+        Ok(widget.children.clone())
     }
 
     fn create_element(_widget: &Self::ArcWidget) -> Self {
@@ -118,7 +113,6 @@ impl MultiChildElement for RingFlexElement {
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_horizontal,
             flip_cross_axis: widget.flip_vertical,
             phantom: PhantomData,
@@ -134,10 +128,6 @@ impl MultiChildElement for RingFlexElement {
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
             ),
-            set_if_changed(
-                &mut render.flexible_configs,
-                get_flexible_configs(&widget.children),
-            ),
             set_if_changed(&mut render.flip_main_axis, widget.flip_horizontal),
             set_if_changed(&mut render.flip_cross_axis, widget.flip_vertical),
         ]
@@ -145,10 +135,6 @@ impl MultiChildElement for RingFlexElement {
         .any(|&changed| changed)
         .then_some(RenderAction::Relayout)
     }
-}
-
-pub(super) fn get_flexible_configs(children: &Vec<Flexible<impl Protocol>>) -> Vec<FlexibleConfig> {
-    children.iter().map(Flexible::get_flexible_config).collect()
 }
 
 pub struct RenderRingFlex {

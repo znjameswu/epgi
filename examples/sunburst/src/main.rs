@@ -41,30 +41,30 @@ fn main() {
                                     child = RingTrack!(
                                         cross_axis_alignment = CrossAxisAlignment::Stretch,
                                         children = vec![
-                                            Flexible {
-                                                flex: 2,
-                                                fit: FlexFit::Tight,
-                                                child: ColoredRing!(
+                                            Flexible!(
+                                                flex = 2,
+                                                fit = FlexFit::Tight,
+                                                child = ColoredRing!(
                                                     color = Color::RED,
                                                     child = ARC_PHANTOM_RING.clone(),
-                                                )
-                                            },
-                                            Flexible {
-                                                flex: 2,
-                                                fit: FlexFit::Tight,
-                                                child: ColoredRing!(
+                                                ),
+                                            ),
+                                            Flexible!(
+                                                flex = 2,
+                                                fit = FlexFit::Tight,
+                                                child = ColoredRing!(
                                                     color = Color::GREEN,
                                                     child = ARC_PHANTOM_RING.clone(),
-                                                )
-                                            },
-                                            Flexible {
-                                                flex: 1,
-                                                fit: FlexFit::Tight,
-                                                child: ColoredRing!(
+                                                ),
+                                            ),
+                                            Flexible!(
+                                                flex = 2,
+                                                fit = FlexFit::Tight,
+                                                child = ColoredRing!(
                                                     color = Color::BLUE,
                                                     child = ARC_PHANTOM_RING.clone(),
-                                                )
-                                            }
+                                                ),
+                                            ),
                                         ]
                                     )
                                 )

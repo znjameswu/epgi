@@ -137,4 +137,12 @@ impl AdapterRender for RenderBoxRingAdapter {
             &Affine2d::from_translation(&(offset + origin_offset)),
         )
     }
+
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcChildRenderObject<Self::ChildProtocol>,
+        intrinsics: &mut <Self::ParentProtocol as epgi_core::foundation::Protocol>::Intrinsics,
+    ) {
+        unimplemented!()
+    }
 }
