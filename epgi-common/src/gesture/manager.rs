@@ -4,10 +4,10 @@ use arena::*;
 
 use std::{any::TypeId, time::Instant};
 
-use epgi_2d::{Affine2d, BoxProtocol};
+use epgi_2d::{Affine2d, ArcBoxRenderObject};
 use epgi_core::{
     foundation::{Arc, AssertExt, SyncMpscReceiver, SyncMpscSender, TransformHitPosition},
-    tree::{ArcChildRenderObject, HitTestContext},
+    tree::HitTestContext,
 };
 use hashbrown::{hash_map::Entry, HashMap};
 
@@ -39,7 +39,7 @@ impl PointerGestureManager {
         }
     }
 
-    pub fn flush_events(&mut self, root: &ArcChildRenderObject<BoxProtocol>) {
+    pub fn flush_events(&mut self, root: &ArcBoxRenderObject) {
         while let Ok(event) = self.rx.try_recv() {
             self.handle_pointer_event(event, root.clone())
         }
@@ -53,11 +53,7 @@ impl PointerGestureManager {
         self.process_associated_updates(associated_updates);
     }
 
-    fn handle_pointer_event(
-        &mut self,
-        event: PointerEvent,
-        root: ArcChildRenderObject<BoxProtocol>,
-    ) {
+    fn handle_pointer_event(&mut self, event: PointerEvent, root: ArcBoxRenderObject) {
         use PointerEventVariantData::*;
         use PointerInteractionVariantData::*;
 

@@ -10,19 +10,19 @@ use epgi_core::{
         ImplByTemplate, ProxyRender, ProxyRenderTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use super::{RingOffset, RingProtocol, RingSize};
+use super::{ArcRingRenderObject, ArcRingWidget, RingOffset, RingProtocol, RingSize};
 
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<ColoredRing>))]
 #[derive(Debug)]
 pub struct ColoredRing {
     pub color: Color,
-    pub child: ArcChildWidget<RingProtocol>,
+    pub child: ArcRingWidget,
 }
 
 impl Widget for ColoredRing {
@@ -52,7 +52,7 @@ impl SingleChildElement for ColoredRingElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<RingProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcRingWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
@@ -90,7 +90,7 @@ impl ProxyRender for RenderColoredRing {
         &self,
         size: &RingSize,
         offset: &RingOffset,
-        child: &ArcChildRenderObject<RingProtocol>,
+        child: &ArcRingRenderObject,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         paint_ctx.draw_ring_sector(

@@ -27,7 +27,7 @@ impl Widget for Scaffold {
     type ChildProtocol = BoxProtocol;
     type Element = ConsumerElement<BoxProtocol>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }

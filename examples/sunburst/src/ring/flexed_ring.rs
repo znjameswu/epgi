@@ -42,8 +42,8 @@ impl From<RingAxis> for Axis {
 }
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<RingFlex>))]
-pub struct RingFlex {
+#[builder(build_method(into=Asc<FlexedRing>))]
+pub struct FlexedRing {
     /// The direction to use as the main axis.
     pub direction: RingAxis,
     /// How the children should be placed along the main axis.
@@ -71,10 +71,10 @@ pub struct RingFlex {
     pub children: Vec<ArcRingWidget>,
 }
 
-impl Widget for RingFlex {
+impl Widget for FlexedRing {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type Element = RingFlexElement;
+    type Element = FlexedRingElement;
 
     fn into_arc_widget(self: Arc<Self>) -> Asc<Self> {
         self
@@ -82,16 +82,16 @@ impl Widget for RingFlex {
 }
 
 #[derive(Clone, Debug)]
-pub struct RingFlexElement {}
+pub struct FlexedRingElement {}
 
-impl ImplByTemplate for RingFlexElement {
+impl ImplByTemplate for FlexedRingElement {
     type Template = MultiChildElementTemplate<false>;
 }
 
-impl MultiChildElement for RingFlexElement {
+impl MultiChildElement for FlexedRingElement {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type ArcWidget = Asc<RingFlex>;
+    type ArcWidget = Asc<FlexedRing>;
     type Render = RenderFlex<RingProtocol>;
 
     fn get_child_widgets(
@@ -137,15 +137,15 @@ impl MultiChildElement for RingFlexElement {
     }
 }
 
-pub struct RenderRingFlex {
-    pub direction: RingAxis,
-    pub main_axis_alignment: MainAxisAlignment,
-    pub main_axis_size: MainAxisSize,
-    pub cross_axis_alignment: CrossAxisAlignment,
-    pub flexible_configs: Vec<FlexibleConfig>,
-    pub flip_main_axis: bool,
-    pub flip_cross_axis: bool,
-}
+// pub struct RenderRingFlex {
+//     pub direction: RingAxis,
+//     pub main_axis_alignment: MainAxisAlignment,
+//     pub main_axis_size: MainAxisSize,
+//     pub cross_axis_alignment: CrossAxisAlignment,
+//     pub flexible_configs: Vec<FlexibleConfig>,
+//     pub flip_main_axis: bool,
+//     pub flip_cross_axis: bool,
+// }
 
 impl FlexRender<RingProtocol> for RenderFlex<RingProtocol> {
     type CrossSize = f32;

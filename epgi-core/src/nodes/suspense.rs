@@ -35,7 +35,7 @@ impl<P: Protocol> Widget for Suspense<P> {
         self.key.as_deref()
     }
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }

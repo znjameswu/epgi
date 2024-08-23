@@ -6,14 +6,14 @@ use epgi_core::{
         ImplByTemplate, ProxyRender, ProxyRenderTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 use crate::ARC_PHANTOM_RING;
 
-use super::{RingConstraints, RingProtocol, RingSize};
+use super::{ArcRingRenderObject, ArcRingWidget, RingConstraints, RingProtocol, RingSize};
 
 #[derive(Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<ConstrainedRing>))]
@@ -21,7 +21,7 @@ use super::{RingConstraints, RingProtocol, RingSize};
 pub struct ConstrainedRing {
     pub constraints: RingConstraints,
     #[builder(default=ARC_PHANTOM_RING.clone())]
-    pub child: ArcChildWidget<RingProtocol>,
+    pub child: ArcRingWidget,
 }
 
 impl Widget for ConstrainedRing {
@@ -29,7 +29,7 @@ impl Widget for ConstrainedRing {
     type ChildProtocol = RingProtocol;
     type Element = ConstrainedRingElement;
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Arc<Self>) -> Asc<Self> {
         self
     }
 }
@@ -51,7 +51,7 @@ impl SingleChildElement for ConstrainedRingElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<RingProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcRingWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
@@ -91,7 +91,7 @@ impl ProxyRender for RenderConstrainedRing {
     fn perform_layout(
         &mut self,
         constraints: &RingConstraints,
-        child: &ArcChildRenderObject<RingProtocol>,
+        child: &ArcRingRenderObject,
     ) -> RingSize {
         let child_constraints = self.constraints.enforce(constraints);
         if let Some(size) = child_constraints.is_tight() {

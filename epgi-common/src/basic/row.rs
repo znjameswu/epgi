@@ -1,10 +1,10 @@
 use std::marker::PhantomData;
 
-use epgi_2d::BoxProtocol;
+use epgi_2d::{ArcBoxWidget, BoxProtocol};
 use epgi_core::{
     foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     template::{ImplByTemplate, MultiChildElement, MultiChildElementTemplate},
-    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -36,7 +36,7 @@ pub struct Row {
     pub flip_horizontal: bool,
     #[builder(default = false)]
     pub flip_vertical: bool,
-    pub children: Vec<ArcChildWidget<BoxProtocol>>,
+    pub children: Vec<ArcBoxWidget>,
 }
 
 impl Widget for Row {
@@ -44,7 +44,7 @@ impl Widget for Row {
     type ChildProtocol = BoxProtocol;
     type Element = RowElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }
@@ -67,7 +67,7 @@ impl MultiChildElement for RowElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<Vec<ArcChildWidget<BoxProtocol>>, BuildSuspendedError> {
+    ) -> Result<Vec<ArcBoxWidget>, BuildSuspendedError> {
         Ok(widget.children.clone())
     }
 

@@ -16,16 +16,16 @@ use epgi_core::{
         TemplateRenderBase, TemplateRenderElement,
     },
     tree::{
-        ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext, ChildLayerProducingIterator,
-        ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        FullRender, HitTestContext, HitTestResult, ImplElement, LayerCompositionConfig,
-        PaintResults, RecordedChildLayer, Render, RenderAction, RenderObject,
+        ArcWidget, BuildContext, ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback,
+        ElementBase, ElementImpl, ElementReconcileItem, FullRender, HitTestContext, HitTestResult,
+        ImplElement, LayerCompositionConfig, PaintResults, RecordedChildLayer, Render,
+        RenderAction, RenderObject,
     },
 };
 
 use crate::{
-    Affine2dCanvas, Affine2dEncoding, ArcBoxRenderObject, BoxConstraints, BoxIntrinsics, BoxOffset,
-    BoxProtocol, BoxSize, Point2d,
+    Affine2dCanvas, Affine2dEncoding, ArcBoxElementNode, ArcBoxRenderObject, ArcBoxWidget,
+    BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol, BoxSize, Point2d,
 };
 
 pub struct BoxSingleChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
@@ -43,7 +43,7 @@ pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
         widget: &Self::ArcWidget,
         ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError>;
+    ) -> Result<ArcBoxWidget, BuildSuspendedError>;
 
     /// A major limitation to the single child element template is that,
     /// we cannot provide consumed values and build context during the creation the Element itself.
@@ -92,14 +92,14 @@ where
         widget: &Self::ArcWidget,
         ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-        [child]: [ArcChildElementNode<BoxProtocol>; 1],
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<BoxProtocol>>,
+        [child]: [ArcBoxElementNode; 1],
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcBoxElementNode>,
     ) -> Result<
         (
             [ElementReconcileItem<BoxProtocol>; 1],
             Option<ChildRenderObjectsUpdateCallback<Self::ChildContainer, BoxProtocol>>,
         ),
-        ([ArcChildElementNode<BoxProtocol>; 1], BuildSuspendedError),
+        ([ArcBoxElementNode; 1], BuildSuspendedError),
     > {
         let child_widget = match E::get_child_widget(Some(element), widget, ctx, provider_values) {
             Err(error) => return Err(([child], error)),
@@ -119,7 +119,7 @@ where
         widget: &Self::ArcWidget,
         ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<(E, [ArcChildWidget<BoxProtocol>; 1]), BuildSuspendedError> {
+    ) -> Result<(E, [ArcBoxWidget; 1]), BuildSuspendedError> {
         let element = E::create_element(widget);
         let child_widget = E::get_child_widget(None, widget, ctx, provider_values)?;
         Ok((element, [child_widget]))

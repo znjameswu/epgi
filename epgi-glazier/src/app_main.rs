@@ -32,12 +32,12 @@ use crate::EpgiGlazierSchedulerExtension;
 
 pub struct AppLauncher {
     title: String,
-    app: ArcChildWidget<BoxProtocol>,
+    app: ArcBoxWidget,
 }
 const QUIT_MENU_ID: u32 = 0x100;
 
 impl AppLauncher {
-    pub fn new(app: ArcChildWidget<BoxProtocol>) -> Self {
+    pub fn new(app: ArcBoxWidget) -> Self {
         Self {
             title: "epgi app".into(),
             app,
@@ -341,7 +341,7 @@ impl FrameInfo {
 }
 
 impl MainState {
-    fn start_scheduler_with(&mut self, app: ArcChildWidget<BoxProtocol>) {
+    fn start_scheduler_with(&mut self, app: ArcBoxWidget) {
         // First we construct an empty root with no children. Later we will inject our application widget inside
         let (element_node, render_object, widget_binding) = initialize_root();
 
@@ -392,7 +392,7 @@ fn initialize_root() -> (
     // This is to allow the injection of a child widget later on.
     let root_widget = Arc::new(RootView {
         build: Box::new(move |mut ctx| {
-            let (child, _) = ctx.use_state::<Option<ArcChildWidget<BoxProtocol>>>(None);
+            let (child, _) = ctx.use_state::<Option<ArcBoxWidget>>(None);
             child
         }),
     });
@@ -405,7 +405,7 @@ fn initialize_root() -> (
         None,
         Hooks {
             array_hooks: [
-                Box::new(StateHook::<Option<ArcChildWidget<BoxProtocol>>> { val: None }) as _,
+                Box::new(StateHook::<Option<ArcBoxWidget>> { val: None }) as _,
             ]
             .into(),
         },
@@ -418,7 +418,7 @@ fn initialize_root() -> (
     );
 
     // Construct the widget injection binding by hand for later use.
-    let widget_binding = SetState::<Option<ArcChildWidget<BoxProtocol>>>::new(
+    let widget_binding = SetState::<Option<ArcBoxWidget>>::new(
         Arc::downgrade(&element_node.context),
         0,
     );
@@ -442,9 +442,9 @@ fn initialize_scheduler_handle() {
 }
 
 fn bind_frame_info(
-    child: ArcChildWidget<BoxProtocol>,
+    child: ArcBoxWidget,
 ) -> (
-    ArcChildWidget<BoxProtocol>,
+    ArcBoxWidget,
     Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
 ) {
     // Bind the frame info, which provides time.
@@ -468,9 +468,9 @@ fn bind_frame_info(
 }
 
 fn bind_constraints(
-    child: ArcChildWidget<BoxProtocol>,
+    child: ArcBoxWidget,
 ) -> (
-    ArcChildWidget<BoxProtocol>,
+    ArcBoxWidget,
     Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
 ) {
     // Bind the window size.

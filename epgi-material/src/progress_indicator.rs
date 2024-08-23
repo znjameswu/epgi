@@ -49,7 +49,7 @@ impl Widget for CircularProgressIndicator {
 
     type Element = ConsumerElement<BoxProtocol>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> Asc<dyn ConsumerWidget<BoxProtocol>> {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<dyn ConsumerWidget<BoxProtocol>> {
         self
     }
 }

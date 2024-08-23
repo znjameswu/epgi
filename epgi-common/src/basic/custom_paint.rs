@@ -63,7 +63,7 @@ impl<B: CustomPainter, F: CustomPainter> Widget for CustomPaint<B, F> {
 
     type Element = CustomPaintElement<B, F>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> Asc<CustomPaint<B, F>> {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<CustomPaint<B, F>> {
         self
     }
 }

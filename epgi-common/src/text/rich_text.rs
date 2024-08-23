@@ -7,7 +7,7 @@ use epgi_2d::{
 use epgi_core::{
     foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
     template::{ImplByTemplate, LeafElement, LeafElementTemplate, LeafRender, LeafRenderTemplate},
-    tree::{BuildContext, ElementBase, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -33,7 +33,7 @@ impl Widget for RichText {
 
     type Element = RichTextElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }

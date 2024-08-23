@@ -12,8 +12,8 @@ use typed_builder::TypedBuilder;
 use super::{ArcRingWidget, CrossAxisAlignment, MainAxisAlignment, MainAxisSize, RingProtocol};
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<RingSlice>))]
-pub struct RingSlice {
+#[builder(build_method(into=Asc<SectoredRing>))]
+pub struct SectoredRing {
     /// How the children should be placed along the main axis.
     #[builder(default = MainAxisAlignment::Start)]
     pub main_axis_alignment: MainAxisAlignment,
@@ -39,10 +39,10 @@ pub struct RingSlice {
     pub children: Vec<ArcRingWidget>,
 }
 
-impl Widget for RingSlice {
+impl Widget for SectoredRing {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type Element = RingSliceElement;
+    type Element = SectoredRingElement;
 
     fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
@@ -50,16 +50,16 @@ impl Widget for RingSlice {
 }
 
 #[derive(Clone, Debug)]
-pub struct RingSliceElement {}
+pub struct SectoredRingElement {}
 
-impl ImplByTemplate for RingSliceElement {
+impl ImplByTemplate for SectoredRingElement {
     type Template = MultiChildElementTemplate<false>;
 }
 
-impl MultiChildElement for RingSliceElement {
+impl MultiChildElement for SectoredRingElement {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type ArcWidget = Asc<RingSlice>;
+    type ArcWidget = Asc<SectoredRing>;
     type Render = RenderFlex<RingProtocol>;
 
     fn get_child_widgets(
@@ -77,12 +77,12 @@ impl MultiChildElement for RingSliceElement {
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {
-            direction: Axis::Vertical,
+            direction: Axis::Horizontal,
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flip_main_axis: widget.flip_radial,
-            flip_cross_axis: widget.flip_angular,
+            flip_main_axis: widget.flip_angular,
+            flip_cross_axis: widget.flip_radial,
             phantom: PhantomData,
         }
     }
@@ -96,8 +96,8 @@ impl MultiChildElement for RingSliceElement {
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
             ),
-            set_if_changed(&mut render.flip_main_axis, widget.flip_radial),
-            set_if_changed(&mut render.flip_cross_axis, widget.flip_angular),
+            set_if_changed(&mut render.flip_main_axis, widget.flip_angular),
+            set_if_changed(&mut render.flip_cross_axis, widget.flip_radial),
         ]
         .iter()
         .any(|&changed| changed)

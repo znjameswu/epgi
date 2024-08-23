@@ -12,8 +12,8 @@ use epgi_winit::{AppLauncher, Window};
 pub use ring::*;
 
 fn main() {
-    let sunburst = BoxRingAdapter!(
-        child = RingAlign!(
+    let sunburst = BoxAdapterRing!(
+        child = AlignedRing!(
             alignment = RingAlignment::CENTER_END,
             child = Builder!(
                 builder = move |ctx| {
@@ -38,7 +38,7 @@ fn main() {
                                 padding = RingEdgeInsets::new().inner(inner),
                                 child = ConstrainedRing!(
                                     constraints = RingConstraints::new_tight(30.0, span),
-                                    child = RingTrack!(
+                                    child = SectoredRing!(
                                         cross_axis_alignment = CrossAxisAlignment::Stretch,
                                         children = vec![
                                             Flexible!(

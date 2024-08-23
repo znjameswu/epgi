@@ -14,32 +14,32 @@ use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<BoxMultiLineAdapter>))]
-pub struct BoxMultiLineAdapter {
+#[builder(build_method(into=Asc<BoxAdapterMultiLine>))]
+pub struct BoxAdapterMultiLine {
     child: ArcChildWidget<MultiLineProtocol>,
 }
 
-impl Widget for BoxMultiLineAdapter {
+impl Widget for BoxAdapterMultiLine {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = MultiLineProtocol;
-    type Element = BoxMultiLineAdapterElement;
+    type Element = BoxAdapterMultiLineElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct BoxMultiLineAdapterElement {}
+pub struct BoxAdapterMultiLineElement {}
 
-impl ImplByTemplate for BoxMultiLineAdapterElement {
+impl ImplByTemplate for BoxAdapterMultiLineElement {
     type Template = SingleChildElementTemplate<true, false>;
 }
 
-impl SingleChildElement for BoxMultiLineAdapterElement {
+impl SingleChildElement for BoxAdapterMultiLineElement {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = MultiLineProtocol;
-    type ArcWidget = Asc<BoxMultiLineAdapter>;
+    type ArcWidget = Asc<BoxAdapterMultiLine>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
@@ -55,11 +55,11 @@ impl SingleChildElement for BoxMultiLineAdapterElement {
     }
 }
 
-impl SingleChildRenderElement for BoxMultiLineAdapterElement {
-    type Render = RenderBoxMultiLineAdapter;
+impl SingleChildRenderElement for BoxAdapterMultiLineElement {
+    type Render = RenderBoxAdapterMultiLine;
 
     fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
-        RenderBoxMultiLineAdapter {}
+        RenderBoxAdapterMultiLine {}
     }
 
     fn update_render(
@@ -70,13 +70,13 @@ impl SingleChildRenderElement for BoxMultiLineAdapterElement {
     }
 }
 
-pub struct RenderBoxMultiLineAdapter {}
+pub struct RenderBoxAdapterMultiLine {}
 
-impl ImplByTemplate for RenderBoxMultiLineAdapter {
+impl ImplByTemplate for RenderBoxAdapterMultiLine {
     type Template = AdapterRenderTemplate;
 }
 
-impl AdapterRender for RenderBoxMultiLineAdapter {
+impl AdapterRender for RenderBoxAdapterMultiLine {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = MultiLineProtocol;
     type LayoutMemo = MultiLineOffset;

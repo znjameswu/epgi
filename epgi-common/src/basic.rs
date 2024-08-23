@@ -7,8 +7,8 @@ pub use animated_container::*;
 mod center;
 pub use center::*;
 
-mod color_box;
-pub use color_box::*;
+mod colored_box;
+pub use colored_box::*;
 
 mod column;
 pub use column::*;

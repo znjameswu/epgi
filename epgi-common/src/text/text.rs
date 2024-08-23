@@ -1,6 +1,8 @@
 use std::{borrow::Cow, ops::Deref, sync::Arc};
 
-use epgi_2d::{BoxProtocol, LocalTextStyle, MultiLineProtocol, TextAlign, TextSpan, TextStyle};
+use epgi_2d::{
+    ArcBoxWidget, BoxProtocol, LocalTextStyle, MultiLineProtocol, TextAlign, TextSpan, TextStyle,
+};
 use epgi_core::{
     foundation::{Asc, AscProvideExt, InlinableDwsizeVec, Provide, SmallVecExt, TypeKey},
     nodes::{ComponentElement, ComponentWidget, ConsumerElement, ConsumerWidget},
@@ -10,7 +12,7 @@ use epgi_core::{
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use crate::{BoxMultiLineAdapter, RichText};
+use crate::{BoxAdapterMultiLine, RichText};
 
 #[derive(Clone, Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Text>))]
@@ -38,8 +40,8 @@ impl Widget for Text {
 }
 
 impl ComponentWidget<BoxProtocol> for Text {
-    fn build(&self, _ctx: &mut BuildContext<'_>) -> ArcChildWidget<BoxProtocol> {
-        BoxMultiLineAdapter!(
+    fn build(&self, _ctx: &mut BuildContext<'_>) -> ArcBoxWidget {
+        BoxAdapterMultiLine!(
             child = Asc::new(MultiLineText {
                 text: self.text.clone(),
                 text_spans: self.text_spans.clone(),

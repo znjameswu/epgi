@@ -12,8 +12,8 @@ use typed_builder::TypedBuilder;
 use super::{ArcRingWidget, CrossAxisAlignment, MainAxisAlignment, MainAxisSize, RingProtocol};
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<RingTrack>))]
-pub struct RingTrack {
+#[builder(build_method(into=Asc<CascadedRing>))]
+pub struct CascadedRing {
     /// How the children should be placed along the main axis.
     #[builder(default = MainAxisAlignment::Start)]
     pub main_axis_alignment: MainAxisAlignment,
@@ -39,10 +39,10 @@ pub struct RingTrack {
     pub children: Vec<ArcRingWidget>,
 }
 
-impl Widget for RingTrack {
+impl Widget for CascadedRing {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type Element = RingTrackElement;
+    type Element = CascadedRingElement;
 
     fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
@@ -50,16 +50,16 @@ impl Widget for RingTrack {
 }
 
 #[derive(Clone, Debug)]
-pub struct RingTrackElement {}
+pub struct CascadedRingElement {}
 
-impl ImplByTemplate for RingTrackElement {
+impl ImplByTemplate for CascadedRingElement {
     type Template = MultiChildElementTemplate<false>;
 }
 
-impl MultiChildElement for RingTrackElement {
+impl MultiChildElement for CascadedRingElement {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type ArcWidget = Asc<RingTrack>;
+    type ArcWidget = Asc<CascadedRing>;
     type Render = RenderFlex<RingProtocol>;
 
     fn get_child_widgets(
@@ -77,12 +77,12 @@ impl MultiChildElement for RingTrackElement {
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {
-            direction: Axis::Horizontal,
+            direction: Axis::Vertical,
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flip_main_axis: widget.flip_angular,
-            flip_cross_axis: widget.flip_radial,
+            flip_main_axis: widget.flip_radial,
+            flip_cross_axis: widget.flip_angular,
             phantom: PhantomData,
         }
     }
@@ -96,8 +96,8 @@ impl MultiChildElement for RingTrackElement {
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
             ),
-            set_if_changed(&mut render.flip_main_axis, widget.flip_angular),
-            set_if_changed(&mut render.flip_cross_axis, widget.flip_radial),
+            set_if_changed(&mut render.flip_main_axis, widget.flip_radial),
+            set_if_changed(&mut render.flip_cross_axis, widget.flip_angular),
         ]
         .iter()
         .any(|&changed| changed)

@@ -2,8 +2,8 @@ use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Provide},
     template::ImplByTemplate,
     tree::{
-        ArcChildWidget, BuildContext, ChildLayerProducingIterator, HitTestContext,
-        LayerCompositionConfig, RecordedChildLayer, RenderAction, Widget,
+        BuildContext, ChildLayerProducingIterator, HitTestContext, LayerCompositionConfig,
+        RecordedChildLayer, RenderAction, Widget,
     },
 };
 
@@ -34,7 +34,7 @@ impl Widget for RootView {
 
     type Element = RootElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> Asc<RootView> {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<RootView> {
         self
     }
 }
@@ -54,7 +54,7 @@ impl BoxSingleChildElement for RootElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

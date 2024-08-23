@@ -7,7 +7,7 @@ use epgi_core::{
     foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     max,
     template::ImplByTemplate,
-    tree::{ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -77,7 +77,7 @@ impl BoxSingleChildElement for AlignElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

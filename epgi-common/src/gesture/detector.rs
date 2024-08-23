@@ -1,7 +1,7 @@
 use std::{any::TypeId, sync::Arc};
 
 use epgi_2d::{
-    BoxOffset, BoxProtocol, BoxSingleChildElement, BoxSingleChildElementTemplate,
+    ArcBoxWidget, BoxOffset, BoxProtocol, BoxSingleChildElement, BoxSingleChildElementTemplate,
     BoxSingleChildRenderElement, BoxSize, Point2d,
 };
 use epgi_core::{
@@ -10,10 +10,7 @@ use epgi_core::{
     nodes::{ComponentElement, ComponentWidget},
     scheduler::JobBuilder,
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
-    tree::{
-        ArcChildWidget, BuildContext, ElementBase, HitTestResult, RenderAction, RenderObject,
-        Widget,
-    },
+    tree::{BuildContext, ElementBase, HitTestResult, RenderAction, RenderObject, Widget},
 };
 use epgi_macro::Declarative;
 use hashbrown::HashMap;
@@ -29,7 +26,7 @@ use crate::{
 pub struct GestureDetector {
     #[builder(default, setter(transform=|op: impl Fn(&mut JobBuilder) + Send + Sync + 'static| Some(Asc::new(op) as _)))]
     pub on_tap: Option<ArcJobCallback>,
-    pub child: ArcChildWidget<BoxProtocol>,
+    pub child: ArcBoxWidget,
 }
 
 impl std::fmt::Debug for GestureDetector {
@@ -54,7 +51,7 @@ impl Widget for GestureDetector {
 }
 
 impl ComponentWidget<BoxProtocol> for GestureDetector {
-    fn build(&self, _ctx: &mut BuildContext<'_>) -> ArcChildWidget<BoxProtocol> {
+    fn build(&self, _ctx: &mut BuildContext<'_>) -> ArcBoxWidget {
         let mut recognizer_factories = Vec::new();
         if let Some(on_tap) = &self.on_tap {
             recognizer_factories.push(GestureRecognizerFactory::new::<TapGestureRecognizer>(
@@ -78,7 +75,7 @@ impl ComponentWidget<BoxProtocol> for GestureDetector {
 #[derive(Debug)]
 pub struct RawGestureDetector {
     recognizer_factories: Vec<GestureRecognizerFactory>,
-    child: ArcChildWidget<BoxProtocol>,
+    child: ArcBoxWidget,
 }
 
 pub struct GestureRecognizerFactory {
@@ -141,7 +138,7 @@ impl BoxSingleChildElement for RawGestureDetectorElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

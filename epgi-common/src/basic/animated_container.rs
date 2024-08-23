@@ -50,7 +50,7 @@ impl Widget for AnimatedContainer {
     type ChildProtocol = BoxProtocol;
     type Element = ComponentElement<BoxProtocol>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }

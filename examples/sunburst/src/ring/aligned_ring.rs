@@ -6,7 +6,7 @@ use epgi_core::{
         ImplByTemplate, ShiftedRender, ShiftedRenderTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -17,8 +17,8 @@ use super::{
 };
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<RingAlign>))]
-pub struct RingAlign {
+#[builder(build_method(into=Asc<AlignedRing>))]
+pub struct AlignedRing {
     pub alignment: RingAlignment,
     #[builder(default)]
     pub radial_factor: Option<f32>,
@@ -81,7 +81,7 @@ impl RingAlignment {
     }
 }
 
-impl Widget for RingAlign {
+impl Widget for AlignedRing {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
     type Element = RingAlignElement;
@@ -101,14 +101,14 @@ impl ImplByTemplate for RingAlignElement {
 impl SingleChildElement for RingAlignElement {
     type ParentProtocol = RingProtocol;
     type ChildProtocol = RingProtocol;
-    type ArcWidget = Asc<RingAlign>;
+    type ArcWidget = Asc<AlignedRing>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<RingProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcRingWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

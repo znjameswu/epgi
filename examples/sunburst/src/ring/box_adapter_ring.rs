@@ -5,49 +5,47 @@ use epgi_core::{
         AdapterRender, AdapterRenderTemplate, ImplByTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{
-        ArcChildRenderObject, ArcChildWidget, BuildContext, HitTestContext, RenderAction, Widget,
-    },
+    tree::{ArcChildRenderObject, BuildContext, HitTestContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use super::{RingConstraints, RingOffset, RingProtocol};
+use super::{ArcRingRenderObject, ArcRingWidget, RingConstraints, RingOffset, RingProtocol};
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<BoxRingAdapter>))]
-pub struct BoxRingAdapter {
-    pub child: ArcChildWidget<RingProtocol>,
+#[builder(build_method(into=Asc<BoxAdapterRing>))]
+pub struct BoxAdapterRing {
+    pub child: ArcRingWidget,
 }
 
-impl Widget for BoxRingAdapter {
+impl Widget for BoxAdapterRing {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = RingProtocol;
-    type Element = BoxRingAdapterElement;
+    type Element = BoxAdapterRingElement;
 
-    fn into_arc_widget(self: Arc<Self>) -> Asc<BoxRingAdapter> {
+    fn into_arc_widget(self: Arc<Self>) -> Asc<BoxAdapterRing> {
         self
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct BoxRingAdapterElement {}
+pub struct BoxAdapterRingElement {}
 
-impl ImplByTemplate for BoxRingAdapterElement {
+impl ImplByTemplate for BoxAdapterRingElement {
     type Template = SingleChildElementTemplate<true, false>;
 }
 
-impl SingleChildElement for BoxRingAdapterElement {
+impl SingleChildElement for BoxAdapterRingElement {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = RingProtocol;
-    type ArcWidget = Asc<BoxRingAdapter>;
+    type ArcWidget = Asc<BoxAdapterRing>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<RingProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcRingWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
@@ -56,11 +54,11 @@ impl SingleChildElement for BoxRingAdapterElement {
     }
 }
 
-impl SingleChildRenderElement for BoxRingAdapterElement {
-    type Render = RenderBoxRingAdapter;
+impl SingleChildRenderElement for BoxAdapterRingElement {
+    type Render = RenderBoxAdapterRing;
 
     fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
-        RenderBoxRingAdapter {}
+        RenderBoxAdapterRing {}
     }
 
     fn update_render(
@@ -73,13 +71,13 @@ impl SingleChildRenderElement for BoxRingAdapterElement {
     const NOOP_UPDATE_RENDER_OBJECT: bool = true;
 }
 
-pub struct RenderBoxRingAdapter {}
+pub struct RenderBoxAdapterRing {}
 
-impl ImplByTemplate for RenderBoxRingAdapter {
+impl ImplByTemplate for RenderBoxAdapterRing {
     type Template = AdapterRenderTemplate;
 }
 
-impl AdapterRender for RenderBoxRingAdapter {
+impl AdapterRender for RenderBoxAdapterRing {
     type ParentProtocol = BoxProtocol;
     type ChildProtocol = RingProtocol;
     type LayoutMemo = BoxOffset;
@@ -87,7 +85,7 @@ impl AdapterRender for RenderBoxRingAdapter {
     fn perform_layout(
         &mut self,
         constraints: &BoxConstraints,
-        child: &ArcChildRenderObject<RingProtocol>,
+        child: &ArcRingRenderObject,
     ) -> (BoxSize, BoxOffset) {
         let max_size = constraints.biggest();
         let max_diameter = max_size.width.min(max_size.height);
@@ -112,7 +110,7 @@ impl AdapterRender for RenderBoxRingAdapter {
         _size: &BoxSize,
         &offset: &BoxOffset,
         &origin_offset: &BoxOffset,
-        child: &ArcChildRenderObject<RingProtocol>,
+        child: &ArcRingRenderObject,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         paint_ctx.with_transform(
@@ -130,7 +128,7 @@ impl AdapterRender for RenderBoxRingAdapter {
         _size: &BoxSize,
         &offset: &BoxOffset,
         &origin_offset: &Self::LayoutMemo,
-        child: &ArcChildRenderObject<RingProtocol>,
+        child: &ArcRingRenderObject,
     ) -> bool {
         ctx.hit_test_with_paint_transform(
             child.clone(),

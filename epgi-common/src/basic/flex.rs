@@ -1,8 +1,8 @@
 use std::{f32::INFINITY, iter::zip, marker::PhantomData};
 
 use epgi_2d::{
-    Affine2dPaintContextExt, BlendMode, BoxConstraints, BoxOffset, BoxProtocol, BoxSize,
-    PRECISION_ERROR_TOLERANCE,
+    Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, BlendMode, BoxConstraints,
+    BoxOffset, BoxProtocol, BoxSize, PRECISION_ERROR_TOLERANCE,
 };
 use epgi_core::{
     foundation::{
@@ -13,10 +13,7 @@ use epgi_core::{
         ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildHitTest,
         MultiChildLayout, MultiChildPaint, MultiChildRender, MultiChildRenderTemplate,
     },
-    tree::{
-        ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, FullRender, RenderAction,
-        Widget,
-    },
+    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, FullRender, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -232,7 +229,7 @@ where
     type ChildProtocol = P;
     type Element = FlexElement<P>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }
@@ -649,12 +646,12 @@ impl FlexRender<BoxProtocol> for RenderFlex<BoxProtocol> {
 
     fn perform_paint(
         &self,
-        &size: &<BoxProtocol as Protocol>::Size,
-        &offset: &<BoxProtocol as Protocol>::Offset,
-        child_offsets: &Vec<<BoxProtocol as Protocol>::Offset>,
+        &size: &BoxSize,
+        &offset: &BoxOffset,
+        child_offsets: &Vec<BoxOffset>,
         overflow: f32,
-        children: &Vec<ArcChildRenderObject<BoxProtocol>>,
-        paint_ctx: &mut impl PaintContext<Canvas = <BoxProtocol as Protocol>::Canvas>,
+        children: &Vec<ArcBoxRenderObject>,
+        paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         if overflow < PRECISION_ERROR_TOLERANCE {
             for (&child_offset, child) in zip(child_offsets, children) {

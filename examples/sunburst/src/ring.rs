@@ -1,11 +1,14 @@
-mod adapter;
-pub use adapter::*;
+mod aligned_ring;
+pub use aligned_ring::*;
 
-mod align;
-pub use align::*;
+mod box_adapter_ring;
+pub use box_adapter_ring::*;
 
-mod center;
-pub use center::*;
+mod cascaded_ring;
+pub use cascaded_ring::*;
+
+mod centered_ring;
+pub use centered_ring::*;
 
 mod colored_ring;
 pub use colored_ring::*;
@@ -13,20 +16,17 @@ pub use colored_ring::*;
 mod constrained_ring;
 pub use constrained_ring::*;
 
-mod flex;
-pub use flex::*;
+mod flexed_ring;
+pub use flexed_ring::*;
 
-mod padding;
-pub use padding::*;
+mod padded_ring;
+pub use padded_ring::*;
 
 mod phantom_ring;
 pub use phantom_ring::*;
 
-mod slice;
-pub use slice::*;
-
-mod track;
-pub use track::*;
+mod sectored_ring;
+pub use sectored_ring::*;
 
 use std::f32::consts::{PI, TAU};
 

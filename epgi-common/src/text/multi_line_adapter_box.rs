@@ -1,5 +1,5 @@
 use epgi_2d::{
-    Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxOffset, BoxProtocol,
+    Affine2dCanvas, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxOffset, BoxProtocol,
     MultiLineConstraints, MultiLineIntrinsics, MultiLineOffset, MultiLineProtocol, MultiLineSize,
     SingleLineSize,
 };
@@ -9,45 +9,45 @@ use epgi_core::{
         AdapterRender, AdapterRenderTemplate, ImplByTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 #[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<MultiLineBoxAdapter>))]
-pub struct MultiLineBoxAdapter {
-    child: ArcChildWidget<BoxProtocol>,
+#[builder(build_method(into=Asc<MultiLineAdapterBox>))]
+pub struct MultiLineAdapterBox {
+    child: ArcBoxWidget,
 }
 
-impl Widget for MultiLineBoxAdapter {
+impl Widget for MultiLineAdapterBox {
     type ParentProtocol = MultiLineProtocol;
     type ChildProtocol = BoxProtocol;
-    type Element = MultiLineBoxAdapterElement;
+    type Element = MultiLineAdapterBoxElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct MultiLineBoxAdapterElement {}
+pub struct MultiLineAdapterBoxElement {}
 
-impl ImplByTemplate for MultiLineBoxAdapterElement {
+impl ImplByTemplate for MultiLineAdapterBoxElement {
     type Template = SingleChildElementTemplate<true, false>;
 }
 
-impl SingleChildElement for MultiLineBoxAdapterElement {
+impl SingleChildElement for MultiLineAdapterBoxElement {
     type ParentProtocol = MultiLineProtocol;
     type ChildProtocol = BoxProtocol;
-    type ArcWidget = Asc<MultiLineBoxAdapter>;
+    type ArcWidget = Asc<MultiLineAdapterBox>;
 
     fn get_child_widget(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
@@ -56,11 +56,11 @@ impl SingleChildElement for MultiLineBoxAdapterElement {
     }
 }
 
-impl SingleChildRenderElement for MultiLineBoxAdapterElement {
-    type Render = RenderMultiLineBoxAdapter;
+impl SingleChildRenderElement for MultiLineAdapterBoxElement {
+    type Render = RenderMultiLineBAdapterBox;
 
     fn create_render(&self, _widget: &Self::ArcWidget) -> Self::Render {
-        RenderMultiLineBoxAdapter {}
+        RenderMultiLineBAdapterBox {}
     }
 
     fn update_render(
@@ -71,13 +71,13 @@ impl SingleChildRenderElement for MultiLineBoxAdapterElement {
     }
 }
 
-pub struct RenderMultiLineBoxAdapter {}
+pub struct RenderMultiLineBAdapterBox {}
 
-impl ImplByTemplate for RenderMultiLineBoxAdapter {
+impl ImplByTemplate for RenderMultiLineBAdapterBox {
     type Template = AdapterRenderTemplate;
 }
 
-impl AdapterRender for RenderMultiLineBoxAdapter {
+impl AdapterRender for RenderMultiLineBAdapterBox {
     type ParentProtocol = MultiLineProtocol;
     type ChildProtocol = BoxProtocol;
     type LayoutMemo = ();

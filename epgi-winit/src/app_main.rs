@@ -1,11 +1,11 @@
-use epgi_2d::{Affine2dEncoding, BoxConstraints, BoxOffset, BoxProtocol, BoxSize, RootView};
+use epgi_2d::{Affine2dEncoding, ArcBoxWidget, BoxConstraints, BoxOffset, BoxSize, RootView};
 use epgi_common::{ConstrainedBox, FrameInfo, PointerEvent};
 use epgi_core::{
     foundation::{unbounded_channel_sync, Arc, Asc, SyncMpscReceiver, SyncMutex},
     hooks::SetState,
     nodes::Builder,
     scheduler::{get_current_scheduler, setup_scheduler, FrameMetrics, Scheduler, SchedulerHandle},
-    tree::{ArcChildWidget, LayoutResults},
+    tree::LayoutResults,
     Provider,
 };
 use std::{num::NonZeroUsize, sync::atomic::Ordering, time::Instant};
@@ -64,7 +64,7 @@ struct MainState<'a> {
 
 #[derive(TypedBuilder)]
 pub struct AppLauncher {
-    app: ArcChildWidget<BoxProtocol>,
+    app: ArcBoxWidget,
     #[builder(default, setter(strip_option))]
     sync_threadpool_builder: Option<rayon::ThreadPoolBuilder>,
     #[builder(default, setter(strip_option))]
@@ -514,7 +514,7 @@ impl<'a> MainState<'a> {
 impl<'a> MainState<'a> {
     fn start_scheduler_with(
         &mut self,
-        app: ArcChildWidget<BoxProtocol>,
+        app: ArcBoxWidget,
         rx: SyncMpscReceiver<PointerEvent>,
         spawn_hook: impl SpawnHook,
     ) {
@@ -586,11 +586,8 @@ fn initialize_scheduler_handle(
 }
 
 fn bind_frame_info(
-    child: ArcChildWidget<BoxProtocol>,
-) -> (
-    ArcChildWidget<BoxProtocol>,
-    Arc<SyncMutex<Option<SetState<FrameInfo>>>>,
-) {
+    child: ArcBoxWidget,
+) -> (ArcBoxWidget, Arc<SyncMutex<Option<SetState<FrameInfo>>>>) {
     // Bind the frame info, which provides time.
     let frame_binding = Arc::new(SyncMutex::<Option<SetState<FrameInfo>>>::new(None));
     let result = frame_binding.clone();
@@ -608,9 +605,9 @@ fn bind_frame_info(
 }
 
 fn bind_constraints(
-    child: ArcChildWidget<BoxProtocol>,
+    child: ArcBoxWidget,
 ) -> (
-    ArcChildWidget<BoxProtocol>,
+    ArcBoxWidget,
     Arc<SyncMutex<Option<SetState<BoxConstraints>>>>,
 ) {
     // Bind the window size.

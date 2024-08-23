@@ -6,7 +6,7 @@ use epgi_core::{
         ImplByTemplate, ShiftedRender, ShiftedRenderTemplate, SingleChildElement,
         SingleChildElementTemplate, SingleChildRenderElement,
     },
-    tree::{ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -153,7 +153,7 @@ impl SingleChildElement for PaddedRingElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<RingProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcRingWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

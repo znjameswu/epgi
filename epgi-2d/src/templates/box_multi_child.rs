@@ -16,10 +16,10 @@ use epgi_core::{
         TemplateRenderBase, TemplateRenderElement,
     },
     tree::{
-        ArcChildElementNode, ArcWidget, BuildContext, ChildLayerProducingIterator,
-        ChildRenderObjectsUpdateCallback, ElementBase, ElementImpl, ElementReconcileItem,
-        FullRender, HitTestContext, HitTestResult, ImplElement, LayerCompositionConfig,
-        PaintResults, RecordedChildLayer, Render, RenderAction, RenderObject,
+        ArcWidget, BuildContext, ChildLayerProducingIterator, ChildRenderObjectsUpdateCallback,
+        ElementBase, ElementImpl, ElementReconcileItem, FullRender, HitTestContext, HitTestResult,
+        ImplElement, LayerCompositionConfig, PaintResults, RecordedChildLayer, Render,
+        RenderAction, RenderObject,
     },
 };
 
@@ -98,7 +98,7 @@ where
         ctx: &mut BuildContext<'_>,
         provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
         children: Vec<ArcBoxElementNode>,
-        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcChildElementNode<BoxProtocol>>,
+        nodes_needing_unmount: &mut InlinableDwsizeVec<ArcBoxElementNode>,
     ) -> Result<
         (
             Vec<ElementReconcileItem<BoxProtocol>>,

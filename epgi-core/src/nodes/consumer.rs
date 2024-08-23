@@ -112,7 +112,7 @@ where
     type ChildProtocol = P;
     type Element = ConsumerElement<P>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
@@ -189,7 +189,7 @@ macro_rules! impl_multi_consumer {
             type Element = ConsumerElement<P>;
 
             fn into_arc_widget(
-                self: std::sync::Arc<Self>,
+                self: Asc<Self>,
             ) -> <Self::Element as ElementBase>::ArcWidget {
                 self
             }

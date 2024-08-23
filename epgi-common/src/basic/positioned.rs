@@ -2,7 +2,7 @@ use epgi_2d::{ArcBoxWidget, BoxProtocol, BoxSingleChildElement, BoxSingleChildEl
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     template::ImplByTemplate,
-    tree::{ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -89,7 +89,7 @@ impl BoxSingleChildElement for PositionedElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

@@ -13,7 +13,7 @@ use epgi_core::{
     },
     scheduler::get_current_scheduler,
     template::ImplByTemplate,
-    tree::{ArcChildRenderObject, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{ArcChildRenderObject, BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -43,7 +43,7 @@ impl Widget for Stack {
     type ChildProtocol = BoxProtocol;
     type Element = StackElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
         self
     }
 }

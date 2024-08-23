@@ -163,7 +163,7 @@ where
     type ChildProtocol = P;
     type Element = ConsumerElement<P>;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
@@ -280,7 +280,7 @@ where
 //     type ChildProtocol = P;
 //     type Element = ComponentElement<P>;
 
-//     fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+//     fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
 //         self
 //     }
 // }

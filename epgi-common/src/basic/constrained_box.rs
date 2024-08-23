@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use epgi_2d::{
-    ArcBoxRenderObject, BoxConstraints, BoxIntrinsics, BoxProtocol, BoxProxyRender,
+    ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxIntrinsics, BoxProtocol, BoxProxyRender,
     BoxProxyRenderTemplate, BoxSingleChildElement, BoxSingleChildElementTemplate,
     BoxSingleChildRenderElement, BoxSize,
 };
 use epgi_core::{
     foundation::{set_if_changed, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
     template::ImplByTemplate,
-    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -21,7 +21,7 @@ use crate::ARC_PHANTOM_BOX;
 pub struct ConstrainedBox {
     pub constraints: BoxConstraints,
     #[builder(default=ARC_PHANTOM_BOX.clone())]
-    pub child: ArcChildWidget<BoxProtocol>,
+    pub child: ArcBoxWidget,
 }
 
 impl Widget for ConstrainedBox {
@@ -31,7 +31,7 @@ impl Widget for ConstrainedBox {
 
     type Element = ConstrainedBoxElement;
 
-    fn into_arc_widget(self: Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Arc<Self>) -> Asc<Self> {
         self
     }
 }
@@ -51,7 +51,7 @@ impl BoxSingleChildElement for ConstrainedBoxElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 

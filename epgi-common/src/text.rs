@@ -1,8 +1,8 @@
-mod box_multi_line_adapter;
-pub use box_multi_line_adapter::*;
+mod box_adapter_multi_line;
+pub use box_adapter_multi_line::*;
 
-mod multi_line_box_adapter;
-pub use multi_line_box_adapter::*;
+mod multi_line_adapter_box;
+pub use multi_line_adapter_box::*;
 
 mod multi_line;
 pub use multi_line::*;

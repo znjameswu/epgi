@@ -1,14 +1,14 @@
 use epgi_2d::{
-    Affine2dCanvas, Affine2dPaintContextExt, BoxOffset, BoxProtocol, BoxSingleChildElement,
-    BoxSingleChildElementTemplate, BoxSingleChildRenderElement, BoxSize, Brush, Color, Fill,
-    FillPainter, Painter, Rect,
+    Affine2dCanvas, Affine2dPaintContextExt, ArcBoxRenderObject, ArcBoxWidget, BoxOffset,
+    BoxProtocol, BoxSingleChildElement, BoxSingleChildElementTemplate, BoxSingleChildRenderElement,
+    BoxSize, Brush, Color, Fill, FillPainter, Painter, Rect,
 };
 use epgi_core::{
     foundation::{
         set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
     },
     template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
-    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, RenderAction, Widget},
+    tree::{BuildContext, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -18,7 +18,7 @@ use typed_builder::TypedBuilder;
 #[derive(Debug)]
 pub struct ColoredBox {
     pub color: Color,
-    pub child: ArcChildWidget<BoxProtocol>,
+    pub child: ArcBoxWidget,
 }
 
 impl Widget for ColoredBox {
@@ -48,7 +48,7 @@ impl BoxSingleChildElement for ColorBoxElement {
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<BoxProtocol>, BuildSuspendedError> {
+    ) -> Result<ArcBoxWidget, BuildSuspendedError> {
         Ok(widget.child.clone())
     }
 
@@ -86,7 +86,7 @@ impl ProxyRender for RenderColorBox {
         &self,
         size: &BoxSize,
         offset: &BoxOffset,
-        child: &ArcChildRenderObject<BoxProtocol>,
+        child: &ArcBoxRenderObject,
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         paint_ctx.draw_rect(

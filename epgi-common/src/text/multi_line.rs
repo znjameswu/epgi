@@ -22,7 +22,7 @@ impl Widget for MultiLine {
     type ChildProtocol = MultiLineProtocol;
     type Element = MultiLineElement;
 
-    fn into_arc_widget(self: std::sync::Arc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
+    fn into_arc_widget(self: Asc<Self>) -> <Self::Element as ElementBase>::ArcWidget {
         self
     }
 }
