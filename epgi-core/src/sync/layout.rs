@@ -139,7 +139,7 @@ where
             cache_fresh,
         );
         self.mark.clear_self_needs_layout();
-        self.mark.clear_parent_use_size();
+        self.mark.try_clear_parent_use_size();
     }
 
     fn get_intrinsics(&self, intrinsics: &mut <R::ParentProtocol as Protocol>::Intrinsics) {
@@ -160,6 +160,7 @@ where
             },
             cache_fresh,
         );
+        self.mark.clear_self_needs_layout();
     }
 }
 

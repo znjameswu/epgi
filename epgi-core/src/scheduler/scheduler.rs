@@ -1,4 +1,10 @@
-use std::{any::Any, sync::Arc};
+use std::{
+    any::Any,
+    sync::{
+        atomic::{AtomicUsize, Ordering::*},
+        Arc,
+    },
+};
 
 use event_listener::Listener;
 use hashbrown::HashSet;
@@ -55,6 +61,8 @@ pub struct BuildStates {
     pub root_render_object: ArcAnyLayerRenderObject,
 }
 
+pub(crate) static LAYOUT_PASS_ID: AtomicUsize = AtomicUsize::new(0);
+
 impl BuildStates {
     pub(crate) fn apply_batcher_result(
         &mut self,
@@ -70,6 +78,7 @@ impl BuildStates {
     }
 
     pub(crate) fn perform_layout(&mut self) {
+        LAYOUT_PASS_ID.fetch_add(1, Relaxed);
         self.root_render_object.visit_and_layout();
     }
 

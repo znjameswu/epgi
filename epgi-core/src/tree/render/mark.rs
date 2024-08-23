@@ -1,10 +1,50 @@
-use std::sync::atomic::{AtomicBool, Ordering::*};
+use std::{
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering::*},
+    usize,
+};
+
+use crate::scheduler::LAYOUT_PASS_ID;
 
 pub struct RenderMark {
     needs_layout: AtomicBool,
     descendant_has_layout: AtomicBool,
-    parent_use_size: AtomicBool,
+    parent_use_size: ParentUseSize,
     pub(crate) is_detached: AtomicBool,
+}
+
+struct ParentUseSize(AtomicUsize);
+
+impl ParentUseSize {
+    const FLAG_MASK: usize = 1 << (8 * size_of::<usize>() - 1);
+    fn get(&self) -> bool {
+        self.0.load(Relaxed) & Self::FLAG_MASK == 1
+    }
+
+    fn try_clear(&self) {
+        loop {
+            let layout_pass = LAYOUT_PASS_ID.load(Relaxed);
+            let stamp = self.0.load(Relaxed);
+            if stamp & (!Self::FLAG_MASK) != layout_pass {
+                let new_stamp = layout_pass & (!Self::FLAG_MASK);
+                let _ = self
+                    .0
+                    .compare_exchange_weak(stamp, new_stamp, Relaxed, Relaxed);
+            }
+        }
+    }
+
+    fn set(&self) {
+        loop {
+            let layout_pass = LAYOUT_PASS_ID.load(Relaxed);
+            let stamp = self.0.load(Relaxed);
+            if stamp & (!Self::FLAG_MASK) != layout_pass {
+                let new_stamp = layout_pass | Self::FLAG_MASK;
+                let _ = self
+                    .0
+                    .compare_exchange_weak(stamp, new_stamp, Relaxed, Relaxed);
+            }
+        }
+    }
 }
 
 pub struct LayerMark {
@@ -27,7 +67,7 @@ impl RenderMark {
         Self {
             needs_layout: true.into(),
             descendant_has_layout: true.into(),
-            parent_use_size: true.into(),
+            parent_use_size: ParentUseSize(ParentUseSize::FLAG_MASK.into()),
             is_detached: false.into(),
         }
     }
@@ -53,15 +93,15 @@ impl RenderMark {
     // }
 
     pub(crate) fn parent_use_size(&self) -> bool {
-        self.parent_use_size.load(Relaxed)
+        self.parent_use_size.get()
     }
 
-    pub(crate) fn clear_parent_use_size(&self) {
-        self.parent_use_size.store(false, Relaxed)
+    pub(crate) fn try_clear_parent_use_size(&self) {
+        self.parent_use_size.try_clear()
     }
 
     pub(crate) fn set_parent_use_size(&self) {
-        self.parent_use_size.store(true, Relaxed)
+        self.parent_use_size.set()
     }
 
     pub(crate) fn needs_layout(&self) -> Result<(), NoRelayoutToken> {

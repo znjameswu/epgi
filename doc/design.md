@@ -807,3 +807,15 @@ How to implement a parent data system:
         3. Every time parent data changes, a new wrapper needs to be generated and propagated up, causing parent receives a new render object summary, prompting the parent to relayout everytime, even if the parent data change may have not intended to relayout its parent. (FATAL!!!)
 
 Decision: Setting parent data onto the render object.
+
+# Parent_use_size tracking
+To correctly track if a parent render object's layout depend on child render object configuration, the following factors need to be considered:
+1. A parent can query the child's intrinsic properties.
+2. A parent can layout the child multiple times, both in use_size manner and in fire-and-forget manner.
+3. The above behaviors can intermix. For example, after the last layout attempt, the parent could still query an intrinsics and use it to determine its size.
+
+The only good news is that during a single layout pass, parent_use_size is a monotonic boolean. We can track parent_use_size by letting methods set parent_use_size and clearing it when a fresh layout pass reaches a render object. A work-efficient flag clearing algorithm is, then:
+1. Stores a stamp to indicate the layout pass id associated with the current boolean flag
+2. When laying out the render object, if the current layout pass does not match the stamp, indicating a new layout pass, then we clear the boolean flag.
+
+The stamp is collision-resistant and can be made smaller than u64 or u32, since stamp collision only causes missed parent_use_size clearing, which only causes unnecessary child layout but will not result in a staled layout.
