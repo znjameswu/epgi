@@ -20,7 +20,13 @@ use typed_builder::TypedBuilder;
 use crate::{AnimationFrame, Lerp, Tween};
 
 pub trait BuildContextImplicitAnimationExt {
-    /// A state hook providing the state for [ImplicitlyAnimated] to draw.
+    /// A hook providing the state for [ImplicitlyAnimated] to draw.
+    ///
+    /// Everytime when the hook is executed with a different value, it will try to smoothly 
+    /// continues the current animation to the new value.
+    /// 
+    /// If you want to trigger the animation using a setter. You will have to manage a state hook
+    /// outside to have a setter, and pass the state in as a parameter.
     ///
     /// To avoid wasting CPU-cycles when the animation has reached their target,
     /// we have to cancel the subscription to the animation frame while static, and add the subscription back while active.
@@ -28,12 +34,64 @@ pub trait BuildContextImplicitAnimationExt {
     /// (which requires accessing local states).
     /// Therefore, the states has to be stored by a hook in its parent, and the subscription is performed by a child widget.
     /// Hence this hook.
+    ///
+    /// See also:
+    /// - [ImplicitlyAnimated]]
+    // Design note: we cannot provide an external setter to trigger the implicit animation without 
+    // adding another state hook.
+    // The reason is that any setter that guarantees animation continuity have to set `target`, 
+    // `start_time`, `source` *all at the same time*. Failing to do so will result in glitches.
+    // Therefore, we have to either:
+    // - Carry the `current` state inside the setter to prepare to set into the `source` state.
+    //      Which is totally unacceptable because then we are generating new setters every frame.
+    //      Anyone letting their widgets consuming this setter would be stupid or crazy.
+    //      No one will be expecting their widgets to be constantly rebuilding due to a setter.
+    // - Hiding the `current` state behind a `Arc<Mutex<>>` and carry it in setter.
+    //      This could work, but it needs to keep track of a Arc<Mutex<>> and keep it in sync 
+    //      using a use_effect. Making it a worse version of the next candidate.
+    // - Introduce another state hook as a buffer. The setter only sets that buffer state. And
+    //      a use_effect watching that buffer will trigger state updates. We will be better off
+    //      by asking users to use a use_state and use_effect if they really want it.
     fn use_implicitly_animated_value<T: Lerp + State + PartialEq>(
         &mut self,
         value: &T,
         duration: Duration,
         curve: Option<&Asc<dyn Tween<Output = f32> + Send + Sync>>,
     ) -> ImplicitlyAnimatedValue<T>;
+
+    /// A hook providing the state for [ImplicitlyAnimated] to draw an entrance animation.
+    ///
+    /// When the widget is mounted for the first time, it will start from the state given by `init`.
+    /// Then it will immediately start transition to the state given by `value.`
+    ///
+    /// See also:
+    /// - [use_implicitly_animated_value](BuildContextImplicitAnimationExt::use_implicitly_animated_value)
+    /// - [ImplicitlyAnimated]
+    fn use_entrance_animation_value_with<T: Lerp + State + PartialEq>(
+        &mut self,
+        init: impl FnOnce() -> T,
+        value: T,
+        duration: Duration,
+        curve: Option<&Asc<dyn Tween<Output = f32> + Send + Sync>>,
+    ) -> ImplicitlyAnimatedValue<T>;
+
+    /// A hook providing the state for [ImplicitlyAnimated] to draw an entrance animation.
+    ///
+    /// When the widget is mounted for the first time, it will start from the state given by `init`.
+    /// Then it will immediately start transition to the state given by `value.`
+    ///
+    /// See also:
+    /// - [use_implicitly_animated_value](BuildContextImplicitAnimationExt::use_implicitly_animated_value)
+    /// - [ImplicitlyAnimated]
+    fn use_entrance_animation_value<T: Lerp + State + PartialEq>(
+        &mut self,
+        init: T,
+        value: T,
+        duration: Duration,
+        curve: Option<&Asc<dyn Tween<Output = f32> + Send + Sync>>,
+    ) -> ImplicitlyAnimatedValue<T> {
+        self.use_entrance_animation_value_with(move || init, value, duration, curve)
+    }
 }
 
 impl BuildContextImplicitAnimationExt for BuildContext<'_> {
@@ -89,6 +147,26 @@ impl BuildContextImplicitAnimationExt for BuildContext<'_> {
             }
         };
         ImplicitlyAnimatedValue { set_current, state }
+    }
+
+    fn use_entrance_animation_value_with<T: Lerp + State + PartialEq>(
+        &mut self,
+        init: impl FnOnce() -> T,
+        value: T,
+        duration: Duration,
+        curve: Option<&Asc<dyn Tween<Output = f32> + Send + Sync>>,
+    ) -> ImplicitlyAnimatedValue<T> {
+        let (state, set_state) = self.use_state_with(init);
+        let animated_value = self.use_implicitly_animated_value(&state, duration, curve);
+        self.use_effect(
+            move |_| {
+                get_current_scheduler().create_sync_job(|job_builder| {
+                    set_state.set(value, job_builder);
+                })
+            },
+            (),
+        );
+        animated_value
     }
 }
 

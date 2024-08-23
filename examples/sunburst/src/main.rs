@@ -6,7 +6,7 @@ use epgi_2d::Color;
 use epgi_common::{
     BuildContextImplicitAnimationExt, Center, FlexFit, ImplicitlyAnimated, ARC_FAST_OUT_SLOW_IN,
 };
-use epgi_core::{scheduler::get_current_scheduler, Builder};
+use epgi_core::Builder;
 use epgi_material::{MaterialApp, Scaffold};
 use epgi_winit::{AppLauncher, Window};
 pub use ring::*;
@@ -17,19 +17,11 @@ fn main() {
             alignment = RingAlignment::CENTER_END,
             child = Builder!(
                 builder = move |ctx| {
-                    let (target, set_target) = ctx.use_state((0.0, 0.0));
-                    let value = ctx.use_implicitly_animated_value(
-                        &target,
+                    let value = ctx.use_entrance_animation_value(
+                        (0.0, 0.0),
+                        (100.0, TAU),
                         Duration::from_secs_f32(2.0),
                         Some(&ARC_FAST_OUT_SLOW_IN),
-                    );
-                    ctx.use_effect(
-                        move |_| {
-                            get_current_scheduler().create_sync_job(|job_builder| {
-                                set_target.set((100.0, TAU), job_builder);
-                            })
-                        },
-                        (),
                     );
                     ImplicitlyAnimated!(
                         value,
