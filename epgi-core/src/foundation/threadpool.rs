@@ -56,6 +56,25 @@ pub trait ThreadPoolExt {
     ) -> Vec<R>;
 
     /// This peculiar API is a temporary workaround for Stack widget. See https://github.com/rayon-rs/rayon/issues/1179
+    fn par_zip3_ref_mut_mut_map_reduce_vec<
+        T1: Sync,
+        T2: Send,
+        T3: Send,
+        R: Send,
+        F: Fn(&T1, &mut T2, &mut T3) -> R + Send + Sync,
+        OP: Fn(R, R) -> R + Send + Sync,
+        ID: Fn() -> R + Send + Sync,
+    >(
+        &self,
+        vec1: &Vec<T1>,
+        vec2: &mut Vec<T2>,
+        vec3: &mut Vec<T3>,
+        f: F,
+        identity: ID,
+        reduce: OP,
+    ) -> R;
+
+    /// This peculiar API is a temporary workaround for Stack widget. See https://github.com/rayon-rs/rayon/issues/1179
     fn par_zip3_ref_ref_mut_map_reduce_vec<
         T1: Sync,
         T2: Sync,
@@ -337,6 +356,55 @@ impl ThreadPoolExt for rayon::ThreadPool {
                 });
                 res
             }
+        }
+    }
+
+    fn par_zip3_ref_mut_mut_map_reduce_vec<
+        T1: Sync,
+        T2: Send,
+        T3: Send,
+        R: Send,
+        F: Fn(&T1, &mut T2, &mut T3) -> R + Send + Sync,
+        OP: Fn(R, R) -> R + Send + Sync,
+        ID: Fn() -> R + Send + Sync,
+    >(
+        &self,
+        vec1: &Vec<T1>,
+        vec2: &mut Vec<T2>,
+        vec3: &mut Vec<T3>,
+        f: F,
+        identity: ID,
+        reduce: OP,
+    ) -> R {
+        let len = std::cmp::min(std::cmp::min(vec1.len(), vec2.len()), vec3.len());
+        match len {
+            0 => identity(),
+            1 => f(&vec1[0], &mut vec2[0], &mut vec3[0]),
+            2..16 => {
+                let mut output = std::iter::repeat_with(|| None)
+                    .take(len)
+                    .collect::<Vec<_>>(); // Brilliant answer from https://www.reddit.com/r/rust/comments/qjh00f/comment/hiqe32i
+                self.scope(|s| {
+                    let f_ref = &f;
+                    for (((elem1, elem2), elem3), out) in std::iter::zip(
+                        std::iter::zip(std::iter::zip(vec1, vec2), vec3),
+                        output.iter_mut(),
+                    ) {
+                        s.spawn(move |_| *out = Some(f_ref(elem1, elem2, elem3)));
+                    }
+                });
+                output
+                    .into_iter()
+                    .map(Option::unwrap)
+                    .reduce(reduce)
+                    .unwrap()
+            }
+            _ => self.install(|| {
+                (vec1, vec2, vec3)
+                    .into_par_iter()
+                    .map(|(elem1, elem2, elem3)| f(elem1, elem2, elem3))
+                    .reduce(identity, reduce)
+            }),
         }
     }
 

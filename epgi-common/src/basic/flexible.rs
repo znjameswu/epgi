@@ -53,6 +53,15 @@ pub struct Flexible<P: Protocol> {
     pub child: ArcChildWidget<P>,
 }
 
+impl<P: Protocol> Flexible<P> {
+    pub fn get_config(&self) -> FlexibleConfig {
+        FlexibleConfig {
+            flex: self.flex,
+            fit: self.fit,
+        }
+    }
+}
+
 impl<P: Protocol> Widget for Flexible<P> {
     type ParentProtocol = P;
     type ChildProtocol = P;
@@ -98,10 +107,7 @@ impl<P: Protocol> SingleChildElement for FlexibleElement<P> {
         &mut self,
         widget: &Self::ArcWidget,
     ) -> Option<(Asc<dyn Any + Send + Sync>, Option<RenderAction>)> {
-        let new_flexible_config = FlexibleConfig {
-            flex: widget.flex,
-            fit: widget.fit,
-        };
+        let new_flexible_config = widget.get_config();
         let needs_update_parent_data = !self
             .flexible_config
             .is_some_and(|flexible_config| flexible_config == new_flexible_config);

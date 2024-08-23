@@ -230,7 +230,7 @@ fn main() {
                                                 )
                                             }
                                         )
-                                    )
+                                    ) as _
                                 })
                                 .collect()
                         )

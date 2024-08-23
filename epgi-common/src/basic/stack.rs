@@ -8,17 +8,17 @@ use epgi_2d::{
 };
 use epgi_core::{
     foundation::{
-        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide,
-        ThreadPoolExt,
+        set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
+        Provide, ThreadPoolExt,
     },
     scheduler::get_current_scheduler,
     template::ImplByTemplate,
-    tree::{BuildContext, ElementBase, RenderAction, Widget},
+    tree::{ArcChildRenderObject, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use crate::Alignment;
+use crate::{Alignment, PositionedConfig};
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Stack>))]
@@ -28,7 +28,7 @@ pub struct Stack {
     #[builder(default=StackFit::Loose)]
     pub fit: StackFit,
     //TODO: Clip behavior
-    pub children: Vec<Positioned>,
+    pub children: Vec<ArcBoxWidget>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -36,71 +36,6 @@ pub enum StackFit {
     Loose,
     Expand,
     Passthrough,
-}
-
-#[derive(Clone, Debug, Declarative, TypedBuilder)]
-pub struct Positioned {
-    #[builder(default, setter(strip_option))]
-    pub l: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    pub r: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    pub t: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    pub b: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    pub width: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    pub height: Option<f32>,
-    pub child: ArcBoxWidget,
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub struct PositionedConfig {
-    l: Option<f32>,
-    r: Option<f32>,
-    t: Option<f32>,
-    b: Option<f32>,
-    width: Option<f32>,
-    height: Option<f32>,
-}
-
-impl Positioned {
-    pub fn is_positioned(&self) -> bool {
-        self.l.is_some()
-            || self.r.is_some()
-            || self.t.is_some()
-            || self.b.is_some()
-            || self.width.is_some()
-            || self.height.is_some()
-    }
-    fn get_config(&self) -> PositionedConfig {
-        PositionedConfig {
-            l: self.l,
-            r: self.r,
-            t: self.t,
-            b: self.b,
-            width: self.width,
-            height: self.height,
-        }
-    }
-}
-
-impl PositionedConfig {
-    pub fn is_positioned(&self) -> bool {
-        self.l.is_some()
-            || self.r.is_some()
-            || self.t.is_some()
-            || self.b.is_some()
-            || self.width.is_some()
-            || self.height.is_some()
-    }
-}
-
-impl From<ArcBoxWidget> for Positioned {
-    fn from(child: ArcBoxWidget) -> Self {
-        Positioned!(child)
-    }
 }
 
 impl Widget for Stack {
@@ -130,11 +65,7 @@ impl BoxMultiChildElement for StackElement {
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
     ) -> Result<Vec<ArcBoxWidget>, BuildSuspendedError> {
-        Ok(widget
-            .children
-            .iter()
-            .map(|positioned| positioned.child.clone())
-            .collect())
+        Ok(widget.children.clone())
     }
 
     fn create_element(_widget: &Self::ArcWidget) -> Self {
@@ -145,7 +76,6 @@ impl BoxMultiChildElement for StackElement {
         RenderStack {
             alignment: widget.alignment,
             fit: widget.fit,
-            positioned_configs: widget.children.iter().map(Positioned::get_config).collect(),
         }
     }
 
@@ -153,10 +83,6 @@ impl BoxMultiChildElement for StackElement {
         [
             set_if_changed(&mut render.alignment, widget.alignment),
             set_if_changed(&mut render.fit, widget.fit),
-            set_if_changed(
-                &mut render.positioned_configs,
-                widget.children.iter().map(Positioned::get_config).collect(),
-            ),
         ]
         .iter()
         .any(|&changed| changed)
@@ -167,7 +93,6 @@ impl BoxMultiChildElement for StackElement {
 pub struct RenderStack {
     pub alignment: Alignment,
     pub fit: StackFit,
-    pub positioned_configs: Vec<PositionedConfig>,
     //TODO: Clip behavior
 }
 
@@ -194,11 +119,7 @@ impl BoxMultiChildLayout for RenderStack {
         children: &Vec<ArcBoxRenderObject>,
     ) -> (BoxSize, Self::LayoutMemo) {
         use std::sync::atomic::Ordering::*;
-        debug_assert_eq!(
-            children.len(),
-            self.positioned_configs.len(),
-            "RenderStack should receive the same amount of children as its positioned config"
-        );
+
         if children.is_empty() {
             let biggest = constraints.biggest();
             if biggest.is_finite() {
@@ -220,6 +141,20 @@ impl BoxMultiChildLayout for RenderStack {
             .take(children.len())
             .collect::<Vec<_>>();
 
+        let mut positioned_configs = std::iter::repeat(PositionedConfig::default())
+            .take(children.len())
+            .collect::<Vec<_>>();
+
+        fn get_positioned_config<P: Protocol>(
+            child: &ArcChildRenderObject<P>,
+        ) -> Option<PositionedConfig> {
+            child.as_ref().get_parent_data().and_then(|data| {
+                data.downcast::<PositionedConfig>()
+                    .ok()
+                    .map(|config| config.as_ref().clone())
+            })
+        }
+
         fn layout_non_positioned_child(
             child: &ArcBoxRenderObject,
             positioned_config: &PositionedConfig,
@@ -234,11 +169,12 @@ impl BoxMultiChildLayout for RenderStack {
         }
 
         let threadpool = &get_current_scheduler().sync_threadpool;
-        let biggest_non_positioned_size = threadpool.par_zip3_ref_ref_mut_map_reduce_vec(
+        let biggest_non_positioned_size = threadpool.par_zip3_ref_mut_mut_map_reduce_vec(
             children,
-            &self.positioned_configs,
+            &mut positioned_configs,
             &mut child_sizes,
             |child, positioned_config, child_size| {
+                *positioned_config = get_positioned_config(child).unwrap_or_default();
                 layout_non_positioned_child(
                     child,
                     positioned_config,
@@ -342,7 +278,7 @@ impl BoxMultiChildLayout for RenderStack {
 
         let offsets = threadpool.par_zip3_ref_ref_mut_map_collect_vec(
             children,
-            &self.positioned_configs,
+            &positioned_configs,
             &mut child_sizes,
             |child, positioned_config, child_size| {
                 layout_all_child(

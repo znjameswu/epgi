@@ -34,6 +34,9 @@ pub use padding::*;
 mod phantom_box;
 pub use phantom_box::*;
 
+mod positioned;
+pub use positioned::*;
+
 mod row;
 pub use row::*;
 
