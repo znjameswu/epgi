@@ -17,7 +17,7 @@ struct ParentUseSize(AtomicUsize);
 impl ParentUseSize {
     const FLAG_MASK: usize = 1 << (8 * size_of::<usize>() - 1);
     fn get(&self) -> bool {
-        self.0.load(Relaxed) & Self::FLAG_MASK == 1
+        self.0.load(Relaxed) & Self::FLAG_MASK != 0
     }
 
     fn try_clear(&self) {
@@ -26,9 +26,12 @@ impl ParentUseSize {
             let stamp = self.0.load(Relaxed);
             if stamp & (!Self::FLAG_MASK) != layout_pass {
                 let new_stamp = layout_pass & (!Self::FLAG_MASK);
-                let _ = self
+                if let Ok(_) = self
                     .0
-                    .compare_exchange_weak(stamp, new_stamp, Relaxed, Relaxed);
+                    .compare_exchange_weak(stamp, new_stamp, Relaxed, Relaxed)
+                {
+                    break;
+                }
             }
         }
     }
@@ -39,9 +42,12 @@ impl ParentUseSize {
             let stamp = self.0.load(Relaxed);
             if stamp & (!Self::FLAG_MASK) != layout_pass {
                 let new_stamp = layout_pass | Self::FLAG_MASK;
-                let _ = self
+                if let Ok(_) = self
                     .0
-                    .compare_exchange_weak(stamp, new_stamp, Relaxed, Relaxed);
+                    .compare_exchange_weak(stamp, new_stamp, Relaxed, Relaxed)
+                {
+                    break;
+                }
             }
         }
     }
