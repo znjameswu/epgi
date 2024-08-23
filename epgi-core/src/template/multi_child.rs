@@ -1,10 +1,9 @@
-use std::{any::TypeId, borrow::Cow};
+use std::any::TypeId;
 
 use crate::{
     foundation::{
         AnyRawPointer, Arc, Asc, BuildSuspendedError, Canvas, InlinableDwsizeVec, Key,
         LayerProtocol, PaintContext, Protocol, Provide, TypeKey, VecContainer,
-        EMPTY_CONSUMED_TYPES,
     },
     tree::{
         default_reconcile_vec, ArcChildElementNode, ArcChildRenderObject, ArcChildWidget,
@@ -37,8 +36,8 @@ pub trait MultiChildElement: Clone + Send + Sync + Sized + 'static {
     >;
 
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
-        EMPTY_CONSUMED_TYPES.into()
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
+        &[]
     }
 
     fn get_child_widgets(
@@ -86,7 +85,7 @@ where
 
     type ArcWidget = E::ArcWidget;
 
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
         E::get_consumed_types(widget)
     }
 

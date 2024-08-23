@@ -214,8 +214,8 @@ impl<E: FullElement> ElementNode<E> {
         }
         let new_widget_ref = new_widget.as_ref().unwrap_or(&old_widget);
         let consumed_values = read_and_update_subscriptions_sync(
-            &E::get_consumed_types(new_widget_ref),
-            &E::get_consumed_types(&old_widget),
+            E::get_consumed_types(new_widget_ref).as_ref(),
+            E::get_consumed_types(&old_widget).as_ref(),
             &self.context,
             lane_scheduler,
         );

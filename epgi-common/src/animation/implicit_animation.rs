@@ -1,7 +1,5 @@
 use std::{
-    borrow::Cow,
     fmt::Debug,
-    ops::Deref,
     time::{Duration, Instant},
 };
 
@@ -179,13 +177,11 @@ where
     F: Fn(&mut BuildContext, T) -> ArcChildWidget<P> + Send + Sync + 'static,
     P: Protocol,
 {
-    fn get_consumed_types(&self) -> Cow<[TypeKey]> {
+    fn get_consumed_types(&self) -> &[TypeKey] {
         match &self.value.state {
-            ImplicitlyAnimatedValueState::Static { .. } => (&[]).into(),
+            ImplicitlyAnimatedValueState::Static { .. } => &[],
             ImplicitlyAnimatedValueState::Active { .. } => {
-                IMPLICITLY_ANIMATED_BUILDER_CONSUMED_TYPES_ACTIVE
-                    .deref()
-                    .into()
+                IMPLICITLY_ANIMATED_BUILDER_CONSUMED_TYPES_ACTIVE.as_ref()
             }
         }
     }

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ops::Deref, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
 use epgi_2d::{
     ArcBoxWidget, BoxProtocol, LocalTextStyle, MultiLineProtocol, TextAlign, TextSpan, TextStyle,
@@ -84,8 +84,8 @@ lazy_static::lazy_static! {
 }
 
 impl ConsumerWidget<MultiLineProtocol> for MultiLineText {
-    fn get_consumed_types(&self) -> Cow<[TypeKey]> {
-        MULTI_LINE_TEXT_CONSUMED_TYPES.deref().into()
+    fn get_consumed_types(&self) -> &[TypeKey] {
+        MULTI_LINE_TEXT_CONSUMED_TYPES.as_ref()
     }
 
     fn build(

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     foundation::{
-        Arc, Asc, Container, InlinableDwsizeVec, Protocol, Provide, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, Container, InlinableDwsizeVec, Protocol, Provide, 
     },
     scheduler::get_current_scheduler,
     sync::{CommitBarrier, ImplCommitRenderObject},
@@ -88,8 +88,8 @@ impl<E: FullElement> ElementNode<E> {
             let element_context =
                 ElementContextNode::new_for::<E>(node.clone() as _, parent_context, &widget);
             let subscription_diff = Self::calc_subscription_diff(
-                &E::get_consumed_types(&widget),
-                EMPTY_CONSUMED_TYPES,
+                E::get_consumed_types(&widget).as_ref(),
+                &[],
                 &work_context.recorded_provider_values,
                 &element_context.provider_map,
             );
@@ -132,8 +132,8 @@ impl<E: FullElement> ElementNode<E> {
             let mut child_work_context = Cow::Borrowed(work_context.as_ref());
             // Reversible side effect must happen with the node lock held and the work handle checked
             let provider_values = self.read_consumed_values_async(
-                &E::get_consumed_types(&snapshot_reborrow.widget),
-                EMPTY_CONSUMED_TYPES,
+                E::get_consumed_types(&snapshot_reborrow.widget).as_ref(),
+                &[],
                 &mut child_work_context,
                 &barrier,
                 &snapshot_reborrow.element_lock_held,

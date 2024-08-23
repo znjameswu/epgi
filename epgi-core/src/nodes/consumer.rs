@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, marker::PhantomData};
+use std::{any::TypeId, marker::PhantomData};
 
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -16,7 +16,7 @@ pub trait ConsumerWidget<P: Protocol>:
     Widget<Element = ConsumerElement<P>, ParentProtocol = P, ChildProtocol = P> + WidgetExt
 {
     #[allow(unused_variables)]
-    fn get_consumed_types(&self) -> Cow<[TypeKey]>;
+    fn get_consumed_types(&self) -> &[TypeKey];
 
     fn build(
         &self,
@@ -57,7 +57,7 @@ impl<P: Protocol> SingleChildElement for ConsumerElement<P> {
     type ChildProtocol = P;
     type ArcWidget = Asc<dyn ConsumerWidget<P>>;
 
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
         widget.get_consumed_types()
     }
 
@@ -123,8 +123,8 @@ where
     F: Fn(&mut BuildContext, Asc<T>) -> ArcChildWidget<P> + Send + Sync + 'static,
     P: Protocol,
 {
-    fn get_consumed_types(&self) -> Cow<[TypeKey]> {
-        std::array::from_ref(&self.type_key).into()
+    fn get_consumed_types(&self) -> &[TypeKey] {
+        std::array::from_ref(&self.type_key)
     }
 
     fn build(
@@ -201,7 +201,7 @@ macro_rules! impl_multi_consumer {
             F: Fn(&mut BuildContext, $(Asc<$t>),*) -> ArcChildWidget<P> + Send + Sync + 'static,
             P: Protocol,
         {
-            fn get_consumed_types(&self) -> Cow<[TypeKey]> {
+            fn get_consumed_types(&self) -> &[TypeKey] {
                 self.type_keys.as_ref().into()
             }
 

@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use epgi_2d::{ArcBoxWidget, BoxProtocol, Color};
 use epgi_common::ColoredBox;
 use epgi_core::{
@@ -37,8 +35,8 @@ lazy_static::lazy_static! {
 }
 
 impl ConsumerWidget<BoxProtocol> for Scaffold {
-    fn get_consumed_types(&self) -> Cow<[TypeKey]> {
-        SCAFFOLD_CONSUMED_TYPES.as_ref().into()
+    fn get_consumed_types(&self) -> &[TypeKey] {
+        SCAFFOLD_CONSUMED_TYPES.as_ref()
     }
 
     fn build(

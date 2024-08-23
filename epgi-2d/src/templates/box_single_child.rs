@@ -1,7 +1,3 @@
-use std::any::{Any, TypeId};
-use std::borrow::Cow;
-
-use epgi_core::foundation::EMPTY_CONSUMED_TYPES;
 use epgi_core::template::TemplateRender;
 use epgi_core::tree::{ImplRender, RenderBase, RenderImpl};
 use epgi_core::{
@@ -22,6 +18,7 @@ use epgi_core::{
         RenderAction, RenderObject,
     },
 };
+use std::any::{Any, TypeId};
 
 use crate::{
     Affine2dCanvas, Affine2dEncoding, ArcBoxElementNode, ArcBoxRenderObject, ArcBoxWidget,
@@ -34,8 +31,8 @@ pub trait BoxSingleChildElement: Clone + Send + Sync + Sized + 'static {
     type ArcWidget: ArcWidget<Element = Self>;
 
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
-        EMPTY_CONSUMED_TYPES.into()
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
+        &[]
     }
 
     fn get_child_widget(
@@ -83,7 +80,7 @@ where
 
     type ArcWidget = E::ArcWidget;
 
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
         E::get_consumed_types(widget)
     }
 

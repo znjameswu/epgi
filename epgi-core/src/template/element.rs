@@ -1,9 +1,9 @@
-use std::{any::Any, borrow::Cow};
+use std::any::Any;
 
 use crate::{
     foundation::{
         Arc, Asc, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
-        Provide, TypeKey, EMPTY_CONSUMED_TYPES,
+        Provide, TypeKey,
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
@@ -22,8 +22,8 @@ pub trait TemplateElementBase<E> {
     type ArcWidget: ArcWidget<Element = E>;
 
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
-        EMPTY_CONSUMED_TYPES.into()
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
+        &[]
     }
     fn perform_rebuild_element(
         element: &mut E,
@@ -87,7 +87,7 @@ where
 
     // type ElementImpl = <E::Template as TemplateElement<E>>::ElementImpl;
 
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
         E::Template::get_consumed_types(widget)
     }
 

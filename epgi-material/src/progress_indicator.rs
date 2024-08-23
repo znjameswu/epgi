@@ -1,7 +1,5 @@
 use std::{
-    borrow::Cow,
     f32::consts::{FRAC_PI_2, PI},
-    ops::Deref,
     time::Duration,
 };
 
@@ -75,15 +73,11 @@ const PATH_COUNT: u32 = 2222;
 const ROTATION_COUNT: u32 = 1333;
 
 impl ConsumerWidget<BoxProtocol> for CircularProgressIndicator {
-    fn get_consumed_types(&self) -> Cow<[TypeKey]> {
+    fn get_consumed_types(&self) -> &[TypeKey] {
         if self.value.is_some() {
-            CIRCULAR_PROGRESS_INDICATOR_CONSUMED_TYPES_DETERMINATE
-                .deref()
-                .into()
+            CIRCULAR_PROGRESS_INDICATOR_CONSUMED_TYPES_DETERMINATE.as_ref()
         } else {
-            CIRCULAR_PROGRESS_INDICATOR_CONSUMED_TYPES_INDETERMINATE
-                .deref()
-                .into()
+            CIRCULAR_PROGRESS_INDICATOR_CONSUMED_TYPES_INDETERMINATE.as_ref()
         }
     }
 

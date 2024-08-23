@@ -1,6 +1,6 @@
 use crate::{
     foundation::{
-        Arc, AsIterator, Container, InlinableDwsizeVec, Protocol, Provide, EMPTY_CONSUMED_TYPES,
+        Arc, AsIterator, Container, InlinableDwsizeVec, Protocol, Provide, 
     },
     scheduler::{get_current_scheduler, LanePos},
     sync::{LaneScheduler, RenderObjectCommitResult},
@@ -64,8 +64,8 @@ impl<E: FullElement> ElementNode<E> {
         });
 
         let consumed_values = read_and_update_subscriptions_sync(
-            &E::get_consumed_types(widget),
-            EMPTY_CONSUMED_TYPES,
+            E::get_consumed_types(widget).as_ref(),
+            &[],
             &node.context,
             lane_scheduler,
         );

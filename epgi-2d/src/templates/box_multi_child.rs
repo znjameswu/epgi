@@ -1,7 +1,6 @@
 use std::any::TypeId;
-use std::borrow::Cow;
 
-use epgi_core::foundation::{VecContainer, EMPTY_CONSUMED_TYPES};
+use epgi_core::foundation::VecContainer;
 use epgi_core::template::TemplateRender;
 use epgi_core::tree::{default_reconcile_vec, ImplRender, RenderBase, RenderImpl};
 use epgi_core::{
@@ -39,8 +38,8 @@ pub trait BoxMultiChildElement: Clone + Send + Sync + Sized + 'static {
     >;
 
     #[allow(unused_variables)]
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
-        EMPTY_CONSUMED_TYPES.into()
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
+        &[]
     }
 
     fn get_child_widgets(
@@ -88,7 +87,7 @@ where
 
     type ArcWidget = E::ArcWidget;
 
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
         E::get_consumed_types(widget)
     }
 

@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, marker::PhantomData};
+use std::{any::TypeId, marker::PhantomData};
 
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -16,7 +16,7 @@ pub trait SuspendableConsumerWidget<P: Protocol>:
     Widget<Element = SuspendableConsumerElement<P>, ParentProtocol = P, ChildProtocol = P> + WidgetExt
 {
     #[allow(unused_variables)]
-    fn get_consumed_types(&self) -> Cow<[TypeKey]>;
+    fn get_consumed_types(&self) -> &[TypeKey];
 
     fn build(
         &self,
@@ -57,7 +57,7 @@ impl<P: Protocol> SingleChildElement for SuspendableConsumerElement<P> {
     type ChildProtocol = P;
     type ArcWidget = Asc<dyn SuspendableConsumerWidget<P>>;
 
-    fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
+    fn get_consumed_types(widget: &Self::ArcWidget) -> impl AsRef<[TypeKey]> {
         widget.get_consumed_types()
     }
 
@@ -135,8 +135,8 @@ where
         + 'static,
     P: Protocol,
 {
-    fn get_consumed_types(&self) -> Cow<[TypeKey]> {
-        std::array::from_ref(&self.type_key).into()
+    fn get_consumed_types(&self) -> &[TypeKey] {
+        std::array::from_ref(&self.type_key)
     }
 
     fn build(
@@ -213,8 +213,8 @@ macro_rules! impl_multi_suspendable_consumer {
             F: Fn(&mut BuildContext, $(Asc<$t>),*) -> Result<ArcChildWidget<P>, BuildSuspendedError> + Send + Sync + 'static,
             P: Protocol,
         {
-            fn get_consumed_types(&self) -> Cow<[TypeKey]> {
-                self.type_keys.as_ref().into()
+            fn get_consumed_types(&self) -> &[TypeKey] {
+                self.type_keys.as_ref()
             }
 
             fn build(
