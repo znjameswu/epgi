@@ -25,11 +25,17 @@ pub use custom_paint::*;
 mod flex;
 pub use flex::*;
 
+mod flexible;
+pub use flexible::*;
+
 mod padding;
 pub use padding::*;
 
 mod phantom_box;
 pub use phantom_box::*;
+
+mod positioned;
+pub use positioned::*;
 
 mod row;
 pub use row::*;

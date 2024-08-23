@@ -1,9 +1,9 @@
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow};
 
 use crate::{
     foundation::{
-        Arc, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol, Provide,
-        TypeKey, EMPTY_CONSUMED_TYPES,
+        Arc, Asc, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
+        Provide, TypeKey, EMPTY_CONSUMED_TYPES,
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
@@ -54,6 +54,23 @@ pub trait TemplateElementBase<E> {
         ),
         BuildSuspendedError,
     >;
+
+    /// Returns the new parent data and corresponding render action for parent
+    /// if the parent data has changed
+    ///
+    /// It is recommended to cache the last generated parent data, and only
+    /// generate parent data when the parent data needs to be changed.
+    ///
+    /// Will only be invoked if this element is a component element. Has no effect
+    /// if implemented on other elements.
+    #[allow(unused_variables)]
+    #[inline(always)]
+    fn generate_parent_data(
+        element: &mut E,
+        widget: &Self::ArcWidget,
+    ) -> Option<(Asc<dyn Any + Send + Sync>, Option<RenderAction>)> {
+        None
+    }
 }
 
 impl<E> ElementBase for E
@@ -113,6 +130,13 @@ where
         BuildSuspendedError,
     > {
         E::Template::perform_inflate_element(widget, ctx, provider_values)
+    }
+
+    fn generate_parent_data(
+        &mut self,
+        widget: &Self::ArcWidget,
+    ) -> Option<(Asc<dyn Any + Send + Sync>, Option<RenderAction>)> {
+        E::Template::generate_parent_data(self, widget)
     }
 }
 

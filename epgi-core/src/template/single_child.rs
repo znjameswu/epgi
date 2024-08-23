@@ -1,9 +1,9 @@
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow};
 
 use crate::{
     foundation::{
-        Arc, ArrayContainer, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide, TypeKey,
-        EMPTY_CONSUMED_TYPES,
+        Arc, ArrayContainer, Asc, BuildSuspendedError, InlinableDwsizeVec, Protocol, Provide,
+        TypeKey, EMPTY_CONSUMED_TYPES,
     },
     tree::{
         ArcChildElementNode, ArcChildWidget, ArcWidget, BuildContext,
@@ -44,6 +44,23 @@ pub trait SingleChildElement: Clone + Send + Sync + Sized + 'static {
     /// We expect most people does not need provider or hooks during this process.
     /// If you do need, you can always perform relevant operations in the parent and pass it down in widget.
     fn create_element(widget: &Self::ArcWidget) -> Self;
+
+    /// Returns the new parent data and corresponding render action for parent
+    /// if the parent data has changed
+    ///
+    /// It is recommended to cache the last generated parent data, and only
+    /// generate parent data when the parent data needs to be changed.
+    ///
+    /// Will only be invoked if this element is a component element. Has no effect
+    /// if implemented on other elements.
+    #[allow(unused_variables)]
+    #[inline(always)]
+    fn generate_parent_data(
+        &mut self,
+        widget: &Self::ArcWidget,
+    ) -> Option<(Asc<dyn Any + Send + Sync>, Option<RenderAction>)> {
+        None
+    }
 }
 
 impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
@@ -101,6 +118,13 @@ where
         let element = E::create_element(widget);
         let child_widget = E::get_child_widget(None, widget, ctx, provider_values)?;
         Ok((element, [child_widget]))
+    }
+
+    fn generate_parent_data(
+        element: &mut E,
+        widget: &Self::ArcWidget,
+    ) -> Option<(Asc<dyn Any + Send + Sync>, Option<RenderAction>)> {
+        E::generate_parent_data(element, widget)
     }
 }
 

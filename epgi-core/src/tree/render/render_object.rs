@@ -2,9 +2,8 @@ use std::any::Any;
 
 use crate::{
     foundation::{
-        default_query_interface_arc, default_query_interface_box, default_query_interface_ref, Arc,
-        AsAny, Aweak, Canvas, CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol,
-        Protocol, SyncMutex,
+        default_query_interface_arc, default_query_interface_ref, Arc, AsAny, Asc, Aweak, Canvas,
+        CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol, Protocol, SyncMutex,
     },
     sync::ImplComposite,
     tree::{ElementContextNode, LayerCache, LayerMark},
@@ -47,6 +46,7 @@ impl<R: Render> RenderObject<R> {
             mark: RenderMark::new(),
             layer_mark: Default::default(),
             inner: SyncMutex::new(RenderObjectInner {
+                parent_data: None,
                 cache: RenderCache::new(),
                 render,
                 children,
@@ -73,6 +73,7 @@ where
 {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
+    parent_data: Option<Asc<dyn Any + Send + Sync>>,
     pub(crate) cache: RenderCache<R, C>,
     pub(crate) render: R,
     pub(crate) children:
@@ -136,21 +137,9 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send 
     fn element_context(&self) -> &ElementContextNode;
     fn render_mark(&self) -> &RenderMark;
     fn detach_render_object(&self);
+    fn get_parent_data(&self) -> Option<Asc<dyn Any + Send + Sync>>;
+    fn set_parent_data(&self, data: Asc<dyn Any + Send + Sync>);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
-
-    fn mark_render_action(
-        self: &Arc<Self>,
-        propagated_render_action: Option<RenderAction>,
-        descendant_has_action: Option<RenderAction>,
-    ) -> Option<RenderAction>
-    where
-        Self: Sized;
-
-    fn try_as_aweak_any_layer_render_object(
-        render_object: &Arc<Self>,
-    ) -> Option<AweakAnyLayerRenderObject>
-    where
-        Self: Sized;
 
     fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any>;
 }
@@ -176,6 +165,13 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         }
     }
 
+    fn get_parent_data(&self) -> Option<Asc<dyn Any + Send + Sync>> {
+        self.inner.lock().parent_data.clone()
+    }
+    fn set_parent_data(&self, data: Asc<dyn Any + Send + Sync>) {
+        self.inner.lock().parent_data = Some(data);
+    }
+
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {
         if <R as FullRender>::Impl::IS_LAYER {
             Some(<R as FullRender>::Impl::into_arc_any_layer_render_object(
@@ -186,7 +182,13 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         }
     }
 
-    fn mark_render_action(
+    fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any> {
+        Box::new(self as ArcChildRenderObject<R::ParentProtocol>)
+    }
+}
+
+impl<R: FullRender> RenderObject<R> {
+    pub(crate) fn mark_render_action(
         self: &Arc<Self>,
         mut propagated_render_action: Option<RenderAction>,
         descendant_has_action: Option<RenderAction>,
@@ -207,7 +209,7 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         )
     }
 
-    fn try_as_aweak_any_layer_render_object(
+    pub(crate) fn try_as_aweak_any_layer_render_object(
         render_object: &Arc<Self>,
     ) -> Option<AweakAnyLayerRenderObject>
     where
@@ -220,10 +222,6 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
         } else {
             None
         }
-    }
-
-    fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any> {
-        Box::new(self as ArcChildRenderObject<R::ParentProtocol>)
     }
 }
 
@@ -247,8 +245,8 @@ pub trait ChildRenderObjectWithCanvas<C: Canvas>:
 {
 }
 
-impl<R: FullRender> ChildRenderObjectWithCanvas<<R::ParentProtocol as Protocol>::Canvas>
-    for RenderObject<R>
+impl<C: Canvas, T> ChildRenderObjectWithCanvas<C> for T where
+    T: CastInterfaceByRawPtr + crate::sync::ChildRenderObjectHitTestExt<C> + Send + Sync + 'static
 {
 }
 
@@ -257,9 +255,9 @@ impl<C: Canvas> dyn ChildRenderObjectWithCanvas<C> {
         default_query_interface_ref(self)
     }
 
-    pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
-        default_query_interface_box(self)
-    }
+    // pub fn query_interface_box<T: ?Sized + 'static>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+    //     default_query_interface_box(self)
+    // }
 
     pub fn query_interface_arc<T: ?Sized + 'static>(self: Arc<Self>) -> Result<Arc<T>, Arc<Self>> {
         default_query_interface_arc(self)

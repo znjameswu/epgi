@@ -1,6 +1,9 @@
 use epgi_core::{
     foundation::{Intrinsics, LayerProtocol, Protocol},
-    tree::{ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, LayerCompositionConfig},
+    tree::{
+        ArcChildElementNode, ArcChildRenderObject, ArcChildWidget, ChildRenderObject,
+        LayerCompositionConfig,
+    },
     Provider,
 };
 
@@ -211,7 +214,7 @@ impl From<[f32; 2]> for BoxOffset {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum BoxIntrinsics {
     MinWidth { height: f32, res: Option<f32> },
     MaxWidth { height: f32, res: Option<f32> },
@@ -240,6 +243,80 @@ impl Intrinsics for BoxIntrinsics {
             | (MaxHeight { width: x, .. }, MaxHeight { width: y, .. }) => x == y,
             _ => false,
         }
+    }
+}
+
+pub trait BoxRenderObjectIntrinsicsExt {
+    fn get_min_intrinsic_width(&self, height: f32) -> Option<f32>;
+    fn get_max_intrinsic_width(&self, height: f32) -> Option<f32>;
+    fn get_min_intrinsic_height(&self, width: f32) -> Option<f32>;
+    fn get_max_intrinsic_height(&self, width: f32) -> Option<f32>;
+}
+
+impl BoxRenderObjectIntrinsicsExt for dyn ChildRenderObject<BoxProtocol> {
+    fn get_min_intrinsic_width(&self, height: f32) -> Option<f32> {
+        let mut intrinsics = BoxIntrinsics::MinWidth { height, res: None };
+        self.get_intrinsics(&mut intrinsics);
+        let BoxIntrinsics::MinWidth {
+            height: new_height,
+            res,
+        } = intrinsics
+        else {
+            panic!("Child returns a wrong intrinsics type.")
+        };
+        debug_assert_eq!(
+            height, new_height,
+            "Intrinsics computation should not modify input parameters"
+        );
+        res
+    }
+    fn get_max_intrinsic_width(&self, height: f32) -> Option<f32> {
+        let mut intrinsics = BoxIntrinsics::MaxWidth { height, res: None };
+        self.get_intrinsics(&mut intrinsics);
+        let BoxIntrinsics::MaxWidth {
+            height: new_height,
+            res,
+        } = intrinsics
+        else {
+            panic!("Child returns a wrong intrinsics type.")
+        };
+        debug_assert_eq!(
+            height, new_height,
+            "Intrinsics computation should not modify input parameters"
+        );
+        res
+    }
+    fn get_min_intrinsic_height(&self, width: f32) -> Option<f32> {
+        let mut intrinsics = BoxIntrinsics::MinHeight { width, res: None };
+        self.get_intrinsics(&mut intrinsics);
+        let BoxIntrinsics::MinHeight {
+            width: new_width,
+            res,
+        } = intrinsics
+        else {
+            panic!("Child returns a wrong intrinsics type.")
+        };
+        debug_assert_eq!(
+            width, new_width,
+            "Intrinsics computation should not modify input parameters"
+        );
+        res
+    }
+    fn get_max_intrinsic_height(&self, width: f32) -> Option<f32> {
+        let mut intrinsics = BoxIntrinsics::MaxHeight { width, res: None };
+        self.get_intrinsics(&mut intrinsics);
+        let BoxIntrinsics::MaxHeight {
+            width: new_width,
+            res,
+        } = intrinsics
+        else {
+            panic!("Child returns a wrong intrinsics type.")
+        };
+        debug_assert_eq!(
+            width, new_width,
+            "Intrinsics computation should not modify input parameters"
+        );
+        res
     }
 }
 

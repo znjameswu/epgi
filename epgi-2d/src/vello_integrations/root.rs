@@ -86,6 +86,16 @@ impl ImplByTemplate for RenderRoot {
 
 impl BoxSingleChildRender for RenderRoot {
     type LayoutMemo = ();
+
+    const NOOP_DETACH: bool = true;
+
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcBoxRenderObject,
+        intrinsics: &mut crate::BoxIntrinsics,
+    ) {
+        child.get_intrinsics(intrinsics)
+    }
 }
 
 impl BoxSingleChildLayoutByParent for RenderRoot {

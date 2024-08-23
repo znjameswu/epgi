@@ -32,6 +32,12 @@ pub trait Affine2dMultiChildRender: Send + Sync + Sized + 'static {
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    );
 }
 
 impl<
@@ -62,6 +68,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        children: &Vec<ArcChildRenderObject<Self::ChildProtocol>>,
+        intrinsics: &mut <Self::ParentProtocol as Protocol>::Intrinsics,
+    ) {
+        R::compute_intrinsics(render, children, intrinsics)
+    }
 }
 
 impl<

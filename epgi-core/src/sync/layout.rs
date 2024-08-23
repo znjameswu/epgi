@@ -69,6 +69,8 @@ pub trait ChildRenderObjectLayoutExt<PP: Protocol> {
     fn layout_use_size(&self, constraints: &PP::Constraints) -> PP::Size;
 
     fn layout(&self, constraints: &PP::Constraints);
+
+    fn get_intrinsics(&self, intrinsics: &mut PP::Intrinsics);
 }
 
 impl<R> ChildRenderObjectLayoutExt<R::ParentProtocol> for RenderObject<R>
@@ -83,22 +85,28 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        if let Err(token) = needs_layout {
-            if let Some(cache) = inner_reborrow.cache.layout_cache_ref(token) {
-                if constraints == &cache.layout_results.constraints {
-                    let size = cache.layout_results.size.clone();
-                    return size;
-                }
+        let cache_fresh = match needs_layout {
+            Ok(()) => inner_reborrow.cache.clear(),
+            Err(no_relayout) => no_relayout.into(),
+        };
+        let cache = inner_reborrow.cache.layout_cache_ref(cache_fresh);
+        if let Some(cache) = cache {
+            if constraints == &cache.layout_results.constraints {
+                let size = cache.layout_results.size.clone();
+                // This return path does not need to clear needs_layout flag
+                return size;
             }
         }
+
         let (size, memo) = R::Impl::perform_full_layout(
             &mut inner_reborrow.render,
             &constraints,
             &inner_reborrow.children,
         );
-        inner_reborrow
-            .cache
-            .insert_layout_results(LayoutResults::new(constraints.clone(), size.clone(), memo));
+        inner_reborrow.cache.insert_layout_results(
+            LayoutResults::new(constraints.clone(), size.clone(), memo),
+            cache_fresh,
+        );
 
         self.mark.clear_self_needs_layout();
         self.mark.set_parent_use_size();
@@ -109,23 +117,49 @@ where
         let needs_layout = self.mark.needs_layout();
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        if let Err(token) = needs_layout {
-            if let Some(cache) = inner_reborrow.cache.layout_cache_ref(token) {
-                if constraints == &cache.layout_results.constraints {
-                    return;
-                }
+        let cache_fresh = match needs_layout {
+            Ok(()) => inner_reborrow.cache.clear(),
+            Err(no_relayout) => no_relayout.into(),
+        };
+        let cache = inner_reborrow.cache.layout_cache_ref(cache_fresh);
+        if let Some(cache) = cache {
+            if constraints == &cache.layout_results.constraints {
+                // This return path does not need to clear needs_layout flag
+                return;
             }
         }
+
         let (size, memo) = R::Impl::perform_full_layout(
             &mut inner_reborrow.render,
             &constraints,
             &inner_reborrow.children,
         );
-        inner_reborrow
-            .cache
-            .insert_layout_results(LayoutResults::new(constraints.clone(), size, memo));
+        inner_reborrow.cache.insert_layout_results(
+            LayoutResults::new(constraints.clone(), size, memo),
+            cache_fresh,
+        );
         self.mark.clear_self_needs_layout();
         self.mark.clear_parent_use_size();
+    }
+
+    fn get_intrinsics(&self, intrinsics: &mut <R::ParentProtocol as Protocol>::Intrinsics) {
+        let needs_layout = self.mark.needs_layout();
+        let mut inner = self.inner.lock();
+        let inner_reborrow = &mut *inner;
+        let cache_fresh = match needs_layout {
+            Ok(()) => inner_reborrow.cache.clear(),
+            Err(no_relayout) => no_relayout.into(),
+        };
+
+        inner_reborrow.cache.get_intrinsics_or_insert_with(
+            intrinsics,
+            |intrinsics| {
+                inner_reborrow
+                    .render
+                    .compute_intrinsics(&inner_reborrow.children, intrinsics);
+            },
+            cache_fresh,
+        );
     }
 }
 

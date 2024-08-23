@@ -12,7 +12,8 @@ use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 use super::{
-    ArcRingRenderObject, ArcRingWidget, RingConstraints, RingOffset, RingProtocol, RingSize,
+    ArcRingRenderObject, ArcRingWidget, RingConstraints, RingIntrinsics, RingOffset, RingProtocol,
+    RingSize,
 };
 
 #[derive(Debug, Declarative, TypedBuilder)]
@@ -191,5 +192,9 @@ impl ShiftedRender for RenderPositionedRing {
             theta: size.dtheta - child_size.dtheta,
         });
         (size, child_extra_offset)
+    }
+
+    fn compute_intrinsics(&mut self, child: &ArcRingRenderObject, intrinsics: &mut RingIntrinsics) {
+        child.get_intrinsics(intrinsics)
     }
 }

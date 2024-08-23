@@ -30,7 +30,7 @@ where
             let inner = self.inner.lock();
             let cached_composition = &inner
                 .cache
-                .layout_cache_ref(no_relayout_token)
+                .layout_cache_ref(no_relayout_token.into())
                 .expect("Layer should only be composited after they are laid out")
                 .layer_cache
                 .as_ref()
@@ -47,7 +47,7 @@ where
         let inner_reborrow = &mut *inner;
         let layer_cache = inner_reborrow
             .cache
-            .layout_cache_mut(no_relayout_token)
+            .layout_cache_mut(no_relayout_token.into())
             .expect("Layer should only be composited after they are laid out")
             .layer_cache
             .as_mut()
@@ -89,7 +89,7 @@ where
         let inner_reborrow = &mut *inner;
         let layer_cache = inner_reborrow
             .cache
-            .layout_cache_mut(no_relayout_token)
+            .layout_cache_mut(no_relayout_token.into())
             .expect("Layer should only be composited after they are laid out")
             .layer_cache
             .as_mut()

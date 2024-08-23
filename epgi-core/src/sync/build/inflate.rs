@@ -101,7 +101,7 @@ impl<E: FullElement> ElementNode<E> {
         let result = E::perform_inflate_element(&widget, &mut ctx, provider_values);
 
         let (state, change) = match result {
-            Ok((element, child_widgets)) => {
+            Ok((mut element, child_widgets)) => {
                 assert!(
                     ctx.hook_context.has_finished(),
                     "A build function should always invoke every hook whenever it is called"
@@ -125,7 +125,7 @@ impl<E: FullElement> ElementNode<E> {
 
                 let (render_object, render_object_commit_result) =
                     <E as Element>::Impl::inflate_success_commit_render_object(
-                        &element,
+                        &mut element,
                         widget,
                         &mut children,
                         render_object_changes,

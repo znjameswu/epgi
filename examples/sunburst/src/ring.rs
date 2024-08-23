@@ -233,7 +233,7 @@ impl RingSize {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RingIntrinsics;
 
 impl Intrinsics for RingIntrinsics {

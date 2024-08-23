@@ -25,13 +25,18 @@ use epgi_core::{
 
 use crate::{
     Affine2dCanvas, Affine2dEncoding, ArcBoxElementNode, ArcBoxRenderObject, ArcBoxWidget,
-    BoxConstraints, BoxOffset, BoxProtocol, BoxSize, Point2d,
+    BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol, BoxSize, Point2d,
 };
 
-pub struct BoxMultiChildElementTemplate<const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool>;
+pub struct BoxMultiChildElementTemplate<const PROVIDE_ELEMENT: bool>;
 
 pub trait BoxMultiChildElement: Clone + Send + Sync + Sized + 'static {
     type ArcWidget: ArcWidget<Element = Self>;
+    type Render: FullRender<
+        ParentProtocol = BoxProtocol,
+        ChildProtocol = BoxProtocol,
+        ChildContainer = VecContainer,
+    >;
 
     #[allow(unused_variables)]
     fn get_consumed_types(widget: &Self::ArcWidget) -> Cow<[TypeKey]> {
@@ -52,10 +57,27 @@ pub trait BoxMultiChildElement: Clone + Send + Sync + Sized + 'static {
     /// We expect most people does not need provider or hooks during this process.
     /// If you do need, you can always perform relevant operations in the parent and pass it down in widget.
     fn create_element(widget: &Self::ArcWidget) -> Self;
+
+    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
+    /// Update necessary properties of render object given by the widget
+    ///
+    /// Called during the commit phase, when the widget is updated.
+    /// Always called after [RenderElement::try_update_render_object_children].
+    /// If that call failed to update children (indicating suspense), then this call will be skipped.
+    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction>;
+
+    /// Whether [Render::update_render_object] is a no-op and always returns None
+    ///
+    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
+    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
+    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
+    ///
+    /// Setting to false will always guarantee the correct behavior.
+    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
-    for BoxMultiChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> TemplateElementBase<E>
+    for BoxMultiChildElementTemplate<PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
     E: BoxMultiChildElement,
@@ -106,45 +128,20 @@ where
     }
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateElement<E>
-    for BoxMultiChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> TemplateElement<E>
+    for BoxMultiChildElementTemplate<PROVIDE_ELEMENT>
 where
     E: ElementBase,
-    ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>: ImplElement<E>,
+    ElementImpl<true, PROVIDE_ELEMENT>: ImplElement<E>,
 {
-    type Impl = ElementImpl<RENDER_ELEMENT, PROVIDE_ELEMENT>;
+    type Impl = ElementImpl<true, PROVIDE_ELEMENT>;
 }
 
-pub trait BoxMultiChildRenderElement: BoxMultiChildElement {
-    type Render: FullRender<
-        ParentProtocol = BoxProtocol,
-        ChildProtocol = BoxProtocol,
-        ChildContainer = VecContainer,
-    >;
-
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render;
-    /// Update necessary properties of render object given by the widget
-    ///
-    /// Called during the commit phase, when the widget is updated.
-    /// Always called after [RenderElement::try_update_render_object_children].
-    /// If that call failed to update children (indicating suspense), then this call will be skipped.
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction>;
-
-    /// Whether [Render::update_render_object] is a no-op and always returns None
-    ///
-    /// When set to true, [Render::update_render_object]'s implementation will be ignored,
-    /// Certain optimizations to reduce mutex usages will be applied during the commit phase.
-    /// However, if [Render::update_render_object] is actually not no-op, doing this will cause unexpected behaviors.
-    ///
-    /// Setting to false will always guarantee the correct behavior.
-    const NOOP_UPDATE_RENDER_OBJECT: bool = false;
-}
-
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateRenderElement<E>
-    for BoxMultiChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> TemplateRenderElement<E>
+    for BoxMultiChildElementTemplate<PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
-    E: BoxMultiChildRenderElement,
+    E: BoxMultiChildElement,
 {
     type Render = E::Render;
 
@@ -167,8 +164,8 @@ pub trait BoxMultiChildProvideElement: BoxMultiChildElement {
     fn get_provided_value(widget: &Self::ArcWidget) -> &Arc<Self::Provided>;
 }
 
-impl<E, const RENDER_ELEMENT: bool, const PROVIDE_ELEMENT: bool> TemplateProvideElement<E>
-    for BoxMultiChildElementTemplate<RENDER_ELEMENT, PROVIDE_ELEMENT>
+impl<E, const PROVIDE_ELEMENT: bool> TemplateProvideElement<E>
+    for BoxMultiChildElementTemplate<PROVIDE_ELEMENT>
 where
     E: ImplByTemplate<Template = Self>,
     E: BoxMultiChildProvideElement,
@@ -192,6 +189,12 @@ pub trait BoxMultiChildRender: Send + Sync + Sized + 'static {
 
     fn detach(&mut self) {}
     const NOOP_DETACH: bool = false;
+
+    fn compute_intrinsics(
+        &mut self,
+        children: &Vec<ArcBoxRenderObject>,
+        intrinsics: &mut BoxIntrinsics,
+    );
 }
 
 impl<
@@ -217,6 +220,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        children: &Vec<ArcBoxRenderObject>,
+        intrinsics: &mut BoxIntrinsics,
+    ) {
+        R::compute_intrinsics(render, children, intrinsics)
+    }
 }
 
 impl<

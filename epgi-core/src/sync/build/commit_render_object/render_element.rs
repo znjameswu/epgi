@@ -55,7 +55,7 @@ where
     }
 
     fn rebuild_success_commit_render_object<'batch>(
-        element: &E,
+        element: &mut E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
         children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
@@ -123,7 +123,7 @@ where
     }
 
     fn inflate_success_commit_render_object(
-        element: &E,
+        element: &mut E,
         widget: &E::ArcWidget,
         _children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<

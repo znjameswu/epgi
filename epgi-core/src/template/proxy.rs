@@ -29,6 +29,14 @@ pub trait ProxyRender: Send + Sync + Sized + 'static {
         child.layout_use_size(constraints)
     }
 
+    fn compute_intrinsics(
+        &mut self,
+        child: &ArcChildRenderObject<Self::Protocol>,
+        intrinsics: &mut <Self::Protocol as Protocol>::Intrinsics,
+    ) {
+        child.get_intrinsics(intrinsics)
+    }
+
     #[allow(unused_variables)]
     fn perform_paint(
         &self,
@@ -118,6 +126,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        [child]: &[ArcChildRenderObject<R::Protocol>; 1],
+        intrinsics: &mut <R::Protocol as Protocol>::Intrinsics,
+    ) {
+        R::compute_intrinsics(render, child, intrinsics)
+    }
 }
 
 impl<R> TemplateRender<R> for ProxyRenderTemplate

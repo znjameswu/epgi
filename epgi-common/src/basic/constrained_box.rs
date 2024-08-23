@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use epgi_2d::{
-    BoxConstraints, BoxProtocol, BoxSingleChildElement, BoxSingleChildElementTemplate,
+    ArcBoxRenderObject, BoxConstraints, BoxIntrinsics, BoxProtocol, BoxProxyRender,
+    BoxProxyRenderTemplate, BoxSingleChildElement, BoxSingleChildElementTemplate,
     BoxSingleChildRenderElement, BoxSize,
 };
 use epgi_core::{
     foundation::{set_if_changed, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
-    template::{ImplByTemplate, ProxyRender, ProxyRenderTemplate},
-    tree::{ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
+    template::ImplByTemplate,
+    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
@@ -79,18 +80,16 @@ pub struct RenderConstrainedBox {
 }
 
 impl ImplByTemplate for RenderConstrainedBox {
-    type Template = ProxyRenderTemplate;
+    type Template = BoxProxyRenderTemplate;
 }
 
-impl ProxyRender for RenderConstrainedBox {
-    type Protocol = BoxProtocol;
-
+impl BoxProxyRender for RenderConstrainedBox {
     const NOOP_DETACH: bool = true;
 
     fn perform_layout(
         &mut self,
         constraints: &BoxConstraints,
-        child: &ArcChildRenderObject<BoxProtocol>,
+        child: &ArcBoxRenderObject,
     ) -> BoxSize {
         let child_constraints = self.constraints.enforce(constraints);
         if let Some(size) = child_constraints.is_tight() {
@@ -100,5 +99,9 @@ impl ProxyRender for RenderConstrainedBox {
             let size = child.layout_use_size(&child_constraints);
             return size;
         }
+    }
+
+    fn compute_intrinsics(&mut self, child: &ArcBoxRenderObject, intrinsics: &mut BoxIntrinsics) {
+        unimplemented!()
     }
 }

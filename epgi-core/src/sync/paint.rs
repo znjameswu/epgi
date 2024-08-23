@@ -24,13 +24,13 @@ where
         let Err(_token) = self.mark.is_detached() else {
             return;
         };
-        let no_relayout_token = self.mark.assert_not_needing_layout();
+        let cache_fresh = self.mark.assert_not_needing_layout().into();
         let mut inner = self.inner.lock();
 
         let paint_results = inner.render.paint_layer(&inner.children);
         let layout_cache = inner
             .cache
-            .layout_cache_mut(no_relayout_token)
+            .layout_cache_mut(cache_fresh)
             .expect("Repaint can only be performed after layout has finished");
         layout_cache.layer_cache = Some(LayerCache::new(paint_results, None));
     }
@@ -60,37 +60,29 @@ pub trait ChildRenderObjectPaintExt<PP: Protocol> {
     );
 }
 
-trait ChildRenderObjectPaintExtImpl<PP: Protocol> {
-    fn paint_impl(
-        self: Arc<Self>,
-        offset: PP::Offset,
-        paint_ctx: &mut impl PaintContext<Canvas = PP::Canvas>,
-    );
-}
-
-impl<PP, T> ChildRenderObjectPaintExt<PP> for T
+impl<R> ChildRenderObjectPaintExt<R::ParentProtocol> for RenderObject<R>
 where
-    T: ChildRenderObjectPaintExtImpl<PP>,
-    PP: Protocol,
+    R: Render,
+    R::Impl: ImplPaint<R>,
 {
     fn paint(
         self: Arc<Self>,
-        offset: &<PP as Protocol>::Offset,
-        paint_ctx: &mut <<PP as Protocol>::Canvas as Canvas>::PaintContext<'_>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintContext<'_>,
     ) {
         self.paint_impl(offset.clone(), paint_ctx)
     }
 
     fn paint_scan(
         self: Arc<Self>,
-        offset: &<PP as Protocol>::Offset,
-        paint_ctx: &mut <<PP as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
+        offset: &<R::ParentProtocol as Protocol>::Offset,
+        paint_ctx: &mut <<R::ParentProtocol as Protocol>::Canvas as Canvas>::PaintScanner<'_>,
     ) {
         self.paint_impl(offset.clone(), paint_ctx)
     }
 }
 
-impl<R> ChildRenderObjectPaintExtImpl<R::ParentProtocol> for RenderObject<R>
+impl<R> RenderObject<R>
 where
     R: Render,
     R::Impl: ImplPaint<R>,
@@ -102,8 +94,8 @@ where
     ) {
         let mut inner = self.inner.lock();
         let inner_reborrow = &mut *inner;
-        let token = self.mark.assert_not_needing_layout();
-        let Some(cache) = inner_reborrow.cache.layout_cache_mut(token) else {
+        let cache_fresh = self.mark.assert_not_needing_layout().into();
+        let Some(cache) = inner_reborrow.cache.layout_cache_mut(cache_fresh) else {
             panic!("Paint should only be called after layout has finished")
         };
         R::Impl::paint_into_context(

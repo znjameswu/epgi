@@ -122,7 +122,7 @@ impl<E: FullElement> ElementNode<E> {
 
                 let (render_object, change) =
                     <E as Element>::Impl::rebuild_success_commit_render_object(
-                        &element,
+                        &mut element,
                         widget,
                         shuffle,
                         &mut children,

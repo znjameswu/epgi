@@ -12,7 +12,8 @@ use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
 use super::{
-    ArcRingRenderObject, ArcRingWidget, RingConstraints, RingOffset, RingProtocol, RingSize,
+    ArcRingRenderObject, ArcRingWidget, RingConstraints, RingIntrinsics, RingOffset, RingProtocol,
+    RingSize,
 };
 
 #[derive(Debug, Declarative, TypedBuilder)]
@@ -203,5 +204,10 @@ impl ShiftedRender for RenderRingPadding {
         let child_size = child.layout_use_size(&constraints.deflate(self.padding));
         let size = constraints.constrain(child_size.inflate(self.padding));
         (size, ())
+    }
+
+    fn compute_intrinsics(&mut self, child: &ArcRingRenderObject, intrinsics: &mut RingIntrinsics) {
+        child.get_intrinsics(intrinsics);
+        unimplemented!();
     }
 }

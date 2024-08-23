@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use epgi_2d::{
-    Affine2dCanvas, Affine2dPaintContextExt, MultiLineConstraints, MultiLineOffset,
-    MultiLineProtocol, MultiLineSize, Paragraph, TextAlign, TextSpan, TextStyle,
+    Affine2dCanvas, Affine2dPaintContextExt, MultiLineConstraints, MultiLineIntrinsics,
+    MultiLineOffset, MultiLineProtocol, MultiLineSize, Paragraph, TextAlign, TextSpan, TextStyle,
 };
 use epgi_core::{
     foundation::{Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
@@ -110,5 +110,9 @@ impl LeafRender for RenderRichText {
         paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
         paint_ctx.draw_paragraph(&self.paragraph, &offset.offsets)
+    }
+
+    fn compute_intrinsics(render: &mut Self, intrinsics: &mut MultiLineIntrinsics) {
+        unimplemented!()
     }
 }

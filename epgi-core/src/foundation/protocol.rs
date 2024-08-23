@@ -1,4 +1,7 @@
-use std::{fmt::Debug, ops::Mul};
+use std::{
+    fmt::Debug,
+    ops::{Deref, Mul},
+};
 
 use crate::tree::{
     ArcAnyLayerRenderObject, ArcChildLayerRenderObject, ArcChildRenderObject,
@@ -36,7 +39,7 @@ pub trait LayerProtocol: Protocol {
     ) -> LayerCompositionConfig<Self::Canvas>;
 }
 
-pub trait Intrinsics: Debug + Send + Sync {
+pub trait Intrinsics: Clone + Debug + Send + Sync {
     fn eq_tag(&self, other: &Self) -> bool;
     fn eq_param(&self, other: &Self) -> bool;
 }
@@ -51,33 +54,42 @@ impl Intrinsics for () {
     }
 }
 
-struct TagEq<T: Intrinsics>(T);
+// pub(crate) struct TagEq<T: Intrinsics>(T);
 
-impl<T> PartialEq<Self> for TagEq<T>
+// impl<T> PartialEq<Self> for TagEq<T>
+// where
+//     T: Intrinsics,
+// {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.0.eq_tag(&other.0)
+//     }
+// }
+
+// impl<T> Eq for TagEq<T>
+// where
+//     T: Intrinsics,
+// {
+//     fn assert_receiver_is_total_eq(&self) {}
+// }
+
+#[derive(Clone, Debug)]
+pub struct ParamEq<T>(pub T);
+
+impl<T, I> PartialEq<Self> for ParamEq<T>
 where
-    T: Intrinsics,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq_tag(&other.0)
-    }
-}
-
-impl<T> Eq for TagEq<T>
-where
-    T: Intrinsics,
-{
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
-struct ParamEq<T: Intrinsics>(T);
-
-impl<T> PartialEq<Self> for ParamEq<T>
-where
-    T: Intrinsics,
+    I: Intrinsics,
+    T: Deref<Target = I>,
 {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq_param(&other.0)
     }
+}
+
+impl<T, I> Eq for ParamEq<T>
+where
+    I: Intrinsics,
+    T: Deref<Target = I>,
+{
 }
 
 pub trait Canvas: Clone + Sized + 'static {

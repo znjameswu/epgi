@@ -1,20 +1,15 @@
 use std::marker::PhantomData;
 
-use epgi_2d::{
-    ArcBoxWidget, BoxMultiChildElement, BoxMultiChildElementTemplate, BoxMultiChildRenderElement,
-    BoxProtocol,
-};
+use epgi_2d::BoxProtocol;
 use epgi_core::{
     foundation::{set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, Provide},
-    template::ImplByTemplate,
-    tree::{BuildContext, ElementBase, RenderAction, Widget},
+    template::{ImplByTemplate, MultiChildElement, MultiChildElementTemplate},
+    tree::{ArcChildWidget, BuildContext, ElementBase, RenderAction, Widget},
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
 
-use crate::{Axis, CrossAxisAlignment, Flexible, MainAxisAlignment, MainAxisSize, RenderFlex};
-
-use super::get_flexible_configs;
+use crate::{Axis, CrossAxisAlignment, MainAxisAlignment, MainAxisSize, RenderFlex};
 
 #[derive(Debug, Declarative, TypedBuilder)]
 #[builder(build_method(into=Asc<Column>))]
@@ -41,7 +36,7 @@ pub struct Column {
     pub flip_horizontal: bool,
     #[builder(default = false)]
     pub flip_vertical: bool,
-    pub children: Vec<Flexible<BoxProtocol>>,
+    pub children: Vec<ArcChildWidget<BoxProtocol>>,
 }
 
 impl Widget for Column {
@@ -58,32 +53,27 @@ impl Widget for Column {
 pub struct ColumnElement {}
 
 impl ImplByTemplate for ColumnElement {
-    type Template = BoxMultiChildElementTemplate<true, false>;
+    type Template = MultiChildElementTemplate<false>;
 }
 
-impl BoxMultiChildElement for ColumnElement {
+impl MultiChildElement for ColumnElement {
+    type ParentProtocol = BoxProtocol;
+    type ChildProtocol = BoxProtocol;
     type ArcWidget = Asc<Column>;
+    type Render = RenderFlex<BoxProtocol>;
 
     fn get_child_widgets(
         _element: Option<&mut Self>,
         widget: &Self::ArcWidget,
         _ctx: &mut BuildContext<'_>,
         _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<Vec<ArcBoxWidget>, BuildSuspendedError> {
-        Ok(widget
-            .children
-            .iter()
-            .map(|flexible| flexible.child.clone())
-            .collect())
+    ) -> Result<Vec<ArcChildWidget<BoxProtocol>>, BuildSuspendedError> {
+        Ok(widget.children.clone())
     }
 
     fn create_element(_widget: &Self::ArcWidget) -> Self {
         Self {}
     }
-}
-
-impl BoxMultiChildRenderElement for ColumnElement {
-    type Render = RenderFlex<BoxProtocol>;
 
     fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
         RenderFlex {
@@ -91,7 +81,6 @@ impl BoxMultiChildRenderElement for ColumnElement {
             main_axis_alignment: widget.main_axis_alignment,
             main_axis_size: widget.main_axis_size,
             cross_axis_alignment: widget.cross_axis_alignment,
-            flexible_configs: get_flexible_configs(&widget.children),
             flip_main_axis: widget.flip_vertical,
             flip_cross_axis: widget.flip_horizontal,
             phantom: PhantomData,
@@ -105,10 +94,6 @@ impl BoxMultiChildRenderElement for ColumnElement {
             set_if_changed(
                 &mut render.cross_axis_alignment,
                 widget.cross_axis_alignment,
-            ),
-            set_if_changed(
-                &mut render.flexible_configs,
-                get_flexible_configs(&widget.children),
             ),
             set_if_changed(&mut render.flip_main_axis, widget.flip_vertical),
             set_if_changed(&mut render.flip_cross_axis, widget.flip_horizontal),

@@ -75,4 +75,11 @@ impl LeafRender for RenderPhantomBox {
         _paint_ctx: &mut impl PaintContext<Canvas = Affine2dCanvas>,
     ) {
     }
+
+    fn compute_intrinsics(
+        _render: &mut Self,
+        _intrinsics: &mut <Self::Protocol as epgi_core::foundation::Protocol>::Intrinsics,
+    ) {
+        // No-op
+    }
 }

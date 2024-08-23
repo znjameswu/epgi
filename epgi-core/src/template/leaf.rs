@@ -151,6 +151,11 @@ pub trait LeafRender: Send + Sync + Sized + 'static {
         constraints: &<Self::Protocol as Protocol>::Constraints,
     ) -> <Self::Protocol as Protocol>::Size;
 
+    fn compute_intrinsics(
+        render: &mut Self,
+        intrinsics: &mut <Self::Protocol as Protocol>::Intrinsics,
+    );
+
     #[allow(unused_variables)]
     fn perform_paint(
         &self,
@@ -196,6 +201,14 @@ where
     }
 
     const NOOP_DETACH: bool = R::NOOP_DETACH;
+
+    fn compute_intrinsics(
+        render: &mut R,
+        _children: &[ArcChildRenderObject<R::Protocol>; 0],
+        intrinsics: &mut <R::Protocol as Protocol>::Intrinsics,
+    ) {
+        R::compute_intrinsics(render, intrinsics)
+    }
 }
 
 impl<R> TemplateRender<R> for LeafRenderTemplate
