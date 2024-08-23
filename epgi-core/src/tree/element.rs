@@ -1,5 +1,5 @@
 mod context;
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow};
 
 pub use context::*;
 
@@ -25,7 +25,7 @@ mod waker;
 pub(crate) use waker::*;
 
 use crate::foundation::{
-    Arc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
+    Arc, Asc, Aweak, BuildSuspendedError, ContainerOf, HktContainer, InlinableDwsizeVec, Protocol,
     Provide, PtrEq, TypeKey, EMPTY_CONSUMED_TYPES,
 };
 
@@ -85,6 +85,23 @@ pub trait ElementBase: Clone + Send + Sync + Sized + 'static {
         ),
         BuildSuspendedError,
     >;
+
+    /// Returns the new parent data and corresponding render action for parent
+    /// if the parent data has changed
+    ///
+    /// It is recommended to cache the last generated parent data, and only
+    /// generate parent data when the parent data needs to be changed.
+    ///
+    /// Will only be invoked if this element is a component element. Has no effect
+    /// if implemented on other elements.
+    #[allow(unused_variables)]
+    #[inline(always)]
+    fn generate_parent_data(
+        &mut self,
+        widget: &Self::ArcWidget,
+    ) -> Option<(Asc<dyn Any + Send + Sync>, Option<RenderAction>)> {
+        None
+    }
 }
 
 // This is separated from the main ELement trait to avoid inductive cycles in ImplReconcileCommit::visit_commit

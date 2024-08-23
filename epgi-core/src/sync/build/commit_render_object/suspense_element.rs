@@ -147,7 +147,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
     }
 
     fn rebuild_success_commit_render_object<'batch>(
-        _element: &SuspenseElement<P>,
+        _element: &mut SuspenseElement<P>,
         widget: &Asc<Suspense<P>>,
         _shuffle: Option<
             ChildRenderObjectsUpdateCallback<
@@ -244,7 +244,7 @@ impl<P: Protocol> ImplCommitRenderObject<SuspenseElement<P>> for ElementImpl<tru
     }
 
     fn inflate_success_commit_render_object(
-        _element: &SuspenseElement<P>,
+        _element: &mut SuspenseElement<P>,
         widget: &Asc<Suspense<P>>,
         children: &mut EitherParallel<[ArcChildElementNode<P>; 1], [ArcChildElementNode<P>; 2]>,
         render_object_changes: EitherParallel<

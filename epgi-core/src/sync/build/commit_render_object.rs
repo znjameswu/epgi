@@ -81,7 +81,7 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
     // Reason for this signature: there is going to be a write_back regardless
     // You have to return the resources since they are moved out when we occupy the node, and later they need to move back
     fn rebuild_success_commit_render_object<'batch>(
-        element: &E,
+        element: &mut E,
         widget: &E::ArcWidget,
         shuffle: Option<ChildRenderObjectsUpdateCallback<E::ChildContainer, E::ChildProtocol>>,
         children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
@@ -105,7 +105,7 @@ pub trait ImplCommitRenderObject<E: Element<Impl = Self>>: ImplElementNode<E> {
     ) -> RenderObjectCommitResult<E::ParentProtocol>;
 
     fn inflate_success_commit_render_object(
-        element: &E,
+        element: &mut E,
         widget: &E::ArcWidget,
         children: &mut ContainerOf<E::ChildContainer, ArcChildElementNode<E::ChildProtocol>>,
         render_object_changes: ContainerOf<

@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::{
     foundation::{
-        default_query_interface_arc, default_query_interface_ref, Arc, AsAny, Aweak, Canvas,
+        default_query_interface_arc, default_query_interface_ref, Arc, AsAny, Asc, Aweak, Canvas,
         CastInterfaceByRawPtr, ContainerOf, HktContainer, LayerProtocol, Protocol, SyncMutex,
     },
     sync::ImplComposite,
@@ -46,6 +46,7 @@ impl<R: Render> RenderObject<R> {
             mark: RenderMark::new(),
             layer_mark: Default::default(),
             inner: SyncMutex::new(RenderObjectInner {
+                parent_data: None,
                 cache: RenderCache::new(),
                 render,
                 children,
@@ -72,6 +73,7 @@ where
 {
     // parent: Option<AweakParentRenderObject<R::SelfProtocol>>,
     // boundaries: Option<RenderObjectBoundaries>,
+    parent_data: Option<Asc<dyn Any + Send + Sync>>,
     pub(crate) cache: RenderCache<R, C>,
     pub(crate) render: R,
     pub(crate) children:
@@ -135,6 +137,8 @@ pub trait AnyRenderObject: crate::sync::AnyRenderObjectLayoutExt + AsAny + Send 
     fn element_context(&self) -> &ElementContextNode;
     fn render_mark(&self) -> &RenderMark;
     fn detach_render_object(&self);
+    fn get_parent_data(&self) -> Option<Asc<dyn Any + Send + Sync>>;
+    fn set_parent_data(&self, data: Asc<dyn Any + Send + Sync>);
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject>;
 
     fn as_any_arc_child(self: Arc<Self>) -> Box<dyn Any>;
@@ -159,6 +163,13 @@ impl<R: FullRender> AnyRenderObject for RenderObject<R> {
                 self.inner.lock().render.detach();
             }
         }
+    }
+
+    fn get_parent_data(&self) -> Option<Asc<dyn Any + Send + Sync>> {
+        self.inner.lock().parent_data.clone()
+    }
+    fn set_parent_data(&self, data: Asc<dyn Any + Send + Sync>) {
+        self.inner.lock().parent_data = Some(data);
     }
 
     fn downcast_arc_any_layer_render_object(self: Arc<Self>) -> Option<ArcAnyLayerRenderObject> {

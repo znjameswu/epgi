@@ -455,7 +455,7 @@ where
         let snapshot_reborrow = &mut *snapshot;
 
         let CommitPreVisitStash {
-            element,
+            mut element,
             hooks,
             mut children,
             rebuild_stash,
@@ -468,7 +468,7 @@ where
             } = rebuild_stash;
             let (render_object, change) =
                 <E as Element>::Impl::rebuild_success_commit_render_object(
-                    &element,
+                    &mut element,
                     &snapshot_reborrow.widget,
                     shuffle,
                     &mut children,
@@ -491,7 +491,7 @@ where
         } else {
             let (render_object, change) =
                 <E as Element>::Impl::inflate_success_commit_render_object(
-                    &element,
+                    &mut element,
                     &snapshot_reborrow.widget,
                     &mut children,
                     render_object_changes,

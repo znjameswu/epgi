@@ -9,12 +9,9 @@ use epgi_core::{
         set_if_changed, Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Protocol,
         Provide, VecContainer,
     },
-    max,
     template::{
-        AdapterRender, AdapterRenderTemplate, ImplByTemplate, MultiChildElement,
-        MultiChildElementTemplate, MultiChildHitTest, MultiChildLayout, MultiChildPaint,
-        MultiChildRender, MultiChildRenderTemplate, SingleChildElement, SingleChildElementTemplate,
-        SingleChildRenderElement,
+        ImplByTemplate, MultiChildElement, MultiChildElementTemplate, MultiChildHitTest,
+        MultiChildLayout, MultiChildPaint, MultiChildRender, MultiChildRenderTemplate,
     },
     tree::{
         ArcChildRenderObject, ArcChildWidget, BuildContext, ElementBase, FullRender, RenderAction,
@@ -23,6 +20,8 @@ use epgi_core::{
 };
 use epgi_macro::Declarative;
 use typed_builder::TypedBuilder;
+
+use crate::{FlexFit, FlexibleConfig};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
@@ -368,8 +367,16 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     let mut cross_size = render.initial_cross_size();
     let mut allocated_size = 0.0;
 
+    fn get_flexible_config<P: Protocol>(child: &ArcChildRenderObject<P>) -> Option<FlexibleConfig> {
+        child.as_ref().get_parent_data().and_then(|data| {
+            data.downcast::<FlexibleConfig>()
+                .ok()
+                .map(|config| config.as_ref().clone())
+        })
+    }
+
     for (child, size) in zip(children.iter(), child_sizes.iter_mut()) {
-        let FlexibleConfig { flex, fit: _ } = child.get_flexible_config();
+        let FlexibleConfig { flex, fit: _ } = get_flexible_config(child).unwrap_or_default();
         if flex > 0 {
             total_flex += flex;
         } else {
@@ -387,7 +394,7 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     if total_flex > 0 {
         let space_per_flex = free_space / total_flex as f32;
         for (child, size) in zip(children.iter(), child_sizes.iter_mut()) {
-            let FlexibleConfig { flex, fit } = child.get_flexible_config();
+            let FlexibleConfig { flex, fit } = get_flexible_config(child).unwrap_or_default();
             if flex > 0 {
                 let max_child_extent = if can_flex {
                     space_per_flex * flex as f32 // TODO: last child accomodation
@@ -414,7 +421,7 @@ pub fn default_flex_perform_layout<P: Protocol, R: FlexRender<P>>(
     }
 
     let ideal_size = match main_axis_size {
-        MainAxisSize::Min if can_flex => max_main_size,
+        MainAxisSize::Max if can_flex => max_main_size,
         _ => allocated_size,
     };
 
@@ -558,7 +565,8 @@ impl FlexRender<BoxProtocol> for RenderFlex<BoxProtocol> {
         main_size_range: Option<(f32, f32)>,
         parent_constraints: &BoxConstraints,
     ) -> BoxConstraints {
-        let (max_main_size, min_main_size) = main_size_range.unwrap_or((0.0, INFINITY));
+        let (min_main_size, max_main_size) = main_size_range.unwrap_or((0.0, INFINITY));
+        debug_assert!(min_main_size <= max_main_size);
         match self.direction {
             Axis::Horizontal => BoxConstraints {
                 min_width: min_main_size,
@@ -689,151 +697,3 @@ where
 }
 
 impl<P: Protocol> MultiChildHitTest for RenderFlex<P> {}
-
-/// How the child is inscribed into the available space.
-///
-/// See also:
-///
-///  * [RenderFlex], the flex render object.
-///  * [Column], [Row], and [Flex], the flex widgets.
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum FlexFit {
-    /// The child is forced to fill the available space.
-    ///
-    // /// The [Expanded] widget assigns this kind of [FlexFit] to its child.
-    Tight,
-
-    /// The child can be at most as large as the available space (but is
-    /// allowed to be smaller).
-    ///
-    // /// The [Flexible] widget assigns this kind of [FlexFit] to its child.
-    Loose,
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub struct FlexibleConfig {
-    flex: u32,
-    fit: FlexFit,
-}
-
-impl Default for FlexibleConfig {
-    fn default() -> Self {
-        Self {
-            flex: 0,
-            fit: FlexFit::Tight,
-        }
-    }
-}
-
-#[derive(Debug, Declarative, TypedBuilder)]
-#[builder(build_method(into=Asc<Flexible<P>>))]
-pub struct Flexible<P: Protocol> {
-    #[builder(default = 1)]
-    pub flex: u32,
-    #[builder(default=FlexFit::Loose)]
-    pub fit: FlexFit,
-    pub child: ArcChildWidget<P>,
-}
-
-impl<P: Protocol> Widget for Flexible<P> {
-    type ParentProtocol = P;
-    type ChildProtocol = P;
-    type Element = FlexibleElement<P>;
-
-    fn into_arc_widget(self: Asc<Self>) -> Asc<Self> {
-        self
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct FlexibleElement<P: Protocol> {
-    phantom: PhantomData<P>,
-}
-
-impl<P: Protocol> ImplByTemplate for FlexibleElement<P> {
-    type Template = SingleChildElementTemplate<true, false>;
-}
-
-impl<P: Protocol> SingleChildElement for FlexibleElement<P> {
-    type ParentProtocol = P;
-    type ChildProtocol = P;
-    type ArcWidget = Asc<Flexible<P>>;
-
-    fn get_child_widget(
-        _element: Option<&mut Self>,
-        widget: &Self::ArcWidget,
-        _ctx: &mut BuildContext<'_>,
-        _provider_values: InlinableDwsizeVec<Arc<dyn Provide>>,
-    ) -> Result<ArcChildWidget<P>, BuildSuspendedError> {
-        Ok(widget.child.clone())
-    }
-
-    fn create_element(_widget: &Self::ArcWidget) -> Self {
-        Self {
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<P: Protocol> SingleChildRenderElement for FlexibleElement<P> {
-    type Render = RenderFlexible<P>;
-
-    fn create_render(&self, widget: &Self::ArcWidget) -> Self::Render {
-        RenderFlexible {
-            config: FlexibleConfig {
-                flex: widget.flex,
-                fit: widget.fit,
-            },
-            phantom: PhantomData,
-        }
-    }
-
-    fn update_render(render: &mut Self::Render, widget: &Self::ArcWidget) -> Option<RenderAction> {
-        max!(
-            set_if_changed(&mut render.config.flex, widget.flex).then_some(RenderAction::Relayout),
-            set_if_changed(&mut render.config.fit, widget.fit).then_some(RenderAction::Relayout),
-        )
-    }
-}
-
-pub struct RenderFlexible<P: Protocol> {
-    config: FlexibleConfig,
-    phantom: PhantomData<P>,
-}
-
-impl<P: Protocol> ImplByTemplate for RenderFlexible<P> {
-    type Template = AdapterRenderTemplate;
-}
-
-impl<P: Protocol> AdapterRender for RenderFlexible<P> {
-    type ParentProtocol = P;
-    type ChildProtocol = P;
-    type LayoutMemo = ();
-
-    fn perform_layout(
-        &mut self,
-        constraints: &P::Constraints,
-        child: &ArcChildRenderObject<P>,
-    ) -> (P::Size, ()) {
-        (child.layout_use_size(constraints), ())
-    }
-
-    fn compute_intrinsics(
-        &mut self,
-        child: &ArcChildRenderObject<P>,
-        intrinsics: &mut P::Intrinsics,
-    ) {
-        child.get_intrinsics(intrinsics)
-    }
-
-    fn perform_paint(
-        &self,
-        _size: &P::Size,
-        offset: &P::Offset,
-        _memo: &(),
-        child: &ArcChildRenderObject<P>,
-        paint_ctx: &mut impl PaintContext<Canvas = P::Canvas>,
-    ) {
-        paint_ctx.paint(child, offset)
-    }
-}

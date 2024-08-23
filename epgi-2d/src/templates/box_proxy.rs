@@ -10,8 +10,8 @@ use epgi_core::{
 };
 
 use crate::{
-    Affine2dCanvas, ArcBoxRenderObject, ArcBoxWidget, BoxConstraints, BoxIntrinsics, BoxOffset,
-    BoxProtocol, BoxSize, Point2d,
+    Affine2dCanvas, ArcBoxRenderObject, BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol,
+    BoxSize, Point2d,
 };
 
 pub struct BoxProxyRenderTemplate;

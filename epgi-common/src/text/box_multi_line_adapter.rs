@@ -1,7 +1,6 @@
 use epgi_2d::{
-    Affine2d, Affine2dCanvas, BoxConstraints, BoxIntrinsics, BoxOffset,
-    BoxProtocol, BoxSize, MultiLineConstraints, MultiLineOffset,
-    MultiLineProtocol, SingleLineOffset,
+    Affine2d, Affine2dCanvas, BoxConstraints, BoxIntrinsics, BoxOffset, BoxProtocol, BoxSize,
+    MultiLineConstraints, MultiLineOffset, MultiLineProtocol, SingleLineOffset,
 };
 use epgi_core::{
     foundation::{Arc, Asc, BuildSuspendedError, InlinableDwsizeVec, PaintContext, Provide},
